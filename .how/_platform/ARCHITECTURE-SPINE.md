@@ -18,9 +18,9 @@ companions:
   - .how/_platform/c4-l2-containers.md
   - .how/_platform/cross-cutting.md
 reviewed:
-  date: ""
-  sha: ""
-  lenses: []
+  date: "2026-08-22"
+  sha: 1a67115
+  lenses: [structure, prose, edge-case-hunter]
 ---
 
 # Architecture Spine — Snapdown

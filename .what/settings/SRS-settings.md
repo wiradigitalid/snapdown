@@ -6,9 +6,9 @@ created: "2026-08-22"
 updated: "2026-08-22"
 satisfies: [FR-5, FR-16, FR-17, FR-18, NFR-6, NFR-7]
 reviewed:
-  date: ""
-  sha: ""
-  lenses: []
+  date: "2026-08-22"
+  sha: 1a67115
+  lenses: [structure, prose, edge-case-hunter]
 ---
 
 # SRS — settings

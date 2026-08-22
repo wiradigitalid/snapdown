@@ -6,9 +6,9 @@ created: "2026-08-22"
 updated: "2026-08-22"
 satisfies: [FR-19, FR-20, FR-21, FR-22, NFR-9]
 reviewed:
-  date: ""
-  sha: ""
-  lenses: []
+  date: "2026-08-22"
+  sha: 1a67115
+  lenses: [structure, prose, edge-case-hunter]
 ---
 
 # SRS — agent-access

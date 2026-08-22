@@ -10,10 +10,19 @@ decisions:
     status: applied
     file: .control/decisions/DEC-001-stack.md
     serves: [CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-7, CAP-8]
+    touches:
+      - .how/_platform/ARCHITECTURE-SPINE.md
+      - .how/_platform/c4-l2-containers.md
     created: "2026-08-22"
   - id: DEC-002
     title: An agent reads the Library through a stateless MCP bridge and a key the Reviewer pastes
     status: applied
     file: .control/decisions/DEC-002-mcp-bridge-and-key.md
     serves: [CAP-7]
+    touches:
+      - .how/_platform/ARCHITECTURE-SPINE.md
+      - .how/_platform/c4-l2-containers.md
+      - .how/_platform/inventory-api.md
+      - .what/agent-access/SRS-agent-access.md
+      - .what/agent-access/03-domain/domain-model.md
     created: "2026-08-22"

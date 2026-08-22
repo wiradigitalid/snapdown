@@ -5,7 +5,6 @@ status: applied
 touches:
   - .how/_platform/ARCHITECTURE-SPINE.md
   - .how/_platform/c4-l2-containers.md
-  - .constitution/project/codebase-stack-guide.md
 supersedes: null
 superseded_by: null
 created: "2026-08-22"
@@ -92,4 +91,5 @@ Any of these makes revisiting correct:
 | --- | --- |
 | Meeting note | — |
 | Open question | — |
+| Note | `.constitution/project/codebase-stack-guide.md` is deliberately NOT in `touches`. It is born empty and its own header forbids filling it before code exists that ratifies it; the first wave's distillation promotes `bmad-spec`'s `stack.md` companion into it |
 | Source material | `.control/memlog/prd-capture-to-markdown.md` and `.control/memlog/prd-agent-handoff.md`, both carrying the `change` entry where the owner set the stack mid-run; `.what/_prd/agent-handoff/addendum.md` § Options weighed |

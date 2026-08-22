@@ -8,5 +8,5 @@ Decisions are no longer looked up through the memlog — the memlog goes back to
 
 | id | Title | Status | Type | Touches | File |
 | --- | --- | --- | --- | --- | --- |
-| `DEC-001` | Snapdown is built as a Tauri v2 desktop app in Rust with React front ends, and a Go web service | `applied` | — | — | `.control/decisions/DEC-001-stack.md` |
-| `DEC-002` | An agent reads the Library through a stateless MCP bridge and a key the Reviewer pastes | `applied` | — | — | `.control/decisions/DEC-002-mcp-bridge-and-key.md` |
+| `DEC-001` | Snapdown is built as a Tauri v2 desktop app in Rust with React front ends, and a Go web service | `applied` | — | `.how/_platform/ARCHITECTURE-SPINE.md`, `.how/_platform/c4-l2-containers.md` | `.control/decisions/DEC-001-stack.md` |
+| `DEC-002` | An agent reads the Library through a stateless MCP bridge and a key the Reviewer pastes | `applied` | — | `.how/_platform/ARCHITECTURE-SPINE.md`, `.how/_platform/c4-l2-containers.md`, `.how/_platform/inventory-api.md`, `.what/agent-access/SRS-agent-access.md`, `.what/agent-access/03-domain/domain-model.md` | `.control/decisions/DEC-002-mcp-bridge-and-key.md` |
