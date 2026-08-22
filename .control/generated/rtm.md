@@ -100,40 +100,52 @@ rtm:
   FR: FR-16
   DEC: []
   UC: UC-14
-  story: ''
-  wave: ''
-  release: ''
-  test: []
-  status: ''
-  green: false
+  story: W1-S3
+  wave: W1
+  release: r1
+  test:
+  - cargo::unwritable_vault_folder_is_refused_at_choosing
+  - cargo::changing_the_vault_moves_every_file_or_none
+  - cargo::quality_budget_outside_range_is_refused_on_entry
+  - vitest::settings_shows_the_stored_size_of_the_latest_finding
+  status: unknown
   exempt: false
-  broken_at: story
+  green: false
+  broken_at: status
 - BG: BG-6
   CAP: CAP-6
   FR: FR-17
   DEC: []
   UC: UC-15
-  story: ''
-  wave: ''
-  release: ''
-  test: []
-  status: ''
-  green: false
+  story: W1-S4
+  wave: W1
+  release: r1
+  test:
+  - cargo::a_combination_held_elsewhere_is_refused_at_binding
+  - cargo::two_actions_cannot_share_one_combination
+  - cargo::a_cleared_hotkey_disables_its_action
+  - cargo::rebinding_takes_effect_without_a_restart
+  - cargo::a_failed_startup_registration_is_reported_not_swallowed
+  status: unknown
   exempt: false
-  broken_at: story
+  green: false
+  broken_at: status
 - BG: BG-6
   CAP: CAP-6
   FR: FR-18
   DEC: []
   UC: UC-16
-  story: ''
-  wave: ''
-  release: ''
-  test: []
-  status: ''
-  green: false
+  story: W1-S5
+  wave: W1
+  release: r1
+  test:
+  - cargo::startup_registration_needs_no_administrator_rights
+  - cargo::the_setting_is_read_back_from_the_os_not_remembered
+  - cargo::disabling_removes_the_registration
+  status: unknown
   exempt: false
-  broken_at: story
+  green: false
+  broken_at: status
 - BG: BG-2
   CAP: CAP-7
   FR: FR-19
@@ -282,14 +294,18 @@ rtm:
   FR: FR-5
   DEC: []
   UC: UC-13
-  story: ''
-  wave: ''
-  release: ''
-  test: []
-  status: ''
-  green: false
+  story: W1-S3
+  wave: W1
+  release: r1
+  test:
+  - cargo::unwritable_vault_folder_is_refused_at_choosing
+  - cargo::changing_the_vault_moves_every_file_or_none
+  - cargo::quality_budget_outside_range_is_refused_on_entry
+  - vitest::settings_shows_the_stored_size_of_the_latest_finding
+  status: unknown
   exempt: false
-  broken_at: story
+  green: false
+  broken_at: status
 - BG: BG-1
   CAP: CAP-3
   FR: FR-6

@@ -1,1 +1,13 @@
-dag: []
+dag:
+- wave: W1
+  order:
+  - parallel:
+    - W1-S1
+  - parallel:
+    - W1-S2
+  - parallel:
+    - W1-S3
+  - parallel:
+    - W1-S4
+  - parallel:
+    - W1-S5

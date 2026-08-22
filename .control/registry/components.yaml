@@ -169,13 +169,6 @@ logical_components:
     component: finding
     area: vault-fs
     depends_on: [LC-004, LC-005]
-  - id: LC-009
-    name: hotkey-registrar
-    lc_type: gateway
-    container: desktop-app
-    component: finding
-    area: capture-pipeline
-    depends_on: [LC-025]
   # --- bundle · desktop-app ---------------------------------------------------------
   - id: LC-010
     name: bundle-composer
@@ -227,6 +220,13 @@ logical_components:
     component: settings
     area: settings-store
     depends_on: []
+  - id: LC-009
+    name: hotkey-registrar
+    lc_type: gateway
+    container: desktop-app
+    component: settings
+    area: settings-store
+    depends_on: [LC-025]
   - id: LC-026
     name: startup-registrar
     lc_type: gateway

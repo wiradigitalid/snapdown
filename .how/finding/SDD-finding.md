@@ -42,7 +42,7 @@ orphan report is built to find and is a state the Reviewer can act on, unlike it
 
 ## Structure · [outline]
 
-Nine Logical Components, all in `desktop-app`. Registered in `.control/registry/components.yaml`.
+Eight Logical Components, all in `desktop-app`. Registered in `.control/registry/components.yaml`.
 
 | LC | type | Responsibility |
 | --- | --- | --- |
@@ -54,7 +54,6 @@ Nine Logical Components, all in `desktop-app`. Registered in `.control/registry/
 | LC-006 `findings-editor` | ui-screen | The Finding list and the detail view. Note editing, multi-select, delete confirmation, the orphan report |
 | LC-007 `marker-canvas` | ui-composite | Placing, dragging, and removing Markers over an image, in normalised coordinates (AD-3) |
 | LC-008 `orphan-sweeper` | service | Compares `finding_store` against `vault_blobs` in both directions. Reports; never deletes on its own |
-| LC-009 `hotkey-registrar` | gateway | Registers and unregisters the global hotkeys with Windows, and reports a registration that failed |
 
 ```mermaid
 graph TD
@@ -63,22 +62,24 @@ graph TD
     LC006 --> LC008["LC-008 orphan-sweeper"]
     LC007 --> LC004
     LC001["LC-001 capture-overlay"] --> LC002["LC-002 region-capturer"]
-    LC001 --> LC009["LC-009 hotkey-registrar"]
+    LC009(["LC-009 hotkey-registrar<br/>settings"]) -->|"raises capture requested"| LC001
     LC002 --> LC003["LC-003 image-reducer"]
     LC003 --> LC005["LC-005 vault-blobs"]
     LC004 --> LC005
     LC008 --> LC004
     LC008 --> LC005
-    LC009 --> LC025(["LC-025 settings-store<br/>settings"])
-    LC003 -.->|"reads the Quality Budget"| LC025
+    LC003 -.->|"reads the Quality Budget"| LC025(["LC-025 settings-store<br/>settings"])
 ```
 
 Dependency direction is downward only. `LC-005 vault-blobs` depends on nothing and is depended on by
 everything that touches a file — which is what makes AD-2 enforceable in one place. No UI component is
 depended on by a service.
 
-Two crossings out of this component, both reads: `LC-009` and `LC-003` read Settings from
-`LC-025 settings-store`. Neither writes, and `settings` depends on nothing here.
+One crossing out of this component, and it is a read: `LC-003` reads the Quality Budget from
+`LC-025 settings-store`. One crossing in: `LC-009 hotkey-registrar` belongs to `settings` — it owns the
+binding it registers — and raises a capture-requested event this component listens for. That direction
+is deliberate: `finding` does not know which key was pressed, and `settings` does not know what a
+Capture is.
 
 ## Inherited Constraints · [guarded]
 
@@ -101,7 +102,7 @@ answer anywhere below.
 | Boundary | Slow | Absent | Lying | What the user sees | What is logged |
 | --- | --- | --- | --- | --- | --- |
 | Windows screen capture (LC-002) | Capture is one grab of already-composited pixels; there is no slow case short of the compositor stalling. If the grab has not returned in 2 s the overlay closes and the Capture is abandoned | The API refuses — a protected window, a session lock, a secure desktop. The Capture is abandoned and the Reviewer is told the screen could not be read, with the reason Windows gave | Returns fewer pixels than the selected region, or a black rectangle. Detected by comparing returned dimensions against the request; a mismatch abandons the Capture. An all-black result is **not** treated as a lie — a genuinely black region is legitimate | A toast: "Could not capture that region" plus the OS reason. The overlay is gone and nothing is in the Vault. The next hotkey press works | `event=capture_failed`, the reason code, the requested dimensions, the returned dimensions. Never pixels |
-| Windows hotkey registration (LC-009) | Not applicable — registration is synchronous and immediate | The combination is held by another process. At binding time the Settings screen refuses the choice and names the conflict; at startup the hotkey is left unregistered and a tray badge appears | Registration reports success and the key never fires. Detected only by the Reviewer, which is why the tray badge shows the *verified* registration state, re-read from the OS rather than remembered | At binding: an inline refusal naming the conflict. At startup: a tray badge and one line in the Settings screen saying which hotkey is not active | `event=hotkey_registration_failed`, the combination, the OS error. The combination is not a secret |
+| Capture requested, from `LC-009` (`settings`) | Not applicable — an in-process event | The hotkey never registered, so no event ever arrives. Nothing here can detect that; `settings` owns the reporting, and its tray badge is what the Reviewer sees | The event arrives twice for one key press. Guarded by refusing a second overlay while one is open: a Capture already in progress swallows the event rather than stacking overlays | Nothing from this component. The unregistered-hotkey report belongs to `settings` | `event=capture_request_ignored`, and why. At debug level |
 | Vault filesystem, write (LC-005) | A slow or network-mounted Vault. The write is off the save path already, so the Reviewer is not blocked; if it has not completed in 10 s the Finding is marked broken and the row is removed | The folder is gone or unwritable — an unplugged drive, a revoked permission. The Capture is abandoned before any row is committed, and the Reviewer is told the Vault is unreachable | Reports a successful write for a file that is not there, which happens on some network filesystems. `LC-005` re-reads the file's size after writing, and a mismatch is a failed write | A toast naming the Vault path and what went wrong, with an action that opens Settings. No half-Finding in the list | `event=blob_write_failed`, the relative path, the byte count expected and found. Never the bytes |
 | Vault filesystem, delete (LC-005) | Rare; treated as absent after 5 s | The file is already gone. Treated as **success** — the goal is that it is not there, and refusing here would leave the Reviewer unable to delete a Finding whose file someone else removed | Reports a successful delete for a file still present — or refuses because another process holds it open. Re-checked after the call; if the file is still there the whole deletion is abandoned and no row is removed | A dialog: "Could not delete N of M findings", naming the files, and nothing was removed. BR-5's all-or-nothing, stated to the Reviewer | `event=blob_delete_failed`, the relative path, the OS error |
 | `library.db` (LC-004) | SQLite on a local file; a slow case means the disk is failing. A statement not returning in 5 s surfaces as unavailable | The file is missing or corrupt. Snapdown starts, refuses to capture, and says the Library could not be opened, offering the Vault path so the Reviewer can look. It MUST NOT create a fresh empty Library over a corrupt one | A write reports success and is not durable. Guarded by `journal_mode=WAL` plus `synchronous=FULL` on the transaction that commits a Finding — the one place durability is worth the cost | A blocking banner in the Editor and a tray badge. Capture is disabled rather than silently losing Findings | `event=store_unavailable`, the operation, the SQLite result code |

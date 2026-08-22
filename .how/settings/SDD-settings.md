@@ -20,7 +20,15 @@ three inventories in `.how/_platform/`, and C4.
 
 ## Decision Summary · [outline]
 
+Not written: `[outline]` is above this component's `mode`.
+
 ## Structure · [outline]
+
+Not written for the same reason. For the record, and because `wdi-init` registered them rather than
+this file: `settings` owns four Logical Components in `desktop-app` — `LC-025 settings-store`,
+`LC-015 settings-screen`, `LC-026 startup-registrar`, and `LC-009 hotkey-registrar`. The last one is
+here rather than in `finding` because this component owns the binding it registers; it raises a
+capture-requested event that `finding` listens for.
 
 ## Design Notes
 

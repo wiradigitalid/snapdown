@@ -1,5 +1,152 @@
 # waves.yaml — rencana kerja.
 #
 # `release` MUST disebut tiap wave. STATUS STORY MUST NOT DISALIN KE SINI.
+#
+# One wave completes one Product Component. That is not a rule of the method — a wave MAY cross
+# components — it is this product's plan, chosen so that V3 is green after every wave rather than
+# only at the end. The cost is that W2 is a wave `L`.
 
-waves: []
+waves:
+  - id: W1
+    title: Workspace, the two stores, and Settings complete
+    status: open
+    release: r1
+    prd: [capture-to-markdown]
+    fr: [FR-5, FR-16, FR-17, FR-18]
+    components: [settings]
+    size: L
+    depends_on: []
+    spec_folder: _bmad-output/specs/w1-settings/
+    opened: "2026-08-22"
+    spec_reviewed:
+      date: ""
+      sha: ""
+      lenses: []
+    epics:
+      - id: EP-settings
+        component: settings
+        title: Settings
+        stories:
+          - id: W1-S1
+            title: Cargo workspace, Tauri v2 shell, React webview, tray, and CI
+            component: settings
+            satisfies: []
+            depends_on: []
+            touches: [settings-store]
+            spec_folder: _bmad-output/specs/w1-settings/
+            tests:
+              - cargo::workspace_builds
+              - cargo::snapdown_core_has_no_io_dependency
+              - vitest::app_renders_shell
+              - ci::korpus_workflow_runs_validate
+          - id: W1-S2
+            title: library.db with migrations, the setting table, and the Vault blob adapter
+            component: settings
+            satisfies: []
+            depends_on: [W1-S1]
+            touches: [settings-store, local-db, vault-fs]
+            spec_folder: _bmad-output/specs/w1-settings/
+            tests:
+              - cargo::migrations_apply_to_an_empty_database
+              - cargo::migrations_are_idempotent
+              - cargo::setting_read_falls_back_to_its_shipped_default
+              - cargo::vault_refuses_a_path_that_escapes_its_root
+              - cargo::corrupt_library_refuses_to_open_and_does_not_recreate
+          - id: W1-S3
+            title: Settings screen — the Vault folder and the Quality Budget
+            component: settings
+            satisfies: [UC-13, UC-14]
+            depends_on: [W1-S2]
+            touches: [settings-store, editor-ui]
+            spec_folder: _bmad-output/specs/w1-settings/
+            tests:
+              - cargo::unwritable_vault_folder_is_refused_at_choosing
+              - cargo::changing_the_vault_moves_every_file_or_none
+              - cargo::quality_budget_outside_range_is_refused_on_entry
+              - vitest::settings_shows_the_stored_size_of_the_latest_finding
+          - id: W1-S4
+            title: Hotkey binding, OS registration, and honest conflict reporting
+            component: settings
+            satisfies: [UC-15]
+            depends_on: [W1-S3]
+            touches: [settings-store, capture-pipeline]
+            spec_folder: _bmad-output/specs/w1-settings/
+            tests:
+              - cargo::a_combination_held_elsewhere_is_refused_at_binding
+              - cargo::two_actions_cannot_share_one_combination
+              - cargo::a_cleared_hotkey_disables_its_action
+              - cargo::rebinding_takes_effect_without_a_restart
+              - cargo::a_failed_startup_registration_is_reported_not_swallowed
+          - id: W1-S5
+            title: Run at Windows startup, reflecting the real registration
+            component: settings
+            satisfies: [UC-16]
+            depends_on: [W1-S4]
+            touches: [settings-store]
+            spec_folder: _bmad-output/specs/w1-settings/
+            tests:
+              - cargo::startup_registration_needs_no_administrator_rights
+              - cargo::the_setting_is_read_back_from_the_os_not_remembered
+              - cargo::disabling_removes_the_registration
+
+  - id: W2
+    title: Finding complete — the capture loop, the Editor, Markers, deletion
+    status: planned
+    release: r1
+    prd: [capture-to-markdown]
+    fr: [FR-1, FR-2, FR-3, FR-4, FR-6, FR-7, FR-8, FR-9, FR-13, FR-15]
+    components: [finding]
+    size: L
+    depends_on: [W1]
+    spec_folder: _bmad-output/specs/w2-finding/
+    scope: >-
+      Per-monitor Capture Overlay, region selection at each monitor's own scale factor, the note
+      field at the region, image reduction under the Quality Budget, the Editor's Finding list and
+      detail view, Note editing, the Marker canvas, multi-select, hard deletion with its files, and
+      the orphan report. Carries RISK-1 through RISK-4, which is why it is a wave L.
+
+  - id: W3
+    title: Bundle complete — compose, list, copy, delete
+    status: planned
+    release: r1
+    prd: [capture-to-markdown]
+    fr: [FR-10, FR-11, FR-12, FR-14]
+    components: [bundle]
+    size: M
+    depends_on: [W2]
+    spec_folder: _bmad-output/specs/w3-bundle/
+    scope: >-
+      The composer, the pure Markdown writer, the Marker burner, the Bundle store with its
+      delete-with-files transaction, and the Bundle list. The golden-file test that AD-9 rests on is
+      born here, covering the clipboard path; the other two paths join it in W4 and W5.
+
+  - id: W4
+    title: Agent access complete — the key, the Local API, the MCP bridge
+    status: planned
+    release: r2
+    prd: [agent-handoff]
+    fr: [FR-19, FR-20, FR-21, FR-22]
+    components: [agent-access]
+    size: M
+    depends_on: [W3]
+    spec_folder: _bmad-output/specs/w4-agent-access/
+    scope: >-
+      Access Key issue, re-copy, state, and revoke; the loopback-only read-only API; the stateless
+      stdio MCP bridge. The refusal-versus-empty-result behaviour is tested from an agent's position,
+      not the API's, because that is where RISK-6 actually happens.
+
+  - id: W5
+    title: Sharing complete — publish, the web service, the reader
+    status: planned
+    release: r2
+    prd: [agent-handoff]
+    fr: [FR-23, FR-24, FR-25, FR-26]
+    components: [sharing]
+    size: L
+    depends_on: [W3]
+    spec_folder: _bmad-output/specs/w5-sharing/
+    scope: >-
+      The staged publish client, the Publication record with its sticky failure, the Go service with
+      its embedded store and identical refusals, and the React reader. Three containers and two
+      languages, carrying RISK-8, RISK-9, and RISK-10. Depends on W3 rather than W4 — the two r2
+      waves are independent and MAY run in parallel.

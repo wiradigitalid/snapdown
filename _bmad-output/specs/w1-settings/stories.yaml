@@ -1,0 +1,59 @@
+- id: "W1-S1"
+  title: Cargo workspace, Tauri v2 shell, React webview, tray, and CI
+  description: >-
+    Lay the substrate every later wave builds inside: the Cargo workspace with snapdown-core and
+    snapdown-store, the Tauri v2 app starting to a tray icon, the React + Vite front end with the
+    design system's tokens and base elements, and the two CI workflows. See SPEC.md, W1-S1.
+  invoke_dev_with: >-
+    snapdown-core MUST have no I/O dependency at all — not filesystem, not network, not clock. The
+    named test for it MUST check the dependency graph, not assert a literal. Do not create web/api/
+    or crates/snapdown-mcp; this wave needs no Go and no MCP. The app starts to a tray icon, not a
+    window, and opens Settings on first run only.
+
+- id: "W1-S2"
+  title: library.db with migrations, the setting table, and the Vault blob adapter
+  description: >-
+    Two adapters in snapdown-store, both behind ports declared in snapdown-core: the SQLite settings
+    store with forward-only idempotent migrations, and the Vault blob adapter. Only the setting and
+    schema_version tables exist this wave. See SPEC.md, W1-S2.
+  invoke_dev_with: >-
+    Two rules here are load-bearing for the whole product. A corrupt library.db MUST refuse to open
+    and MUST NOT be replaced by a fresh empty one. The Vault adapter MUST resolve a path and refuse
+    anything escaping the root — resolve, never string-match — because W4 and W5 both rely on this
+    single check. Never log a Setting's value: a Vault path can carry a person's name.
+
+- id: "W1-S3"
+  title: Settings screen — the Vault folder and the Quality Budget
+  description: >-
+    Screen 12 at /settings: one screen with sections. The Vault folder with its all-or-nothing move,
+    and the Quality Budget with shipped defaults of 1600 px and quality 75. See SPEC.md, W1-S3.
+  invoke_dev_with: >-
+    Write the Quality Budget defaults as named constants with a comment pointing at OQ-3 — they are a
+    working answer, not a measured one. An unwritable folder is refused at the moment of choosing,
+    not at next use. If an all-or-nothing Vault move cannot be made safe against a file held open by
+    another process, refusing the move is the acceptable answer; say which you implemented. No
+    literal colour, spacing, radius, or font size anywhere — tokens only.
+
+- id: "W1-S4"
+  title: Hotkey binding, OS registration, and honest conflict reporting
+  description: >-
+    LC-009 hotkey-registrar: two bindable actions, conflict refused at binding time, rebinding
+    without a restart, a cleared binding disabling its action, and a failed startup registration
+    reported rather than swallowed. See SPEC.md, W1-S4.
+  invoke_dev_with: >-
+    If Windows cannot be made to report a hotkey conflict reliably at binding time, do NOT fake it —
+    report the limitation and escalate, because FR-17's promise would then need renegotiating and
+    that is the owner's call. The registrar raises a capture-requested event that nothing subscribes
+    to in this wave; wire it and leave it unconsumed rather than adding a placeholder capture.
+    Registration MUST work without administrator rights; if it cannot, that is the most important
+    thing in your report.
+
+- id: "W1-S5"
+  title: Run at Windows startup, reflecting the real registration
+  description: >-
+    LC-026 startup-registrar. Enabling needs no administrator rights, starting this way opens no
+    window, and the setting is read back from the OS rather than remembered. See SPEC.md, W1-S5.
+  invoke_dev_with: >-
+    Read the registration state back from the OS every time the screen opens. Do not cache it — the
+    whole promise in FR-18 is that the setting reflects reality rather than an intention. Disabling
+    MUST remove the registration, not leave it and ignore it.

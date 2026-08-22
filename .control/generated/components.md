@@ -37,12 +37,12 @@ product_components:
   - LC-006
   - LC-007
   - LC-008
-  - LC-009
 - id: settings
   name: null
   containers:
   - desktop-app
   logical_components:
+  - LC-009
   - LC-015
   - LC-025
   - LC-026
@@ -102,8 +102,8 @@ logical_components:
   owner: null
 - id: LC-009
   type: null
-  component: finding
-  area: capture-pipeline
+  component: settings
+  area: settings-store
   owner: null
 - id: LC-010
   type: null
