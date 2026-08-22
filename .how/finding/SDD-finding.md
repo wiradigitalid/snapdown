@@ -7,9 +7,9 @@ updated: "2026-08-22"
 realizes: [UC-1, UC-2, UC-3, UC-4, UC-5, UC-6, UC-7, UC-8]
 binds: [AD-1, AD-2, AD-3, AD-4, AD-6]
 reviewed:
-  date: ""
-  sha: ""
-  lenses: []
+  date: "2026-08-22"
+  sha: 9bdda00
+  lenses: [structure, prose, edge-case-hunter]
 ---
 
 # SDD — finding

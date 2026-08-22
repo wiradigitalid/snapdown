@@ -7,9 +7,9 @@ updated: "2026-08-22"
 realizes: [UC-9, UC-10, UC-11, UC-12]
 binds: [AD-2, AD-3, AD-4, AD-9]
 reviewed:
-  date: ""
-  sha: ""
-  lenses: []
+  date: "2026-08-22"
+  sha: 9bdda00
+  lenses: [structure, prose, edge-case-hunter]
 ---
 
 # SDD — bundle
