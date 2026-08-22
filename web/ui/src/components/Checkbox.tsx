@@ -10,6 +10,7 @@ export const Checkbox: React.FC<CheckboxProps> = ({
   indeterminate = false,
   checked,
   disabled,
+  className = '',
   style,
   ...props
 }) => {
@@ -20,6 +21,8 @@ export const Checkbox: React.FC<CheckboxProps> = ({
       checkboxRef.current.indeterminate = indeterminate;
     }
   }, [indeterminate]);
+
+  const inputClass = `checkbox-input ${className}`.trim();
 
   return (
     <label
@@ -40,11 +43,8 @@ export const Checkbox: React.FC<CheckboxProps> = ({
         type="checkbox"
         checked={checked}
         disabled={disabled}
-        style={{
-          accentColor: 'var(--color-accent)',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          ...style,
-        }}
+        className={inputClass}
+        style={style}
         {...props}
       />
       {label && <span>{label}</span>}

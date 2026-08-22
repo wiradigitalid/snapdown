@@ -16,10 +16,12 @@ export const TextField: React.FC<TextFieldProps> = ({
   maxLength,
   value,
   disabled,
+  className = '',
   style,
   ...props
 }) => {
   const currentLength = typeof value === 'string' ? value.length : 0;
+  const inputClass = `text-field-input ${invalid ? 'invalid' : ''} ${className}`.trim();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', width: '100%' }}>
@@ -38,18 +40,8 @@ export const TextField: React.FC<TextFieldProps> = ({
         disabled={disabled}
         value={value}
         maxLength={maxLength}
-        style={{
-          fontFamily: 'var(--font-ui)',
-          fontSize: 'var(--text-sm)',
-          padding: 'var(--space-2) var(--space-3)',
-          borderRadius: 'var(--radius-sm)',
-          border: `1px solid ${invalid ? 'var(--color-danger)' : 'var(--color-border)'}`,
-          backgroundColor: 'var(--color-surface)',
-          color: 'var(--color-text)',
-          outline: 'none',
-          opacity: disabled ? 0.6 : 1,
-          ...style,
-        }}
+        className={inputClass}
+        style={style}
         {...props}
       />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

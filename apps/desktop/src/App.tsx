@@ -1,10 +1,7 @@
-import React, { useState } from 'react';
-import { Button, TextField, Toast } from '@snapdown/ui';
+import React from 'react';
+import { TextField } from '@snapdown/ui';
 
 export const App: React.FC = () => {
-  const [activeRoute] = useState<string>('/settings');
-  const [showToast, setShowToast] = useState<boolean>(false);
-
   return (
     <main
       data-testid="app-shell"
@@ -37,19 +34,7 @@ export const App: React.FC = () => {
           >
             Snapdown Settings
           </h1>
-          <p
-            style={{
-              margin: 'var(--space-1) 0 0',
-              fontSize: 'var(--text-sm)',
-              color: 'var(--color-text-muted)',
-            }}
-          >
-            Active Route: {activeRoute}
-          </p>
         </div>
-        <Button variant="primary" onClick={() => setShowToast(true)}>
-          Save Configuration
-        </Button>
       </header>
 
       <section
@@ -78,13 +63,6 @@ export const App: React.FC = () => {
           defaultValue=""
         />
       </section>
-
-      {showToast && (
-        <Toast
-          message="Settings updated successfully"
-          onDismiss={() => setShowToast(false)}
-        />
-      )}
     </main>
   );
 };

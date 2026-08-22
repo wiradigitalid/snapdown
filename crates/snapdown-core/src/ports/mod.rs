@@ -1,6 +1,10 @@
 use crate::domain::setting::{Setting, SettingKey};
 use crate::error::CoreError;
 
+pub trait Clock {
+    fn now_rfc3339(&self) -> String;
+}
+
 pub trait SettingsStore {
     fn get(&self, key: &SettingKey) -> Result<Option<Setting>, CoreError>;
     fn set(&self, setting: &Setting) -> Result<(), CoreError>;

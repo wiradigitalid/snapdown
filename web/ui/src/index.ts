@@ -7,4 +7,3 @@ export * from './components/Modal';
 export * from './components/ConfirmDialog';
 export * from './components/MarkerBadge';
 export * from './components/EmptyState';
-export * from './components/Markdown';

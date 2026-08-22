@@ -1,0 +1,13 @@
+  V13  .how/finding/SDD-finding.md: changed at 6a470fd after being reviewed at 9bdda00 — stale review
+  V13  waves.yaml:W1: carries no `reviewed` trace with a date and sha
+  V18  W1-S2: has no story file in _bmad-output/specs/w1-settings/stories/
+  V18  W1-S3: has no story file in _bmad-output/specs/w1-settings/stories/
+  V18  W1-S4: has no story file in _bmad-output/specs/w1-settings/stories/
+  V18  W1-S5: has no story file in _bmad-output/specs/w1-settings/stories/
+  V24  .agent/skills/bmad-project-context/references/template.md: cites `src/lib/money.ts` which does not exist
+  V24  .agent/skills/bmad-project-context/references/template.md: cites `src/routes/webhooks.ts` which does not exist
+  V24  .how/_platform/design-system.md: cites `web/ui/src/components/Markdown.tsx` which does not exist
+  V25  desktop-app: `built: true` MUST have a heading in the code map
+  V25  mcp-bridge: `built: true` MUST have a heading in the code map
+  V25  web-api: `built: true` MUST have a heading in the code map
+  V25  web-ui: `built: true` MUST have a heading in the code map

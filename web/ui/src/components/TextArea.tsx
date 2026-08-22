@@ -14,6 +14,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
   errorMessage,
   value,
   disabled,
+  className = '',
   style,
   onChange,
   ...props
@@ -26,6 +27,8 @@ export const TextArea: React.FC<TextAreaProps> = ({
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
   }, [value, autoGrow]);
+
+  const textareaClass = `text-area-input ${invalid ? 'invalid' : ''} ${className}`.trim();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', width: '100%' }}>
@@ -44,6 +47,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
         ref={textareaRef}
         disabled={disabled}
         value={value}
+        className={textareaClass}
         onChange={(e) => {
           if (autoGrow && textareaRef.current) {
             textareaRef.current.style.height = 'auto';
@@ -54,16 +58,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
           }
         }}
         style={{
-          fontFamily: 'var(--font-ui)',
-          fontSize: 'var(--text-sm)',
-          padding: 'var(--space-2) var(--space-3)',
-          borderRadius: 'var(--radius-sm)',
-          border: `1px solid ${invalid ? 'var(--color-danger)' : 'var(--color-border)'}`,
-          backgroundColor: 'var(--color-surface)',
-          color: 'var(--color-text)',
-          outline: 'none',
           resize: autoGrow ? 'none' : 'vertical',
-          opacity: disabled ? 0.6 : 1,
           ...style,
         }}
         {...props}

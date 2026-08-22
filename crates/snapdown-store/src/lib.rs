@@ -6,7 +6,7 @@ mod tests {
 
     #[test]
     fn store_crate_initializes() {
-        let id = snapdown_core::new_id();
+        let id = snapdown_core::id_from_timestamp(1_700_000_000, 0);
         assert_eq!(id.len(), 36);
     }
 }

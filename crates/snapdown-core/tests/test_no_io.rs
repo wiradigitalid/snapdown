@@ -1,4 +1,5 @@
-use cargo_metadata::{DependencyKind, MetadataCommand};
+use cargo_metadata::{DependencyKind, MetadataCommand, PackageId};
+use std::collections::HashSet;
 
 #[test]
 fn snapdown_core_has_no_io_dependency() {
@@ -6,23 +7,66 @@ fn snapdown_core_has_no_io_dependency() {
         .exec()
         .expect("cargo metadata must execute successfully");
 
+    let resolve = metadata
+        .resolve
+        .as_ref()
+        .expect("cargo metadata resolve graph must exist");
+
     let core_pkg = metadata
         .packages
         .iter()
         .find(|p| p.name == "snapdown-core")
         .expect("snapdown-core package must exist in workspace metadata");
 
-    // Check normal dependencies declared in Cargo.toml
-    let normal_deps: Vec<_> = core_pkg
-        .dependencies
-        .iter()
-        .filter(|d| d.kind == DependencyKind::Normal)
-        .map(|d| d.name.clone())
-        .collect();
+    // Walk the resolved graph transitively from snapdown-core
+    let mut visited: HashSet<PackageId> = HashSet::new();
+    let mut to_visit: Vec<PackageId> = vec![core_pkg.id.clone()];
+    let mut transitive_packages: Vec<String> = Vec::new();
 
-    println!("snapdown-core normal dependencies: {:?}", normal_deps);
+    while let Some(current_id) = to_visit.pop() {
+        if !visited.insert(current_id.clone()) {
+            continue;
+        }
 
-    // Prohibited crates: any crate related to I/O, network, clock, or OS filesystems
+        let pkg = metadata
+            .packages
+            .iter()
+            .find(|p| p.id == current_id)
+            .expect("package must exist in metadata");
+
+        if pkg.name != "snapdown-core" {
+            transitive_packages.push(pkg.name.clone());
+        }
+
+        if let Some(node) = resolve.nodes.iter().find(|n| n.id == current_id) {
+            for dep in &node.deps {
+                // Find matching dependency declaration in pkg.dependencies to check if target-specific or dev-only
+                let dep_pkg = metadata.packages.iter().find(|p| p.id == dep.pkg);
+                let dep_name = dep_pkg.map(|p| p.name.as_str()).unwrap_or(&dep.name);
+
+                let is_normal = pkg.dependencies.iter().any(|d| {
+                    d.name == dep_name && d.kind == DependencyKind::Normal && d.target.is_none()
+                });
+
+                // Also check node.deps dep_kinds
+                let is_normal_dep_kind = dep
+                    .dep_kinds
+                    .iter()
+                    .any(|k| k.kind == DependencyKind::Normal && k.target.is_none());
+
+                if is_normal || is_normal_dep_kind {
+                    to_visit.push(dep.pkg.clone());
+                }
+            }
+        }
+    }
+
+    println!(
+        "Transitive normal dependencies of snapdown-core: {:?}",
+        transitive_packages
+    );
+
+    // Prohibited crates: any crate related to I/O, network, clock, or OS filesystems / entropy
     let forbidden_names = [
         "tokio",
         "async-std",
@@ -37,26 +81,40 @@ fn snapdown_core_has_no_io_dependency() {
         "notify",
         "open",
         "std_semaphore",
-        "chrono", // chrono has clock/system time calls; domain core uses raw strings or pure serde/uuidv7
+        "chrono",
+        "getrandom",
+        "rand",
     ];
 
     for forbidden in &forbidden_names {
         assert!(
-            !normal_deps.contains(&forbidden.to_string()),
-            "snapdown-core must not depend on forbidden I/O or OS crate: {forbidden}"
+            !transitive_packages.contains(&forbidden.to_string()),
+            "snapdown-core must not have transitive dependency on forbidden crate: {forbidden}"
         );
     }
 
-    // Allowed normal dependencies for snapdown-core
-    let allowed_prefixes = ["serde", "thiserror", "uuid"];
-    for dep in &normal_deps {
-        let is_allowed = allowed_prefixes
-            .iter()
-            .any(|allowed| dep.starts_with(allowed));
+    // Explicit allowlist of allowed transitive crate names for snapdown-core
+    let allowed_crates = [
+        "serde",
+        "serde_core",
+        "serde_derive",
+        "serde_json",
+        "thiserror",
+        "thiserror-impl",
+        "uuid",
+        "proc-macro2",
+        "quote",
+        "syn",
+        "unicode-ident",
+        "itoa",
+        "memchr",
+        "zmij",
+    ];
+
+    for pkg_name in &transitive_packages {
         assert!(
-            is_allowed,
-            "snapdown-core has unexpected normal dependency `{dep}`. Only pure domain dependencies ({:?}) are allowed.",
-            allowed_prefixes
+            allowed_crates.contains(&pkg_name.as_str()),
+            "snapdown-core has unexpected transitive dependency `{pkg_name}`. Only explicitly permitted crates are allowed.",
         );
     }
 }

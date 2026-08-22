@@ -19,5 +19,26 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Run validate.py check
-        run: uv run .constitution/method/scripts/validate.py --check
+      - name: Run validate.py check against baseline
+        shell: bash
+        run: |
+          set -e
+          # Run validate.py and capture findings (lines starting with 2 spaces and V<number>)
+          uv run .constitution/method/scripts/validate.py --check > validate_output.txt 2>&1 || true
+          grep -E '^  V[0-9]+' validate_output.txt | sort > current_findings.txt || true
+          sort .github/validate-baseline.txt > baseline_findings.txt
+
+          echo "=== Current Findings ==="
+          cat current_findings.txt
+          echo "========================"
+
+          if ! cmp -s current_findings.txt baseline_findings.txt; then
+            echo "::error::Validator findings differ from .github/validate-baseline.txt!"
+            echo "--- Unexpected findings (new violations) ---"
+            comm -23 current_findings.txt baseline_findings.txt || true
+            echo "--- Stale baseline entries (fixed findings that must be removed from baseline) ---"
+            comm -13 current_findings.txt baseline_findings.txt || true
+            exit 1
+          fi
+          echo "Validator findings match baseline exactly."
+

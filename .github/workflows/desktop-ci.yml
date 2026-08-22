@@ -45,11 +45,23 @@ jobs:
           npm --prefix web/ui install
           npm --prefix apps/desktop install
 
-      - name: Frontend typecheck
+      - name: Shared UI typecheck
+        run: npm --prefix web/ui run typecheck
+
+      - name: Shared UI lint
+        run: npm --prefix web/ui run lint
+
+      - name: Shared UI unit tests
+        run: npm --prefix web/ui run test
+
+      - name: Desktop Frontend typecheck
         run: npm --prefix apps/desktop run typecheck
 
-      - name: Frontend lint
+      - name: Desktop Frontend lint
         run: npm --prefix apps/desktop run lint
 
-      - name: Frontend unit tests
+      - name: Desktop Frontend unit tests
         run: npm --prefix apps/desktop run test
+
+      - name: Desktop Frontend build
+        run: npm --prefix apps/desktop run build

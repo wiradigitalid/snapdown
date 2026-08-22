@@ -14,7 +14,7 @@
       {
         "title": "Snapdown Settings",
         "label": "main",
-        "url": "/settings",
+        "url": "index.html",
         "width": 800,
         "height": 600,
         "resizable": true,

@@ -4,7 +4,7 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager,
+    AppHandle, Manager,
 };
 
 fn show_settings_window(app: &AppHandle) {
@@ -12,21 +12,7 @@ fn show_settings_window(app: &AppHandle) {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
-        let _ = window.emit("navigate", "/settings");
     }
-}
-
-fn is_first_run(app: &AppHandle) -> bool {
-    let resolver = app.path();
-    if let Ok(app_data_dir) = resolver.app_data_dir() {
-        let flag_path = app_data_dir.join(".ran_before");
-        if !flag_path.exists() {
-            let _ = std::fs::create_dir_all(&app_data_dir);
-            let _ = std::fs::write(flag_path, b"1");
-            return true;
-        }
-    }
-    false
 }
 
 fn main() {
@@ -67,9 +53,9 @@ fn main() {
                 })
                 .build(app)?;
 
-            if is_first_run(&handle) {
-                show_settings_window(&handle);
-            }
+            // Per MF-8: First run will be derived from setting table being empty once W1-S2 lands.
+            // Until W1-S2 store lands, open Settings unconditionally.
+            show_settings_window(&handle);
 
             Ok(())
         })
