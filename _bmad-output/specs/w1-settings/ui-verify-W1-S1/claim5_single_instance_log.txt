@@ -1,0 +1,14 @@
+=== SINGLE INSTANCE VERIFICATION LOG ===
+Date: 2026-08-23 06:19:30 +07:00
+
+--- Initial Running Instance ---
+PID: 37544 | Name: desktop | StartTime: 08/23/2026 06:18:35
+
+--- Executing Second Instance ---
+Command: D:\Developer\orca-workspaces\snapdown\w1-settings\target\debug\desktop.exe
+Spawned PID: 31980
+Second Instance HasExited: True | ExitCode: 0
+
+--- Post-launch Process Count ---
+Total running 'desktop' processes: 1
+  - PID: 37544 | StartTime: 08/23/2026 06:18:35
