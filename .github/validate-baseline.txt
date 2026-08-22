@@ -1,0 +1,8 @@
+  V18  W1-S2: has no story file in _bmad-output/specs/w1-settings/stories/
+  V18  W1-S3: has no story file in _bmad-output/specs/w1-settings/stories/
+  V18  W1-S4: has no story file in _bmad-output/specs/w1-settings/stories/
+  V18  W1-S5: has no story file in _bmad-output/specs/w1-settings/stories/
+  V24  .agent/skills/bmad-project-context/references/template.md: cites `src/lib/money.ts` which does not exist
+  V24  .agent/skills/bmad-project-context/references/template.md: cites `src/routes/webhooks.ts` which does not exist
+  V25  mcp-bridge: `built: true` MUST have a heading in the code map
+  V25  web-api: `built: true` MUST have a heading in the code map

@@ -1,0 +1,48 @@
+name: Korpus Validation
+
+on:
+  push:
+    branches: [main, master, "kodesh87/*"]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  validate:
+    name: Validate Corpus
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        # No cache: there is no uv.lock in this repository and there will not be. validate.py is a
+        # PEP-723 script with inline dependencies, not a uv project, and `enable-cache: true` fails
+        # outright when its dependency glob matches nothing.
+        uses: astral-sh/setup-uv@v3
+
+      - name: Run validate.py check against baseline
+        shell: bash
+        run: |
+          set -e
+          # Run validate.py and capture findings (lines starting with 2 spaces and V<number>)
+          uv run .constitution/method/scripts/validate.py --check > validate_output.txt 2>&1 || true
+          # Findings only. Everything after the "Skipped:" heading is a SKIP, not a finding, and a
+          # skip appearing or disappearing is not a regression. A skip that becomes a real finding
+          # shows up above that line, so it is still caught.
+          sed '/^Skipped:/,$d' validate_output.txt | grep -E '^  V[0-9]+' | sort > current_findings.txt || true
+          sort .github/validate-baseline.txt > baseline_findings.txt
+
+          echo "=== Current Findings ==="
+          cat current_findings.txt
+          echo "========================"
+
+          if ! cmp -s current_findings.txt baseline_findings.txt; then
+            echo "::error::Validator findings differ from .github/validate-baseline.txt!"
+            echo "--- Unexpected findings (new violations) ---"
+            comm -23 current_findings.txt baseline_findings.txt || true
+            echo "--- Stale baseline entries (fixed findings that must be removed from baseline) ---"
+            comm -13 current_findings.txt baseline_findings.txt || true
+            exit 1
+          fi
+          echo "Validator findings match baseline exactly."
+
