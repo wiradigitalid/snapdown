@@ -1,0 +1,23 @@
+name: Korpus Validation
+
+on:
+  push:
+    branches: [main, master, "kodesh87/*"]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  validate:
+    name: Validate Corpus
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Run validate.py check
+        run: uv run .constitution/method/scripts/validate.py --check

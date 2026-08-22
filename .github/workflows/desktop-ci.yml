@@ -1,0 +1,55 @@
+name: Desktop CI
+
+on:
+  push:
+    branches: [main, master, "kodesh87/*"]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  rust-check:
+    name: Rust Workspace Build & Test
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Rust formatting check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy check
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run Cargo tests
+        run: cargo test --workspace
+
+  web-check:
+    name: Desktop Frontend Check
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: |
+          npm --prefix web/ui install
+          npm --prefix apps/desktop install
+
+      - name: Frontend typecheck
+        run: npm --prefix apps/desktop run typecheck
+
+      - name: Frontend lint
+        run: npm --prefix apps/desktop run lint
+
+      - name: Frontend unit tests
+        run: npm --prefix apps/desktop run test

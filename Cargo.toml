@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/snapdown-core",
+    "crates/snapdown-store",
+    "apps/desktop/src-tauri",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Snapdown Contributors"]
+license = "MIT"
+repository = "https://github.com/wiradigitalid/snapdown"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+uuid = { version = "1.10", features = ["v7", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+tauri = { version = "2.0", features = ["tray-icon"] }
+tauri-build = { version = "2.0" }
+tauri-plugin-single-instance = { version = "2.0" }
