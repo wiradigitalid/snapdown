@@ -2,4 +2,163 @@
 #
 # `pivot_trigger` is a measurable condition that makes turning or giving up the right call.
 
-risks: []
+risks:
+  - id: RISK-1
+    title: Per-monitor DPI scaling makes the captured region disagree with the region that was dragged
+    component: finding
+    owner: Repo owner
+    likelihood: high
+    impact: high
+    note: The single most likely source of a wrong capture, and it is invisible until someone compares
+      the image to what they selected. It is why the overlay is one window per monitor rather than one
+      over the virtual desktop.
+    mitigation: Per-monitor overlay windows, coordinates converted at the monitor's own scale factor,
+      and an integration test on a real multi-monitor session with mixed scale factors.
+    pivot_trigger: Region accuracy is still wrong on a mixed-scale-factor setup after two focused
+      attempts. Then the capture adapter moves to a platform-native implementation, per DEC-001's
+      reversal trigger.
+    status: open
+  - id: RISK-2
+    title: NFR-2 (500 ms save) and NFR-3 (real encoding work) cannot both hold on one path
+    component: finding
+    owner: Repo owner
+    likelihood: medium
+    impact: medium
+    note: Reduction is genuine work and the save has to return focus fast. If reduction is not moved
+      off the save path, one of the two numbers is missed — and the Editor then has to tolerate a
+      Finding whose image is still being written.
+    mitigation: Commit the record, return focus, finish the image immediately after; the Editor renders
+      an arriving Finding as arriving. Timed tests around both numbers.
+    pivot_trigger: The 500 ms is missed on the owner's own machine with the shipped Quality Budget.
+      Then NFR-2 is renegotiated at G2 rather than the design being bent to fit it.
+    status: open
+  - id: RISK-3
+    title: Deleting a file on Windows can fail while its record has already gone, producing exactly the
+      orphans NFR-5 forbids
+    component: finding
+    owner: Repo owner
+    likelihood: medium
+    impact: high
+    note: A file held open by another process cannot be removed, and BR-5 requires that nothing then
+      be removed. Getting this wrong in the convenient direction is the failure that makes BG-5
+      unmeasurable.
+    mitigation: Files removed before the record is committed as gone, with the prior state restored on
+      any failure; the orphan report of FR-15 as the standing check; an invariant assertion in every
+      deletion test.
+    pivot_trigger: Any orphan observed in normal use after the deletion path is written. Then deletion
+      becomes a two-phase operation with a reconcile on start, and BR-5 is restated.
+    status: open
+  - id: RISK-4
+    title: A partial Marker renumber silently mis-attaches a comment to the wrong spot
+    component: finding
+    owner: Repo owner
+    likelihood: low
+    impact: high
+    note: The only defect that destroys the product's single promise, and neither the Reviewer nor the
+      agent can see it. AD-1 exists for this and is not sufficient on its own — the renumber has to be
+      one operation over one collection.
+    mitigation: Markers and Note lines stored as one ordered collection (AD-1); property-based tests
+      over add, move, remove, and renumber asserting no gap and no mismatch.
+    pivot_trigger: One occurrence in real use. There is no acceptable rate.
+    status: open
+  - id: RISK-5
+    title: The three handoff paths drift into three renderings of one Bundle
+    component: bundle
+    owner: Repo owner
+    likelihood: medium
+    impact: medium
+    note: The pressure to render slightly differently per surface is constant and each instance looks
+      reasonable on its own. Two agents then read the same review and disagree about it.
+    mitigation: One composer in the core, the composed bytes stored (AD-9), and a golden-file test
+      asserting the clipboard, Local API, and published bytes are identical.
+    pivot_trigger: Any surface needing a shape the stored bytes do not carry. That is a change to the
+      composer, and it goes through wdi-decision rather than into the surface.
+    status: open
+  - id: RISK-6
+    title: The bridge flattens a refusal into an empty result, and the agent reports the Library as
+      empty
+    component: agent-access
+    owner: Repo owner
+    likelihood: medium
+    impact: medium
+    note: BR-17 and AD-7 are the mitigation and they are checkable on the API side while the failure
+      happens on the agent side. A bridge that returns an empty tool result for a refusal satisfies
+      the letter of both.
+    mitigation: Refusals carry a code from the catalogue in cross-cutting.md and are mapped to an MCP
+      tool error, never to an empty result; the behaviour is tested from an agent's position rather
+      than the API's.
+    pivot_trigger: One observed instance of an agent reporting an empty Library on a refusal, after the
+      mapping is written. Then the bridge stops translating errors and passes them through, per
+      DEC-002's reversal trigger.
+    status: open
+  - id: RISK-7
+    title: The Access Key ends up on disk, and revocation becomes cosmetic
+    component: agent-access
+    owner: Repo owner
+    likelihood: low
+    impact: high
+    note: Any convenience that persists the key — a cache file, a shell history, a log line — turns
+      per-session access into standing access. DEC-002 exists because this is the failure mode of every
+      alternative that was rejected.
+    mitigation: The bridge receives the key through a tool call and holds it in memory only; library.db
+      stores a hash; a repository and log scan in CI; the constraint stated in cross-cutting.md §
+      Secrets.
+    pivot_trigger: The key found written anywhere outside the OS credential store. Then the key
+      lifetime is redesigned rather than the storage being moved.
+    status: open
+  - id: RISK-8
+    title: An unpublish reports success it did not achieve, and the Reviewer believes something is
+      private
+    component: sharing
+    owner: Repo owner
+    likelihood: medium
+    impact: high
+    note: The worst outcome this product can produce, which is why BR-20 keeps the Bundle marked
+      published on any unconfirmed unpublish. Designing it away is the tempting direction.
+    mitigation: BR-20; the reconcile route (endpoint 14); the failure recorded on the Publication and
+      shown in the Bundle list (FR-26); tests calling immediately after an unpublish.
+    pivot_trigger: One instance of a Bundle shown as unpublished while still being served. Then
+      Publication state stops being local and is read from the service on every open.
+    status: open
+  - id: RISK-9
+    title: A Publication URL leaks, because a URL is a bearer credential wherever it is pasted
+    component: sharing
+    owner: Repo owner
+    likelihood: medium
+    impact: medium
+    note: The accepted weakness behind OQ-8. An agent transcript, a shared terminal, or a log is
+      enough. AD-8 limits the damage to one Bundle; it does not prevent it.
+    mitigation: 128 bits of slug entropy (NFR-10); no route that enumerates (NFR-15); unpublish as a
+      one-action remedy; AD-8 keeping the slug unrelated to every Library id so one leak is not a way
+      to find the next.
+    pivot_trigger: A Publication read by anyone the Reviewer did not hand the URL to. Then the read
+      token designed for in AD-8 is promised and shipped.
+    status: open
+  - id: RISK-10
+    title: The publish seam is the one contract nothing typechecks, because the two sides are different
+      languages
+    component: sharing
+    owner: Repo owner
+    likelihood: medium
+    impact: medium
+    note: Named as a cost in DEC-001 and recorded here because a cost with no owner is not managed.
+      Rows 12 to 14 of inventory-api.md are the whole agreement between Rust and Go.
+    mitigation: The three publish endpoints specified in inventory-api.md; an integration test that
+      runs the real publish client against a real web-api from a clean directory (NFR-14).
+    pivot_trigger: Two or more defects caused by the two sides disagreeing about the contract. Then the
+      Go choice reopens in favour of one language, per DEC-001's reversal trigger.
+    status: open
+  - id: RISK-11
+    title: An agent fetching several Bundle images in one turn spends more context than the Reviewer
+      intended
+    component: agent-access
+    owner: Repo owner
+    likelihood: medium
+    impact: low
+    note: The product has no way to stop it, and BG-3 is the goal it undermines. It is the strongest
+      argument for conservative Quality Budget defaults.
+    mitigation: Reduction on the way in (AD-4) so there is no expensive version to fetch; a
+      conservative shipped default; OQ-3 kept open until the default is measured.
+    pivot_trigger: The measured cost of reading a five-Finding Bundle crowding out the task it was
+      about. Then the default long edge drops and OQ-3 closes with a number.
+    status: open

@@ -9,3 +9,6 @@ Rows move here from the other three lists. MUST NOT be deleted.
 | id | Question | Answer | Closed |
 |---|---|---|---|
 | — | — | — | — |
+
+**Empty as of 2026-08-22.** No question has been closed yet. A row arrives here by moving from
+`blocking.md`, `assumptions.md`, or `external.md`, keeping its id.

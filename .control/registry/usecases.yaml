@@ -3,4 +3,147 @@
 # `critical: true` when the UC touches MONEY, PERSONAL DATA, or an IRREVERSIBLE ACTION.
 # This label decides something ONLY at `mode: deep`.
 
-usecases: []
+usecases:
+  # --- finding ----------------------------------------------------------------------
+  - id: UC-1
+    title: I press a key, box the thing that is wrong, and say what is wrong with it
+    actor: Reviewer
+    component: finding
+    satisfies: [FR-1, FR-2]
+    critical: false
+  - id: UC-2
+    title: I take five of these in a row without stopping
+    actor: Reviewer
+    component: finding
+    satisfies: [FR-3]
+    critical: false
+  - id: UC-3
+    title: I look at everything I have captured so far
+    actor: Reviewer
+    component: finding
+    satisfies: [FR-6]
+    critical: false
+  - id: UC-4
+    title: I reword a note now that I have read it back
+    actor: Reviewer
+    component: finding
+    satisfies: [FR-7]
+    critical: false
+  - id: UC-5
+    title: I point at three separate spots inside one screenshot
+    actor: Reviewer
+    component: finding
+    satisfies: [FR-8]
+    critical: false
+  - id: UC-6
+    title: I pick out several findings at once
+    actor: Reviewer
+    component: finding
+    satisfies: [FR-9]
+    critical: false
+  - id: UC-7
+    title: I throw away the findings I am done with
+    actor: Reviewer
+    component: finding
+    satisfies: [FR-13]
+    critical: true
+  - id: UC-8
+    title: I find out what has gone missing or been left behind
+    actor: Reviewer
+    component: finding
+    satisfies: [FR-15]
+    critical: false
+  # --- bundle -----------------------------------------------------------------------
+  - id: UC-9
+    title: I turn the findings I picked into one review document
+    actor: Reviewer
+    component: bundle
+    satisfies: [FR-10]
+    critical: false
+  - id: UC-10
+    title: I look back at the reviews I have already put together
+    actor: Reviewer
+    component: bundle
+    satisfies: [FR-11]
+    critical: false
+  - id: UC-11
+    title: I drop a whole review straight into the conversation I am having with my agent
+    actor: Reviewer
+    component: bundle
+    satisfies: [FR-12]
+    critical: false
+  - id: UC-12
+    title: I get rid of a review and everything in it
+    actor: Reviewer
+    component: bundle
+    satisfies: [FR-14]
+    critical: true
+  # --- settings ---------------------------------------------------------------------
+  - id: UC-13
+    title: I decide how much picture quality a screenshot is worth
+    actor: Reviewer
+    component: settings
+    satisfies: [FR-5]
+    critical: false
+  - id: UC-14
+    title: I decide where my screenshots are kept
+    actor: Reviewer
+    component: settings
+    satisfies: [FR-16]
+    critical: false
+  - id: UC-15
+    title: I change the keys that set Snapdown off, because one of them clashes
+    actor: Reviewer
+    component: settings
+    satisfies: [FR-17]
+    critical: false
+  - id: UC-16
+    title: I have Snapdown ready the moment I sign in
+    actor: Reviewer
+    component: settings
+    satisfies: [FR-18]
+    critical: false
+  # --- agent-access -----------------------------------------------------------------
+  - id: UC-17
+    title: I let the agent in front of me read my reviews
+    actor: Reviewer
+    component: agent-access
+    satisfies: [FR-19]
+    critical: true
+  - id: UC-18
+    title: I read a review from inside my agent instead of pasting it in
+    actor: Local coding agent
+    component: agent-access
+    satisfies: [FR-20, FR-21]
+    critical: false
+  - id: UC-19
+    title: I take the agent's access away again
+    actor: Reviewer
+    component: agent-access
+    satisfies: [FR-22]
+    critical: false
+  # --- sharing ----------------------------------------------------------------------
+  - id: UC-20
+    title: I put a review somewhere the agent on my server can reach it
+    actor: Reviewer
+    component: sharing
+    satisfies: [FR-23]
+    critical: true
+  - id: UC-21
+    title: I read a review that was put up for me, from a machine that has nothing else on it
+    actor: Remote coding agent
+    component: sharing
+    satisfies: [FR-24]
+    critical: false
+  - id: UC-22
+    title: I take a published review back off the internet
+    actor: Reviewer
+    component: sharing
+    satisfies: [FR-25]
+    critical: false
+  - id: UC-23
+    title: I check whether a review of mine is still readable from outside
+    actor: Reviewer
+    component: sharing
+    satisfies: [FR-26]
+    critical: false

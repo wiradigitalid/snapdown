@@ -4,12 +4,378 @@
 # Numbers are allocated FROM HERE and MUST NOT restart per document, per component, or per release.
 # The sequence is global to one product.
 
-goals: []
+goals:
+  - id: BG-1
+    title: A note is unambiguously attached to the image it describes
+    measure: Zero notes attached to the wrong image, on every handoff
+  - id: BG-2
+    title: Capture to handoff happens in one pass, with no file management
+    measure: Median handoff time for a five-Finding review under 120 seconds
+  - id: BG-3
+    title: A handoff costs as few agent tokens as it can while staying legible
+    measure: Stored bytes per Finding a small fraction of the unreduced capture, at a quality the
+      Reviewer does not override
+  - id: BG-4
+    title: The same review reaches an agent that is not on the capture machine
+    measure: Every published Bundle is fetchable by the remote agent on the first try
+  - id: BG-5
+    title: A review is disposable — findings and their files leave together
+    measure: Zero files in the Vault that nothing points at, and zero records pointing at a file
+      that is gone
+  - id: BG-6
+    title: The tool never becomes the thing being managed
+    measure: Cold start to a usable tray icon under 3 seconds, and no setting touched after the
+      first run
 
-capabilities: []
+capabilities:
+  - id: CAP-1
+    title: Capture a screen region with a Note, from a hotkey
+    goal: BG-2
+    component: finding
+    target_release: r1
+    prd: capture-to-markdown
+  - id: CAP-2
+    title: Reduce every captured image under a budget the Reviewer sets
+    goal: BG-3
+    component: finding
+    target_release: r1
+    prd: capture-to-markdown
+  - id: CAP-3
+    title: Hold Findings with their Notes and Markers, and work on them in the Editor
+    goal: BG-1
+    component: finding
+    target_release: r1
+    prd: capture-to-markdown
+  - id: CAP-4
+    title: Compose selected Findings into a named Markdown Bundle
+    goal: BG-1
+    component: bundle
+    target_release: r1
+    prd: capture-to-markdown
+    depends_on: [CAP-3]
+  - id: CAP-5
+    title: Remove a Finding together with its file, and know when something is orphaned
+    goal: BG-5
+    component: finding
+    target_release: r1
+    prd: capture-to-markdown
+  - id: CAP-6
+    title: Keep the tool out of the way — folder, hotkeys, startup
+    goal: BG-6
+    component: settings
+    target_release: r1
+    prd: capture-to-markdown
+  - id: CAP-7
+    title: Let an agent on this machine read a Bundle, after the Reviewer hands it a key
+    goal: BG-2
+    component: agent-access
+    target_release: r2
+    prd: agent-handoff
+    depends_on: [CAP-4]
+  - id: CAP-8
+    title: Let an agent on another host read a Bundle over HTTPS
+    goal: BG-4
+    component: sharing
+    target_release: r2
+    prd: agent-handoff
+    depends_on: [CAP-4]
 
-functional: []
+functional:
+  # --- CAP-1 Capture -----------------------------------------------------------------
+  - id: FR-1
+    title: Capture a screen region from a global hotkey
+    capability: CAP-1
+    component: finding
+    writes: [Finding]
+    proof: From a maximised third-party window, pressing the hotkey dims all screens, and dragging
+      a box then releasing produces an image of exactly that region.
+  - id: FR-2
+    title: Write the Note at capture time
+    capability: CAP-1
+    component: finding
+    writes: [Finding, Note]
+    proof: A Finding saved this way shows, in the Editor, exactly the text that was typed at capture
+      time against exactly the region that was dragged.
+  - id: FR-3
+    title: Capture repeatedly without leaving the loop
+    capability: CAP-1
+    component: finding
+    writes: [Finding]
+    proof: Six Captures in succession, each started by the hotkey from the application under review,
+      produce six Findings, and at no point does a Snapdown window need to be closed or dismissed.
+  # --- CAP-2 Image reduction ---------------------------------------------------------
+  - id: FR-4
+    title: Reduce every captured image automatically
+    capability: CAP-2
+    component: finding
+    writes: [Finding]
+    no_uc: Reduction has no actor and no initiating step. It is a property of UC-1 and UC-2 rather
+      than a use case of its own, and it is asserted by NFR-3 rather than by a flow.
+    proof: A capture of a full 4K screen is stored as a file whose long edge matches the configured
+      maximum and whose size is a small fraction of the unreduced capture, and it is still legible
+      enough to read the UI text in it.
+  - id: FR-5
+    title: Control the Quality Budget
+    capability: CAP-2
+    component: settings
+    writes: [Setting]
+    proof: Changing the long edge in Settings and taking a new Capture produces a stored image at the
+      new size, while Findings captured earlier are untouched.
+  # --- CAP-3 Library and Editor ------------------------------------------------------
+  - id: FR-6
+    title: See every Finding with its Note
+    capability: CAP-3
+    component: finding
+    proof: After six Captures, the Editor lists exactly those six Findings with the six Notes that
+      were typed, each against the right image.
+  - id: FR-7
+    title: Edit a Note
+    capability: CAP-3
+    component: finding
+    writes: [Note]
+    proof: Editing a Note, closing the Editor, and reopening it shows the edited text.
+  - id: FR-8
+    title: Place numbered Markers bound to numbered Note lines
+    capability: CAP-3
+    component: finding
+    writes: [Marker, Note]
+    proof: Placing three Markers on one image produces lines 1., 2., and 3. in that Finding's Note,
+      and the badge numbers on the image match the line numbers exactly.
+  - id: FR-9
+    title: Select several Findings at once
+    capability: CAP-3
+    component: finding
+    proof: Selecting four of eleven Findings and choosing an action applies it to exactly those four.
+  # --- CAP-4 Bundles -----------------------------------------------------------------
+  - id: FR-10
+    title: Compose selected Findings into a named Bundle
+    capability: CAP-4
+    component: bundle
+    writes: [Bundle, BundleItem]
+    proof: Composing five selected Findings under a chosen name produces one Markdown file where the
+      five Notes appear under their own five images, in the order the Reviewer selected.
+  - id: FR-11
+    title: List and reopen Bundles
+    capability: CAP-4
+    component: bundle
+    proof: After composing two Bundles, both appear in the Bundle list with the right names and
+      counts, and opening either shows the Findings it holds.
+  - id: FR-12
+    title: Copy a Bundle's Markdown
+    capability: CAP-4
+    component: bundle
+    proof: Copying a Bundle and pasting into a plain text editor yields the Bundle's complete
+      Markdown, unchanged.
+  - id: FR-14
+    title: Delete a Bundle with its images
+    capability: CAP-4
+    component: bundle
+    writes: [Bundle, BundleItem, Publication]
+    defers_to: [FR-25]
+    proof: Deleting a Bundle removes it from the Bundle list and leaves neither its Markdown nor its
+      images in the Vault folder.
+  # --- CAP-5 Removal -----------------------------------------------------------------
+  - id: FR-13
+    title: Delete Findings, and their image files with them
+    capability: CAP-5
+    component: finding
+    writes: [Finding, Note, Marker]
+    proof: Deleting three Findings removes them from the Editor and leaves no trace of their three
+      image files in the Vault folder.
+  - id: FR-15
+    title: Report orphans
+    capability: CAP-5
+    component: finding
+    proof: After a file is deleted from the Vault outside Snapdown, the Reviewer is shown that the
+      Finding is now broken and offered to delete the Finding.
+  # --- CAP-6 Settings ----------------------------------------------------------------
+  - id: FR-16
+    title: Choose the Vault folder
+    capability: CAP-6
+    component: settings
+    writes: [Setting]
+    proof: Choosing a folder and taking a Capture puts the image file in that folder; choosing a
+      different folder and taking another Capture puts the new image in the new folder.
+  - id: FR-17
+    title: Edit the hotkeys
+    capability: CAP-6
+    component: settings
+    writes: [Setting]
+    proof: Changing the Capture hotkey makes the new combination work and the old one stop working,
+      without restarting Snapdown.
+  - id: FR-18
+    title: Run at Windows startup
+    capability: CAP-6
+    component: settings
+    writes: [Setting]
+    proof: With the setting on, signing in to Windows leaves Snapdown running in the tray with its
+      hotkeys registered; with it off, it does not start.
+  # --- CAP-7 Local agent access ------------------------------------------------------
+  - id: FR-19
+    title: Issue and copy an Access Key
+    capability: CAP-7
+    component: agent-access
+    writes: [AccessKey]
+    proof: Clicking Copy access key puts a key on the clipboard, and an agent given that key can read
+      the Library while an agent given no key cannot.
+  - id: FR-20
+    title: Serve the Library over the Local API
+    capability: CAP-7
+    component: agent-access
+    proof: With a valid Access Key, a request from this machine returns a Bundle's Markdown; the same
+      request without the key, or from another machine, is refused.
+  - id: FR-21
+    title: Read a Bundle through MCP
+    capability: CAP-7
+    component: agent-access
+    proof: A coding agent with the Bridge configured and the key pasted can name the Findings in a
+      Bundle and describe what is in their images, without the Reviewer pasting any content.
+  - id: FR-22
+    title: Revoke access
+    capability: CAP-7
+    component: agent-access
+    writes: [AccessKey]
+    proof: After a revoke, an agent that had been reading Bundles a moment earlier is refused on its
+      next call.
+  # --- CAP-8 Web sharing -------------------------------------------------------------
+  - id: FR-23
+    title: Publish a Bundle
+    capability: CAP-8
+    component: sharing
+    writes: [Publication]
+    proof: Publishing a Bundle yields a URL that, fetched from another machine, returns that Bundle's
+      Markdown with working image links.
+  - id: FR-24
+    title: Serve a published Bundle
+    capability: CAP-8
+    component: sharing
+    proof: A plain HTTP client given the URL retrieves the Markdown, and every image reference in it
+      retrieves an image.
+  - id: FR-25
+    title: Unpublish a Bundle
+    capability: CAP-8
+    component: sharing
+    writes: [Publication]
+    proof: After unpublishing, fetching the previously working URL from another machine returns
+      nothing, and the Bundle is still intact in the Library.
+  - id: FR-26
+    title: See and copy a Bundle's Publication
+    capability: CAP-8
+    component: sharing
+    proof: The Bundle list distinguishes published from unpublished Bundles at a glance, and copying
+      the URL of a published one puts a working URL on the clipboard.
 
-nonfunctional: []
+nonfunctional:
+  - id: NFR-1
+    title: The Capture Overlay is visible within 200 ms of the hotkey press, with three monitors
+      attached
+    goal: BG-2
+    component: finding
+    enforced_by: A timed test around overlay creation in the capture path
+  - id: NFR-2
+    title: Saving a Finding dismisses the overlay and returns focus within 500 ms, with image
+      reduction not blocking that
+    goal: BG-2
+    component: finding
+    enforced_by: A timed test around the save path, asserting reduction runs off it
+  - id: NFR-3
+    title: Every stored Finding image fits the Quality Budget's long edge, and the shipped default
+      keeps a full-screen 4K capture under 250 KB
+    goal: BG-3
+    component: finding
+    enforced_by: An assertion over the stored file in the image-reduction tests
+  - id: NFR-4
+    title: No part of the capture path performs a network call, and capture works with networking
+      disabled
+    goal: BG-2
+    component: finding
+    enforced_by: A test that runs the capture path with outbound calls failing and asserts none was
+      attempted
+  - id: NFR-5
+    title: After any deletion the Vault holds no unreferenced file, and the Library points at no
+      absent file
+    goal: BG-5
+    component: finding
+    enforced_by: An invariant check in the deletion tests, plus the orphan report of FR-15
+  - id: NFR-6
+    title: Cold start reaches a usable tray icon with hotkeys registered within 3 seconds, and idles
+      under 150 MB working set with the Editor closed
+    goal: BG-6
+    component: settings
+    enforced_by: A startup timing test and a measured idle check
+  - id: NFR-7
+    title: Every hotkey and startup registration succeeds without administrator rights
+    goal: BG-6
+    component: settings
+    enforced_by: Running the integration suite as a standard user
+  - id: NFR-8
+    title: A Bundle's Markdown renders in a plain CommonMark reader, with every image reference
+      resolving relative to the Markdown file's own folder
+    goal: BG-1
+    component: bundle
+    enforced_by: A rendering test over a composed Bundle
+  - id: NFR-9
+    title: The Local API binds 127.0.0.1 only and refuses every request without a currently valid
+      Access Key, comparing keys in constant time
+    goal: BG-4
+    component: agent-access
+    enforced_by: Tests attempting the interface from a non-loopback address and with absent, wrong,
+      and revoked keys
+  - id: NFR-10
+    title: A Publication's URL slug carries at least 128 bits of entropy from a cryptographically
+      secure source
+    goal: BG-4
+    component: sharing
+    enforced_by: An assertion on slug generation
+  - id: NFR-11
+    title: No Finding, Note, or Bundle leaves this machine except through a publish the Reviewer
+      confirmed on a named Bundle
+    goal: BG-4
+    component: sharing
+    enforced_by: A test exercising capture, composition, and idle operation with outbound calls
+      failing, asserting none was attempted
+  - id: NFR-12
+    title: Only reduced images are ever transmitted or published; an unreduced capture never leaves
+      the machine
+    goal: BG-3
+    component: sharing
+    enforced_by: An assertion on the publish payload
+  - id: NFR-13
+    title: A revoke and an unpublish each take effect on the next request, with no cache or grace
+      period
+    goal: BG-5
+    component: sharing
+    enforced_by: Tests calling immediately after each
+  - id: NFR-14
+    title: The web service runs as one executable with one configuration file, needs no database
+      server, and its whole state is one directory
+    goal: BG-6
+    component: sharing
+    enforced_by: An integration test starting it from a clean directory and serving a published
+      Bundle
+  - id: NFR-15
+    title: The web service exposes no route that lists, searches, or enumerates Publications, and
+      returns the same refusal for an unknown slug as for a revoked one
+    goal: BG-4
+    component: sharing
+    enforced_by: A route-inventory test and a response-equality test
 
-journeys: []
+journeys:
+  - id: UJ-1
+    title: The Reviewer files five findings during one pass over a running app
+    prd: capture-to-markdown
+  - id: UJ-2
+    title: The Reviewer points at three specific spots inside one screenshot
+    prd: capture-to-markdown
+  - id: UJ-3
+    title: The Reviewer composes and hands over one Bundle
+    prd: capture-to-markdown
+  - id: UJ-4
+    title: First run
+    prd: capture-to-markdown
+  - id: UJ-5
+    title: The Reviewer hands a Bundle to the agent in the next window
+    prd: agent-handoff
+  - id: UJ-6
+    title: The Reviewer hands a Bundle to an agent on a server
+    prd: agent-handoff

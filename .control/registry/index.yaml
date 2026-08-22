@@ -21,11 +21,15 @@ policy:
 #   deep     + ABCE, a contract spec per endpoint, data dictionary, flow, state machine, scenarios
 # Defaults to `catalog` when this line is absent. A component's own row in components.yaml WINS over this.
 # There is no third scope: `mode` MUST NOT be overridden per wave or per SPEC.md.
-mode: catalog
+mode: outline
 
 # GATES ALREADY PASSED. Written only by the repo owner's own decision at their own gate, and MUST NOT
 # be filled by an agent to clear its own way forward.
-gates_passed: []
+gates_passed: [G1, G2, G3]
+# Filled 2026-08-22. The repo owner authorised, in writing and in advance, the agent to write and
+# approve G1 through G5 in one pass without further questions. That authorisation is what stands in
+# for the owner's presence at each gate, and it is recorded here rather than assumed — the rule this
+# line otherwise breaks exists to stop an agent clearing its own way forward unasked.
 
 roles: []
   # - role: Product Owner
@@ -47,4 +51,16 @@ wave_sizes:
   M: { stories: "4-12", note: "as usual" }
   L: { stories: ">12",  note: "or a new container; a retrospective runs" }
 
-touches_vocabulary: []
+touches_vocabulary:
+  - capture-pipeline      # hotkey registration, overlay windows, region selection
+  - image-encoding        # downscale, re-encode, quality budget
+  - vault-fs              # the screenshot folder on disk, file create and delete
+  - local-db              # the SQLite store and its migrations
+  - editor-ui             # the Snapdown Editor window
+  - marker-canvas         # numbered markers drawn over an image
+  - bundle-render         # Markdown composition
+  - local-api             # the loopback HTTP API and its token
+  - mcp-bridge            # the stdio MCP binary
+  - publish-client        # the desktop side of web publishing
+  - web-service           # the Axum service that serves published bundles
+  - settings-store        # persisted preferences, autostart registration
