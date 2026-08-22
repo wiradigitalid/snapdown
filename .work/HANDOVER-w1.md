@@ -6,13 +6,11 @@ Written 2026-08-23 by the outgoing orchestrator (Claude), **second revision** �
 about the UI verification and is superseded by this. Everything durable is in the corpus or under
 `_bmad-output/specs/w1-settings/`. If this file and the corpus disagree, the corpus wins.
 
-## Do NOT create a worktree. One already exists and it holds the work
-
-This is the single easiest mistake to make here, so it comes before everything else.
+## Do NOT create a worktree. One already exists, and here is the real reason
 
 Run the orchestrator from the **main** worktree, `D:/Developer/wiradigital.id/snapdown`. Dispatch every
 worker into the worktree that **already exists**, using this exact selector — it is a
-`<repo-id>::<path>` pair and a bare repo id will not target it:
+`<repo-id>::<path>` pair, and a bare repo id will not target it:
 
 ```
 d5f6f273-8548-4b5e-9623-89197cee6326::D:/Developer/orca-workspaces/snapdown/w1-settings
@@ -22,23 +20,39 @@ d5f6f273-8548-4b5e-9623-89197cee6326::D:/Developer/orca-workspaces/snapdown/w1-s
 orca orchestration worker-start --task <T>   --worktree "d5f6f273-8548-4b5e-9623-89197cee6326::D:/Developer/orca-workspaces/snapdown/w1-settings"   --agent opencode
 ```
 
-`--worktree new-top-level` and `--worktree new-child` MUST NOT be used for W1. A fresh worktree would
-branch from `main` and none of this wave's code is on `main` — it is on `kodesh87/w1-settings`, which
-is checked out in the worktree above. A worker sent to a new worktree would start from an empty tree
-and rebuild what already exists.
+**The reason is the build cache, not the code.** PR #1 is merged, so `main` now carries every line of
+W1-S1 and a fresh worktree would have the source. What it would not have is the **3.5 GB Cargo
+`target/`** and two `node_modules` trees. Tauri's first cold build is the slowest thing in this project
+by a wide margin, and throwing it away buys nothing.
 
-`orca worktree list` confirms only two exist, and that is correct:
+`--worktree new-top-level` and `--worktree new-child` MUST NOT be used for W1. Creation flags
+(`--name`, `--base-branch`, `--setup`) are **rejected** for an existing worktree — Orca errors with
+`Creation and setup options apply only to new-child or new-top-level worktrees`. If you hit that error
+you passed a creation flag out of habit; drop the flag, do not switch to a new worktree to satisfy it.
+
+Only two worktrees exist, and that is correct:
 
 | Worktree | Branch | Role |
 |---|---|---|
 | `D:/Developer/wiradigital.id/snapdown` | `main` | the orchestrator's. **Never edit application code here** |
-| `D:/Developer/orca-workspaces/snapdown/w1-settings` | `kodesh87/w1-settings` | every worker's, for all of W1 |
+| `D:/Developer/orca-workspaces/snapdown/w1-settings` | `kodesh87/w1-s2-stores` | every worker's, for the rest of W1 |
 
-Creation flags (`--name`, `--base-branch`, `--setup`) are **rejected** for an existing worktree — Orca
-errors with `Creation and setup options apply only to new-child or new-top-level worktrees`. If you see
-that error you passed a creation flag by habit; drop it, do not switch to a new worktree to satisfy it.
+## PR #1 is merged, so the plan changed — read this before you push anything
 
-W1-S2 through W1-S5 all run in that same worktree and push to that same branch, updating PR #1.
+`kodesh87/w1-settings` was merged into `main` as `58e46ab` and **that branch is finished**. Committing
+to it again would revive a merged branch, and the outgoing orchestrator moved the worktree off it for
+exactly that reason.
+
+The worktree is now on **`kodesh87/w1-s2-stores`**, branched off `origin/main` at `58e46ab`, with the
+build cache intact. Push that branch and open a PR for W1-S2 when its story is done.
+
+**"One PR per wave" is dead.** It was the plan, and the merge of PR #1 overtook it — the wave's first
+story is already on `main`. From here it is **one PR per story**, each branched off `main`. That is a
+change of plan, not a mistake to correct: each story is independently reviewable and the wave still
+closes as a wave through Phase 4.
+
+One consequence worth knowing: `waves.yaml` still says W1 is `open`, and it is. A merged story does not
+close a wave — Phase 4 does.
 
 ## Read these first, in this order
 
@@ -70,15 +84,15 @@ did the job or looked like it did.
 Wave **W1** open. Release r1, PRD `capture-to-markdown`, component `settings`
 (`mode: catalog`, `risk_accepted: medium`), size L. Five stories.
 
-Branch `kodesh87/w1-settings`, head **`3da6372`**, worktree
-`D:/Developer/orca-workspaces/snapdown/w1-settings`. PR **#1**:
+Worktree `D:/Developer/orca-workspaces/snapdown/w1-settings`, now on
+`kodesh87/w1-s2-stores` off `main` at `58e46ab`. PR #1 is **merged and closed**:
 https://github.com/wiradigitalid/snapdown/pull/1
 
-**One PR per wave, not per story.** W1-S2..S5 push to this branch and update PR #1.
+One PR per story from here — see the section above for why that changed.
 
 | Story | State |
 |---|---|
-| **W1-S1** | Code done. Panel clean on the **third** pass: 0 must-fix. PR open, **CI green on the right SHA**. One thing outstanding: the UI verification report, plus the three-item Step 4 checklist |
+| **W1-S1** | Done and **merged to `main`** as `58e46ab`. Panel clean on the third pass, CI green on the right SHA. Two loose ends: the UI verification report, and the three-item Step 4 checklist |
 | W1-S2 | Not started. Brief ready |
 | W1-S3 | Not started |
 | W1-S4 | Not started |
@@ -259,15 +273,19 @@ You are the orchestrator for Snapdown wave W1. Read .work/HANDOVER-w1.md first, 
 AGENTS.md — the orchestrator role is not bound to any CLI now; only the coder role is,
 to OpenCode or Cursor.
 
-DO NOT CREATE A WORKTREE. One already exists and it holds every line of this wave's
-code, on branch kodesh87/w1-settings. Run yourself from the main worktree and dispatch
-every worker into it with this exact selector:
+DO NOT CREATE A WORKTREE. One already exists and it holds a 3.5 GB Cargo build cache
+plus node_modules; a fresh one would force a cold Tauri rebuild for nothing. Run
+yourself from the main worktree and dispatch every worker into it with this exact
+selector:
 
   d5f6f273-8548-4b5e-9623-89197cee6326::D:/Developer/orca-workspaces/snapdown/w1-settings
 
-Never --worktree new-top-level or new-child for W1: a new worktree branches from main,
-and none of this wave's code is on main. All of W1-S2..S5 run in that same worktree and
-push to that same branch, updating PR #1.
+Never --worktree new-top-level or new-child for W1.
+
+PR #1 is already merged, so W1-S1 is on main and branch kodesh87/w1-settings is
+finished — do not commit to it. That worktree is already checked out on
+kodesh87/w1-s2-stores, branched off main, ready for W1-S2. It is now one PR per story,
+not one per wave. W1 stays open until Phase 4 closes it.
 
 Start by firing the ready-made brief at
 _bmad-output/specs/w1-settings/dispatch-briefs/W1-S1-ui-verification-finish.md — a UI
