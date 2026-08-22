@@ -6,6 +6,40 @@ Written 2026-08-23 by the outgoing orchestrator (Claude), **second revision** �
 about the UI verification and is superseded by this. Everything durable is in the corpus or under
 `_bmad-output/specs/w1-settings/`. If this file and the corpus disagree, the corpus wins.
 
+## Do NOT create a worktree. One already exists and it holds the work
+
+This is the single easiest mistake to make here, so it comes before everything else.
+
+Run the orchestrator from the **main** worktree, `D:/Developer/wiradigital.id/snapdown`. Dispatch every
+worker into the worktree that **already exists**, using this exact selector — it is a
+`<repo-id>::<path>` pair and a bare repo id will not target it:
+
+```
+d5f6f273-8548-4b5e-9623-89197cee6326::D:/Developer/orca-workspaces/snapdown/w1-settings
+```
+
+```bash
+orca orchestration worker-start --task <T>   --worktree "d5f6f273-8548-4b5e-9623-89197cee6326::D:/Developer/orca-workspaces/snapdown/w1-settings"   --agent opencode
+```
+
+`--worktree new-top-level` and `--worktree new-child` MUST NOT be used for W1. A fresh worktree would
+branch from `main` and none of this wave's code is on `main` — it is on `kodesh87/w1-settings`, which
+is checked out in the worktree above. A worker sent to a new worktree would start from an empty tree
+and rebuild what already exists.
+
+`orca worktree list` confirms only two exist, and that is correct:
+
+| Worktree | Branch | Role |
+|---|---|---|
+| `D:/Developer/wiradigital.id/snapdown` | `main` | the orchestrator's. **Never edit application code here** |
+| `D:/Developer/orca-workspaces/snapdown/w1-settings` | `kodesh87/w1-settings` | every worker's, for all of W1 |
+
+Creation flags (`--name`, `--base-branch`, `--setup`) are **rejected** for an existing worktree — Orca
+errors with `Creation and setup options apply only to new-child or new-top-level worktrees`. If you see
+that error you passed a creation flag by habit; drop it, do not switch to a new worktree to satisfy it.
+
+W1-S2 through W1-S5 all run in that same worktree and push to that same branch, updating PR #1.
+
 ## Read these first, in this order
 
 1. `AGENTS.md` — the **orchestrator role is no longer bound to any CLI.** Whichever agent this
@@ -224,6 +258,16 @@ distillation; RTM green; then `status: closed`.
 You are the orchestrator for Snapdown wave W1. Read .work/HANDOVER-w1.md first, then
 AGENTS.md — the orchestrator role is not bound to any CLI now; only the coder role is,
 to OpenCode or Cursor.
+
+DO NOT CREATE A WORKTREE. One already exists and it holds every line of this wave's
+code, on branch kodesh87/w1-settings. Run yourself from the main worktree and dispatch
+every worker into it with this exact selector:
+
+  d5f6f273-8548-4b5e-9623-89197cee6326::D:/Developer/orca-workspaces/snapdown/w1-settings
+
+Never --worktree new-top-level or new-child for W1: a new worktree branches from main,
+and none of this wave's code is on main. All of W1-S2..S5 run in that same worktree and
+push to that same branch, updating PR #1.
 
 Start by firing the ready-made brief at
 _bmad-output/specs/w1-settings/dispatch-briefs/W1-S1-ui-verification-finish.md — a UI
