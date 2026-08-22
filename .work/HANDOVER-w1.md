@@ -44,7 +44,7 @@ https://github.com/wiradigitalid/snapdown/pull/1
 
 | Story | State |
 |---|---|
-| **W1-S1** | Code done. Panel clean on the **third** pass: 0 must-fix. PR open. **Two things outstanding — see below** |
+| **W1-S1** | Code done. Panel clean on the **third** pass: 0 must-fix. PR open, **CI green on the right SHA**. One thing outstanding: the UI verification report, plus the three-item Step 4 checklist |
 | W1-S2 | Not started. Brief ready |
 | W1-S3 | Not started |
 | W1-S4 | Not started |
@@ -78,29 +78,30 @@ That same accessibility tree hardened a follow-up into something concrete: the E
 is its placeholder (`e.g. D:/SnapdownVault`), not `Vault Path`, so a screen reader announces the wrong
 thing. Routed to W1-S3, which rewrites that screen.
 
-### W1-S1, outstanding item 2 — Step 4 and Step 5
+### W1-S1, outstanding item 2 — Step 4. Step 5 is already done
 
-**Step 4, the story-closing checklist.** Three items, not yet answered on the record: a decision worth
-remembering; a trap for the next agent; test names matching what `waves.yaml` records. Answer all
-three before treating the story as closed.
+**Step 4, the story-closing checklist, is what remains.** Three items, not yet answered on the record:
+a decision worth remembering; a trap for the next agent; test names matching what `waves.yaml`
+records. Answer all three before treating the story as closed.
 
-**Step 5, CI.** PR #1 triggered the first CI this repository has ever had, and it needed one fix
+**Step 5, CI — settled.** PR #1 triggered the first CI this repository has ever had, and it needed one fix
 already: `Validate Corpus` failed in its `Install uv` step because `enable-cache: true` errors when
 its dependency glob matches nothing, and there is no `uv.lock` here. Fixed in `3da6372`.
 
 State at handover:
 
+**Step 5 is DONE.** All three checks concluded green, and each was confirmed against the pushed head
+SHA rather than taken on trust — `gh api repos/.../commits/<sha>/check-runs` reported every one at
+`3da6372`, which is the branch head:
+
 | Check | Result |
 |---|---|
-| `Validate Corpus` | **pass** — and this is the meaningful one: the baseline mechanism works in CI, not just locally |
-| `Desktop Frontend Check` | **pass** |
-| `Rust Workspace Build & Test` | **pending** — never yet observed to conclude on `windows-latest` |
+| `Validate Corpus` | **success @ 3da6372** — the meaningful one: the baseline mechanism works in CI, not just locally |
+| `Desktop Frontend Check` | **success @ 3da6372** |
+| `Rust Workspace Build & Test` | **success @ 3da6372** — on `windows-latest` |
 
-**You owe the Rust job's verdict.** Confirm every check concludes, and confirm the checks belong to
-the **pushed head SHA** — a green report from a stale run is a false report. Classify any failure
-before acting: a defect from this change goes to Step 2 with `wdi-systematic-debugging` if the cause
-is unknown; infrastructure or flake gets **one** re-run and MUST NOT be patched around; a guard
-failure means fixing the content, never the guard.
+Nothing is owed here. If a later push to this branch re-runs CI, check the SHA again the same way — a
+green report from a stale run is a false report.
 
 **New follow-up, unfixed on purpose:** every check runs **twice**, because `push` on `kodesh87/*` and
 `pull_request` both fire. Wasteful and it compounds with the already-recorded follow-up about
@@ -229,8 +230,9 @@ _bmad-output/specs/w1-settings/dispatch-briefs/W1-S1-ui-verification-finish.md �
 worker did that verification and ended without writing its report, and you cannot read
 its artifacts yourself.
 
-Then finish W1-S1 Step 4 (the three-item story-closing checklist) and Step 5 (the Rust
-CI job on PR #1 has never been observed to conclude). Then run W1-S2 through W1-S5 with
+Then answer W1-S1's three-item Step 4 checklist. Step 5 is already done — all three
+CI checks are green and were confirmed against the pushed head SHA 3da6372. Then run
+W1-S2 through W1-S5 with
 the wdi-build five-step pipeline, using the briefs in that same folder. Then close the
 wave through Phase 4.
 
