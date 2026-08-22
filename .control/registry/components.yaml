@@ -25,7 +25,7 @@ product_components:
     risk_note: A Capture may contain personal data, and deleting a Finding is an irreversible action
       that removes a file from disk. Nothing here touches money and there is no contractual promise
       to an outside party.
-    g4_passed: false
+    g4_passed: true
 
   - id: bundle
     title: Bundle
@@ -37,7 +37,7 @@ product_components:
     risk_accepted: low
     risk_note: Deleting a Bundle is an irreversible action that removes files from disk, and a
       Bundle carries copies of images that may hold personal data. No money, no third party.
-    g4_passed: false
+    g4_passed: true
 
   - id: settings
     title: Settings
@@ -50,6 +50,8 @@ product_components:
     risk_accepted: medium
     risk_note: No money, no personal data, no irreversible action. The worst outcome is a hotkey
       that does not register, which is visible immediately.
+    # `mode: catalog` skips G4 by design, so this stays false and means nothing. V22 does not read it
+    # for a catalog component, and setting it true would claim a gate that never ran.
     g4_passed: false
 
   - id: agent-access
@@ -64,7 +66,7 @@ product_components:
     risk_note: The key gates access to images that may contain personal data, across a process
       boundary the product does not control. Revocation is the safety, so getting it wrong is an
       irreversible disclosure. No money, no third party.
-    g4_passed: false
+    g4_passed: true
 
   - id: sharing
     title: Sharing
@@ -79,7 +81,7 @@ product_components:
       is irreversible in the sense that matters — an unpublish cannot recall what was already
       fetched. No money moves and there is no contractual promise, but this is the component where a
       mistake cannot be undone.
-    g4_passed: false
+    g4_passed: true
 
 # An entity no Product Component's promise explains. Empty, and that is the correct state: every
 # entity in this product is written by exactly one component's FR.
@@ -109,4 +111,199 @@ containers:
 
 # LC are born by the skill that draws them — wdi-component intent `design`, or wdi-ux for a screen.
 # Registered here for every component at mode guarded or deep, checked at wave close by V12.
-logical_components: []
+logical_components:
+  # --- finding · desktop-app ---------------------------------------------------------
+  - id: LC-001
+    name: capture-overlay
+    lc_type: ui-composite
+    container: desktop-app
+    component: finding
+    area: capture-pipeline
+    depends_on: [LC-002, LC-009]
+  - id: LC-002
+    name: region-capturer
+    lc_type: service
+    container: desktop-app
+    component: finding
+    area: capture-pipeline
+    depends_on: [LC-003]
+  - id: LC-003
+    name: image-reducer
+    lc_type: service
+    container: desktop-app
+    component: finding
+    area: image-encoding
+    depends_on: [LC-005]
+  - id: LC-004
+    name: finding-store
+    lc_type: store
+    container: desktop-app
+    component: finding
+    area: local-db
+    depends_on: [LC-005]
+  - id: LC-005
+    name: vault-blobs
+    lc_type: store
+    container: desktop-app
+    component: finding
+    area: vault-fs
+    depends_on: []
+  - id: LC-006
+    name: findings-editor
+    lc_type: ui-screen
+    container: desktop-app
+    component: finding
+    area: editor-ui
+    depends_on: [LC-004, LC-007]
+  - id: LC-007
+    name: marker-canvas
+    lc_type: ui-composite
+    container: desktop-app
+    component: finding
+    area: marker-canvas
+    depends_on: [LC-004]
+  - id: LC-008
+    name: orphan-sweeper
+    lc_type: service
+    container: desktop-app
+    component: finding
+    area: vault-fs
+    depends_on: [LC-004, LC-005]
+  - id: LC-009
+    name: hotkey-registrar
+    lc_type: gateway
+    container: desktop-app
+    component: finding
+    area: capture-pipeline
+    depends_on: [LC-025]
+  # --- bundle · desktop-app ---------------------------------------------------------
+  - id: LC-010
+    name: bundle-composer
+    lc_type: service
+    container: desktop-app
+    component: bundle
+    area: bundle-render
+    depends_on: [LC-004, LC-011, LC-012, LC-013]
+  - id: LC-011
+    name: markdown-writer
+    lc_type: service
+    container: desktop-app
+    component: bundle
+    area: bundle-render
+    depends_on: []
+  - id: LC-012
+    name: marker-burner
+    lc_type: service
+    container: desktop-app
+    component: bundle
+    area: image-encoding
+    depends_on: [LC-005]
+  - id: LC-013
+    name: bundle-store
+    lc_type: store
+    container: desktop-app
+    component: bundle
+    area: local-db
+    depends_on: [LC-005]
+  - id: LC-014
+    name: bundles-editor
+    lc_type: ui-screen
+    container: desktop-app
+    component: bundle
+    area: editor-ui
+    depends_on: [LC-010, LC-013]
+  # --- settings · desktop-app -------------------------------------------------------
+  - id: LC-015
+    name: settings-screen
+    lc_type: ui-screen
+    container: desktop-app
+    component: settings
+    area: settings-store
+    depends_on: [LC-025, LC-026]
+  - id: LC-025
+    name: settings-store
+    lc_type: store
+    container: desktop-app
+    component: settings
+    area: settings-store
+    depends_on: []
+  - id: LC-026
+    name: startup-registrar
+    lc_type: gateway
+    container: desktop-app
+    component: settings
+    area: settings-store
+    depends_on: []
+  # --- agent-access · desktop-app + mcp-bridge --------------------------------------
+  - id: LC-016
+    name: access-key-manager
+    lc_type: service
+    container: desktop-app
+    component: agent-access
+    area: local-api
+    depends_on: []
+  - id: LC-017
+    name: local-api-server
+    lc_type: gateway
+    container: desktop-app
+    component: agent-access
+    area: local-api
+    depends_on: [LC-013, LC-016]
+  - id: LC-018
+    name: mcp-bridge-cli
+    lc_type: gateway
+    container: mcp-bridge
+    component: agent-access
+    area: mcp-bridge
+    depends_on: [LC-017]
+  - id: LC-019
+    name: agent-access-panel
+    lc_type: ui-screen
+    container: desktop-app
+    component: agent-access
+    area: editor-ui
+    depends_on: [LC-016]
+  # --- sharing · desktop-app + web-api + web-ui ------------------------------------
+  - id: LC-020
+    name: publish-client
+    lc_type: gateway
+    container: desktop-app
+    component: sharing
+    area: publish-client
+    depends_on: [LC-013, LC-021, LC-025]
+  - id: LC-021
+    name: publication-store
+    lc_type: store
+    container: desktop-app
+    component: sharing
+    area: local-db
+    depends_on: []
+  - id: LC-022
+    name: publish-dialog
+    lc_type: ui-composite
+    container: desktop-app
+    component: sharing
+    area: editor-ui
+    depends_on: [LC-020]
+  - id: LC-023
+    name: publication-router
+    lc_type: gateway
+    container: web-api
+    component: sharing
+    area: web-service
+    depends_on: [LC-024]
+  - id: LC-024
+    name: served-publication-store
+    lc_type: store
+    container: web-api
+    component: sharing
+    area: web-service
+    depends_on: []
+  - id: LC-027
+    name: bundle-reader
+    lc_type: ui-screen
+    container: web-ui
+    component: sharing
+    area: web-service
+    depends_on: [LC-023]
+

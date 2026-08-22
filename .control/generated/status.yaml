@@ -4,8 +4,9 @@ rtm_rows:
   counted: 25
   excluded_no_uc: 1
 work_progress: []
-gate_readiness: 92%
+gate_readiness: 88%
 validators_red:
+- V13
 - V24
 - V25
 validators_skipped:
