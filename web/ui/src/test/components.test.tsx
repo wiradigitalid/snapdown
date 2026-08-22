@@ -1,3 +1,4 @@
+import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import {
@@ -106,19 +107,71 @@ describe('web/ui components suite', () => {
       expect(handleDismiss).toHaveBeenCalledTimes(1);
       vi.useRealTimers();
     });
+
+    it('renders reachable action without tabIndex -1', () => {
+      const handleAction = vi.fn();
+      render(
+        <Toast
+          message="Saved"
+          actionLabel="Undo"
+          onAction={handleAction}
+          onDismiss={() => {}}
+        />
+      );
+      const btn = screen.getByRole('button', { name: 'Undo' });
+      expect(btn).toBeInTheDocument();
+      expect(btn).not.toHaveAttribute('tabIndex', '-1');
+      fireEvent.click(btn);
+      expect(handleAction).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('Modal', () => {
-    it('renders title, content, focus trap, and handles escape', () => {
+    it('unmounts when closed via Escape or scrim click from stateful parent', () => {
+      const TestParent = () => {
+        const [open, setOpen] = React.useState(true);
+        return (
+          <div>
+            <Modal isOpen={open} onClose={() => setOpen(false)} title="Test Modal">
+              <button>Inside Button</button>
+            </Modal>
+          </div>
+        );
+      };
+
+      const { unmount } = render(<TestParent />);
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      unmount();
+    });
+
+    it('renders title, content, and traps tab focus', () => {
       const handleClose = vi.fn();
       render(
         <Modal isOpen={true} onClose={handleClose} title="Test Modal">
-          <button>Inside Button</button>
+          <button>First Button</button>
+          <button>Second Button</button>
         </Modal>
       );
 
       expect(screen.getByText('Test Modal')).toBeInTheDocument();
-      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toBeInTheDocument();
+
+      const firstBtn = screen.getByRole('button', { name: 'First Button' });
+      const secondBtn = screen.getByRole('button', { name: 'Second Button' });
+
+      // Tab on last element wraps to first
+      secondBtn.focus();
+      fireEvent.keyDown(window, { key: 'Tab' });
+      expect(document.activeElement).toBe(firstBtn);
+
+      // Shift+Tab on first element wraps to last
+      firstBtn.focus();
+      fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+      expect(document.activeElement).toBe(secondBtn);
 
       fireEvent.keyDown(window, { key: 'Escape' });
       expect(handleClose).toHaveBeenCalledTimes(1);

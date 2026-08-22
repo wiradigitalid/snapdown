@@ -3,7 +3,19 @@ use std::collections::HashSet;
 
 #[test]
 fn snapdown_core_has_no_io_dependency() {
+    let target_triple = if cfg!(target_os = "windows") {
+        "x86_64-pc-windows-msvc"
+    } else if cfg!(target_os = "macos") {
+        "x86_64-apple-darwin"
+    } else {
+        "x86_64-unknown-linux-gnu"
+    };
+
     let metadata = MetadataCommand::new()
+        .other_options(vec![
+            "--filter-platform".to_string(),
+            target_triple.to_string(),
+        ])
         .exec()
         .expect("cargo metadata must execute successfully");
 
@@ -40,19 +52,18 @@ fn snapdown_core_has_no_io_dependency() {
 
         if let Some(node) = resolve.nodes.iter().find(|n| n.id == current_id) {
             for dep in &node.deps {
-                // Find matching dependency declaration in pkg.dependencies to check if target-specific or dev-only
                 let dep_pkg = metadata.packages.iter().find(|p| p.id == dep.pkg);
                 let dep_name = dep_pkg.map(|p| p.name.as_str()).unwrap_or(&dep.name);
 
-                let is_normal = pkg.dependencies.iter().any(|d| {
-                    d.name == dep_name && d.kind == DependencyKind::Normal && d.target.is_none()
-                });
+                let is_normal = pkg
+                    .dependencies
+                    .iter()
+                    .any(|d| d.name == dep_name && d.kind == DependencyKind::Normal);
 
-                // Also check node.deps dep_kinds
                 let is_normal_dep_kind = dep
                     .dep_kinds
                     .iter()
-                    .any(|k| k.kind == DependencyKind::Normal && k.target.is_none());
+                    .any(|k| k.kind == DependencyKind::Normal);
 
                 if is_normal || is_normal_dep_kind {
                     to_visit.push(dep.pkg.clone());
@@ -84,6 +95,8 @@ fn snapdown_core_has_no_io_dependency() {
         "chrono",
         "getrandom",
         "rand",
+        "libc",
+        "uuid",
     ];
 
     for forbidden in &forbidden_names {
@@ -101,7 +114,6 @@ fn snapdown_core_has_no_io_dependency() {
         "serde_json",
         "thiserror",
         "thiserror-impl",
-        "uuid",
         "proc-macro2",
         "quote",
         "syn",

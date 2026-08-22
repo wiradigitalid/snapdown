@@ -3,6 +3,11 @@ use crate::error::CoreError;
 
 pub trait Clock {
     fn now_rfc3339(&self) -> String;
+    fn now_unix_millis(&self) -> u64;
+}
+
+pub trait EntropySource {
+    fn random_bytes_10(&self) -> [u8; 10];
 }
 
 pub trait SettingsStore {

@@ -51,7 +51,6 @@ export const Toast: React.FC<ToastProps> = ({
       {actionLabel && onAction && (
         <button
           type="button"
-          tabIndex={-1}
           onClick={onAction}
           style={{
             background: 'none',

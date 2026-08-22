@@ -19,9 +19,9 @@ waves:
     spec_folder: _bmad-output/specs/w1-settings/
     opened: "2026-08-22"
     spec_reviewed:
-      date: ""
-      sha: ""
-      lenses: []
+      date: "2026-08-23"
+      sha: 6a470fd
+      lenses: [structure, prose, edge-case-hunter]
     epics:
       - id: EP-settings
         component: settings

@@ -39,6 +39,7 @@ export const Modal: React.FC<ModalProps> = ({
 
       return () => clearTimeout(timer);
     } else {
+      setIsClosing(false);
       if (previouslyFocusedElementRef.current) {
         previouslyFocusedElementRef.current.focus();
         previouslyFocusedElementRef.current = null;
@@ -62,7 +63,7 @@ export const Modal: React.FC<ModalProps> = ({
           modalRef.current.querySelectorAll<HTMLElement>(
             'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled])'
           )
-        ).filter((el) => el.offsetParent !== null || el === document.activeElement);
+        );
 
         if (focusable.length === 0) {
           e.preventDefault();
@@ -95,6 +96,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   return (
     <div
+      className="modal-overlay"
       data-state={isClosing ? 'closing' : 'open'}
       style={{
         position: 'fixed',
@@ -115,6 +117,7 @@ export const Modal: React.FC<ModalProps> = ({
     >
       <div
         ref={modalRef}
+        className="modal-content"
         role="dialog"
         aria-modal="true"
         tabIndex={-1}

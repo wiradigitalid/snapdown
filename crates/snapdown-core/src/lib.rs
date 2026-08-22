@@ -5,5 +5,5 @@ pub mod util;
 
 pub use domain::setting::{QualityBudget, Setting, SettingKey, SettingValue};
 pub use error::CoreError;
-pub use ports::Clock;
-pub use util::id::id_from_timestamp;
+pub use ports::{Clock, EntropySource};
+pub use util::id::id_from_parts;

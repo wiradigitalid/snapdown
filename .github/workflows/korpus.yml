@@ -25,7 +25,10 @@ jobs:
           set -e
           # Run validate.py and capture findings (lines starting with 2 spaces and V<number>)
           uv run .constitution/method/scripts/validate.py --check > validate_output.txt 2>&1 || true
-          grep -E '^  V[0-9]+' validate_output.txt | sort > current_findings.txt || true
+          # Findings only. Everything after the "Skipped:" heading is a SKIP, not a finding, and a
+          # skip appearing or disappearing is not a regression. A skip that becomes a real finding
+          # shows up above that line, so it is still caught.
+          sed '/^Skipped:/,$d' validate_output.txt | grep -E '^  V[0-9]+' | sort > current_findings.txt || true
           sort .github/validate-baseline.txt > baseline_findings.txt
 
           echo "=== Current Findings ==="

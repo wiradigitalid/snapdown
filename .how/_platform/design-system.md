@@ -3,7 +3,7 @@ type: design-system
 scope: _platform
 status: draft
 created: "2026-08-22"
-updated: "2026-08-22"
+updated: "2026-08-23"
 ---
 
 # Design System — Snapdown
@@ -36,13 +36,19 @@ is a defect, not a local choice.
 | `--color-border`, `--color-border-strong` | Dividers and input outlines | `tokens.css` |
 | `--color-accent`, `--color-accent-text` | The one accent, used for the primary action and nothing decorative | `tokens.css` |
 | `--color-danger`, `--color-danger-text` | Destructive confirmations only — deletion, unpublish | `tokens.css` |
-| `--color-marker`, `--color-marker-text` | The numbered Marker badge, over arbitrary screenshot pixels | `tokens.css` |
+| `--color-marker`, `--color-marker-text`, `--color-marker-ring` | The numbered Marker badge, over arbitrary screenshot pixels. The ring is a separate token because the badge needs contrast against both light and dark screenshot content, and a fill alone cannot give it | `tokens.css` |
 | `--space-1` … `--space-6` | Every margin and padding. No arbitrary pixel spacing | `tokens.css` |
 | `--radius-sm`, `--radius-md` | Corners | `tokens.css` |
 | `--font-ui`, `--font-mono` | Interface text, and Markdown or code | `tokens.css` |
 | `--text-xs` … `--text-xl` | The whole type scale | `tokens.css` |
 | `--shadow-raised` | The one elevation | `tokens.css` |
 | `--z-overlay`, `--z-toast`, `--z-modal` | Stacking, so three surfaces do not each invent a number | `tokens.css` |
+
+One token this table names is **missing from the stylesheet**: a scrim. `Modal` currently writes
+`rgba(0, 0, 0, 0.5)` as a literal, which the rules below forbid. A `--color-scrim` token is the fix,
+and it is recorded here rather than in a component so that whichever wave next touches `Modal` finds
+it. The type scale in the stylesheet is `--text-xs` `--text-sm` `--text-base` `--text-lg` `--text-xl`;
+this table's `--text-xs … --text-xl` is that range.
 
 Both colour schemes are defined on `:root` and swapped under `prefers-color-scheme`. There is no
 theme switcher: the Reviewer's system setting decides, and so does the reader's.
@@ -60,15 +66,21 @@ prevent.
 | `TextField` | default · focus-visible · invalid · disabled · with a character count | `web/ui/src/components/TextField.tsx` |
 | `TextArea` | the same, plus auto-grow. Used for a Note body and a Marker comment | `web/ui/src/components/TextArea.tsx` |
 | `Checkbox` | unchecked · checked · indeterminate · focus-visible · disabled. Indeterminate is required by select-all over a partial selection | `web/ui/src/components/Checkbox.tsx` |
-| `Toast` | one line, an optional action, auto-dismiss. MUST NOT be focusable | `web/ui/src/components/Toast.tsx` |
+| `Toast` | one line, an optional action, auto-dismiss. MUST NOT take focus when it appears, and its action MUST still be reachable by keyboard | `web/ui/src/components/Toast.tsx` |
 | `Modal` | open · closing. Focus trapped, Escape closes, focus returns to the trigger | `web/ui/src/components/Modal.tsx` |
 | `ConfirmDialog` | a `Modal` whose confirm is `danger` and whose message names what will go and how many | `web/ui/src/components/ConfirmDialog.tsx` |
 | `MarkerBadge` | 1–99, plus a dragging state. Fixed size regardless of image scale | `web/ui/src/components/MarkerBadge.tsx` |
 | `EmptyState` | one heading, one sentence, at most one action | `web/ui/src/components/EmptyState.tsx` |
-| `Markdown` | rendered CommonMark, read-only, with relative image resolution | `web/ui/src/components/Markdown.tsx` |
+| `Markdown` | rendered CommonMark, read-only, with relative image resolution | **Not yet built.** W3 creates it, with a real CommonMark parser, when `bundle` first has bytes to render |
 
 `web-ui` uses `Markdown`, `EmptyState`, and `MarkerBadge`. The desktop uses all of them. An element
 only one side needs still lives here, because the alternative is it being written twice.
+
+`Markdown` is the one element deliberately absent from the tree today. W1 built a four-branch string
+splitter under that name and the panel rejected it: a component claiming a capability it does not have
+is worse than an absent one, and no screen in W1 or W2 renders Markdown at all. W3 builds it against a
+real CommonMark parser. AD-9 is why it has to be real — it renders the exact bytes a published Bundle
+serves, so a lossy renderer there is a correctness defect, not a cosmetic one.
 
 ## Rules that bind every screen
 
@@ -79,7 +91,8 @@ only one side needs still lives here, because the alternative is it being writte
 | `--color-danger` appears only on a destructive confirmation | Danger colour becoming decoration, so a real warning reads as styling |
 | Every interactive element has a visible `focus-visible` state | A capture loop that cannot be driven from the keyboard, which FR-2 requires |
 | Every list has an `EmptyState`, and it says what to do next | A blank panel that reads as a bug |
-| A `Toast` never takes focus and never needs dismissing | The capture loop being interrupted by its own confirmation, which FR-3 forbids |
+| A `Toast` never takes focus on appearance and never needs dismissing | The capture loop being interrupted by its own confirmation, which FR-3 forbids |
+| A `Toast`'s action is reachable by keyboard, even though the Toast does not take focus | A clickable control no keyboard user can reach — the earlier wording said "MUST NOT be focusable" and was read as forbidding that too |
 | A `MarkerBadge` renders at a fixed size and its position comes from normalised coordinates | Badges drifting off target when an image is displayed at a different scale (AD-3) |
 | No spacing, colour, radius, or font size is written as a literal. Tokens only | A second design system growing inside one component |
 | Text in the interface is English, and it is the only language shipped | A half-translated interface, which is worse than an untranslated one |
