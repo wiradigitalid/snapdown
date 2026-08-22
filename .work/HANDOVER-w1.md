@@ -230,11 +230,11 @@ _bmad-output/specs/w1-settings/dispatch-briefs/W1-S1-ui-verification-finish.md �
 worker did that verification and ended without writing its report, and you cannot read
 its artifacts yourself.
 
-Then answer W1-S1's three-item Step 4 checklist. Step 5 is already done — all three
-CI checks are green and were confirmed against the pushed head SHA 3da6372. Then run
-W1-S2 through W1-S5 with
-the wdi-build five-step pipeline, using the briefs in that same folder. Then close the
-wave through Phase 4.
+Then answer W1-S1's three-item Step 4 checklist. Step 5 is already done — all three CI
+checks are green and were confirmed against the pushed head SHA 3da6372.
+
+Then run W1-S2 through W1-S5 with the wdi-build five-step pipeline, using the briefs in
+that same folder. Then close the wave through Phase 4.
 
 Two things will stop you if you do not plan for them: Orca marks every OpenCode dispatch
 agent_prompt_stalled even though the worker runs fine — the handover has the workaround —
