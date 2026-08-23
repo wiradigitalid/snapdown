@@ -1,0 +1,29 @@
+# Brief for W4-S5: Integration Verification Suite for Agent Access and Refusal Envelopes
+
+## Objective
+Implement comprehensive integration test suite validating end-to-end flow from AccessKey issuance in Desktop App -> Local API Server -> stdio MCP Bridge calls -> refusal envelopes vs empty results -> path traversal security -> timing attack resistance (AD-4, AD-5, AD-7, AD-9, NFR-9, BR-77, BR-78, BR-79, BR-80, BR-81, BR-82, BR-83, BR-84, BR-85, RISK-6, RISK-7).
+
+## Scope & Changes Required
+1. **Integration Tests (`apps/desktop/src-tauri/tests/test_agent_access_integration.rs`)**:
+   - Write end-to-end integration test:
+     1. Create database and `SqliteAccessKeyStore`, `SqliteBundleStore`, `VaultBlobStore`.
+     2. Start `LocalApiServer` on random loopback port (`127.0.0.1:0`).
+     3. Verify `GET /v1/health` answers without authentication with custom `X-Snapdown-Service` header.
+     4. Query `GET /v1/bundles` without key -> assert 401 `key_required` error envelope (not empty list).
+     5. Generate AccessKey -> call `set_access_key` on bridge client -> query `list_bundles` -> assert returns bundle list.
+     6. Create Bundle with findings, notes, markers, and burned image.
+     7. Call `mcp:read_bundle` -> assert returns exact stored markdown bytes matching golden standard (AD-9, BR-83).
+     8. Call `mcp:read_bundle_image` -> assert returns base64 image data block with correct mimeType.
+     9. Revoke AccessKey -> immediately call `mcp:list_bundles` -> assert returns error `key_invalid` (BR-77, NFR-13).
+     10. Security: Request image with path traversal (`..`, `%2f`, invalid characters) -> assert refused with `bad_request` (BR-84).
+     11. Refusal distinction: Assert `key_required` code differs from `key_invalid` code (BR-77).
+
+2. **Verification**:
+   - Run `cargo fmt --all -- --check`
+   - Run `cargo clippy --workspace --all-targets -- -D warnings`
+   - Run `cargo test --workspace`
+   - Run `npm --prefix web/ui run test`
+   - Run `npm --prefix apps/desktop run test`
+
+Branch: `kodesh87/w4-s5-agent-access-tests`
+Push and open PR against `main`.

@@ -54,7 +54,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     render(<App />);
 
     expect(screen.getByTestId('app-shell')).toBeInTheDocument();
-    expect(screen.getByText('Snapdown Settings')).toBeInTheDocument();
+    expect(screen.getByText('Snapdown')).toBeInTheDocument();
     expect(screen.getByText('General')).toBeInTheDocument();
     expect(screen.getByText('Vault Folder')).toBeInTheDocument();
     expect(screen.getByText('Quality Budget')).toBeInTheDocument();
@@ -64,8 +64,8 @@ describe('Desktop Settings Screen (Screen 12)', () => {
       expect(screen.getByDisplayValue('C:/Users/test/Vault')).toBeInTheDocument();
       expect(screen.getByDisplayValue('1600')).toBeInTheDocument();
       expect(screen.getByDisplayValue('75')).toBeInTheDocument();
-      expect(screen.getByDisplayValue('CommandOrControl+Shift+S')).toBeInTheDocument();
-      expect(screen.getByDisplayValue('CommandOrControl+Shift+E')).toBeInTheDocument();
+      expect(screen.getByText('CommandOrControl+Shift+S')).toBeInTheDocument();
+      expect(screen.getByText('CommandOrControl+Shift+E')).toBeInTheDocument();
       expect(screen.getByTestId('startup-toggle')).not.toBeChecked();
     });
   });
@@ -199,7 +199,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     const pathInput = screen.getByLabelText('Vault Path');
     fireEvent.change(pathInput, { target: { value: 'D:/NewVault' } });
 
-    const applyBtn = screen.getByRole('button', { name: 'Apply Change' });
+    const applyBtn = screen.getByRole('button', { name: 'Apply' });
     fireEvent.click(applyBtn);
 
     // Modal dialog appears
@@ -234,7 +234,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     const pathInput = screen.getByLabelText('Vault Path');
     fireEvent.change(pathInput, { target: { value: 'D:/NewVault' } });
 
-    const applyBtn = screen.getByRole('button', { name: 'Apply Change' });
+    const applyBtn = screen.getByRole('button', { name: 'Apply' });
     fireEvent.click(applyBtn);
 
     const leaveFilesBtn = screen.getByRole('button', { name: 'Leave Files' });
@@ -268,7 +268,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     const pathInput = screen.getByLabelText('Vault Path');
     fireEvent.change(pathInput, { target: { value: 'E:/ReadOnlyVault' } });
 
-    const applyBtn = screen.getByRole('button', { name: 'Apply Change' });
+    const applyBtn = screen.getByRole('button', { name: 'Apply' });
     fireEvent.click(applyBtn);
 
     const moveFilesBtn = screen.getByRole('button', { name: 'Move Files' });
@@ -315,17 +315,18 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('CommandOrControl+Shift+S')).toBeInTheDocument();
+      expect(screen.getByText('CommandOrControl+Shift+S')).toBeInTheDocument();
     });
 
-    const captureInput = screen.getByLabelText('Capture Region');
-    fireEvent.change(captureInput, { target: { value: 'Ctrl+Alt+C' } });
+    const recordBtn = screen.getByRole('button', { name: 'Record shortcut for Capture Region' });
+    fireEvent.click(recordBtn);
+    fireEvent.keyDown(recordBtn, { key: 'c', ctrlKey: true, altKey: true });
 
     const saveCaptureBtn = screen.getByRole('button', { name: 'Save Capture Region' });
     fireEvent.click(saveCaptureBtn);
 
     await waitFor(() => {
-      expect(settingsService.setHotkey).toHaveBeenCalledWith('capture', 'Ctrl+Alt+C');
+      expect(settingsService.setHotkey).toHaveBeenCalledWith('capture', 'CommandOrControl+Alt+C');
       expect(screen.getByText('Hotkey for capture updated successfully')).toBeInTheDocument();
     });
   });
@@ -363,7 +364,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('CommandOrControl+Shift+S')).toBeInTheDocument();
+      expect(screen.getByText('CommandOrControl+Shift+S')).toBeInTheDocument();
     });
 
     const clearCaptureBtn = screen.getByRole('button', { name: 'Clear Capture Region' });
@@ -391,13 +392,14 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('CommandOrControl+Shift+E')).toBeInTheDocument();
+      expect(screen.getByText('CommandOrControl+Shift+E')).toBeInTheDocument();
     });
 
-    const openEditorInput = screen.getByLabelText('Open Editor');
-    fireEvent.change(openEditorInput, { target: { value: 'CommandOrControl+Shift+S' } });
+    const recordBtn = screen.getByRole('button', { name: 'Record shortcut for Open Workspace / Editor' });
+    fireEvent.click(recordBtn);
+    fireEvent.keyDown(recordBtn, { key: 's', ctrlKey: true, shiftKey: true });
 
-    const saveEditorBtn = screen.getByRole('button', { name: 'Save Open Editor' });
+    const saveEditorBtn = screen.getByRole('button', { name: 'Save Open Workspace / Editor' });
     fireEvent.click(saveEditorBtn);
 
     await waitFor(() => {
@@ -443,7 +445,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
       expect(
         screen.getByText(/Failed to register shortcut for action 'capture' at startup/)
       ).toBeInTheDocument();
-      expect(screen.getByText('Disabled / Inactive')).toBeInTheDocument();
+      expect(screen.getByText('Disabled')).toBeInTheDocument();
     });
   });
 

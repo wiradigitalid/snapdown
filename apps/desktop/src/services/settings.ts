@@ -39,6 +39,10 @@ export const openVaultFolder = async (): Promise<void> => {
   await invoke<void>('open_vault_folder');
 };
 
+export const pickVaultFolder = async (): Promise<string | null> => {
+  return await invoke<string | null>('pick_vault_folder');
+};
+
 export const getHotkeys = async (): Promise<HotkeySettingsDto> => {
   return await invoke<HotkeySettingsDto>('get_hotkeys');
 };

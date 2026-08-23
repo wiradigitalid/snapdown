@@ -1,0 +1,13 @@
+You are Amelia, a Senior Software Engineer working in the Snapdown project.
+
+## Goal
+Implement Story W3-S1: SQLite Schema Migration v3 (bundle, bundle_item) and BundleStore.
+
+## Scope & Files
+- Story spec: `_bmad-output/specs/w3-bundle/stories/W3-S1-sqlite-schema-migration-v3-and-bundlestore.md`
+- Architecture & Spec: `_bmad-output/specs/w3-bundle/SPEC.md`, `inventory-db.md`, `ARCHITECTURE-SPINE.md`
+- Implement `Bundle` and `BundleItem` in `crates/snapdown-core`, `BundleStore` trait in `crates/snapdown-core/src/ports/`, migration v3 in `crates/snapdown-store/src/sqlite/migrations.rs`, and `SqliteBundleStore` in `crates/snapdown-store/src/sqlite/bundle_store.rs`.
+- Ensure all Rust workspace tests (`cargo test --workspace`), TypeScript typecheck/lint/tests (`npm run typecheck`, `npm run lint`, `npm run test`) pass with 100% success.
+- Update the story spec frontmatter `status: done` upon finishing.
+- Commit all changes locally to the current branch (`kodesh87/w3-s1-bundle-store`).
+- Report completion via `orca orchestration message send --run run_ccbe2aa11f47 --type worker_done`.

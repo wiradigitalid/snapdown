@@ -1,0 +1,59 @@
+# Brief for W4-S3: Stateless stdio MCP Bridge binary (snapdown-bridge)
+
+## Objective
+Implement LC-018 `mcp-bridge-cli` as a dedicated workspace executable crate `crates/snapdown-bridge` (or `snapdown-bridge`) speaking Model Context Protocol (MCP) over stdio and calling Local API routes over HTTP (AD-5, AD-7, AD-9, BR-80, BR-81, BR-82, BR-83, BR-84, BR-85, RISK-6, RISK-7).
+
+## Scope & Changes Required
+1. **New Crate `crates/snapdown-bridge`**:
+   - `crates/snapdown-bridge/Cargo.toml`:
+     ```toml
+     [package]
+     name = "snapdown-bridge"
+     version = "0.1.0"
+     edition = "2021"
+
+     [dependencies]
+     serde = { workspace = true }
+     serde_json = { workspace = true }
+     ureq = "2.9"
+     base64 = "0.22"
+
+     [dev-dependencies]
+     tiny_http = { workspace = true }
+     tempfile = { workspace = true }
+     ```
+   - Add `"crates/snapdown-bridge"` to `[workspace.members]` in root `Cargo.toml`.
+
+2. **MCP stdio Protocol implementation (`crates/snapdown-bridge/src/`)**:
+   - `mcp.rs`: JSON-RPC 2.0 frames (`id`, `method`, `params`, `result`, `error`). Handles standard MCP methods:
+     - `initialize`: returns server info (`name: "snapdown-bridge"`, `version: "0.1.0"`) and capabilities (`tools: {}`).
+     - `tools/list`: returns 4 tool schemas:
+       1. `mcp:set_access_key` (parameters: `{"key": {"type": "string", "description": "Access Key from Snapdown"}}`)
+       2. `mcp:list_bundles` (no parameters)
+       3. `mcp:read_bundle` (parameters: `{"bundle_id": {"type": "string"}}`)
+       4. `mcp:read_bundle_image` (parameters: `{"bundle_id": {"type": "string"}, "filename": {"type": "string"}}`)
+     - `tools/call`: executes requested tool against Local API.
+   - `client.rs`: HTTP client wrapper talking to `http://127.0.0.1:<port>`:
+     - Default port discovery: reads port from env `SNAPDOWN_PORT`, config file, or defaults to 18400 (or probes `/v1/health`).
+     - When Local API unreachable or connection refused: immediately returns error `unavailable` ("Snapdown is not running") without hanging or looping (BR-80, FR-21).
+     - When receiving error envelope from Local API: maps `code` and `message` verbatim into MCP tool error (AD-7, BR-77, RISK-6). NEVER maps refusal to an empty successful list.
+     - Holds the secret key in memory ONLY. Never writes to disk, logs, or cache (AD-5, BR-81, RISK-7).
+     - `mcp:read_bundle_image`: fetches binary from `/v1/bundles/:id/images/:filename`, base64-encodes it, and returns standard MCP image content block (`{"type": "image", "data": "base64...", "mimeType": "image/png"}`).
+   - `main.rs`: Read JSON-RPC lines from `std::io::stdin().lock()`, process, and write line responses to `std::io::stdout()`.
+
+3. **Tests (`crates/snapdown-bridge/tests/test_bridge_mcp.rs`)**:
+   - Integration test running bridge logic against mock Local API server:
+     - MCP handshake (`initialize` and `tools/list`).
+     - `set_access_key` in-memory lifecycle.
+     - `list_bundles`, `read_bundle`, `read_bundle_image` calls.
+     - Refusal vs empty result mapping test (401 returns MCP tool error, empty 200 returns empty list).
+     - Unreachable server returns immediate `unavailable`.
+
+## Verification
+Run:
+`cargo test --workspace`
+`cargo clippy --workspace --all-targets -- -D warnings`
+`cargo fmt --all -- --check`
+
+Branch: `kodesh87/w4-s3-mcp-bridge`
+Push and open PR against `main`.

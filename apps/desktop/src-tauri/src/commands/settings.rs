@@ -158,6 +158,40 @@ pub fn get_latest_finding_size(state: State<AppState>) -> Result<Option<u64>, St
 }
 
 #[tauri::command]
+pub fn pick_vault_folder() -> Result<Option<String>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        // Using PowerShell folder browser dialog on Windows
+        let script = r#"
+Add-Type -AssemblyName System.Windows.Forms
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+$dialog.Description = "Select Snapdown Vault Folder"
+$dialog.ShowNewFolderButton = $true
+if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+    Write-Output $dialog.SelectedPath
+}
+"#;
+        let output = std::process::Command::new("powershell")
+            .args(&["-NoProfile", "-NonInteractive", "-Command", script])
+            .output()
+            .map_err(|e| format!("Failed to launch folder picker: {e}"))?;
+
+        if output.status.success() {
+            let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path_str.is_empty() {
+                return Ok(Some(path_str));
+            }
+        }
+        Ok(None)
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(None)
+    }
+}
+
+#[tauri::command]
 pub fn open_vault_folder(state: State<AppState>) -> Result<(), String> {
     let store = &state.settings_store;
     let vault_path = match store

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Button, TextField, ConfirmDialog } from '@snapdown/ui';
+import { pickVaultFolder } from '../services/settings';
 
 export interface VaultSectionProps {
   vaultPath: string;
@@ -23,6 +24,23 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
   React.useEffect(() => {
     setInputValue(vaultPath);
   }, [vaultPath]);
+
+  const handleBrowse = async () => {
+    try {
+      const selected = await pickVaultFolder();
+      if (selected && selected.trim() !== '') {
+        setInputValue(selected);
+        setErrorMessage(null);
+        if (selected !== vaultPath) {
+          setPendingPath(selected);
+          setShowConfirm(true);
+        }
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMessage(`Failed to open folder picker: ${msg}`);
+    }
+  };
 
   const handleApply = () => {
     const trimmed = inputValue.trim();
@@ -58,12 +76,13 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
 
   return (
     <section
+      data-testid="vault-section"
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 'var(--space-4)',
+        gap: 'var(--space-3)',
         backgroundColor: 'var(--color-surface)',
-        padding: 'var(--space-5)',
+        padding: 'var(--space-4)',
         borderRadius: 'var(--radius-md)',
         border: '1px solid var(--color-border)',
       }}
@@ -72,7 +91,8 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
         <h2
           style={{
             margin: 0,
-            fontSize: 'var(--text-lg)',
+            fontSize: 'var(--text-base)',
+            fontWeight: 600,
             fontFamily: 'var(--font-ui)',
             color: 'var(--color-text)',
           }}
@@ -87,33 +107,44 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
             color: 'var(--color-text-muted)',
           }}
         >
-          Location where capture screenshots and markdown notes are securely stored.
+          Location where capture screenshots and markdown notes are stored.
         </p>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-        <TextField
-          id="vault-path-input"
-          label="Vault Path"
-          value={inputValue}
-          onChange={(e) => {
-            setInputValue(e.target.value);
-            setErrorMessage(null);
-          }}
-          invalid={Boolean(errorMessage)}
-          errorMessage={errorMessage || undefined}
-          disabled={disabled || isSaving}
-        />
-
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-end' }}>
+          <div style={{ flex: 1 }}>
+            <TextField
+              id="vault-path-input"
+              label="Vault Path"
+              value={inputValue}
+              onChange={(e) => {
+                setInputValue(e.target.value);
+                setErrorMessage(null);
+              }}
+              invalid={Boolean(errorMessage)}
+              errorMessage={errorMessage || undefined}
+              disabled={disabled || isSaving}
+            />
+          </div>
+          <Button
+            variant="secondary"
+            onClick={handleBrowse}
+            disabled={disabled || isSaving}
+          >
+            Browse...
+          </Button>
           <Button
             variant="primary"
             onClick={handleApply}
             disabled={disabled || isSaving || inputValue.trim() === vaultPath}
             loading={isSaving}
           >
-            Apply Change
+            Apply
           </Button>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Button
             variant="secondary"
             onClick={onOpenExplorer}

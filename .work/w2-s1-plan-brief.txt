@@ -1,0 +1,25 @@
+STEP 1 of 5 — PLAN ONLY. Snapdown wave W2, story W2-S1.
+
+You are in worktree D:/Developer/orca-workspaces/snapdown/w1-settings, branch kodesh87/w2-s1-finding-store.
+
+WHAT TO DO:
+Invoke skill `bmad-build-auto` under folder+id dispatch:
+  spec_folder = _bmad-output/specs/w2-finding/
+  story_id = W2-S1
+
+Resolve from `_bmad-output/specs/w2-finding/stories.yaml` and `_bmad-output/specs/w2-finding/SPEC.md`.
+Scope: SQLite schema for `finding`, `note`, and `marker` tables (migration v2) with `FindingStore` port & SQLite adapter implementation.
+
+Halt after planning.
+Produce story spec at `_bmad-output/specs/w2-finding/stories/W2-S1-sqlite-schema-for-finding-note-and-marker-tables-with-finding-store.md` with frontmatter status: ready-for-dev. Write NO application code in this step.
+
+Invariants to cover:
+- Define domain models: `Finding`, `Note`, `Marker` in `crates/snapdown-core/src/domain/finding.rs` (with UUIDv7, RFC3339 UTC timestamps, normalized coordinates 0.0..=1.0 per AD-3, single-table sequence per AD-1).
+- Port: `FindingStore` in `crates/snapdown-core/src/ports/mod.rs` (CRUD for finding, note, marker; atomic renumbering; list findings).
+- Schema Migration v2: create `finding`, `note`, and `marker` tables strictly per `inventory-db.md` rows 1, 2, and 3.
+- `marker` table schema: `id TEXT PRIMARY KEY, finding_id TEXT NOT NULL REFERENCES finding(id) ON DELETE CASCADE, ordinal INTEGER NOT NULL, x REAL NOT NULL, y REAL NOT NULL, comment TEXT NOT NULL, UNIQUE(finding_id, ordinal)` (AD-1, AD-3).
+- Implement `SqliteFindingStore` in `crates/snapdown-store/src/sqlite/finding_store.rs`.
+- Named tests to specify:
+    `cargo::migrations_v2_apply_cleanly_and_idempotently`
+    `cargo::finding_store_crud_and_transaction_guarantees`
+    `cargo::marker_renumber_preserves_single_sequence_invariant`

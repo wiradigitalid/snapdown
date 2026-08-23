@@ -33,7 +33,8 @@ use commands::finding::{
 };
 use commands::hotkey::{clear_hotkey, get_hotkeys, set_hotkey};
 use commands::settings::{
-    get_latest_finding_size, get_settings, open_vault_folder, set_quality_budget, set_vault_path,
+    get_latest_finding_size, get_settings, open_vault_folder, pick_vault_folder,
+    set_quality_budget, set_vault_path,
 };
 use commands::sharing::{
     get_publication_status, publish_bundle, reconcile_publication, unpublish_bundle,
@@ -190,6 +191,7 @@ pub fn run() {
             set_quality_budget,
             get_latest_finding_size,
             open_vault_folder,
+            pick_vault_folder,
             get_hotkeys,
             set_hotkey,
             clear_hotkey,
