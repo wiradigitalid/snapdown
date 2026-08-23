@@ -2,7 +2,7 @@
 id: W4-S2
 title: Local API HTTP server with constant-time auth and bundle routes
 wave: W4
-status: planned
+status: done
 created: 2026-08-23
 dependencies: [W4-S1]
 files:
