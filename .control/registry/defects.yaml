@@ -95,3 +95,41 @@ defects:
       it is a 160-bit CSPRNG value today and that is a property of the generator, not of this render.
     blocked_by: DEC-005, which freezes `sharing`. Registered now, fixed when that lifts.
     status: open
+  - id: BUG-4
+    title: The capture overlay is never mounted; pressing the capture hotkey shows the Settings shell
+    found: "2026-08-23"
+    found_by: narrow UI audit (static verification), confirmed by the coordinator against the source
+    component: finding
+    severity: critical
+    contradicts: [FR-1, FR-2, UC-1, UC-2, NFR-1, NFR-2]
+    evidence: |
+      apps/desktop/src-tauri/src/commands/capture.rs:103-106
+        WebviewWindowBuilder::new(..., WebviewUrl::App("index.html?overlay=true".into()), ...)
+      apps/desktop/src/main.tsx and apps/desktop/src/App.tsx
+        grep for window.location.search, URLSearchParams, or "overlay": NO MATCH.
+      apps/desktop has exactly ONE html entry point, index.html. vite.config.ts declares no
+      rollupOptions.input, so there is no second bundle to route to.
+      Therefore the overlay window mounts <App /> - the full Editor shell, opening on Settings -
+      instead of <CaptureOverlay />.
+    impact: |
+      THE CAPTURE PATH DOES NOT WORK. Pressing the capture hotkey opens an undecorated fullscreen
+      window showing Settings. There is no dim, no crosshair, no region drag, no note field, and no
+      Finding is ever created from the hotkey. FR-1 and FR-2 are unmet, UC-1 and UC-2 cannot be
+      performed, and NFR-1/NFR-2's timing budgets measure a path nobody can reach.
+      This is the single most-executed action in the product and the reason the product exists.
+    why_undetected: |
+      CaptureOverlay.tsx has passing unit tests - capture_overlay_draws_selection_and_dimensions and
+      friends. The COMPONENT is correct and tested in isolation; it is simply never mounted. Nothing
+      tests the wiring between the Rust window builder's URL and the frontend's routing, because
+      that seam has no owner in any document: inventory-screen row 1 names the screen, and no
+      contract describes how the overlay window selects what to render.
+      The W2 UI verification that would have caught it is recorded in
+      _bmad-output/specs/w1-settings/ui-verify-W1-S1/ for W1 only. No wave ever drove the capture
+      hotkey end to end.
+    fix: |
+      Route on the query parameter in main.tsx: read window.location.search and mount
+      <CaptureOverlay /> when overlay=true, <App /> otherwise. Then add a test that asserts the
+      mount decision from the URL, and an end-to-end check that the hotkey produces a Finding.
+      The deeper fix is the missing seam contract - .how/finding/02-contracts/ describes the Tauri
+      command surface and says nothing about how a window chooses its root component.
+    status: open

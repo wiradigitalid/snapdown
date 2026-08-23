@@ -243,16 +243,30 @@ waves:
               - vitest::a_theme_change_while_running_repaints_every_surface
               - vitest::a_theme_invariant_token_is_declared_as_one_in_the_token_file
           - id: W6-S2
-            title: The editor shell — persona naming, the navigation rail, one executable
+            title: The editor shell — persona naming, the navigation rail, one executable, and the overlay mount
             component: settings
             satisfies: [UC-24, UC-25]
             depends_on: [W6-S1]
-            touches: [editor-ui]
+            touches: [editor-ui, capture-pipeline]
             spec_folder: _bmad-output/specs/w6-desktop-experience/
             why: |
               LC-028. The frame is inline JSX in App.tsx today, owned by no component and tested by
               nothing, which is how FR-27 and FR-28 came to be unmet with no document being wrong.
+
+              **This story also carries BUG-4, which is critical and outranks everything else in the
+              wave.** capture.rs opens `index.html?overlay=true` and NOTHING in the frontend reads
+              window.location.search. There is one html entry point and no second bundle. So the
+              overlay window mounts <App /> — the Editor shell, opening on Settings — instead of
+              <CaptureOverlay />. The capture path, the most-executed action in the product and the
+              reason it exists, does not work in the shipped build.
+
+              It belongs here rather than in a story of its own because the decision *which root
+              component this window renders* is a frame concern, and this story is where the frame
+              gains an owner. Doing it anywhere else would leave the seam ownerless again.
             tests:
+              - vitest::the_overlay_window_url_mounts_the_capture_overlay_and_not_the_editor
+              - vitest::the_default_window_url_mounts_the_editor_and_not_the_overlay
+              - cargo::the_capture_hotkey_produces_a_finding_end_to_end
               - cargo::the_build_produces_exactly_one_desktop_executable
               - cargo::the_executable_name_the_tray_tooltip_and_the_window_title_share_one_source
               - vitest::the_workspace_window_titles_itself_snapdown_editor

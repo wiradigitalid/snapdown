@@ -80,6 +80,14 @@ Two of the ten stories are defects rather than new work — code disagreeing wit
 been `active` since G2. Both were found by taking `bundle` and `settings` to `mode: deep` and reading
 the code against the documents.
 
+**A third defect was found after this SPEC was written, and it outranks the rest of the wave.**
+`BUG-4`: `capture.rs` opens the overlay window at `index.html?overlay=true`, and nothing in the
+frontend reads `window.location.search`. There is one html entry point and no second bundle, so the
+overlay window mounts the Editor shell instead of `CaptureOverlay`. **The capture path does not
+work** — no dim, no crosshair, no region drag, no note field, no Finding. `FR-1`, `FR-2`, `UC-1` and
+`UC-2` are unmet in the shipped build. It is folded into `W6-S2`, because deciding which root
+component a window renders is a frame concern and `W6-S2` is where the frame gains an owner.
+
 Who is affected: the Reviewer, on every screen. Nothing here is visible to an agent. `DEC-005` freezes
 `sharing` and `agent-access`; their surfaces stay reachable (`BR-120`) and gain no behaviour.
 
@@ -168,6 +176,8 @@ At the end of this wave, on a clean Windows 11 machine, in **both** themes, at 1
 6. Capturing a tooltip and a full screen on `Auto` produces two different resolved pairs, both stored
    with their Findings, and Settings names the budget for each.
 7. Deleting a Finding that belongs to a Bundle leaves that Bundle's item list and Markdown intact.
+8. **Pressing the capture hotkey shows the capture overlay and produces a Finding.** It does not
+   today (`BUG-4`), and no other item on this list matters if this one fails.
 
 ## Assumptions
 

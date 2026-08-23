@@ -18,22 +18,34 @@
     the page background. Toggle's indeterminate state is load-bearing for W6-S5, not decoration.
 
 - id: "W6-S2"
-  title: The editor shell — persona naming, the navigation rail, one executable
+  title: The editor shell — persona naming, the navigation rail, one executable, and the overlay mount
   description: >-
     Extract the window frame out of App.tsx into LC-028 editor-shell with its own tests. Left
     navigation rail at 200px replacing the top tab row, all four primary surfaces listed on every
     surface, the Capture action pinned to the rail's foot, window title "Snapdown Editor" distinct
     from the tray's "Snapdown", and a build assertion that exactly one desktop executable is produced.
-    See .how/settings/04-components/LC-028-editor-shell.md and .how/settings/01-ux/DESIGN.md.
+    ALSO carries BUG-4, which is critical: route on the overlay query parameter so the capture
+    overlay window mounts CaptureOverlay instead of the Editor. See
+    .how/settings/04-components/LC-028-editor-shell.md, .how/settings/01-ux/DESIGN.md, and
+    .control/registry/defects.yaml BUG-4.
   invoke_dev_with: >-
-    The rail replaces the tab row for a reason that is not taste: FR-29 needs Settings to fit 1024x720
-    without scrolling, and a top tab row costs ~64px of height on every surface. LC-028 depends on
-    NOTHING — a frame that reads state is a frame that can fail to draw, and FR-28 requires navigation
-    to survive any surface's failure. The active item must be distinguished by MORE than colour
-    (fill plus a left edge bar). The build assertion matters: renaming the product left a stale
-    desktop.exe beside Snapdown.exe and the owner ran the wrong one, which is what made them believe
-    the product had no navigation at all. sharing and agent-access are frozen by DEC-005 and their
-    surfaces MUST still be listed (BR-120).
+    READ BUG-4 FIRST, it outranks everything else in this story. capture.rs:106 opens
+    `index.html?overlay=true` and NOTHING in main.tsx or App.tsx reads window.location.search. There
+    is one html entry point and vite.config.ts declares no second input. So the overlay window mounts
+    <App /> - the Editor shell, opening on Settings - instead of <CaptureOverlay />. THE CAPTURE PATH
+    DOES NOT WORK: no dim, no crosshair, no region drag, no note field, no Finding. FR-1, FR-2, UC-1
+    and UC-2 are all unmet in the shipped build. It went unnoticed because CaptureOverlay.tsx's own
+    unit tests pass - the component is correct and simply never mounted, and nothing tests the seam
+    between the Rust window builder's URL and the frontend's routing. Fix it in main.tsx, and write
+    a test that asserts the MOUNT DECISION from the URL, not one that asserts CaptureOverlay renders.
+    Then the shell work. The rail replaces the tab row for a reason that is not taste: FR-29 needs
+    Settings to fit 1024x720 without scrolling, and a top tab row costs ~64px of height on every
+    surface. LC-028 depends on NOTHING - a frame that reads state is a frame that can fail to draw,
+    and FR-28 requires navigation to survive any surface's failure. The active item must be
+    distinguished by MORE than colour (fill plus a left edge bar). The build assertion matters:
+    renaming the product left a stale desktop.exe beside Snapdown.exe and the owner ran the wrong one,
+    which is what made them believe the product had no navigation at all. sharing and agent-access are
+    frozen by DEC-005 and their surfaces MUST still be listed (BR-120).
 
 - id: "W6-S3"
   title: Two columns packed by content height, four groups visible at 1024x720
