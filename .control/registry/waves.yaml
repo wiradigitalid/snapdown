@@ -367,6 +367,7 @@ waves:
               - vitest::the_findings_detail_pane_renders_the_findings_image
               - vitest::the_marker_canvas_is_mounted_over_that_image
               - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
+              - vitest::the_orphan_report_is_reachable_from_the_findings_surface
               - vitest::findings_renders_correctly_in_both_windows_themes
               - vitest::the_empty_state_teaches_the_bound_capture_combination
               - vitest::nothing_selected_is_visually_distinct_from_empty
