@@ -237,7 +237,7 @@ the frontend. The CLI is currently absent from this repository entirely — see 
 fixed, **a locally built `Snapdown.exe` is not the application**, and any UI finding taken from one is
 a finding about the build.
 
-**Three ways a verification run lies, all hit on 2026-08-23:**
+**Four ways a verification run lies, all hit on 2026-08-23:**
 
 - **`cmd | tail` reports the exit code of `tail`, not of `cmd`.** A `cargo build` that failed with
   *package ID specification did not match any packages* was reported as exit 0 because it was piped.
@@ -245,6 +245,10 @@ a finding about the build.
 - **The coordinator's own worktree goes stale the moment a story adds a dependency.** `web/ui`
   typecheck failed locally on missing `@types/node` while CI was green: CI runs `npm ci` from the
   lockfile, a long-lived worktree does not. Run `npm --prefix <pkg> ci` before believing a local red.
+- **`cmd; echo "EXIT=$?"` makes the harness report 0 whatever `cmd` did.** The script's exit code is
+  `echo`'s, and `echo` always succeeds — so the background-task notification says *exit code 0* while
+  the echoed line says `EXIT=1`. A `tauri build` that died on *Access is denied* was reported as a
+  success this way. Read the echoed value, never the notification's code.
 
 ### Pitfalls
 
@@ -309,3 +313,9 @@ whole wave — `SPEC.md`, `stories.yaml`, every dispatch brief — was absent, a
 from scratch as new files. Pass `--base-branch` explicitly for any wave work, and take only the files
 the brief asked for out of a worktree that got this wrong: its reconstructed registries are guesses,
 and overwriting the real ones with them loses everything the wave has written.
+
+**A leftover `Snapdown.exe` process locks its own file and fails the next build.** A binary launched
+by an earlier UI audit was still running hours later; `tauri build` died with *failed to remove file
+`Snapdown.exe`: Access is denied (os error 5)*, which reads like a permissions problem and is not.
+`Get-Process -Name Snapdown` before rebuilding, and treat a still-running instance as cleanup the
+same way a stale worktree is.

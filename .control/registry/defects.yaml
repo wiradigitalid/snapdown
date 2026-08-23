@@ -552,3 +552,50 @@ defects:
         bridge mcp.rs:55,81 - serde_json::to_string on a well-formed response struct. Effectively
           infallible, and the bridge has no channel to report a serialisation failure over anyway.
     status: open
+
+  - id: BUG-13
+    title: "The new CI guard counts every .exe, but FR-27 promises one DESKTOP executable"
+    found: "2026-08-23"
+    found_by: coordinator, rebuilding the app in the main checkout the same day W6-S11 landed
+    component: settings
+    severity: medium
+    contradicts: [FR-27, BR-121]
+    evidence: |
+      .github/workflows/desktop-ci.yml, the "Verify desktop executable" step added by W6-S11:
+
+        $exeCount = (Get-ChildItem -Path "target/release/*.exe").Count
+        if ($exeCount -ne 1) { Write-Error "...found $exeCount"; exit 1 }
+
+      It counts EVERY executable in target/release. This workspace legitimately produces a second
+      one: `snapdown-bridge.exe`, from crates/snapdown-bridge, the MCP executable named in AGENTS.md
+      and in the C4 set. It is not a desktop executable and FR-27 does not forbid it.
+
+      FR-27's consequence, verbatim:
+        "The build produces exactly one desktop executable. A second one left in the output directory
+         is a build failure, not clutter - a stale `desktop.exe` beside the correct `Snapdown.exe` is
+         precisely what caused the Reviewer to run the wrong binary."
+
+      The promise is about a second DESKTOP executable - the stale-rename case. The guard as written
+      also fails on a legitimate workspace binary.
+
+      Reproduced locally: target/release held snapdown-bridge.exe from an earlier `cargo build
+      --workspace`, so the guard would have counted 2 and failed a correct build.
+    impact: |
+      Not a false green - a false RED, which is the kind that gets a guard deleted rather than fixed.
+      The first person to run `cargo build --workspace` and `tauri build` against one target
+      directory gets a build failure with a message that names no real problem.
+    why_undetected: |
+      It passes in CI by accident of job layout, not by being right. `web-check` runs `tauri build`
+      and never builds the bridge; `rust-check` builds the workspace in a separate job with its own
+      target directory. Nothing shares a target directory today, so the two never meet. A cache
+      change or a job merge would surface it, and the guard would look wrong rather than the layout.
+    fix: |
+      Count only the desktop executable's own name against the product name, or exclude the known
+      workspace binaries by name rather than counting the directory. The check should answer "is
+      there a second executable claiming to BE the desktop app" - which is the stale-rename case
+      FR-27 describes - not "how many executables exist".
+    note: |
+      Found by rebuilding rather than by reading. The first build of W6-S11 ran in a fresh worktree
+      where the bridge had never been built, so the guard's blind spot could not show itself there.
+    related: BUG-11
+    status: open
