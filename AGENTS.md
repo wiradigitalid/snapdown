@@ -319,3 +319,11 @@ by an earlier UI audit was still running hours later; `tauri build` died with *f
 `Snapdown.exe`: Access is denied (os error 5)*, which reads like a permissions problem and is not.
 `Get-Process -Name Snapdown` before rebuilding, and treat a still-running instance as cleanup the
 same way a stale worktree is.
+
+**`agent_prompt_stalled` does not mean the worktree failed.** Orca's `worker-start --worktree
+new-child` creates the checkout first and injects the agent's prompt second, so a stall leaves a
+perfectly good worktree behind at the right commit. Retrying with `new-child` makes another one;
+`w6-s3-plan` and `w6-s3-plan2` were both born this way. Check
+`D:/Developer/orca-workspaces/<repo>/` first and re-dispatch into the existing one with
+`--worktree path:<path>`. Attaching a terminal in another worktree does not work either — the Run is
+bound to the main worktree and refuses the handle.
