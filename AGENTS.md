@@ -327,3 +327,11 @@ perfectly good worktree behind at the right commit. Retrying with `new-child` ma
 `D:/Developer/orca-workspaces/<repo>/` first and re-dispatch into the existing one with
 `--worktree path:<path>`. Attaching a terminal in another worktree does not work either — the Run is
 bound to the main worktree and refuses the handle.
+
+**`orca terminal send --text ... --enter` does not submit to a TUI agent.** The text goes into the
+input box and nothing happens. `--text` writes a **bracketed-paste** block — `ESC[200~`, the text,
+`ESC[201~`, then the CR — and TUI input widgets deliberately swallow a CR that arrives inside a paste
+so that multi-line pastes do not fire early. Byte counts show it: a 12-character message with
+`--enter` writes 25 bytes, while `--enter` alone writes **1**. Send the text, then send `--enter` as a
+**separate call** so the CR lands outside the paste block. This is only for driving a worker's TUI;
+workers report back through `orca orchestration worker-done`, which is a CLI call and unaffected.
