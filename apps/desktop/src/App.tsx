@@ -2,13 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { Toast } from '@snapdown/ui';
 import { VaultSection } from './components/VaultSection';
 import { QualityBudgetSection } from './components/QualityBudgetSection';
+import { HotkeySection } from './components/HotkeySection';
 import {
+  clearHotkey as apiClearHotkey,
+  getHotkeys,
   getSettings,
   openVaultFolder,
+  setHotkey as apiSetHotkey,
   setQualityBudget as apiSetQualityBudget,
   setVaultPath as apiSetVaultPath,
 } from './services/settings';
-import { Settings } from './types/settings';
+import { HotkeyAction, HotkeySettingsDto, Settings } from './types/settings';
 
 export const App: React.FC = () => {
   const [settings, setSettings] = useState<Settings>({
@@ -20,20 +24,40 @@ export const App: React.FC = () => {
     latest_finding_size: null,
   });
 
+  const [hotkeySettings, setHotkeySettings] = useState<HotkeySettingsDto>({
+    hotkeys: [
+      {
+        action: 'capture',
+        shortcut: 'CommandOrControl+Shift+S',
+        is_registered: true,
+        is_active: true,
+      },
+      {
+        action: 'open_editor',
+        shortcut: 'CommandOrControl+Shift+E',
+        is_registered: true,
+        is_active: true,
+      },
+    ],
+    startup_warnings: [],
+  });
+
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
-    getSettings()
-      .then((loaded) => {
+
+    Promise.all([getSettings(), getHotkeys()])
+      .then(([loadedSettings, loadedHotkeys]) => {
         if (isMounted) {
-          setSettings(loaded);
+          setSettings(loadedSettings);
+          setHotkeySettings(loadedHotkeys);
           setIsLoading(false);
         }
       })
       .catch((err) => {
-        console.error('Failed to load settings:', err);
+        console.error('Failed to load initial settings:', err);
         if (isMounted) {
           setIsLoading(false);
         }
@@ -54,6 +78,20 @@ export const App: React.FC = () => {
     const updatedBudget = await apiSetQualityBudget(maxLongEdge, encoderQuality);
     setSettings((prev) => ({ ...prev, quality_budget: updatedBudget }));
     setToastMessage('Quality Budget saved successfully');
+  };
+
+  const handleSaveHotkey = async (action: HotkeyAction, shortcut: string) => {
+    await apiSetHotkey(action, shortcut);
+    const refreshed = await getHotkeys();
+    setHotkeySettings(refreshed);
+    setToastMessage(`Hotkey for ${action} updated successfully`);
+  };
+
+  const handleClearHotkey = async (action: HotkeyAction) => {
+    await apiClearHotkey(action);
+    const refreshed = await getHotkeys();
+    setHotkeySettings(refreshed);
+    setToastMessage(`Hotkey for ${action} cleared`);
   };
 
   const handleOpenExplorer = async () => {
@@ -106,7 +144,7 @@ export const App: React.FC = () => {
               color: 'var(--color-text-muted)',
             }}
           >
-            Manage storage directory and capture image quality preferences.
+            Manage storage directory, image quality, and hotkey preferences.
           </p>
         </div>
       </header>
@@ -122,6 +160,13 @@ export const App: React.FC = () => {
         qualityBudget={settings.quality_budget}
         latestFindingSize={settings.latest_finding_size}
         onSaveQualityBudget={handleSaveQualityBudget}
+        disabled={isLoading}
+      />
+
+      <HotkeySection
+        hotkeySettings={hotkeySettings}
+        onSaveHotkey={handleSaveHotkey}
+        onClearHotkey={handleClearHotkey}
         disabled={isLoading}
       />
 

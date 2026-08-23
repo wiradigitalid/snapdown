@@ -9,11 +9,33 @@ vi.mock('../services/settings', () => ({
   setQualityBudget: vi.fn(),
   getLatestFindingSize: vi.fn(),
   openVaultFolder: vi.fn(),
+  getHotkeys: vi.fn(),
+  setHotkey: vi.fn(),
+  clearHotkey: vi.fn(),
 }));
+
+const mockDefaultHotkeys = {
+  hotkeys: [
+    {
+      action: 'capture' as const,
+      shortcut: 'CommandOrControl+Shift+S',
+      is_registered: true,
+      is_active: true,
+    },
+    {
+      action: 'open_editor' as const,
+      shortcut: 'CommandOrControl+Shift+E',
+      is_registered: true,
+      is_active: true,
+    },
+  ],
+  startup_warnings: [],
+};
 
 describe('Desktop Settings Screen (Screen 12)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(settingsService.getHotkeys).mockResolvedValue(mockDefaultHotkeys);
   });
 
   it('app_renders_shell and displays settings sections', async () => {
@@ -32,11 +54,14 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     expect(screen.getByText('Snapdown Settings')).toBeInTheDocument();
     expect(screen.getByText('Vault Folder')).toBeInTheDocument();
     expect(screen.getByText('Quality Budget')).toBeInTheDocument();
+    expect(screen.getByText('Hotkeys')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('C:/Users/test/Vault')).toBeInTheDocument();
       expect(screen.getByDisplayValue('1600')).toBeInTheDocument();
       expect(screen.getByDisplayValue('75')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('CommandOrControl+Shift+S')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('CommandOrControl+Shift+E')).toBeInTheDocument();
     });
   });
 
@@ -88,7 +113,6 @@ describe('Desktop Settings Screen (Screen 12)', () => {
 
     render(<App />);
 
-    // Wait until settings are loaded (e.g. vault path is populated from getSettings)
     await waitFor(() => {
       expect(screen.getByDisplayValue('C:/Users/test/Vault')).toBeInTheDocument();
     });
@@ -249,8 +273,172 @@ describe('Desktop Settings Screen (Screen 12)', () => {
       expect(
         screen.getByText('Directory is not writable: access denied')
       ).toBeInTheDocument();
-      // Input resets to current valid vault path
       expect(screen.getByDisplayValue('C:/Users/test/Vault')).toBeInTheDocument();
+    });
+  });
+
+  it('updates hotkey shortcut successfully', async () => {
+    vi.mocked(settingsService.getSettings).mockResolvedValue({
+      vault_path: 'C:/Users/test/Vault',
+      quality_budget: {
+        max_long_edge: 1600,
+        encoder_quality: 75,
+      },
+      latest_finding_size: null,
+    });
+    vi.mocked(settingsService.setHotkey).mockResolvedValue();
+    vi.mocked(settingsService.getHotkeys)
+      .mockResolvedValueOnce(mockDefaultHotkeys)
+      .mockResolvedValueOnce({
+        hotkeys: [
+          {
+            action: 'capture',
+            shortcut: 'Ctrl+Alt+C',
+            is_registered: true,
+            is_active: true,
+          },
+          {
+            action: 'open_editor',
+            shortcut: 'CommandOrControl+Shift+E',
+            is_registered: true,
+            is_active: true,
+          },
+        ],
+        startup_warnings: [],
+      });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('CommandOrControl+Shift+S')).toBeInTheDocument();
+    });
+
+    const captureInput = screen.getByLabelText('Capture Region');
+    fireEvent.change(captureInput, { target: { value: 'Ctrl+Alt+C' } });
+
+    const saveCaptureBtn = screen.getByRole('button', { name: 'Save Capture Region' });
+    fireEvent.click(saveCaptureBtn);
+
+    await waitFor(() => {
+      expect(settingsService.setHotkey).toHaveBeenCalledWith('capture', 'Ctrl+Alt+C');
+      expect(screen.getByText('Hotkey for capture updated successfully')).toBeInTheDocument();
+    });
+  });
+
+  it('clears hotkey shortcut and disables action', async () => {
+    vi.mocked(settingsService.getSettings).mockResolvedValue({
+      vault_path: 'C:/Users/test/Vault',
+      quality_budget: {
+        max_long_edge: 1600,
+        encoder_quality: 75,
+      },
+      latest_finding_size: null,
+    });
+    vi.mocked(settingsService.clearHotkey).mockResolvedValue();
+    vi.mocked(settingsService.getHotkeys)
+      .mockResolvedValueOnce(mockDefaultHotkeys)
+      .mockResolvedValueOnce({
+        hotkeys: [
+          {
+            action: 'capture',
+            shortcut: '',
+            is_registered: false,
+            is_active: false,
+          },
+          {
+            action: 'open_editor',
+            shortcut: 'CommandOrControl+Shift+E',
+            is_registered: true,
+            is_active: true,
+          },
+        ],
+        startup_warnings: [],
+      });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('CommandOrControl+Shift+S')).toBeInTheDocument();
+    });
+
+    const clearCaptureBtn = screen.getByRole('button', { name: 'Clear Capture Region' });
+    fireEvent.click(clearCaptureBtn);
+
+    await waitFor(() => {
+      expect(settingsService.clearHotkey).toHaveBeenCalledWith('capture');
+      expect(screen.getByText('Hotkey for capture cleared')).toBeInTheDocument();
+    });
+  });
+
+  it('displays conflict error message when hotkey binding fails (BR-26 / BR-27)', async () => {
+    vi.mocked(settingsService.getSettings).mockResolvedValue({
+      vault_path: 'C:/Users/test/Vault',
+      quality_budget: {
+        max_long_edge: 1600,
+        encoder_quality: 75,
+      },
+      latest_finding_size: null,
+    });
+    vi.mocked(settingsService.setHotkey).mockRejectedValue(
+      new Error('Two actions cannot share the same hotkey combination')
+    );
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('CommandOrControl+Shift+E')).toBeInTheDocument();
+    });
+
+    const openEditorInput = screen.getByLabelText('Open Editor');
+    fireEvent.change(openEditorInput, { target: { value: 'CommandOrControl+Shift+S' } });
+
+    const saveEditorBtn = screen.getByRole('button', { name: 'Save Open Editor' });
+    fireEvent.click(saveEditorBtn);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Two actions cannot share the same hotkey combination')
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('displays startup registration warning banner when hotkey fails at startup (BR-26)', async () => {
+    vi.mocked(settingsService.getSettings).mockResolvedValue({
+      vault_path: 'C:/Users/test/Vault',
+      quality_budget: {
+        max_long_edge: 1600,
+        encoder_quality: 75,
+      },
+      latest_finding_size: null,
+    });
+    vi.mocked(settingsService.getHotkeys).mockResolvedValue({
+      hotkeys: [
+        {
+          action: 'capture',
+          shortcut: 'CommandOrControl+Shift+S',
+          is_registered: false,
+          is_active: false,
+        },
+        {
+          action: 'open_editor',
+          shortcut: 'CommandOrControl+Shift+E',
+          is_registered: true,
+          is_active: true,
+        },
+      ],
+      startup_warnings: [
+        "Failed to register shortcut for action 'capture' at startup: Hotkey combination is already held by another application",
+      ],
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('startup-warning-banner')).toBeInTheDocument();
+      expect(
+        screen.getByText(/Failed to register shortcut for action 'capture' at startup/)
+      ).toBeInTheDocument();
+      expect(screen.getByText('Disabled / Inactive')).toBeInTheDocument();
     });
   });
 });

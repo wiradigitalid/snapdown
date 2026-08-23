@@ -316,6 +316,12 @@ mod tests {
 
         let state_data = AppState {
             settings_store: Arc::new(store),
+            hotkey_registrar: Arc::new(std::sync::Mutex::new(
+                crate::hotkey::DesktopHotkeyRegistrar::new(
+                    Arc::new(SqliteSettingsStore::open_in_memory().unwrap()),
+                    None,
+                ),
+            )),
         };
 
         // Empty path is invalid and must be rejected

@@ -28,6 +28,7 @@ pub trait HotkeyRegistrar {
     fn register(&mut self, action: &str, shortcut: &str) -> Result<(), CoreError>;
     fn unregister(&mut self, action: &str) -> Result<(), CoreError>;
     fn is_registered(&self, action: &str) -> bool;
+    fn get_shortcut(&self, action: &str) -> Option<String>;
 }
 
 pub trait StartupRegistrar {

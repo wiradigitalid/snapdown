@@ -8,3 +8,17 @@ export interface Settings {
   quality_budget: QualityBudget;
   latest_finding_size: number | null;
 }
+
+export type HotkeyAction = 'capture' | 'open_editor';
+
+export interface HotkeyItem {
+  action: HotkeyAction;
+  shortcut: string;
+  is_registered: boolean;
+  is_active: boolean;
+}
+
+export interface HotkeySettingsDto {
+  hotkeys: HotkeyItem[];
+  startup_warnings: string[];
+}
