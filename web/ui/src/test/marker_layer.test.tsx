@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MarkerLayer } from '../components/MarkerLayer';
 
@@ -21,7 +21,7 @@ const mockMarkers = [
   },
 ];
 
-describe('MarkerLayer Component', () => {
+describe('MarkerLayer Component (LC-007)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -60,5 +60,62 @@ describe('MarkerLayer Component', () => {
     fireEvent.click(layer, { clientX: 200, clientY: 150 });
 
     expect(onAddMarker).toHaveBeenCalledWith(0.5, 0.5);
+  });
+
+  it('dragging_marker_updates_position', () => {
+    const onUpdateMarkerPosition = vi.fn();
+    const onSelectMarker = vi.fn();
+
+    render(
+      <MarkerLayer
+        markers={mockMarkers}
+        onUpdateMarkerPosition={onUpdateMarkerPosition}
+        onSelectMarker={onSelectMarker}
+      />
+    );
+
+    const layer = screen.getByTestId('marker-layer');
+    vi.spyOn(layer, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 500,
+      height: 400,
+      right: 500,
+      bottom: 400,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+
+    const badge1 = screen.getByTestId('marker-badge-1');
+    fireEvent.mouseDown(badge1);
+
+    expect(onSelectMarker).toHaveBeenCalledWith('m1');
+
+    // Move mouse on window
+    fireEvent.mouseMove(window, { clientX: 250, clientY: 200 });
+    expect(onUpdateMarkerPosition).toHaveBeenCalledWith('m1', 0.5, 0.5);
+
+    fireEvent.mouseUp(window);
+  });
+
+  it('keyboard_navigation_on_markers', () => {
+    const onSelectMarker = vi.fn();
+    const onDeleteMarker = vi.fn();
+
+    render(
+      <MarkerLayer
+        markers={mockMarkers}
+        onSelectMarker={onSelectMarker}
+        onDeleteMarker={onDeleteMarker}
+      />
+    );
+
+    const badge1 = screen.getByRole('button', { name: 'Marker 1' });
+    fireEvent.keyDown(badge1, { key: 'Enter' });
+    expect(onSelectMarker).toHaveBeenCalledWith('m1');
+
+    fireEvent.keyDown(badge1, { key: 'Delete' });
+    expect(onDeleteMarker).toHaveBeenCalledWith('m1');
   });
 });
