@@ -9,7 +9,7 @@
 waves:
   - id: W1
     title: Workspace, the two stores, and Settings complete
-    status: open
+    status: closed
     release: r1
     prd: [capture-to-markdown]
     fr: [FR-5, FR-16, FR-17, FR-18]
