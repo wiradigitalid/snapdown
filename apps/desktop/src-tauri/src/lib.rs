@@ -17,7 +17,9 @@ pub mod startup;
 pub mod state;
 pub mod vault_migration;
 
-use commands::bundle::{create_bundle, delete_bundle, get_bundle_detail, list_bundles};
+use commands::bundle::{
+    copy_bundle_to_clipboard, create_bundle, delete_bundle, get_bundle_detail, list_bundles,
+};
 use commands::capture::{capture_screen_region, dismiss_overlay, trigger_overlay};
 use commands::finding::{
     add_marker, clean_orphans, delete_finding, delete_marker, get_finding_detail, list_findings,
@@ -190,7 +192,8 @@ pub fn run() {
             create_bundle,
             list_bundles,
             get_bundle_detail,
-            delete_bundle
+            delete_bundle,
+            copy_bundle_to_clipboard
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

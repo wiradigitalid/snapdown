@@ -45,3 +45,7 @@ export const getBundleDetail = async (
 export const deleteBundle = async (id: string): Promise<void> => {
   await invoke<void>('delete_bundle', { id });
 };
+
+export const copyBundleToClipboard = async (id: string): Promise<string> => {
+  return await invoke<string>('copy_bundle_to_clipboard', { id });
+};
