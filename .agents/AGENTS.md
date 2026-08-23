@@ -231,6 +231,15 @@ npm --prefix apps/desktop run test && npm --prefix apps/desktop run build
 Three CI jobs cover these: `rust-check`, `web-check`, and `web-service`. A green `korpus.yml` is
 **not** proof the code compiles — it validates the corpus, and they answer different questions.
 
+**Two ways a verification run lies, both hit on 2026-08-23:**
+
+- **`cmd | tail` reports the exit code of `tail`, not of `cmd`.** A `cargo build` that failed with
+  *package ID specification did not match any packages* was reported as exit 0 because it was piped.
+  Check `${PIPESTATUS[0]}`, or redirect to `/dev/null` and read `$?`.
+- **The coordinator's own worktree goes stale the moment a story adds a dependency.** `web/ui`
+  typecheck failed locally on missing `@types/node` while CI was green: CI runs `npm ci` from the
+  lockfile, a long-lived worktree does not. Run `npm --prefix <pkg> ci` before believing a local red.
+
 ### Pitfalls
 
 **A green unit test does not mean the component is reachable.** This is the most expensive mistake
