@@ -1,6 +1,6 @@
 ﻿import React from 'react';
 
-export interface ToggleProps {
+export interface ToggleProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onChange'> {
   id?: string;
   checked?: boolean;
   indeterminate?: boolean;
@@ -10,6 +10,7 @@ export interface ToggleProps {
   'aria-labelledby'?: string;
   className?: string;
   style?: React.CSSProperties;
+  'data-testid'?: string;
 }
 
 export const Toggle: React.FC<ToggleProps> = ({
@@ -22,13 +23,16 @@ export const Toggle: React.FC<ToggleProps> = ({
   'aria-labelledby': ariaLabelledBy,
   className = '',
   style,
+  'data-testid': dataTestId,
+  ...props
 }) => {
   const state = indeterminate ? 'indeterminate' : checked ? 'on' : 'off';
   const ariaChecked = indeterminate ? 'mixed' : checked;
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (disabled || !onChange) return;
     onChange(!checked);
+    props.onClick?.(e);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -39,6 +43,7 @@ export const Toggle: React.FC<ToggleProps> = ({
         onChange(!checked);
       }
     }
+    props.onKeyDown?.(e);
   };
 
   return (
@@ -53,6 +58,7 @@ export const Toggle: React.FC<ToggleProps> = ({
       disabled={disabled}
       data-state={state}
       data-disabled={disabled ? 'true' : 'false'}
+      data-testid={dataTestId}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       className={`toggle-switch ${className}`.trim()}

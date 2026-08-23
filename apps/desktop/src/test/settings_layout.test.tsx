@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 // @ts-expect-error: Node types in vitest
 import fs from 'fs';
@@ -231,7 +231,7 @@ describe('Settings Surface 2-Column Layout (W6-S3 / LC-015 / FR-29)', () => {
       <SettingsView
         settings={mockSettings}
         hotkeySettings={mockDefaultHotkeys}
-        runAtStartup={true}
+        startupStatus="on"
         onSaveVaultPath={handleSaveVault}
         onOpenExplorer={handleOpenExplorer}
         onSaveQualityBudget={handleSaveBudget}

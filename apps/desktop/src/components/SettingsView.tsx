@@ -1,33 +1,42 @@
-import React from 'react';
+﻿import React from 'react';
 import { GeneralSection } from './GeneralSection';
 import { VaultSection } from './VaultSection';
 import { QualityBudgetSection } from './QualityBudgetSection';
 import { HotkeySection } from './HotkeySection';
-import { HotkeyAction, HotkeySettingsDto, NamedBudget, ResolvedPair, Settings } from '../types/settings';
+import {
+  HotkeyAction,
+  HotkeySettingsDto,
+  NamedBudget,
+  ResolvedPair,
+  Settings,
+  StartupState,
+} from '../types/settings';
 
 export interface SettingsViewProps {
   settings: Settings;
   hotkeySettings: HotkeySettingsDto;
-  runAtStartup: boolean;
+  startupStatus: StartupState;
   onSaveVaultPath: (newPath: string, migrate: boolean) => Promise<void>;
   onOpenExplorer: () => Promise<void>;
   onSaveQualityBudget: (budget: NamedBudget, advanced?: ResolvedPair | null) => Promise<void>;
   onSaveHotkey: (action: HotkeyAction, shortcut: string) => Promise<void>;
   onClearHotkey: (action: HotkeyAction) => Promise<void>;
   onToggleStartup: (enabled: boolean) => Promise<void>;
+  onRetryStartup?: () => Promise<void> | void;
   disabled?: boolean;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
   hotkeySettings,
-  runAtStartup,
+  startupStatus,
   onSaveVaultPath,
   onOpenExplorer,
   onSaveQualityBudget,
   onSaveHotkey,
   onClearHotkey,
   onToggleStartup,
+  onRetryStartup,
   disabled = false,
 }) => {
   return (
@@ -59,8 +68,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         }}
       >
         <GeneralSection
-          runAtStartup={runAtStartup}
+          startupStatus={startupStatus}
           onToggleStartup={onToggleStartup}
+          onRetryStartup={onRetryStartup}
           disabled={disabled}
         />
         <VaultSection

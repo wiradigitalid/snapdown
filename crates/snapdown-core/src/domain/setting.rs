@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+﻿use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
 
@@ -283,6 +283,7 @@ pub enum SettingKey {
     HotkeyOpenEditor,
     QualityBudget,
     RunAtStartup,
+    StartupRegistered,
     OpenEditorAfterCapture,
     WebServiceAddress,
     Custom(String),
@@ -296,6 +297,7 @@ impl SettingKey {
             Self::HotkeyOpenEditor => "hotkey_open_editor",
             Self::QualityBudget => "quality_budget",
             Self::RunAtStartup => "run_at_startup",
+            Self::StartupRegistered => "startup.registered",
             Self::OpenEditorAfterCapture => "open_editor_after_capture",
             Self::WebServiceAddress => "web_service_address",
             Self::Custom(s) => s.as_str(),
@@ -309,6 +311,7 @@ impl SettingKey {
             "hotkey_open_editor" => Self::HotkeyOpenEditor,
             "quality_budget" => Self::QualityBudget,
             "run_at_startup" => Self::RunAtStartup,
+            "startup.registered" => Self::StartupRegistered,
             "open_editor_after_capture" => Self::OpenEditorAfterCapture,
             "web_service_address" => Self::WebServiceAddress,
             other => Self::Custom(other.to_string()),
@@ -401,6 +404,7 @@ mod tests {
             (SettingKey::HotkeyOpenEditor, "hotkey_open_editor"),
             (SettingKey::QualityBudget, "quality_budget"),
             (SettingKey::RunAtStartup, "run_at_startup"),
+            (SettingKey::StartupRegistered, "startup.registered"),
             (
                 SettingKey::OpenEditorAfterCapture,
                 "open_editor_after_capture",

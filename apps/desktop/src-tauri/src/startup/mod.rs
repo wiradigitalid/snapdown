@@ -1,5 +1,6 @@
+﻿use snapdown_core::domain::setting::{Setting, SettingKey, SettingValue};
 use snapdown_core::error::CoreError;
-use snapdown_core::ports::StartupRegistrar;
+use snapdown_core::ports::{Clock, SettingsStore, StartupRegistrar};
 use std::sync::Arc;
 
 pub trait AutoStartBackend: Send + Sync {
@@ -53,6 +54,33 @@ impl StartupRegistrar for DesktopStartupRegistrar {
             .disable()
             .map_err(|e| CoreError::System(format!("Failed to disable startup registration: {e}")))
     }
+}
+
+/// Reconciles Windows startup registration during boot per SCN-02 and BR-112.
+/// - If `startup.registered` is absent in SQLite (Run 1: fresh install with nothing configured):
+///   1. Attempt to register autostart with the OS (registrar.enable()).
+///   2. Persist `startup.registered = "expressed"` (even if registration was refused, recording that default was applied).
+/// - If `startup.registered` is present (Run 2, 3, 4: preference already expressed):
+///   Do not touch the registrar during boot. OS state remains whatever was left.
+pub fn reconcile_startup_on_boot(
+    store: &dyn SettingsStore,
+    registrar: &mut dyn StartupRegistrar,
+    clock: &dyn Clock,
+) -> Result<(), CoreError> {
+    let setting = store.get(&SettingKey::StartupRegistered)?;
+    if setting.is_none() {
+        // First run with nothing configured: apply first-run default (BR-112)
+        let _ = registrar.enable();
+
+        // Write `startup.registered = "expressed"` to ensure future runs do not re-apply
+        let record = Setting::new(
+            SettingKey::StartupRegistered,
+            SettingValue::String("expressed".to_string()),
+            clock.now_rfc3339(),
+        );
+        store.set(&record)?;
+    }
+    Ok(())
 }
 
 pub struct TauriAutoStartBackend {
@@ -189,12 +217,15 @@ impl AutoStartBackend for WindowsRegistryAutoStartBackend {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use snapdown_store::sqlite::SqliteSettingsStore;
+    use snapdown_store::system::SystemClock;
     use std::sync::atomic::{AtomicBool, Ordering};
 
     #[derive(Default)]
     pub struct MockAutoStartBackend {
         pub enabled: AtomicBool,
         pub queries: std::sync::atomic::AtomicUsize,
+        pub fail_on_enable: AtomicBool,
     }
 
     impl AutoStartBackend for MockAutoStartBackend {
@@ -204,6 +235,9 @@ pub mod tests {
         }
 
         fn enable(&self) -> Result<(), String> {
+            if self.fail_on_enable.load(Ordering::SeqCst) {
+                return Err("Group policy forbids autostart".to_string());
+            }
             self.enabled.store(true, Ordering::SeqCst);
             Ok(())
         }
@@ -261,6 +295,44 @@ pub mod tests {
 
         registrar.disable().unwrap();
         assert!(!registrar.is_enabled().unwrap());
+        assert!(!backend.enabled.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn first_run_reconciliation_enables_and_records_expressed() {
+        let store = SqliteSettingsStore::open_in_memory().unwrap();
+        let backend = Arc::new(MockAutoStartBackend::default());
+        let mut registrar = DesktopStartupRegistrar::new(backend.clone());
+        let clock = SystemClock::new();
+
+        assert!(!backend.enabled.load(Ordering::SeqCst));
+        assert!(store.get(&SettingKey::StartupRegistered).unwrap().is_none());
+
+        reconcile_startup_on_boot(&store, &mut registrar, &clock).unwrap();
+
+        assert!(backend.enabled.load(Ordering::SeqCst));
+        let record = store.get(&SettingKey::StartupRegistered).unwrap();
+        assert!(record.is_some());
+    }
+
+    #[test]
+    fn subsequent_run_reconciliation_does_not_re_register() {
+        let store = SqliteSettingsStore::open_in_memory().unwrap();
+        let backend = Arc::new(MockAutoStartBackend::default());
+        let mut registrar = DesktopStartupRegistrar::new(backend.clone());
+        let clock = SystemClock::new();
+
+        // Simulate Run 1
+        reconcile_startup_on_boot(&store, &mut registrar, &clock).unwrap();
+        assert!(backend.enabled.load(Ordering::SeqCst));
+
+        // Simulate Run 2: Reviewer turns off
+        registrar.disable().unwrap();
+        assert!(!backend.enabled.load(Ordering::SeqCst));
+
+        // Simulate Run 3: Next boot
+        reconcile_startup_on_boot(&store, &mut registrar, &clock).unwrap();
+        // Crucial: OS registration MUST remain off!
         assert!(!backend.enabled.load(Ordering::SeqCst));
     }
 

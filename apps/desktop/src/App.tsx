@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Toast } from '@snapdown/ui';
 import { EditorShell, NavigationTab } from './components/EditorShell';
 import { SettingsView } from './components/SettingsView';
@@ -17,7 +17,14 @@ import {
   setVaultPath as apiSetVaultPath,
 } from './services/settings';
 import { triggerOverlay } from './services/capture';
-import { HotkeyAction, HotkeySettingsDto, NamedBudget, ResolvedPair, Settings } from './types/settings';
+import {
+  HotkeyAction,
+  HotkeySettingsDto,
+  NamedBudget,
+  ResolvedPair,
+  Settings,
+  StartupState,
+} from './types/settings';
 
 export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'settings' }) => {
   const [activeTab, setActiveTab] = useState<NavigationTab>(initialTab);
@@ -50,7 +57,7 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
     startup_warnings: [],
   });
 
-  const [runAtStartup, setRunAtStartup] = useState<boolean>(true);
+  const [startupStatus, setStartupStatus] = useState<StartupState>('unknown');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -74,9 +81,11 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
         }
 
         if (startupRes.status === 'fulfilled') {
-          setRunAtStartup(startupRes.value.enabled);
+          const val = startupRes.value;
+          setStartupStatus(val.state ?? (val.enabled ? 'on' : 'off'));
         } else {
           console.error('Failed to load startup status:', startupRes.reason);
+          setStartupStatus('unreadable');
         }
 
         setIsLoading(false);
@@ -116,7 +125,8 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
   const handleToggleStartup = async (enabled: boolean) => {
     try {
       const res = await apiSetStartupStatus(enabled);
-      setRunAtStartup(res.enabled);
+      const nextState = res.state ?? (res.enabled ? 'on' : 'off');
+      setStartupStatus(nextState);
       setToastMessage(
         res.enabled
           ? 'Snapdown will run at Windows startup'
@@ -127,10 +137,21 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
       setToastMessage(`Failed to update startup registration: ${msg}`);
       try {
         const current = await getStartupStatus();
-        setRunAtStartup(current.enabled);
+        setStartupStatus(current.state ?? (current.enabled ? 'on' : 'off'));
       } catch {
-        setRunAtStartup(!enabled);
+        setStartupStatus('unreadable');
       }
+    }
+  };
+
+  const handleRetryStartup = async () => {
+    setStartupStatus('unknown');
+    try {
+      const res = await getStartupStatus();
+      setStartupStatus(res.state ?? (res.enabled ? 'on' : 'off'));
+    } catch (err: unknown) {
+      console.error('Failed to retry startup status read:', err);
+      setStartupStatus('unreadable');
     }
   };
 
@@ -170,13 +191,14 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
           <SettingsView
             settings={settings}
             hotkeySettings={hotkeySettings}
-            runAtStartup={runAtStartup}
+            startupStatus={startupStatus}
             onSaveVaultPath={handleSaveVaultPath}
             onOpenExplorer={handleOpenExplorer}
             onSaveQualityBudget={handleSaveQualityBudget}
             onSaveHotkey={handleSaveHotkey}
             onClearHotkey={handleClearHotkey}
             onToggleStartup={handleToggleStartup}
+            onRetryStartup={handleRetryStartup}
             disabled={isLoading}
           />
         )}

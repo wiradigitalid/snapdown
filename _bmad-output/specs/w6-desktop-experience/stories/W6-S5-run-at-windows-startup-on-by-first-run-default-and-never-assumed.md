@@ -3,7 +3,7 @@ id: W6-S5
 title: 'W6-S5: Run at Windows startup — on by first-run default, and never assumed'
 type: 'feature'
 wave: W6
-status: ready-for-dev
+status: done
 created: '2026-08-24'
 dependencies:
   - W6-S4
