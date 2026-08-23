@@ -1,0 +1,62 @@
+stories:
+  - id: W2-S1
+    title: SQLite schema for finding, note, and marker tables with FindingStore
+    spec_file: stories/W2-S1-sqlite-schema-for-finding-note-and-marker-tables-with-finding-store.md
+    satisfies: []
+    depends_on: []
+    touches: [local-db]
+    tests:
+      - cargo::migrations_v2_apply_cleanly_and_idempotently
+      - cargo::finding_store_crud_and_transaction_guarantees
+      - cargo::marker_renumber_preserves_single_sequence_invariant
+
+  - id: W2-S2
+    title: Multi-monitor capture overlay and region selector
+    spec_file: stories/W2-S2-multi-monitor-capture-overlay-and-region-selector.md
+    satisfies: [UC-1, UC-2]
+    depends_on: [W2-S1]
+    touches: [capture-pipeline]
+    tests:
+      - cargo::region_capturer_pixel_accuracy_across_mixed_dpi
+      - vitest::capture_overlay_draws_selection_and_dimensions
+
+  - id: W2-S3
+    title: Image reduction, zero-byte file reservation, and async storage pipeline
+    spec_file: stories/W2-S3-image-reduction-zero-byte-file-reservation-and-async-storage-pipeline.md
+    satisfies: [UC-1, UC-2]
+    depends_on: [W2-S2]
+    touches: [image-encoding, vault-fs]
+    tests:
+      - cargo::quality_budget_downscaling_and_compression
+      - cargo::zero_byte_reservation_and_async_write_completion
+
+  - id: W2-S4
+    title: Findings Editor — chronological list, detail view, and inline Note editing
+    spec_file: stories/W2-S4-findings-editor-chronological-list-detail-view-and-inline-note-editing.md
+    satisfies: [UC-3, UC-4, UC-6]
+    depends_on: [W2-S1, W2-S3]
+    touches: [editor-ui]
+    tests:
+      - vitest::findings_editor_renders_list_and_details
+      - vitest::note_inline_editor_persists_markdown
+
+  - id: W2-S5
+    title: Marker Canvas — normalized spatial coordinates and synchronized badge annotations
+    spec_file: stories/W2-S5-marker-canvas-normalized-spatial-coordinates-and-synchronized-badge-annotations.md
+    satisfies: [UC-5]
+    depends_on: [W2-S4]
+    touches: [marker-canvas, editor-ui]
+    tests:
+      - vitest::marker_placement_normalizes_coordinates
+      - cargo::marker_deletion_renumbers_ordinals_without_gaps
+
+  - id: W2-S6
+    title: Finding deletion with file synchronization and orphan sweeper report
+    spec_file: stories/W2-S6-finding-deletion-with-file-synchronization-and-orphan-sweeper-report.md
+    satisfies: [UC-7, UC-8]
+    depends_on: [W2-S4, W2-S5]
+    touches: [local-db, vault-fs, editor-ui]
+    tests:
+      - cargo::delete_finding_removes_vault_file_before_db_row
+      - cargo::orphan_sweeper_detects_unreferenced_blobs
+      - vitest::orphan_report_displays_discrepancies

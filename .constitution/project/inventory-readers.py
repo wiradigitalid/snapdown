@@ -39,6 +39,24 @@ def derive_db(root: Path) -> "Derived":       # noqa: F821
                     cells=["setting", "settings", "One persisted preference per key: Vault location, each hotkey binding, the Quality Budget pair, startup, open-editor-after-capture, the web service address", "key pk · value · updated_at", "active"],
                     source="crates/snapdown-store/src/sqlite/migrations.rs",
                 ))
+            elif tbl_name_clean == "finding":
+                rows.append(Row(              # noqa: F821
+                    key="finding",
+                    cells=["finding", "finding", "One observation. The row exists only while its image file does (AD-2)", "id UUIDv7 pk · image_path relative to the Vault · image_width · image_height · captured_at · source_monitor · region", "active"],
+                    source="crates/snapdown-store/src/sqlite/migrations.rs",
+                ))
+            elif tbl_name_clean == "note":
+                rows.append(Row(              # noqa: F821
+                    key="note",
+                    cells=["note", "finding", "The prose body of one Finding's Note. The numbered lines are not here — they belong to marker (AD-1)", "id pk · finding_id fk unique · body · updated_at", "active"],
+                    source="crates/snapdown-store/src/sqlite/migrations.rs",
+                ))
+            elif tbl_name_clean == "marker":
+                rows.append(Row(              # noqa: F821
+                    key="marker",
+                    cells=["marker", "finding", "One numbered Marker and the Note line that is the same thing as it. ordinal is the badge number and the line number at once", "id pk · finding_id fk · ordinal unique per finding, from 1, no gaps · x · y normalised 0–1 (AD-3) · comment", "active"],
+                    source="crates/snapdown-store/src/sqlite/migrations.rs",
+                ))
             else:
                 rows.append(Row(              # noqa: F821
                     key=tbl_name_clean,

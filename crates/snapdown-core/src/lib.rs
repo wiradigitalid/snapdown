@@ -5,7 +5,8 @@ pub mod error;
 pub mod ports;
 pub mod util;
 
+pub use domain::finding::{Finding, FindingDetail, Marker, Note, Region};
 pub use domain::setting::{QualityBudget, Setting, SettingKey, SettingValue};
 pub use error::CoreError;
-pub use ports::{Clock, EntropySource};
+pub use ports::{Clock, EntropySource, FindingStore, SettingsStore};
 pub use util::id::id_from_parts;
