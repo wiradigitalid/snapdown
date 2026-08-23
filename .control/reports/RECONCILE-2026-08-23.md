@@ -203,3 +203,31 @@ should have been two questions rather than one:
 
 1. Is every container in the C4 set registered in `containers`? — the direction that was asked
 2. **Does every registered container exist in the tree?** — the direction that was not
+
+---
+
+## Second addendum — a pattern across three wave closes
+
+Three separate findings today turn out to be one shape, and it is worth naming once rather than
+three times.
+
+| Found | What was left in `_bmad-output/` and never carried out |
+|---|---|
+| `OQ-21` | W2–W5's story lists never reached `waves.yaml`. Fourteen story files sit in their spec folders; the registry holds none of them, and not one file contains a `UC-` reference |
+| `BUG-11` | W1's reviewer diagnosed *"vite build fails, therefore `cargo tauri build` fails, therefore `frontendDist` is never produced"* and raised it as a must-fix. The command survives only in `review-W1-S1-reviewer-a.md`. The CLI it needs was never made a dependency |
+| `BUG-11` again | W1's UI verification brief instructed *"`cargo tauri dev` … or build and run `target/debug/desktop.exe` **with the Vite dev server up**"*. So every UI claim this project has made was made against a dev server, and that fact lived in a dispatch brief |
+
+`wdi-build` Phase 4 has a step for exactly this — **Distillation**: *"Every applicable row of the
+ownership table in `corpus-guide.md` has been landed by its owner. Anything durable in the spec
+folder leaves it now, or dies with it."* And the rule above it: *"You MUST NOT close a wave with an
+open distillation row."*
+
+Five waves closed. The scratch layer did its job — `_bmad-output/` is *supposed* to hold work in
+progress and is explicitly not curated. What did not happen is anything leaving it.
+
+**This is not a new defect and it is not filed as one.** It is the mechanism behind two that already
+exist, and the useful thing is that it is checkable at the next wave close rather than discoverable
+a year later: before closing `W6`, read its spec folder and ask what in it is still true afterwards.
+
+The distillation step is also what would have caught `BUG-11` in W1 — a reviewer's must-fix about
+the build not working is durable by any reading, and it stayed in the folder.
