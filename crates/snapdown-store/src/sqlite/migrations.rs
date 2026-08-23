@@ -111,6 +111,28 @@ pub const MIGRATIONS: &[Migration] = &[
         );
     "#,
     },
+    Migration {
+        version: 6,
+        description: "drop finding_id foreign key constraint from bundle_item table",
+        sql: r#"
+        CREATE TABLE IF NOT EXISTS bundle_item_v6 (
+            id TEXT PRIMARY KEY,
+            bundle_id TEXT NOT NULL,
+            finding_id TEXT NOT NULL,
+            position INTEGER NOT NULL,
+            image_path TEXT NOT NULL,
+            FOREIGN KEY(bundle_id) REFERENCES bundle(id) ON DELETE CASCADE,
+            UNIQUE(bundle_id, finding_id)
+        );
+
+        INSERT INTO bundle_item_v6 (id, bundle_id, finding_id, position, image_path)
+        SELECT id, bundle_id, finding_id, position, image_path FROM bundle_item;
+
+        DROP TABLE bundle_item;
+
+        ALTER TABLE bundle_item_v6 RENAME TO bundle_item;
+    "#,
+    },
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> Result<(), StoreError> {

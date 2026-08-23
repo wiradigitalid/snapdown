@@ -8,6 +8,23 @@ pub trait AutoStartBackend: Send + Sync {
     fn disable(&self) -> Result<(), String>;
 }
 
+#[derive(Default, Clone)]
+pub struct NoopAutoStartBackend;
+
+impl AutoStartBackend for NoopAutoStartBackend {
+    fn is_enabled(&self) -> Result<bool, String> {
+        Ok(false)
+    }
+
+    fn enable(&self) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn disable(&self) -> Result<(), String> {
+        Ok(())
+    }
+}
+
 pub struct DesktopStartupRegistrar {
     backend: Arc<dyn AutoStartBackend>,
 }
