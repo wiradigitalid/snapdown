@@ -101,7 +101,7 @@ pub fn set_vault_path(
     if migrate_files {
         if let Some(ref old_path) = current_vault_path {
             if std::path::Path::new(old_path).exists() {
-                VaultMigrator::migrate_vault(old_path, &canonical_dest)
+                let _report = VaultMigrator::migrate_vault(old_path, &canonical_dest)
                     .map_err(|e| e.to_string())?;
             }
         }
