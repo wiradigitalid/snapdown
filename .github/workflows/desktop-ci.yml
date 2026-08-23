@@ -38,6 +38,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -68,6 +74,22 @@ jobs:
 
       - name: Desktop Frontend build
         run: npm --prefix apps/desktop run build
+
+      - name: Build desktop application
+        run: npm --prefix apps/desktop run tauri build -- --no-bundle
+
+      - name: Verify desktop executable
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "target/release/Snapdown.exe")) {
+            Write-Error "Snapdown.exe not found at target/release/Snapdown.exe"
+            exit 1
+          }
+          $exeCount = (Get-ChildItem -Path "target/release/*.exe").Count
+          if ($exeCount -ne 1) {
+            Write-Error "Expected exactly 1 desktop executable in target/release, found $exeCount"
+            exit 1
+          }
 
   web-service:
     name: Web Service Build & Test
