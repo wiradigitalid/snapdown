@@ -109,6 +109,29 @@ pub fn get_bundle_detail(
 
 #[tauri::command]
 pub fn delete_bundle(id: String, state: State<AppState>) -> Result<(), String> {
+    // 1. Delete associated vault markdown file and burned images if present (AD-2, INV-BUNDLE-001)
+    if let Ok(Some(detail)) = state.bundle_store.get_bundle(&id) {
+        let vault_path = match state
+            .settings_store
+            .get(&snapdown_core::domain::setting::SettingKey::VaultPath)
+            .map_err(|e| e.to_string())?
+        {
+            Some(s) => match s.value {
+                snapdown_core::domain::setting::SettingValue::String(p) => p,
+                _ => dirs_or_default_vault().to_string_lossy().to_string(),
+            },
+            _ => dirs_or_default_vault().to_string_lossy().to_string(),
+        };
+
+        if let Ok(vault_store) = VaultBlobStore::new(&vault_path) {
+            let _ = vault_store.delete_blob(&detail.bundle.markdown_path);
+            for item in &detail.items {
+                let _ = vault_store.delete_blob(&item.image_path);
+            }
+        }
+    }
+
+    // 2. Cascade delete bundle and bundle_item records from database
     state
         .bundle_store
         .delete_bundle(&id)
