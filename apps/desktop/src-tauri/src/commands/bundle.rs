@@ -6,7 +6,7 @@ use snapdown_store::vault::VaultBlobStore;
 use std::path::PathBuf;
 use tauri::State;
 
-use crate::commands::sharing::unpublish_bundle;
+use crate::commands::sharing::unpublish_bundle_impl;
 use crate::state::AppState;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,10 +15,9 @@ pub struct CreateBundleInput {
     pub finding_ids: Vec<String>,
 }
 
-#[tauri::command]
-pub fn create_bundle(
+pub fn create_bundle_impl(
     input: CreateBundleInput,
-    state: State<AppState>,
+    state: &AppState,
 ) -> Result<BundleDetail, String> {
     if input.name.trim().is_empty() {
         return Err("Bundle name cannot be empty".into());
@@ -96,6 +95,14 @@ pub fn create_bundle(
 }
 
 #[tauri::command]
+pub fn create_bundle(
+    input: CreateBundleInput,
+    state: State<AppState>,
+) -> Result<BundleDetail, String> {
+    create_bundle_impl(input, &state)
+}
+
+#[tauri::command]
 pub fn list_bundles(state: State<AppState>) -> Result<Vec<BundleDetail>, String> {
     state.bundle_store.list_bundles().map_err(|e| e.to_string())
 }
@@ -111,24 +118,23 @@ pub fn get_bundle_detail(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub fn delete_bundle(id: String, state: State<AppState>) -> Result<(), String> {
+pub fn delete_bundle_impl(id: &str, state: &AppState) -> Result<(), String> {
     // 1. If bundle is currently published, unpublish automatically (BR-20, BR-23)
     // If unpublish fails, abort immediately without deleting local DB records or files
     if let Some(pub_record) = state
         .publication_store
-        .get_by_bundle_id(&id)
+        .get_by_bundle_id(id)
         .map_err(|e| e.to_string())?
     {
         if pub_record.is_live() {
-            unpublish_bundle(id.clone(), state.clone())?;
+            unpublish_bundle_impl(id, state)?;
         }
     }
 
     // 2. Delete associated vault markdown file and burned images if present (AD-2, INV-BUNDLE-001)
     if let Some(detail) = state
         .bundle_store
-        .get_bundle(&id)
+        .get_bundle(id)
         .map_err(|e| e.to_string())?
     {
         let vault_path = match state
@@ -175,19 +181,28 @@ pub fn delete_bundle(id: String, state: State<AppState>) -> Result<(), String> {
     // 3. Cascade delete bundle and bundle_item records from database
     state
         .bundle_store
-        .delete_bundle(&id)
+        .delete_bundle(id)
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn copy_bundle_to_clipboard(id: String, state: State<AppState>) -> Result<String, String> {
+pub fn delete_bundle(id: String, state: State<AppState>) -> Result<(), String> {
+    delete_bundle_impl(&id, &state)
+}
+
+pub fn copy_bundle_to_clipboard_impl(id: &str, state: &AppState) -> Result<String, String> {
     let detail = state
         .bundle_store
-        .get_bundle(&id)
+        .get_bundle(id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Bundle not found: {id}"))?;
 
     Ok(detail.bundle.markdown)
+}
+
+#[tauri::command]
+pub fn copy_bundle_to_clipboard(id: String, state: State<AppState>) -> Result<String, String> {
+    copy_bundle_to_clipboard_impl(&id, &state)
 }
 
 fn dirs_or_default_vault() -> PathBuf {

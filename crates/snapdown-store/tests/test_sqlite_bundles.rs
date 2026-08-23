@@ -47,7 +47,8 @@ fn bundle_store_crud_and_cascade_operations() {
         "Wave 3 Test Bundle".to_string(),
         "# Summary Review
 
-Finding 1 description".to_string(),
+Finding 1 description"
+            .to_string(),
         "bundles/w3_test.md".to_string(),
         "2026-08-23T12:00:00Z".to_string(),
     )
@@ -150,7 +151,8 @@ fn deleting_a_finding_leaves_its_bundle_item_in_place() {
         "# Summary
 
 - Finding 1
-- Finding 2".to_string(),
+- Finding 2"
+            .to_string(),
         "bundles/review_b1.md".to_string(),
         "2026-08-23T12:00:00Z".to_string(),
     )
@@ -325,7 +327,14 @@ fn deleting_a_finding_leaves_the_bundles_own_image_copy_in_the_vault() {
         "2026-08-23T10:00:00Z".into(),
     )
     .unwrap();
-    let item = BundleItem::new("bi-ad".into(), bid.into(), fid.into(), 1, bundle_burned_img.into()).unwrap();
+    let item = BundleItem::new(
+        "bi-ad".into(),
+        bid.into(),
+        fid.into(),
+        1,
+        bundle_burned_img.into(),
+    )
+    .unwrap();
     bundle_store.create_bundle(&bundle, &[item]).unwrap();
 
     // Finding deletion removes finding DB row and finding image blob
@@ -387,7 +396,9 @@ fn deleting_a_bundle_still_cascades_to_its_items() {
     assert_eq!(detail.items.len(), 2);
 
     // Delete bundle
-    bundle_store.delete_bundle(bundle_id).expect("delete bundle");
+    bundle_store
+        .delete_bundle(bundle_id)
+        .expect("delete bundle");
 
     // Verify bundle is None
     assert!(bundle_store.get_bundle(bundle_id).unwrap().is_none());
