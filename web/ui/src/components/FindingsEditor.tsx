@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from './Button';
 import { TextArea } from './TextArea';
-import { TextField } from './TextField';
-import { MarkerLayer } from './MarkerLayer';
 
 export interface FindingItemDto {
   id: string;
@@ -42,9 +40,6 @@ export interface FindingsEditorProps {
   onSelectFinding: (id: string) => void;
   onSaveNote: (findingId: string, noteBody: string) => Promise<void>;
   onDeleteFinding?: (findingId: string) => Promise<void>;
-  onAddMarker?: (findingId: string, x: number, y: number) => Promise<void>;
-  onUpdateMarker?: (findingId: string, markerId: string, x: number, y: number, comment: string) => Promise<void>;
-  onDeleteMarker?: (findingId: string, markerId: string) => Promise<void>;
 }
 
 export const FindingsEditor: React.FC<FindingsEditorProps> = ({
@@ -53,13 +48,9 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
   onSelectFinding,
   onSaveNote,
   onDeleteFinding,
-  onAddMarker,
-  onUpdateMarker,
-  onDeleteMarker,
 }) => {
   const selectedFinding = findings.find((f) => f.finding.id === selectedFindingId);
   const [noteText, setNoteText] = useState<string>('');
-  const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -67,11 +58,6 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
     if (selectedFinding) {
       setNoteText(selectedFinding.note.body);
       setSaveSuccess(false);
-      if (selectedFinding.markers.length > 0) {
-        setSelectedMarkerId(selectedFinding.markers[0].id);
-      } else {
-        setSelectedMarkerId(null);
-      }
     }
   }, [selectedFindingId, selectedFinding]);
 
@@ -85,30 +71,6 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const handleAddMarker = async (x: number, y: number) => {
-    if (!selectedFinding || !onAddMarker) return;
-    await onAddMarker(selectedFinding.finding.id, x, y);
-  };
-
-  const handleUpdateMarkerPosition = async (markerId: string, x: number, y: number) => {
-    if (!selectedFinding || !onUpdateMarker) return;
-    const m = selectedFinding.markers.find((item) => item.id === markerId);
-    if (!m) return;
-    await onUpdateMarker(selectedFinding.finding.id, markerId, x, y, m.comment);
-  };
-
-  const handleCommentChange = async (markerId: string, newComment: string) => {
-    if (!selectedFinding || !onUpdateMarker) return;
-    const m = selectedFinding.markers.find((item) => item.id === markerId);
-    if (!m) return;
-    await onUpdateMarker(selectedFinding.finding.id, markerId, m.x, m.y, newComment);
-  };
-
-  const handleDeleteMarker = async (markerId: string) => {
-    if (!selectedFinding || !onDeleteMarker) return;
-    await onDeleteMarker(selectedFinding.finding.id, markerId);
   };
 
   return (
@@ -189,9 +151,6 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
           padding: '16px',
           overflowY: 'auto',
           backgroundColor: '#ffffff',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
         }}
       >
         {selectedFinding ? (
@@ -205,71 +164,10 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
                   variant="secondary"
                   onClick={() => onDeleteFinding(selectedFinding.finding.id)}
                 >
-                  Delete Finding
+                  Delete
                 </Button>
               )}
             </div>
-
-            {/* Canvas Marker Layer */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 500 }}>
-                Screenshot & Markers
-              </label>
-              <div style={{ width: '100%', height: '240px', borderRadius: '6px', overflow: 'hidden' }}>
-                <MarkerLayer
-                  markers={selectedFinding.markers}
-                  selectedMarkerId={selectedMarkerId}
-                  onAddMarker={handleAddMarker}
-                  onUpdateMarkerPosition={handleUpdateMarkerPosition}
-                  onSelectMarker={(mId) => setSelectedMarkerId(mId)}
-                />
-              </div>
-            </div>
-
-            {/* Marker List & Annotations */}
-            {selectedFinding.markers.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 500 }}>
-                  Marker Annotations (Single-Sequence)
-                </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {selectedFinding.markers.map((m) => (
-                    <div
-                      key={m.id}
-                      data-testid={`marker-row-${m.ordinal}`}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '6px 10px',
-                        backgroundColor: '#f8fafc',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '6px',
-                      }}
-                    >
-                      <span style={{ fontWeight: 700, fontSize: '12px', minWidth: '24px' }}>
-                        #{m.ordinal}
-                      </span>
-                      <TextField
-                        id={`marker-comment-input-${m.ordinal}`}
-                        value={m.comment}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleCommentChange(m.id, e.target.value)}
-                        placeholder={`Annotation for badge ${m.ordinal}`}
-                        style={{ flex: 1 }}
-                      />
-                      {onDeleteMarker && (
-                        <Button
-                          variant="secondary"
-                          onClick={() => handleDeleteMarker(m.id)}
-                        >
-                          Remove
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Metadata */}
             <div
@@ -298,7 +196,7 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
                 value={noteText}
                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNoteText(e.target.value)}
                 placeholder="Enter finding note..."
-                rows={4}
+                rows={5}
               />
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Button
