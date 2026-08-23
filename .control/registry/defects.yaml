@@ -94,6 +94,13 @@ defects:
       html/template, or html.EscapeString on b.Markdown before interpolation. Escaping the slug too:
       it is a 160-bit CSPRNG value today and that is a property of the generator, not of this render.
     blocked_by: DEC-005, which freezes `sharing`. Registered now, fixed when that lifts.
+    note: |
+      Found 2026-08-23 while checking CI coverage, and it makes this defect worse than first written:
+      NO WORKFLOW TOUCHED GO AT ALL. apps/web-service was never built, vetted, or tested by CI, so
+      this shipped into a container with nothing behind it and a regression would have been equally
+      invisible. A `web-service` job was added to desktop-ci.yml the same day - go build, go vet,
+      go test. That is regression protection, not a fix; the escaping is still open.
+      A frozen component is one nobody is watching, which makes CI on it MORE important, not less.
     status: open
   - id: BUG-4
     title: The capture overlay is never mounted; pressing the capture hotkey shows the Settings shell

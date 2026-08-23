@@ -228,7 +228,8 @@ npm --prefix apps/desktop run typecheck && npm --prefix apps/desktop run lint
 npm --prefix apps/desktop run test && npm --prefix apps/desktop run build
 ```
 
-A green `korpus.yml` is **not** proof the code compiles. They answer different questions.
+Three CI jobs cover these: `rust-check`, `web-check`, and `web-service`. A green `korpus.yml` is
+**not** proof the code compiles — it validates the corpus, and they answer different questions.
 
 ### Pitfalls
 

@@ -68,3 +68,37 @@ jobs:
 
       - name: Desktop Frontend build
         run: npm --prefix apps/desktop run build
+
+  web-service:
+    name: Web Service Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Added 2026-08-23. apps/web-service is a `built: true` container with a test file, and NO
+      # workflow touched Go at all - it was never built, vetted, or tested by CI. BUG-3 (published
+      # Markdown interpolated into HTML without escaping) shipped into a container with no CI behind
+      # it, and DEC-005 freezes `sharing`, which makes regression protection MORE important rather
+      # than less: a frozen component is one nobody is watching.
+      #
+      # Running existing tests is not new work on a frozen component. DEC-005 forbids a new FR, a new
+      # use case, a UX pass, or a depth increase; it says in its own text that it does not forbid
+      # fixing what already shipped.
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: apps/web-service/go.sum
+
+      - name: Build
+        working-directory: apps/web-service
+        run: go build ./...
+
+      - name: Vet
+        working-directory: apps/web-service
+        run: go vet ./...
+
+      - name: Test
+        working-directory: apps/web-service
+        run: go test ./...
