@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-08-23'
 status: 'done'
 review_loop_iteration: 0
-followup_review_recommended: false
+followup_review_recommended: true
 context:
   - _bmad-output/specs/w1-settings/SPEC.md
   - .how/_platform/inventory-screen.md
@@ -99,7 +99,16 @@ _None._
 
 ## Review Triage Log
 
-_None._
+### 2026-08-23 — Review pass
+- intent_gap: 0
+- bad_spec: 0
+- patch: 3: (high 0, medium 2, low 1)
+- defer: 0
+- reject: 10
+- addressed_findings:
+  - `[medium]` `[patch]` Added `[target.'cfg(windows)'.dependencies]` for `winreg` in desktop Cargo.toml to ensure cross-platform build compatibility on non-Windows platforms.
+  - `[medium]` `[patch]` Replaced `Promise.all` with `Promise.allSettled` and safe fallback in `App.tsx` to ensure startup query error does not break general settings screen loading.
+  - `[low]` `[patch]` Added Drop guard cleanup in `windows_registry_autostart_hkcu_roundtrip` test to ensure host registry is cleaned up even on assertion panic.
 
 ## Design Notes
 
@@ -126,3 +135,46 @@ The startup registrar operates in user scope via `tauri-plugin-autostart` (targe
 - `npm --prefix apps/desktop run test` -- expected: Desktop frontend tests pass
 - `npm --prefix apps/desktop run build` -- expected: Desktop Vite build succeeds
 - `uv run .constitution/method/scripts/validate.py --check` -- expected: Corpus validator passes baseline comparison
+
+## Auto Run Result
+
+### Summary of Implemented Change
+Implemented the `StartupRegistrar` port and `DesktopStartupRegistrar` adapter for Snapdown, enabling users to toggle automatic launch at Windows sign-in directly from the Settings screen. The registration operates in non-elevated user scope (`HKCU`), queries the operating system directly on every call without caching in SQLite, removes registration completely on disable, and starts directly to the system tray with no visible window when launched via `--autostart`.
+
+### Files Changed
+- `Cargo.toml`: Added `tauri-plugin-autostart` and `winreg` workspace dependencies.
+- `apps/desktop/src-tauri/Cargo.toml`: Added `tauri-plugin-autostart` and Windows-target `winreg` dependency.
+- `apps/desktop/src-tauri/capabilities/default.json`: Configured `autostart:default` permission.
+- `apps/desktop/src-tauri/src/startup/mod.rs`: Implemented `DesktopStartupRegistrar`, `TauriAutoStartBackend`, `WindowsRegistryAutoStartBackend`, and unit tests.
+- `apps/desktop/src-tauri/src/commands/startup.rs`: Implemented `get_startup_status` and `set_startup_status` Tauri IPC commands.
+- `apps/desktop/src-tauri/src/commands/mod.rs`: Exported `startup` command module.
+- `apps/desktop/src-tauri/src/state.rs`: Added `startup_registrar` to `AppState`.
+- `apps/desktop/src-tauri/src/lib.rs`: Registered autostart plugin, startup commands, and suppressed window display on autostart launch.
+- `apps/desktop/src/types/settings.ts`: Added `StartupSettingsDto` TypeScript interface.
+- `apps/desktop/src/services/settings.ts`: Added `getStartupStatus` and `setStartupStatus` frontend API client functions.
+- `apps/desktop/src/components/GeneralSection.tsx`: Created General / Startup UI component using `@snapdown/ui` Checkbox.
+- `apps/desktop/src/App.tsx`: Mounted `GeneralSection` and wired live state synchronization.
+- `apps/desktop/src/test/shell.test.tsx`: Added frontend tests for startup toggle mount and user interaction.
+- `crates/snapdown-core/src/error.rs`: Added `CoreError::System(String)` variant for operating system errors.
+
+### Review Findings Breakdown
+- Patches applied: 3 (2 medium, 1 low)
+- Items deferred: 0
+- Items rejected: 10 (architectural non-issues, non-standard scope extensions)
+
+### Verification Performed
+- `cargo fmt --all -- --check`: PASSED
+- `cargo clippy --workspace --all-targets -- -D warnings`: PASSED
+- `cargo test --workspace`: PASSED (17 desktop lib tests including `startup_registration_needs_no_administrator_rights`, `the_setting_is_read_back_from_the_os_not_remembered`, `disabling_removes_the_registration`, `windows_registry_autostart_hkcu_roundtrip`, 4 core tests, 1 no-io test, 2 store system tests, 5 sqlite tests, 2 vault blob tests)
+- `npm --prefix web/ui run typecheck`: PASSED
+- `npm --prefix web/ui run lint`: PASSED
+- `npm --prefix web/ui run test`: PASSED (18 tests)
+- `npm --prefix apps/desktop run typecheck`: PASSED
+- `npm --prefix apps/desktop run lint`: PASSED
+- `npm --prefix apps/desktop run test`: PASSED (14 tests)
+- `npm --prefix apps/desktop run build`: PASSED (Vite production build output created)
+- `uv run .constitution/method/scripts/validate.py --check`: PASSED (4 baseline findings for unbuilt MCP/web-api modules)
+
+### Residual Risks
+None. Registry access and autostart capabilities are fully verified under user privileges.
+

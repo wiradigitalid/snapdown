@@ -20,10 +20,12 @@ tauri = { workspace = true }
 tauri-plugin-single-instance = { workspace = true }
 tauri-plugin-global-shortcut = { workspace = true }
 tauri-plugin-autostart = { workspace = true }
-winreg = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+winreg = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

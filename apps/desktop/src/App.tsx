@@ -52,20 +52,29 @@ export const App: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
 
-    Promise.all([getSettings(), getHotkeys(), getStartupStatus()])
-      .then(([loadedSettings, loadedHotkeys, startupStatus]) => {
-        if (isMounted) {
-          setSettings(loadedSettings);
-          setHotkeySettings(loadedHotkeys);
-          setRunAtStartup(startupStatus.enabled);
-          setIsLoading(false);
+    Promise.allSettled([getSettings(), getHotkeys(), getStartupStatus()])
+      .then(([settingsRes, hotkeysRes, startupRes]) => {
+        if (!isMounted) return;
+
+        if (settingsRes.status === 'fulfilled') {
+          setSettings(settingsRes.value);
+        } else {
+          console.error('Failed to load settings:', settingsRes.reason);
         }
-      })
-      .catch((err) => {
-        console.error('Failed to load initial settings:', err);
-        if (isMounted) {
-          setIsLoading(false);
+
+        if (hotkeysRes.status === 'fulfilled') {
+          setHotkeySettings(hotkeysRes.value);
+        } else {
+          console.error('Failed to load hotkeys:', hotkeysRes.reason);
         }
+
+        if (startupRes.status === 'fulfilled') {
+          setRunAtStartup(startupRes.value.enabled);
+        } else {
+          console.error('Failed to load startup status:', startupRes.reason);
+        }
+
+        setIsLoading(false);
       });
 
     return () => {
@@ -111,9 +120,13 @@ export const App: React.FC = () => {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setToastMessage(`Failed to update startup registration: ${msg}`);
-      // Refresh real OS state on error
-      const current = await getStartupStatus();
-      setRunAtStartup(current.enabled);
+      // Refresh real OS state on error with fallback
+      try {
+        const current = await getStartupStatus();
+        setRunAtStartup(current.enabled);
+      } catch {
+        setRunAtStartup(!enabled);
+      }
     }
   };
 

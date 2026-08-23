@@ -258,16 +258,21 @@ pub mod tests {
             vec!["--autostart".into()],
         );
 
-        // Clean up beforehand if leftover
-        let _ = backend.disable();
+        // Ensure cleanup even if test assertions fail
+        struct Cleanup<'a>(&'a WindowsRegistryAutoStartBackend);
+        impl<'a> Drop for Cleanup<'a> {
+            fn drop(&mut self) {
+                let _ = self.0.disable();
+            }
+        }
+        let _guard = Cleanup(&backend);
 
+        let _ = backend.disable();
         assert!(!backend.is_enabled().unwrap());
 
-        // Enable in HKCU
         assert!(backend.enable().is_ok());
         assert!(backend.is_enabled().unwrap());
 
-        // Disable completely deletes key value
         assert!(backend.disable().is_ok());
         assert!(!backend.is_enabled().unwrap());
     }
