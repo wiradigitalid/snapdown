@@ -116,6 +116,7 @@ export const EditorShell: React.FC<EditorShellProps> = ({
                 aria-selected={isActive}
                 aria-controls={`panel-${item.id}`}
                 data-testid={`nav-item-${item.id}`}
+                className="nav-rail-item"
                 onClick={() => onTabChange(item.id)}
                 style={{
                   display: 'flex',
@@ -138,7 +139,6 @@ export const EditorShell: React.FC<EditorShellProps> = ({
                   fontSize: 'var(--text-sm)',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
-                  outline: 'none',
                 }}
               >
                 {item.label}
@@ -157,6 +157,7 @@ export const EditorShell: React.FC<EditorShellProps> = ({
         >
           <button
             type="button"
+            className="rail-capture-btn"
             data-testid="rail-capture-btn"
             onClick={onCaptureClick}
             style={{
