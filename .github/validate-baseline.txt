@@ -3,7 +3,6 @@
   V18  W6-S4: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
   V18  W6-S5: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
   V18  W6-S6: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
-  V18  W6-S7: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
   V18  W6-S8: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
   V18  W6-S9: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
   V24  .agent/skills/bmad-project-context/references/template.md: cites `src/lib/money.ts` which does not exist
