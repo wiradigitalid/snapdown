@@ -5,9 +5,7 @@ use snapdown_core::domain::access_key::AccessKey;
 use snapdown_core::domain::bundle::{Bundle, BundleItem};
 use snapdown_core::domain::finding::{Finding, Note};
 use snapdown_core::ports::{AccessKeyStore, BlobStore, BundleStore, FindingStore};
-use snapdown_store::sqlite::{
-    SqliteAccessKeyStore, SqliteBundleStore, SqliteFindingStore,
-};
+use snapdown_store::sqlite::{SqliteAccessKeyStore, SqliteBundleStore, SqliteFindingStore};
 use snapdown_store::vault::VaultBlobStore;
 use tempfile::{NamedTempFile, TempDir};
 
