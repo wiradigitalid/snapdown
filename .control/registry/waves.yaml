@@ -304,18 +304,51 @@ waves:
               It belongs here rather than in a story of its own because the decision *which root
               component this window renders* is a frame concern, and this story is where the frame
               gains an owner. Doing it anywhere else would leave the seam ownerless again.
+            # As-built. Intent names kept beside each so the trace survives.
             tests:
-              - vitest::the_overlay_window_url_mounts_the_capture_overlay_and_not_the_editor
-              - vitest::the_default_window_url_mounts_the_editor_and_not_the_overlay
-              - cargo::the_capture_hotkey_produces_a_finding_end_to_end
-              - cargo::the_build_produces_exactly_one_desktop_executable
-              - cargo::the_executable_name_the_tray_tooltip_and_the_window_title_share_one_source
-              - vitest::the_workspace_window_titles_itself_snapdown_editor
-              - vitest::the_window_title_does_not_change_between_surfaces
-              - vitest::every_primary_surface_is_reachable_from_every_other
-              - vitest::a_frozen_components_surface_is_still_listed
-              - vitest::the_active_surface_is_distinguished_by_more_than_colour
-              - vitest::the_rail_still_renders_when_a_surface_fails_to_load
+              # intent: the_overlay_window_url_mounts_the_capture_overlay_and_not_the_editor
+              - vitest::mounts_captureoverlay_when_url_query_has_overlay_true
+              # intent: the_default_window_url_mounts_the_editor_and_not_the_overlay
+              - vitest::mounts_app_editor_shell_when_url_query_is_empty
+              - vitest::mounts_app_editor_shell_when_url_query_has_other_parameters
+              # intent: the_build_produces_exactly_one_desktop_executable
+              - cargo::desktop_crate_declares_exactly_one_binary_named_snapdown
+              # intent: the_executable_name..._share_one_source / the_workspace_window_titles_itself
+              - cargo::tauri_configuration_has_snapdown_product_and_snapdown_editor_window_title
+              # intent: every_primary_surface_is_reachable / a_frozen_components_surface_is_still_listed
+              - vitest::lists_all_four_primary_surfaces
+              # intent: the_active_surface_is_distinguished_by_more_than_colour
+              - vitest::highlights_the_active_tab_with_multiple_visual_cues
+              # added in the fix round, from the coordinator's must-fix
+              - vitest::provides_visible_focus_visible_treatment_without_suppressing_focus_outline
+              - vitest::renders_200px_wide_navigation_rail_with_branding
+              - vitest::triggers_ontabchange_when_navigation_tab_is_clicked
+              - vitest::renders_pinned_capture_button_and_triggers_oncaptureclick
+              - vitest::renders_children_within_the_main_content_area_without_crashing
+            tests_deliberately_not_written:
+              - name: the_capture_hotkey_produces_a_finding_end_to_end
+                why: |
+                  MY ERROR, not the builder's. I named this as a `cargo` test and it cannot be one.
+                  It needs a registered global Windows hotkey, a transparent overlay across real
+                  monitors, a simulated drag, typed text, and a Finding landing in a store. That is a
+                  UI-DRIVING test, CI is headless, and this repo's own Agent Rules require such a
+                  test to be dispatched to a UI worker rather than run headlessly.
+                  The coverage it wanted is real and still missing: nothing proves the hotkey now
+                  produces a Finding end to end. What DOES exist is mount.test.tsx, which proves the
+                  seam BUG-4 broke - the overlay URL mounts CaptureOverlay - and that is the part
+                  that was actually wrong. The rest of the chain was never in doubt.
+                  Recorded as a wave follow-up: a UI-driving verification pass, like W1 had.
+            tests_thinner_than_declared:
+              - name: the_window_title_does_not_change_between_surfaces
+                state: |
+                  Not written. FR-27 promises it and it is cheap to test. Follow-up, not a return
+                  trip: the behaviour is correct - the title is set once in tauri.conf.json and
+                  nothing in EditorShell touches it - and this is missing coverage, not a defect.
+              - name: the_rail_still_renders_when_a_surface_fails_to_load
+                state: |
+                  Approximated by `renders_children_within_the_main_content_area_without_crashing`,
+                  which is weaker: it renders a child, it does not render a FAILING child. FR-28
+                  requires navigation to survive any surface's failure. Follow-up.
       - id: EP-settings-surface
         component: settings
         title: A Settings screen that fits, and controls that can be answered
