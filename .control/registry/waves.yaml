@@ -379,6 +379,21 @@ waves:
               frontend that no component owns. `build-tooling` was added to the touches vocabulary
               for this story, because the vocabulary had no word for it - which is a fair reflection
               of the fact that nobody owned it.
+
+              **W1 already knew, and that is the part worth carrying into this story.** A W1 reviewer
+              diagnosed this exact failure - "vite build fails, therefore cargo tauri build fails,
+              therefore frontendDist is never produced; cargo tauri dev serves localhost with no
+              document" - and raised it as a must-fix. The command is therefore not unknown: it is
+              `cargo tauri build`. What never happened is making the CLI installable from the
+              repository and carrying the command anywhere a reader would look. The knowledge sat in
+              a closed wave's scratch output, which `_bmad-output/` is allowed to hold and which
+              nothing carries forward.
+
+              **And every UI claim this project has ever made was made against a DEV SERVER.** W1's
+              UI verification brief told its worker: "cargo tauri dev from apps/desktop, or build and
+              run target/debug/desktop.exe WITH THE VITE DEV SERVER UP." A bundled binary has never
+              been verified to work by anyone. That is why this story's third check is `manual::` and
+              why it is placed before the remaining UI stories rather than after them.
             tests:
               - ci::desktop_ci_builds_a_bundled_desktop_artifact
               - ci::the_build_produces_exactly_one_desktop_executable_from_a_real_build

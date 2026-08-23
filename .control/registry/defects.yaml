@@ -427,9 +427,24 @@ defects:
         apps/desktop/package.json devDependencies -> no tauri package at all
         apps/desktop/package.json scripts -> dev, build, preview, typecheck, lint, test. No tauri.
         Cargo.toml has tauri, tauri-build and three plugins - the LIBRARIES - and no tauri-cli.
-      Nothing documents a build command: codebase-stack-guide.md, README.md and the workflows contain
-      no `tauri build`, `tauri dev`, `cargo tauri` or `npm run tauri`.
+      The CORPUS documents no build command: codebase-stack-guide.md, README.md and the workflows
+      contain no `tauri build`, `tauri dev`, `cargo tauri` or `npm run tauri`.
       desktop-ci.yml produces no artifact: no bundle step, no upload, no release.
+
+      CORRECTED 2026-08-23, after this entry was first written. The command is NOT unknown - it is
+      `cargo tauri build`, and W1 knew it. It is written down in W1's WORKING OUTPUT and nowhere a
+      reader would look:
+        _bmad-output/specs/w1-settings/review-W1-S1-reviewer-a.md:46
+          "vite build fails, therefore cargo tauri build fails, therefore frontendDist is never
+           produced. cargo tauri dev serves http://localhost:5173 with no document."
+        _bmad-output/specs/w1-settings/dispatch-briefs/W1-S1-ui-verification-finish.md:65
+          "HOW TO RUN IT: cargo tauri dev from apps/desktop, or build and run target/debug/
+           desktop.exe WITH THE VITE DEV SERVER UP."
+      So the defect is sharper than "nobody documented it". A W1 reviewer diagnosed this exact
+      failure mode - frontendDist never produced, the webview falling back to localhost - raised it
+      as a must-fix, and the CLI it depends on was still never made a dependency of the repository.
+      The knowledge lived in a wave's scratch output, which `_bmad-output/` is explicitly allowed to
+      hold and which nothing carries forward.
     impact: |
       `cargo build --release -p snapdown` compiles and links, and the binary it produces is NOT the
       application. Launched, its webview requests the `devUrl` from tauri.conf.json
@@ -446,12 +461,16 @@ defects:
       npm run build bundles the frontend, and the two are never joined. The gap is exactly the seam
       between them - the same shape as BUG-4, which was the seam between the Rust window builder's
       URL and the frontend's routing. Seams have no owner here.
-      It surfaced only because a UI verification was attempted, which is the first time in this
-      project that anyone tried to run a binary they had built themselves.
+      It surfaced only because a UI verification was attempted against a SELF-BUILT BINARY. That
+      appears to be the first time in this project: W1's UI verification brief told its worker to run
+      `cargo tauri dev` with the Vite dev server up, so every UI claim this project has ever made was
+      made against a DEV SERVER, never against a bundled application. A bundled binary has never been
+      verified to work by anyone.
     fix: |
-      Add the Tauri CLI as a devDependency of apps/desktop with a `tauri` script, or as a cargo
-      binary dependency. Document the build command in codebase-stack-guide.md next to the
-      verification commands. Then have desktop-ci.yml actually build the bundle, which is what makes
+      Add the Tauri CLI so the repository can install it - `@tauri-apps/cli` as a devDependency of
+      apps/desktop with a `tauri` script, or `cargo install tauri-cli` pinned and documented. Carry
+      `cargo tauri build` into codebase-stack-guide.md next to the verification commands, where a
+      reader will actually find it rather than in a closed wave's scratch folder. Then have desktop-ci.yml actually build the bundle, which is what makes
       BR-121 checkable against a real build rather than a declaration.
       Until then, treat any locally built Snapdown.exe as NOT the application.
     note: |
