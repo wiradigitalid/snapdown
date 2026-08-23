@@ -1,4 +1,3 @@
-  V18  W1-S2: has no story file in _bmad-output/specs/w1-settings/stories/
   V18  W1-S3: has no story file in _bmad-output/specs/w1-settings/stories/
   V18  W1-S4: has no story file in _bmad-output/specs/w1-settings/stories/
   V18  W1-S5: has no story file in _bmad-output/specs/w1-settings/stories/
