@@ -2,7 +2,7 @@
 id: W2-S6
 title: Finding deletion with file synchronization and orphan sweeper report
 wave: W2
-status: done
+status: ready-for-dev
 created: 2026-08-23
 dependencies:
   - W2-S1

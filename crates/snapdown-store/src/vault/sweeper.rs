@@ -101,8 +101,8 @@ impl OrphanSweeper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sqlite::SqliteFindingStore;
     use snapdown_core::domain::finding::{Finding, Note};
+    use snapdown_store::sqlite::SqliteFindingStore;
     use tempfile::TempDir;
 
     #[test]
@@ -161,10 +161,7 @@ mod tests {
         assert_eq!(report.total_vault_files, 2);
         assert_eq!(report.referenced_files, 2);
         assert_eq!(report.orphan_files, vec!["findings/orphan.png".to_string()]);
-        assert_eq!(
-            report.missing_files,
-            vec!["findings/finding2.png".to_string()]
-        );
+        assert_eq!(report.missing_files, vec!["findings/finding2.png".to_string()]);
 
         // Clean orphans
         let cleaned = OrphanSweeper::clean_orphans(&vault_store, &report.orphan_files).unwrap();
