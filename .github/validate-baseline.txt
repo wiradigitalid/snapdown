@@ -1,5 +1,4 @@
   V18  W6-S10: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
-  V18  W6-S11: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
   V18  W6-S3: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
   V18  W6-S4: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
   V18  W6-S5: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
