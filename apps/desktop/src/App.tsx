@@ -3,13 +3,16 @@ import { Toast } from '@snapdown/ui';
 import { VaultSection } from './components/VaultSection';
 import { QualityBudgetSection } from './components/QualityBudgetSection';
 import { HotkeySection } from './components/HotkeySection';
+import { GeneralSection } from './components/GeneralSection';
 import {
   clearHotkey as apiClearHotkey,
   getHotkeys,
   getSettings,
+  getStartupStatus,
   openVaultFolder,
   setHotkey as apiSetHotkey,
   setQualityBudget as apiSetQualityBudget,
+  setStartupStatus as apiSetStartupStatus,
   setVaultPath as apiSetVaultPath,
 } from './services/settings';
 import { HotkeyAction, HotkeySettingsDto, Settings } from './types/settings';
@@ -42,25 +45,36 @@ export const App: React.FC = () => {
     startup_warnings: [],
   });
 
+  const [runAtStartup, setRunAtStartup] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
 
-    Promise.all([getSettings(), getHotkeys()])
-      .then(([loadedSettings, loadedHotkeys]) => {
-        if (isMounted) {
-          setSettings(loadedSettings);
-          setHotkeySettings(loadedHotkeys);
-          setIsLoading(false);
+    Promise.allSettled([getSettings(), getHotkeys(), getStartupStatus()])
+      .then(([settingsRes, hotkeysRes, startupRes]) => {
+        if (!isMounted) return;
+
+        if (settingsRes.status === 'fulfilled') {
+          setSettings(settingsRes.value);
+        } else {
+          console.error('Failed to load settings:', settingsRes.reason);
         }
-      })
-      .catch((err) => {
-        console.error('Failed to load initial settings:', err);
-        if (isMounted) {
-          setIsLoading(false);
+
+        if (hotkeysRes.status === 'fulfilled') {
+          setHotkeySettings(hotkeysRes.value);
+        } else {
+          console.error('Failed to load hotkeys:', hotkeysRes.reason);
         }
+
+        if (startupRes.status === 'fulfilled') {
+          setRunAtStartup(startupRes.value.enabled);
+        } else {
+          console.error('Failed to load startup status:', startupRes.reason);
+        }
+
+        setIsLoading(false);
       });
 
     return () => {
@@ -92,6 +106,28 @@ export const App: React.FC = () => {
     const refreshed = await getHotkeys();
     setHotkeySettings(refreshed);
     setToastMessage(`Hotkey for ${action} cleared`);
+  };
+
+  const handleToggleStartup = async (enabled: boolean) => {
+    try {
+      const res = await apiSetStartupStatus(enabled);
+      setRunAtStartup(res.enabled);
+      setToastMessage(
+        res.enabled
+          ? 'Snapdown will run at Windows startup'
+          : 'Snapdown startup registration removed'
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setToastMessage(`Failed to update startup registration: ${msg}`);
+      // Refresh real OS state on error with fallback
+      try {
+        const current = await getStartupStatus();
+        setRunAtStartup(current.enabled);
+      } catch {
+        setRunAtStartup(!enabled);
+      }
+    }
   };
 
   const handleOpenExplorer = async () => {
@@ -148,6 +184,12 @@ export const App: React.FC = () => {
           </p>
         </div>
       </header>
+
+      <GeneralSection
+        runAtStartup={runAtStartup}
+        onToggleStartup={handleToggleStartup}
+        disabled={isLoading}
+      />
 
       <VaultSection
         vaultPath={settings.vault_path}

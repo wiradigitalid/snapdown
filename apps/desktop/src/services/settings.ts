@@ -1,5 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
-import { HotkeyAction, HotkeySettingsDto, QualityBudget, Settings } from '../types/settings';
+import {
+  HotkeyAction,
+  HotkeySettingsDto,
+  QualityBudget,
+  Settings,
+  StartupSettingsDto,
+} from '../types/settings';
 
 export const getSettings = async (): Promise<Settings> => {
   return await invoke<Settings>('get_settings');
@@ -50,5 +56,17 @@ export const setHotkey = async (
 export const clearHotkey = async (action: HotkeyAction): Promise<void> => {
   await invoke<void>('clear_hotkey', {
     action,
+  });
+};
+
+export const getStartupStatus = async (): Promise<StartupSettingsDto> => {
+  return await invoke<StartupSettingsDto>('get_startup_status');
+};
+
+export const setStartupStatus = async (
+  enabled: boolean
+): Promise<StartupSettingsDto> => {
+  return await invoke<StartupSettingsDto>('set_startup_status', {
+    enabled,
   });
 };

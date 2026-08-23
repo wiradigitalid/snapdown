@@ -322,6 +322,11 @@ mod tests {
                     None,
                 ),
             )),
+            startup_registrar: Arc::new(std::sync::Mutex::new(
+                crate::startup::DesktopStartupRegistrar::new(Arc::new(
+                    crate::startup::tests::MockAutoStartBackend::default(),
+                )),
+            )),
         };
 
         // Empty path is invalid and must be rejected
