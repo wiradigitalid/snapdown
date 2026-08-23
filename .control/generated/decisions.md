@@ -4,9 +4,12 @@
 
 Decisions are no longer looked up through the memlog — the memlog goes back to being just a pass log.
 
-**2 decisions** — applied: 2.
+**5 decisions** — accepted: 3 · applied: 2.
 
 | id | Title | Status | Type | Touches | File |
 | --- | --- | --- | --- | --- | --- |
 | `DEC-001` | Snapdown is built as a Tauri v2 desktop app in Rust with React front ends, and a Go web service | `applied` | — | `.how/_platform/ARCHITECTURE-SPINE.md`, `.how/_platform/c4-l2-containers.md` | `.control/decisions/DEC-001-stack.md` |
 | `DEC-002` | An agent reads the Library through a stateless MCP bridge and a key the Reviewer pastes | `applied` | — | `.how/_platform/ARCHITECTURE-SPINE.md`, `.how/_platform/c4-l2-containers.md`, `.how/_platform/inventory-api.md`, `.what/agent-access/SRS-agent-access.md`, `.what/agent-access/03-domain/domain-model.md` | `.control/decisions/DEC-002-mcp-bridge-and-key.md` |
+| `DEC-003` | Snapdown is one process wearing two window personas, not two executables | `accepted` | — | — | `.control/decisions/DEC-003-one-process-two-windows.md` |
+| `DEC-004` | The Quality Budget is chosen as a named intent, and Auto derives the numbers per capture | `accepted` | — | — | `.control/decisions/DEC-004-quality-budget-presets.md` |
+| `DEC-005` | The desktop experience is finished before `sharing` and `agent-access` are touched again | `accepted` | — | — | `.control/decisions/DEC-005-desktop-first-ordering.md` |

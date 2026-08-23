@@ -25,3 +25,12 @@ gen/schemas
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# Captured screenshots and anything derived from real capture output.
+# The product brief makes this a hard constraint, not a preference: this repository is public, and a
+# Capture may contain personal data. Nothing enforced it until 2026-08-23, when a UX audit staged five
+# screenshots of the owner's own machine for commit and was caught by hand.
+.work/**/*.png
+.work/**/*.jpg
+.work/**/*.jpeg
+.work/**/*.webp

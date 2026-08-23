@@ -14,8 +14,13 @@ Written and refreshed only by `wdi-init` intent `structure`, never by hand. Rule
 
 ## Verified
 
-Derived from the tree on disk on **2026-08-23**, at commit **90d55a7**, on branch
-`main` after merging Wave W1 stories (W1-S1 through W1-S5).
+Re-derived from the tree on disk on **2026-08-23**, at commit **4c5c901**, on branch `main` after
+W1–W5 closed.
+
+The previous stamp read commit `90d55a7`, "after merging Wave W1 stories" — four waves stale. Two
+`built: true` containers, `mcp-bridge` and `web-api`, had no heading here at all, which V25 refuses:
+a container we write the inside of MUST have a section in this map. That is what this re-derivation
+fixes.
 
 ## Top level
 
@@ -112,6 +117,42 @@ web/ui/
       tokens.css     ★ every token's value, in both colour schemes. The single source
       components.css ★ every interactive state — focus-visible, hover, active, invalid, disabled
     test/            vitest suites and setup
+```
+
+### mcp-bridge
+
+The stdio Model Context Protocol executable an agent's MCP client launches. It holds no Library state,
+persists neither the Access Key nor any content between runs, and reaches the Library only through the
+Local API — which AD-5 makes read-only. That is why it is a separate binary while the Editor is not
+(`DEC-002` for the reason it exists; AD-11 for why it is not an exception to one-process).
+
+```text
+crates/snapdown-bridge/
+  Cargo.toml         ★ produces snapdown-bridge.exe
+  src/
+    main.rs          ★ the stdio MCP loop. Four tools: set_access_key, list_bundles,
+                     ★ read_bundle, read_bundle_image
+```
+
+### web-api
+
+The Go service that serves published Bundles. A single binary with embedded SQLite and a blob
+directory, on a host the Reviewer controls. It shares no code with the Rust tree and depends on
+nothing in it except the Markdown and image bytes a publish hands it.
+
+Frozen by `DEC-005` for the duration of the desktop experience work: it keeps running, and it receives
+no new work.
+
+```text
+apps/web-service/
+  go.mod             ★ module definition
+  main.go            ★ entry point and flag parsing
+  internal/
+    server/
+      server.go      ★ chi routes: publish, unpublish, reconcile, and the public read routes
+    store/
+      store.go       ★ embedded SQLite plus the blob directory
+    server_test.go   route inventory and the NFR-15 identical-refusal test
 ```
 
 ## Libraries

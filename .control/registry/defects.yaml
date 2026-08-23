@@ -1,3 +1,38 @@
 # defects.yaml — SSOT for defects: ordinary bugs and hotfixes.
+#
+# A defect is code disagreeing with a requirement that was already `active`. Work that exists because
+# a requirement is NEW is planned work, not a defect, and it belongs in a wave — the distinction is
+# what keeps this file from becoming a second backlog.
 
-defects: []
+defects:
+  - id: BUG-1
+    title: Deleting a Finding silently deletes its rows from every Bundle that holds it
+    found: "2026-08-23"
+    found_by: wdi-component, G4 as-built pass over `bundle` at mode deep
+    component: bundle
+    severity: high
+    contradicts: [FR-13, AD-9]
+    evidence: |
+      crates/snapdown-store/src/sqlite/migrations.rs, migration v3:
+        FOREIGN KEY(finding_id) REFERENCES finding(id) ON DELETE CASCADE
+      crates/snapdown-store/src/sqlite/finding_store.rs:29:
+        conn.pragma_update(None, "foreign_keys", "ON")
+      FR-13, third consequence, has been `active` since G2:
+        "A Finding that belongs to a Bundle can still be deleted; the Bundle keeps its own
+         copy of the image and stays readable."
+    impact: |
+      The Bundle's stored Markdown survives, because `bundle.markdown` is a column and AD-9 holds.
+      Its item list loses a row. The delivered document and the record of the delivered document
+      disagree, and nothing reports it. A Reviewer who deletes tidy-up Findings after a handoff
+      corrupts the record of what they handed over.
+    why_undetected: |
+      finding_store.rs:362 asserts the cascade to `note` and `marker`, which is correct. Nothing
+      asserts the ABSENCE of a cascade to `bundle_item`. A test that a cascade does NOT fire is the
+      kind nobody writes unless a document says the cascade must not exist — which is what G4 at
+      `deep` produced.
+    fix: |
+      Drop ON DELETE CASCADE from bundle_item.finding_id. Probably drop the foreign key entirely:
+      a BundleItem refers to a Finding that MAY no longer exist, which is exactly what a foreign
+      key exists to forbid. Requires a migration; existing rows already lost are not recoverable.
+    scenario: .what/bundle/05-scenarios/SCN-05-a-finding-deleted-out-from-under-a-bundle.md
+    status: open

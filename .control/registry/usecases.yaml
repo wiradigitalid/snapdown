@@ -103,6 +103,27 @@ usecases:
     component: settings
     satisfies: [FR-18]
     critical: false
+  # UC-24..UC-26 added 2026-08-23 for CAP-9. None is `critical`: the surface itself touches no money,
+  # no personal data, and nothing irreversible. `critical` is not a synonym for `important` — these
+  # three are the reason every other use case is reachable, and they are still not critical.
+  - id: UC-24
+    title: I can tell what I have opened and which part of it I am in
+    actor: Reviewer
+    component: settings
+    satisfies: [FR-27]
+    critical: false
+  - id: UC-25
+    title: I can get to any part of Snapdown from wherever I happen to be
+    actor: Reviewer
+    component: settings
+    satisfies: [FR-28]
+    critical: false
+  - id: UC-26
+    title: I can see everything a screen offers me without hunting for it
+    actor: Reviewer
+    component: settings
+    satisfies: [FR-29]
+    critical: false
   # --- agent-access -----------------------------------------------------------------
   - id: UC-17
     title: I let the agent in front of me read my reviews

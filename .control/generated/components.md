@@ -24,6 +24,7 @@ product_components:
   - LC-012
   - LC-013
   - LC-014
+  - LC-031
 - id: finding
   name: null
   containers:
@@ -37,6 +38,8 @@ product_components:
   - LC-006
   - LC-007
   - LC-008
+  - LC-029
+  - LC-030
 - id: settings
   name: null
   containers:
@@ -46,6 +49,7 @@ product_components:
   - LC-015
   - LC-025
   - LC-026
+  - LC-028
 - id: sharing
   name: null
   containers:
@@ -194,5 +198,25 @@ logical_components:
   type: null
   component: sharing
   area: web-service
+  owner: null
+- id: LC-028
+  type: null
+  component: settings
+  area: editor-ui
+  owner: null
+- id: LC-029
+  type: null
+  component: finding
+  area: capture-pipeline
+  owner: null
+- id: LC-030
+  type: null
+  component: finding
+  area: editor-ui
+  owner: null
+- id: LC-031
+  type: null
+  component: bundle
+  area: editor-ui
   owner: null
 ```

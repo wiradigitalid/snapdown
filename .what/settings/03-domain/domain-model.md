@@ -3,7 +3,7 @@ type: model
 component: settings
 layer: conceptual
 created: "2026-08-22"
-updated: "2026-08-22"
+updated: "2026-08-23"
 ---
 
 # Model — settings
@@ -25,8 +25,9 @@ The named choices that exist, and who reads each:
 | Setting | What it decides | Read by |
 | --- | --- | --- |
 | Vault location | Where Finding and Bundle files are kept | `finding`, `bundle` |
-| Quality Budget — maximum long edge | How far a capture is downscaled | `finding` |
-| Quality Budget — encoder quality | How hard the reduced image is compressed | `finding` |
+| Quality Budget | Which named intent governs reduction: `Auto`, `Sharp`, `Balanced`, `Small`, `Custom` | `finding` |
+| Quality Budget — maximum long edge | The resolved downscale limit. Under `Auto` it is derived per Capture and is not a stored choice | `finding` |
+| Quality Budget — encoder quality | The resolved compression. Under `Auto` it is derived per Capture and is not a stored choice | `finding` |
 | Capture hotkey | Which combination starts a Capture | `finding` |
 | Open Editor hotkey | Which combination opens the Editor | `finding` |
 | Open Editor after a Capture | Whether a Capture opens the Editor. Off by default | `finding` |
@@ -45,6 +46,12 @@ Windows credential store, and they belong to `agent-access` and `sharing` respec
 - Run at Windows startup is the only Setting whose value is a claim about something outside the
   Library. Its truth lives in the operating system, and this component reads it back rather than
   remembering what it asked for.
+- The Quality Budget is **one choice with two derived companions**, not three independent Settings.
+  The named intent is what the Reviewer sets; the long edge and the encoder quality are what it
+  resolves to. Under `Auto` they are not stored at all — they are computed per Capture, which is why
+  NFR-18 requires the resolved pair to be written onto the Finding rather than read back from here.
+  Under `Custom` the Reviewer sets the two directly and the named intent follows them. Source:
+  `DEC-004`.
 
 ## State Lifecycle
 
@@ -68,6 +75,10 @@ Two conditions that look like states and are not:
 5. Changing the Vault location moves every existing file or moves none. → BR-29, AD-2
 6. A Quality Budget change applies only to Captures taken after it. No stored image is re-encoded.
    → BR-9
+9. The Quality Budget always holds exactly one of five named states, and `Custom` holds if and only if
+   the Reviewer has set a resolved value directly. There is no unnamed state. → BR-103, BR-116, DEC-004
+10. Under `Auto`, the resolved long edge and encoder quality are a function of the captured region and
+    are never read back from a Setting. → BR-104, DEC-004, NFR-18
 7. Run at Windows startup reflects the actual operating-system registration, not a remembered
    intention. → FR-18
 8. No Setting holds a secret. → cross-cutting.md § Secrets

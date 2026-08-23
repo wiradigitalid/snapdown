@@ -258,6 +258,45 @@ rtm:
   green: false
   exempt: false
   broken_at: story
+- BG: BG-7
+  CAP: CAP-9
+  FR: FR-27
+  DEC: []
+  UC: UC-24
+  story: ''
+  wave: ''
+  release: ''
+  test: []
+  status: ''
+  green: false
+  exempt: false
+  broken_at: story
+- BG: BG-7
+  CAP: CAP-9
+  FR: FR-28
+  DEC: []
+  UC: UC-25
+  story: ''
+  wave: ''
+  release: ''
+  test: []
+  status: ''
+  green: false
+  exempt: false
+  broken_at: story
+- BG: BG-7
+  CAP: CAP-9
+  FR: FR-29
+  DEC: []
+  UC: UC-26
+  story: ''
+  wave: ''
+  release: ''
+  test: []
+  status: ''
+  green: false
+  exempt: false
+  broken_at: story
 - BG: BG-2
   CAP: CAP-1
   FR: FR-3

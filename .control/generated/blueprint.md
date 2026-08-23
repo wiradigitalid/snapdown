@@ -8,7 +8,7 @@ This is what the owner reads at **G3 Blueprint**, instead of seven files. Its co
 
 ## Use case catalogue
 
-**23 use cases**, 4 marked `critical`.
+**26 use cases**, 4 marked `critical`.
 
 | id | Use case | Component | Satisfies | critical |
 | --- | --- | --- | --- | --- |
@@ -28,6 +28,9 @@ This is what the owner reads at **G3 Blueprint**, instead of seven files. Its co
 | `UC-21` | I read a review that was put up for me, from a machine that has nothing else on it | `sharing` | `FR-24` | no |
 | `UC-22` | I take a published review back off the internet | `sharing` | `FR-25` | no |
 | `UC-23` | I check whether a review of mine is still readable from outside | `sharing` | `FR-26` | no |
+| `UC-24` | I can tell what I have opened and which part of it I am in | `settings` | `FR-27` | no |
+| `UC-25` | I can get to any part of Snapdown from wherever I happen to be | `settings` | `FR-28` | no |
+| `UC-26` | I can see everything a screen offers me without hunting for it | `settings` | `FR-29` | no |
 | `UC-3` | I look at everything I have captured so far | `finding` | `FR-6` | no |
 | `UC-4` | I reword a note now that I have read it back | `finding` | `FR-7` | no |
 | `UC-5` | I point at three separate spots inside one screenshot | `finding` | `FR-8` | no |
@@ -277,8 +280,9 @@ The named choices that exist, and who reads each:
 | Setting | What it decides | Read by |
 | --- | --- | --- |
 | Vault location | Where Finding and Bundle files are kept | `finding`, `bundle` |
-| Quality Budget — maximum long edge | How far a capture is downscaled | `finding` |
-| Quality Budget — encoder quality | How hard the reduced image is compressed | `finding` |
+| Quality Budget | Which named intent governs reduction: `Auto`, `Sharp`, `Balanced`, `Small`, `Custom` | `finding` |
+| Quality Budget — maximum long edge | The resolved downscale limit. Under `Auto` it is derived per Capture and is not a stored choice | `finding` |
+| Quality Budget — encoder quality | The resolved compression. Under `Auto` it is derived per Capture and is not a stored choice | `finding` |
 | Capture hotkey | Which combination starts a Capture | `finding` |
 | Open Editor hotkey | Which combination opens the Editor | `finding` |
 | Open Editor after a Capture | Whether a Capture opens the Editor. Off by default | `finding` |
@@ -297,6 +301,12 @@ Windows credential store, and they belong to `agent-access` and `sharing` respec
 - Run at Windows startup is the only Setting whose value is a claim about something outside the
   Library. Its truth lives in the operating system, and this component reads it back rather than
   remembering what it asked for.
+- The Quality Budget is **one choice with two derived companions**, not three independent Settings.
+  The named intent is what the Reviewer sets; the long edge and the encoder quality are what it
+  resolves to. Under `Auto` they are not stored at all — they are computed per Capture, which is why
+  NFR-18 requires the resolved pair to be written onto the Finding rather than read back from here.
+  Under `Custom` the Reviewer sets the two directly and the named intent follows them. Source:
+  `DEC-004`.
 
 #### State Lifecycle
 
@@ -320,6 +330,10 @@ Two conditions that look like states and are not:
 5. Changing the Vault location moves every existing file or moves none. → BR-29, AD-2
 6. A Quality Budget change applies only to Captures taken after it. No stored image is re-encoded.
    → BR-9
+9. The Quality Budget always holds exactly one of five named states, and `Custom` holds if and only if
+   the Reviewer has set a resolved value directly. There is no unnamed state. → BR-31, DEC-004
+10. Under `Auto`, the resolved long edge and encoder quality are a function of the captured region and
+    are never read back from a Setting. → BR-32, DEC-004, NFR-18
 7. Run at Windows startup reflects the actual operating-system registration, not a remembered
    intention. → FR-18
 8. No Setting holds a secret. → cross-cutting.md § Secrets
@@ -499,6 +513,7 @@ reader's browser. A desktop surface that is a window rather than a route has `�
 
 | No | Screen | Route | Owning component | Actor | UC served |
 | --- | --- | --- | --- | --- | --- |
+| 0 | Editor shell | — (the window frame itself) | `settings` | Reviewer | UC-24, UC-25 |
 | 1 | Capture Overlay | — (one transparent window per monitor) | `finding` | Reviewer | UC-1, UC-2 |
 | 2 | Capture note field | — (anchored to the selected region) | `finding` | Reviewer | UC-1 |
 | 3 | Capture confirmation toast | — (transient, never takes focus) | `finding` | Reviewer | UC-2 |
@@ -515,12 +530,30 @@ reader's browser. A desktop surface that is a window rather than a route has `�
 | 14 | Published Bundle reader | `/b/:slug` | `sharing` | Remote coding agent, Reviewer | UC-21 |
 | 15 | Publication not available | `/b/:slug` (the refused state) | `sharing` | Remote coding agent, Reviewer | UC-22 |
 
+Row 0 is numbered 0 rather than 16 deliberately. Numbers here are stable and a new row normally takes
+the next one — but the shell is not a new surface, it is the frame every other row has always been
+drawn inside, and it was missing rather than added. Numbering it 16 would place the frame after the
+things it contains. This is the one exception, and it is not a precedent: rows 16 onward take the next
+number as usual.
+
 The system tray menu is not a screen. It is the desktop shell's own affordance for opening rows 4 and
 12 and for quitting, and it holds no state of its own.
 
 Row 12 carries four use cases because Settings is one screen with four sections, not four screens.
-Splitting it into four rows would promise navigation the product does not have. Row 13 is separate
-because it belongs to a different component and a different release.
+Splitting it into four rows would promise navigation the product does not have. That reasoning was
+right and is now load-bearing: `FR-29` requires all five groups visible at the minimum window size,
+and the alternative considered at G2 — a sub-navigation of five groups — was rejected precisely
+because it would have satisfied the requirement by hiding four of them. Row 13 is separate because it
+belongs to a different component and a different release.
+
+Row 0 carries `UC-24` and `UC-25` — knowing what you have opened, and reaching every surface from
+every surface. It is owned by `settings`, and § 4.7 of the PRD carries the argument: `settings`
+already owns the container-level Logical Components, and the frame is machinery of the same kind.
+`UC-26` (seeing everything a screen offers) is not listed against one row because it binds every row.
+
+The system tray menu is still not a screen, and row 0 does not change that. The tray belongs to the
+**Snapdown** persona and the shell to **Snapdown Editor** (`DEC-003`); the tray holds no state and
+draws no surface.
 
 Rows 14 and 15 are the same route in two states. They are listed separately because the refused state
 is a promise — NFR-15 requires it to be identical for an unknown, a revoked, and a never-issued slug —
@@ -530,4 +563,16 @@ No row is owned by `_platform`.
 
 #### Findings
 
-None — `derived_from: plan`, and there is no code to derive from yet.
+`derived_from: plan` still holds — `.constitution/project/inventory-readers.py` has not been written,
+so nothing here is derived from the code and the difference between plan and code has never been
+computed. That is itself the finding, and it is recorded rather than papered over.
+
+What is known without a reader, from the UX pass of 2026-08-23:
+
+- **Rows 2, 7, and 9 had no build unit behind them.** The capture note field, the orphan report, and
+  the Compose Bundle dialog were named here at G3 and were never registered as `LC`. They now are —
+  `LC-029`, `LC-030`, `LC-031` — born by `wdi-ux` in the act of landing `DESIGN`.
+- **Row 0 had neither a row nor a build unit.** The window frame is inline JSX at the top of
+  `App.tsx`, owned by nothing. `LC-028` `editor-shell` now carries it.
+- A row with no `LC` is a promise nobody checks, and three of them sat here for five waves. Writing a
+  reader (`wdi-init` intent `readers`) is what would have caught this without a human noticing.

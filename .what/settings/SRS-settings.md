@@ -3,11 +3,11 @@ type: srs
 component: settings
 status: draft
 created: "2026-08-22"
-updated: "2026-08-22"
+updated: "2026-08-23"
 satisfies: [FR-5, FR-16, FR-17, FR-18, NFR-6, NFR-7]
 reviewed:
-  date: "2026-08-22"
-  sha: 1a67115
+  date: '2026-08-23'
+  sha: '4c5c901'
   lenses: [structure, prose, edge-case-hunter]
 ---
 
@@ -26,9 +26,12 @@ folder on the wrong drive, a Snapdown that is not running when they need it. The
 matters more than the values is honesty: a hotkey that cannot be registered is reported at the moment
 of binding and again at startup, never left silently broken.
 
-This is the only component at `mode: catalog`, so **its G4 is skipped by design**. `risk_accepted` is
-`medium`: no money, no personal data, no irreversible action, and the worst outcome is a hotkey that
-does not work, which is visible immediately.
+**This component was at `mode: catalog` until 2026-08-23 and is now at `mode: deep`.** At `catalog` its
+G4 was skipped by design, which is why the four choices below had no flow, no state, no failure
+behaviour and no screen specification behind them for five waves — and why the owner's Settings
+complaints had nowhere in the corpus to be answered. `risk_accepted` is unchanged at `medium`: no
+money, no personal data, no irreversible action, and the worst outcome is a hotkey that does not work,
+which is visible immediately. Depth and review intensity are separate fields, and only depth moved.
 
 ## Why · [G3]
 
@@ -51,12 +54,24 @@ have to reach across a seam to get it.
 | UC-14 | I decide where my screenshots are kept | Reviewer | FR-16 | no |
 | UC-15 | I change the keys that set Snapdown off, because one of them clashes | Reviewer | FR-17 | no |
 | UC-16 | I have Snapdown ready the moment I sign in | Reviewer | FR-18 | no |
+| UC-24 | I can tell what I have opened and which part of it I am in | Reviewer | FR-27 | no |
+| UC-25 | I can get to any part of Snapdown from wherever I happen to be | Reviewer | FR-28 | no |
+| UC-26 | I can see everything a screen offers me without hunting for it | Reviewer | FR-29 | no |
 
 None is `critical`. Moving the Vault comes closest, and BR-29 makes it all-or-nothing rather than
-irreversible: no file is lost, they are either all in the new place or all in the old one.
+irreversible: no file is lost, they are either all in the new place or all in the old one. UC-24 to
+UC-26 are the reason every other use case in this product is reachable at all, and they are still not
+`critical` — the rule is money, personal data, or an irreversible action, and importance is not on
+that list.
 
-At `mode: catalog` this catalogue plus the three inventories plus C4 is the whole record a builder
-gets for this component, and that is a finished state — not a placeholder waiting for flows.
+UC-24 to UC-26 arrived with `CAP-9` at G2, after r1 and r2 had shipped. They administer the window
+frame rather than a setting, and § 4.7 of the PRD carries the argument for why this component
+administers them: `settings` already owns the container-level Logical Components — the startup
+registrar, the hotkey registrar, the settings store — and the frame is machinery of the same kind.
+
+What G4 now produces for this component is an **as-built record** with a design delta, not a design
+from scratch: the code has been running since W1. The depth change itself is stated once, in the
+opening section, and is not repeated here.
 
 ## Constraints · [G3]
 
@@ -114,8 +129,10 @@ signing out and back in, Snapdown is in the tray with its hotkeys registered, no
   remembered intention. Reading it back on every open is the cheap answer; caching it is the tempting
   one.
 - **Moving the Vault.** BR-29's all-or-nothing across a whole folder of files, on Windows, with files
-  possibly held open. The safe answer may be to refuse the move rather than attempt it, and that is a
-  design decision this component's `mode: catalog` does not document.
+  possibly held open. Documented since 2026-08-23: `SCN-01` records that the code satisfies BR-29 by
+  ordering — copy everything, verify everything, remove the sources last — so no file ever exists in
+  neither place. It also records the two swallowed `fs::remove_file` results that make the promise
+  narrower than it reads.
 
 ### To Be Confirmed
 
@@ -123,31 +140,49 @@ signing out and back in, Snapdown is in the tray with its hotkeys registered, no
 
 ## Gate Checklist · [G3]
 
-At `mode: catalog` only the starred questions are asked.
+At `mode: deep` every question is asked.
 
 | Question | Answer |
 | --- | --- |
-| ★ Is every use case title a sentence a user would say? | Yes, all four in the Reviewer's own voice |
-| ★ Any `FR` with no use case? | No. FR-5, FR-16, FR-17, and FR-18 each have one |
-| ★ Do the inventories and this catalogue describe one system? | Yes. Tables 8–9, screen 12, and no endpoint |
+| ★ Is every use case title a sentence a user would say? | Yes, all seven in the Reviewer's own voice |
+| ★ Any `FR` with no use case? | No. FR-5, FR-16, FR-17, FR-18, FR-27, FR-28 and FR-29 each have one |
+| ★ Do the inventories and this catalogue describe one system? | Yes. Tables 8–9, screens 0 and 12, and no endpoint |
+| Is every `critical` use case justified? | Not applicable — none is `critical`, and UC-24 to UC-26 are not made `critical` by being important |
+| Does every local rule bind only this component? | Yes. Two that looked local are named in `02-rules/` and left cross-component |
+| Is every state machine a machine over something that moves? | Yes, and `03-domain/state-machines.md` says in its own opening that a Setting still has no status — the three machines are the control, the budget, and a binding |
 
 ## Design Reference · [G3]
 
-Paired with `.how/settings/SDD-settings.md`, which stays a **skeleton** at `mode: catalog` — that is
-the finished state for this component, not an omission.
+Paired with `.how/settings/SDD-settings.md`, which at `mode: deep` carries Decision Summary,
+Structure, Inherited Constraints, Failure Behaviour, ABCE, and the deep slots.
 
-Binding invariants: **AD-6** (nothing leaves the machine). At `mode: catalog` the quoted `Inherited
-Constraints` section is not written, and the invariant binds regardless.
+Binding invariants: **AD-2** (a record and its files live or die together), **AD-6** (nothing leaves
+the machine), **AD-10** (colour has one authority in both themes), **AD-11** (one process owns the
+Library). All four are quoted verbatim in the SDD's Inherited Constraints. AD-10 and AD-11 are new on
+2026-08-23 and the SDD records that the shipped code violates both.
 
 ---
 
 ## Slots
 
-All empty, and that is a finished state at `mode: catalog`. `03-domain/domain-model.md` is the one
-exception — it is G3 output and exists at every mode.
+| Slot | State |
+| --- | --- |
+| `02-rules/rules-settings.md` | BR-110 to BR-121. Born 2026-08-23 |
+| `03-domain/domain-model.md` | G3 output, exists at every mode. Amended for DEC-004 |
+| `03-domain/state-machines.md` | Three machines. `deep` only |
+| `04-usecases/` | Three full flows (UC-13, UC-14, UC-15) plus `EXPERIENCE.md` |
+| `05-scenarios/` | SCN-01, SCN-02. `deep` only |
+
+Four of the seven use cases have no full flow, deliberately. `deep` asks for at most three plus every
+`critical` one, and this component has none that is `critical`. UC-16's substance is in SCN-02, where
+the time dimension it turns on actually lives; UC-24 to UC-26 are properties of a surface rather than
+sequences a Reviewer walks through.
 
 ## Open Items
 
-- OQ-3 — the shipped Quality Budget default. `.control/questions/assumptions.md`.
+- OQ-3 — restated by DEC-004. There is no longer a default long edge to be right or wrong; the
+  question is whether `Auto`'s output is legible at its smallest. Still unmeasured.
+- OQ-18 — are four named budgets distinguishable enough to be chosen between?
+- OQ-19 — does hiding rather than destroying the Editor window keep memory unnoticed?
 - OQ-5 — hotkeys without administrator rights. `.control/questions/assumptions.md`.
 - OQ-11 — one Vault at a time. `.control/questions/assumptions.md`.

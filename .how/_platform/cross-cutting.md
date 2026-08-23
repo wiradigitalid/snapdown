@@ -82,6 +82,44 @@ Every timestamp is stored and transmitted in UTC as RFC 3339 with an explicit `Z
 only in what a UI renders for a person. A Bundle's composed-at in its Markdown is UTC, which is why
 the same Bundle read on the desktop and on the server says the same thing.
 
+### Colour, theme, and contrast
+
+**Applies to:** every surface that draws — `desktop-app` and `web-ui`.
+**Enforced by:** a lint rule refusing a colour literal outside the token stylesheet; an automated
+contrast assertion rendering every screen under both `prefers-color-scheme` values and checking every
+text element against its own background; a both-themes render test over every screen.
+
+Colour has one authority — `web/ui/src/styles/tokens.css` — and every colour is defined for both the
+Windows light and the Windows dark theme (AD-10, NFR-16, NFR-17). A component contains no colour
+literal. Meaning colours come in pairs, a background and the foreground proven against it, so the
+pair is checked once rather than at each use.
+
+Three token groups are **theme-invariant on purpose**, and each says so where it is defined:
+`--color-marker*`, the capture overlay's scrim and region ring, and the canvas transparency
+checkerboard. Each is drawn over the Reviewer's own screen content, or over an exported image that
+will be read on another machine under another theme. This machine's theme is the wrong reference for
+them, and the exception is documented so a later pass does not "fix" the inconsistency.
+
+A theme change while the application is running is honoured without a restart.
+
+This agreement exists because the product shipped its opposite. `finding` and `bundle` paint light
+panels unconditionally; the shell paints text from theme-following tokens. Under the dark theme they
+meet and produce white on white. Neither component is wrong alone.
+
+### State a control does not yet know
+
+**Applies to:** `desktop-app`.
+**Enforced by:** a test asserting that a control bound to operating-system state renders its unknown
+state until the read resolves.
+
+A control reporting state owned by the operating system — the Windows startup registration is the only
+one today — renders a distinct *not yet known* state until that state has been read. It MUST NOT
+render an assumed value first (BR-108, FR-18). The shipped build assumes enabled and repaints to
+disabled, and the Reviewer watches the product change its mind about its own state.
+
+This is an agreement rather than one control's detail because the next such control will be written
+by someone who did not read `FR-18`.
+
 ### Identifiers
 
 **Applies to:** all.

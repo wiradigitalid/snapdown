@@ -152,3 +152,200 @@ waves:
       its embedded store and identical refusals, and the React reader. Three containers and two
       languages, carrying RISK-8, RISK-9, and RISK-10. Depends on W3 rather than W4 — the two r2
       waves are independent and MAY run in parallel.
+
+  - id: W6
+    title: The desktop experience rework
+    status: open
+    release: r3
+    prd: [capture-to-markdown]
+    fr: [FR-5, FR-18, FR-27, FR-28, FR-29]
+    components: [settings, finding, bundle]
+    size: L
+    depends_on: []
+    spec_folder: _bmad-output/specs/w6-desktop-experience/
+    opened: "2026-08-23"
+    why: |
+      r1 and r2 shipped every promised capability. The owner's first sustained use produced a list of
+      EXPERIENCE defects, not missing features: they could not name the application they had opened,
+      could not find the Editor, could not read a label against its background, and were asked for two
+      numbers nobody can judge. BG-7 and CAP-9 now carry that, and this wave is where it is paid for.
+      DEC-005 freezes `sharing` and `agent-access` for the duration; their surfaces stay reachable
+      (BR-120) and gain no behaviour.
+    epics:
+      - id: EP-foundation
+        component: settings
+        title: One colour authority, and a frame that owns itself
+        stories:
+          - id: W6-S1
+            title: Every colour through tokens, both themes, enforced by a lint rule
+            component: settings
+            satisfies: []
+            depends_on: []
+            touches: [editor-ui, settings-store]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              The biggest blocker, run alone first so its shape decisions land before anything fans
+              out. 23 hex literals live outside the token file; the meaning pairs, the sunken surface,
+              --space-0 and --radius-full do not exist yet. Every later story in this wave writes UI
+              and would otherwise each invent its own colours again.
+            tests:
+              - vitest::no_component_contains_a_colour_literal
+              - vitest::every_token_is_defined_in_both_themes
+              - vitest::every_text_element_meets_wcag_aa_in_the_light_theme
+              - vitest::every_text_element_meets_wcag_aa_in_the_dark_theme
+              - vitest::a_theme_change_while_running_repaints_every_surface
+              - vitest::a_theme_invariant_token_is_declared_as_one_in_the_token_file
+          - id: W6-S2
+            title: The editor shell — persona naming, the navigation rail, one executable
+            component: settings
+            satisfies: [UC-24, UC-25]
+            depends_on: [W6-S1]
+            touches: [editor-ui]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              LC-028. The frame is inline JSX in App.tsx today, owned by no component and tested by
+              nothing, which is how FR-27 and FR-28 came to be unmet with no document being wrong.
+            tests:
+              - cargo::the_build_produces_exactly_one_desktop_executable
+              - cargo::the_executable_name_the_tray_tooltip_and_the_window_title_share_one_source
+              - vitest::the_workspace_window_titles_itself_snapdown_editor
+              - vitest::the_window_title_does_not_change_between_surfaces
+              - vitest::every_primary_surface_is_reachable_from_every_other
+              - vitest::a_frozen_components_surface_is_still_listed
+              - vitest::the_active_surface_is_distinguished_by_more_than_colour
+              - vitest::the_rail_still_renders_when_a_surface_fails_to_load
+      - id: EP-settings-surface
+        component: settings
+        title: A Settings screen that fits, and controls that can be answered
+        stories:
+          - id: W6-S3
+            title: Two columns packed by content height, five groups visible at 1024x720
+            component: settings
+            satisfies: [UC-26]
+            depends_on: [W6-S2]
+            touches: [editor-ui, settings-store]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            tests:
+              - vitest::all_five_settings_groups_are_visible_at_the_minimum_window_size
+              - vitest::no_group_is_stretched_to_match_a_neighbours_height
+              - vitest::the_agent_access_group_is_present_and_inert
+          - id: W6-S4
+            title: The Quality Budget as a named intent, with Auto deriving per capture
+            component: settings
+            satisfies: [UC-13]
+            depends_on: [W6-S3]
+            touches: [settings-store, image-encoding, local-db]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              DEC-004. Carries the migration adding quality_budget.named, and the three columns
+              NFR-18 needs on `finding`. SCN-03's one assertion is the only one a constant cannot pass.
+            tests:
+              - cargo::auto_resolves_a_different_pair_for_a_small_region_than_for_a_full_screen
+              - cargo::auto_resolves_a_higher_encoder_quality_when_no_downscale_applies
+              - cargo::every_stored_finding_carries_the_pair_that_was_applied_to_it
+              - cargo::the_named_state_and_its_resolved_pair_are_written_together
+              - cargo::an_advanced_value_outside_its_range_is_refused_and_does_not_enter_custom
+              - vitest::editing_an_advanced_value_moves_the_control_to_custom_visibly
+              - vitest::the_readout_names_the_budget_that_produced_the_latest_finding
+              - vitest::a_reviewer_who_never_opens_advanced_never_sees_a_raw_number
+          - id: W6-S5
+            title: Run at Windows startup — on by first-run default, and never assumed
+            component: settings
+            satisfies: [UC-16]
+            depends_on: [W6-S4]
+            touches: [settings-store]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              SCN-02's five runs. Needs the startup.registered key so that "nothing was ever
+              configured" and "the Reviewer turned it off" stop being indistinguishable.
+            tests:
+              - cargo::a_first_run_with_nothing_configured_registers_at_startup
+              - cargo::a_run_after_the_reviewer_disabled_it_does_not_re_register
+              - cargo::a_registration_removed_outside_snapdown_shows_off_and_is_not_restored
+              - vitest::the_startup_toggle_renders_unknown_until_the_os_has_answered
+              - vitest::the_startup_toggle_never_renders_a_definite_state_before_the_read_resolves
+          - id: W6-S6
+            title: Hotkey rows — chip states, honest conflicts, and readable badges
+            component: settings
+            satisfies: [UC-15]
+            depends_on: [W6-S5]
+            touches: [settings-store, capture-pipeline, editor-ui]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            tests:
+              - vitest::a_listening_chip_stops_listening_when_focus_leaves_it
+              - vitest::a_snapdown_internal_conflict_is_worded_differently_from_an_os_conflict
+              - vitest::a_cleared_hotkey_reads_disabled_rather_than_empty
+              - vitest::a_startup_registration_failure_carries_a_badge_before_the_reviewer_acts
+              - vitest::the_active_and_disabled_badges_carry_a_word_not_only_a_colour
+      - id: EP-library-surfaces
+        component: finding
+        title: Findings and Bundles as real workspaces
+        stories:
+          - id: W6-S7
+            title: Findings — capture rail, canvas, note pane, and every state
+            component: finding
+            satisfies: [UC-3, UC-4, UC-5, UC-6]
+            depends_on: [W6-S6]
+            touches: [editor-ui, marker-canvas]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              The surface the owner saw as white-on-white. Also lands the keyboard path to every
+              Marker through the note pane, which is what makes the accessibility floor real.
+            tests:
+              - vitest::findings_renders_correctly_in_both_windows_themes
+              - vitest::the_empty_state_teaches_the_bound_capture_combination
+              - vitest::nothing_selected_is_visually_distinct_from_empty
+              - vitest::every_marker_is_reachable_and_movable_from_the_keyboard
+              - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
+              - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
+              - vitest::panels_take_the_height_available_rather_than_a_fixed_height
+          - id: W6-S8
+            title: Bundles — preview as the centre, and a read-only region not a disabled input
+            component: bundle
+            satisfies: [UC-10, UC-11]
+            depends_on: [W6-S7]
+            touches: [editor-ui, bundle-render]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            tests:
+              - vitest::bundles_renders_correctly_in_both_windows_themes
+              - vitest::the_preview_is_a_read_only_region_and_not_a_disabled_input
+              - vitest::the_empty_state_offers_no_button_that_only_navigates_away
+              - vitest::copy_markdown_announces_its_result
+              - vitest::an_item_whose_image_copy_is_missing_is_flagged_and_the_bundle_still_opens
+      - id: EP-defects
+        component: bundle
+        title: BUG-1 and the swallowed file errors
+        stories:
+          - id: W6-S9
+            title: A Bundle survives the deletion of a Finding it holds
+            component: bundle
+            satisfies: []
+            depends_on: [W6-S4]
+            touches: [local-db]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              BUG-1. bundle_item.finding_id carries ON DELETE CASCADE and foreign_keys is ON, so
+              deleting a Finding silently removes the Bundle's record of that item while its Markdown
+              and image copy survive. FR-13's third consequence has been active since G2 and says the
+              opposite. Migration; rows already lost are not recoverable.
+            tests:
+              - cargo::deleting_a_finding_leaves_its_bundle_item_in_place
+              - cargo::deleting_a_finding_leaves_the_bundle_markdown_byte_identical
+              - cargo::deleting_a_finding_leaves_the_bundles_own_image_copy_in_the_vault
+              - cargo::a_bundle_whose_source_finding_is_gone_still_copies_the_same_bytes
+              - cargo::deleting_a_bundle_still_cascades_to_its_items
+          - id: W6-S10
+            title: The Vault move reports a file it could not remove
+            component: settings
+            satisfies: []
+            depends_on: [W6-S6]
+            touches: [vault-fs, settings-store]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              vault_migration.rs swallows both fs::remove_file results (:141 success path, :180
+              rollback). A source file that will not delete leaves an unreported duplicate of an image
+              that may hold personal data, and the move still reports success.
+            tests:
+              - cargo::vault_move_reports_a_source_file_it_could_not_remove
+              - cargo::vault_move_reports_a_destination_copy_it_could_not_clean_up
+              - cargo::vault_move_failing_at_file_n_leaves_every_source_file_in_place

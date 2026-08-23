@@ -26,6 +26,11 @@ mode: outline
 # GATES ALREADY PASSED. Written only by the repo owner's own decision at their own gate, and MUST NOT
 # be filled by an agent to clear its own way forward.
 gates_passed: [G1, G2, G3, G4]
+# G1 through G4 RE-RUN on 2026-08-23 at greater depth, on the owner's instruction after their first
+# sustained use of the shipped r1/r2 product produced a list of experience defects rather than missing
+# features. G1 gained BG-7; G2 gained CAP-9, FR-27..FR-29, NFR-16..NFR-18 and a rewritten FR-5; the UX
+# gate ran for the first time in this product's life; G3 was reopened over the delta; G4 ran at `deep`
+# for `finding`, `bundle`, and — for the first time ever — `settings`.
 # Filled 2026-08-22. The repo owner authorised, in writing and in advance, the agent to write and
 # approve G1 through G5 in one pass without further questions. That authorisation is what stands in
 # for the owner's presence at each gate, and it is recorded here rather than assumed — the rule this
