@@ -17,10 +17,10 @@ supports and what it does not.
 
 **A green validator on these six would mean somebody guessed.** These lines stay.
 
-## `V18` ×9 — nine W6 stories with no story file
+## `V18` ×8 — eight W6 stories with no story file
 
 **Temporary, and expected.** A story file is written by `wdi-build` Phase 3 Step 1, one story at a
-time. `W6-S1`'s exists; the other nine do not yet. Each line leaves this file as its story is planned,
+time. `W6-S1` and `W6-S2` exist; the other eight do not yet. Each line leaves this file as its story is planned,
 and the last one leaves when the wave closes.
 
 **If a line is still here when W6 closes, that is a real finding** — it means a story was shipped
