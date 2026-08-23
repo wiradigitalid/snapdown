@@ -101,8 +101,8 @@ impl OrphanSweeper {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sqlite::SqliteFindingStore;
     use snapdown_core::domain::finding::{Finding, Note};
-    use snapdown_store::sqlite::SqliteFindingStore;
     use tempfile::TempDir;
 
     #[test]
