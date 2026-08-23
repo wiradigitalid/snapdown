@@ -104,6 +104,7 @@ fn sha256_digest(data: &[u8]) -> [u8; 32] {
     }
     msg.extend_from_slice(&bit_len.to_be_bytes());
 
+    #[allow(unknown_lints, clippy::chunks_exact_to_as_chunks)]
     for chunk in msg.chunks_exact(64) {
         let mut w = [0u32; 64];
         for i in 0..16 {
