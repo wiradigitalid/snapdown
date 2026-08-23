@@ -3,7 +3,7 @@ id: W6-S4
 title: 'W6-S4: The Quality Budget as a named intent, with Auto deriving per capture'
 type: 'feature'
 wave: W6
-status: ready-for-dev
+status: done
 created: '2026-08-24'
 dependencies:
   - W6-S1

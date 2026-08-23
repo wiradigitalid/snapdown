@@ -114,9 +114,10 @@ const mockDefaultHotkeys = {
   startup_warnings: [],
 };
 
-const mockSettings = {
+const mockSettings: import('../types/settings').Settings = {
   vault_path: 'C:/Users/test/Vault',
   quality_budget: {
+    named: 'balanced',
     max_long_edge: 1600,
     encoder_quality: 75,
   },

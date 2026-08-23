@@ -17,15 +17,17 @@ import {
   setVaultPath as apiSetVaultPath,
 } from './services/settings';
 import { triggerOverlay } from './services/capture';
-import { HotkeyAction, HotkeySettingsDto, Settings } from './types/settings';
+import { HotkeyAction, HotkeySettingsDto, NamedBudget, ResolvedPair, Settings } from './types/settings';
 
 export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'settings' }) => {
   const [activeTab, setActiveTab] = useState<NavigationTab>(initialTab);
   const [settings, setSettings] = useState<Settings>({
     vault_path: '',
     quality_budget: {
+      named: 'auto',
+      prose: 'Sizes each capture to what it is. Most captures land near 120 KB.',
       max_long_edge: 1600,
-      encoder_quality: 75,
+      encoder_quality: 82,
     },
     latest_finding_size: null,
   });
@@ -91,8 +93,8 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
     setToastMessage('Vault folder location updated successfully');
   };
 
-  const handleSaveQualityBudget = async (maxLongEdge: number, encoderQuality: number) => {
-    const updatedBudget = await apiSetQualityBudget(maxLongEdge, encoderQuality);
+  const handleSaveQualityBudget = async (budget: NamedBudget, advanced?: ResolvedPair | null) => {
+    const updatedBudget = await apiSetQualityBudget(budget, advanced);
     setSettings((prev) => ({ ...prev, quality_budget: updatedBudget }));
     setToastMessage('Quality Budget saved successfully');
   };

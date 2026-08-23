@@ -5,7 +5,7 @@ import { Root } from '../main';
 vi.mock('../services/settings', () => ({
   getSettings: vi.fn().mockResolvedValue({
     vault_path: 'C:/Users/test/Vault',
-    quality_budget: { max_long_edge: 1600, encoder_quality: 75 },
+    quality_budget: { named: 'balanced', max_long_edge: 1600, encoder_quality: 75 },
     latest_finding_size: null,
   }),
   getHotkeys: vi.fn().mockResolvedValue({ hotkeys: [], startup_warnings: [] }),

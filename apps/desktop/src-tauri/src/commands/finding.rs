@@ -175,6 +175,9 @@ mod tests {
             captured_at: "2026-08-23T10:00:00Z".to_string(),
             source_monitor: "DISPLAY1".to_string(),
             region: "0,0,800,600".to_string(),
+            resolved_long_edge: Some(1280),
+            resolved_encoder_quality: Some(92),
+            budget_name: Some("Auto".to_string()),
         };
         let note = Note {
             id: "note-1".to_string(),

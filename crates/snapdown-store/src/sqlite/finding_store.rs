@@ -104,11 +104,14 @@ impl FindingStore for SqliteFindingStore {
             .transaction()
             .map_err(|e| CoreError::Validation(e.to_string()))?;
 
-        // Insert finding
+        // Insert finding with derivation tracking columns (NFR-18, BR-105)
         tx.execute(
             r#"
-            INSERT INTO finding (id, image_path, image_width, image_height, captured_at, source_monitor, region)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7);
+            INSERT INTO finding (
+                id, image_path, image_width, image_height, captured_at,
+                source_monitor, region, resolved_long_edge, resolved_encoder_quality, budget_name
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);
             "#,
             rusqlite::params![
                 finding.id,
@@ -118,6 +121,9 @@ impl FindingStore for SqliteFindingStore {
                 finding.captured_at,
                 finding.source_monitor,
                 finding.region,
+                finding.resolved_long_edge,
+                finding.resolved_encoder_quality,
+                finding.budget_name,
             ],
         )
         .map_err(|e| CoreError::Validation(e.to_string()))?;
@@ -166,7 +172,8 @@ impl FindingStore for SqliteFindingStore {
         let mut finding_stmt = conn
             .prepare(
                 r#"
-                SELECT id, image_path, image_width, image_height, captured_at, source_monitor, region
+                SELECT id, image_path, image_width, image_height, captured_at,
+                       source_monitor, region, resolved_long_edge, resolved_encoder_quality, budget_name
                 FROM finding WHERE id = ?1;
                 "#,
             )
@@ -182,6 +189,9 @@ impl FindingStore for SqliteFindingStore {
                     captured_at: row.get(4)?,
                     source_monitor: row.get(5)?,
                     region: row.get(6)?,
+                    resolved_long_edge: row.get(7)?,
+                    resolved_encoder_quality: row.get(8)?,
+                    budget_name: row.get(9)?,
                 })
             })
             .optional()
@@ -263,7 +273,8 @@ impl FindingStore for SqliteFindingStore {
         let mut stmt = conn
             .prepare(
                 r#"
-                SELECT id, image_path, image_width, image_height, captured_at, source_monitor, region
+                SELECT id, image_path, image_width, image_height, captured_at,
+                       source_monitor, region, resolved_long_edge, resolved_encoder_quality, budget_name
                 FROM finding
                 ORDER BY captured_at DESC;
                 "#,
@@ -280,6 +291,9 @@ impl FindingStore for SqliteFindingStore {
                     captured_at: row.get(4)?,
                     source_monitor: row.get(5)?,
                     region: row.get(6)?,
+                    resolved_long_edge: row.get(7)?,
+                    resolved_encoder_quality: row.get(8)?,
+                    budget_name: row.get(9)?,
                 })
             })
             .map_err(|e| CoreError::Validation(e.to_string()))?;

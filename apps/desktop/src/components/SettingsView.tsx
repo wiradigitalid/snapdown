@@ -3,7 +3,7 @@ import { GeneralSection } from './GeneralSection';
 import { VaultSection } from './VaultSection';
 import { QualityBudgetSection } from './QualityBudgetSection';
 import { HotkeySection } from './HotkeySection';
-import { HotkeyAction, HotkeySettingsDto, Settings } from '../types/settings';
+import { HotkeyAction, HotkeySettingsDto, NamedBudget, ResolvedPair, Settings } from '../types/settings';
 
 export interface SettingsViewProps {
   settings: Settings;
@@ -11,7 +11,7 @@ export interface SettingsViewProps {
   runAtStartup: boolean;
   onSaveVaultPath: (newPath: string, migrate: boolean) => Promise<void>;
   onOpenExplorer: () => Promise<void>;
-  onSaveQualityBudget: (maxLongEdge: number, encoderQuality: number) => Promise<void>;
+  onSaveQualityBudget: (budget: NamedBudget, advanced?: ResolvedPair | null) => Promise<void>;
   onSaveHotkey: (action: HotkeyAction, shortcut: string) => Promise<void>;
   onClearHotkey: (action: HotkeyAction) => Promise<void>;
   onToggleStartup: (enabled: boolean) => Promise<void>;
@@ -86,6 +86,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <QualityBudgetSection
           qualityBudget={settings.quality_budget}
           latestFindingSize={settings.latest_finding_size}
+          latestFinding={settings.latest_finding}
           onSaveQualityBudget={onSaveQualityBudget}
           disabled={disabled}
         />

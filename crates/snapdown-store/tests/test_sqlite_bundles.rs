@@ -6,11 +6,11 @@ use snapdown_store::vault::VaultBlobStore;
 use tempfile::{NamedTempFile, TempDir};
 
 #[test]
-fn migrations_v6_apply_cleanly_and_create_bundle_tables() {
+fn migrations_apply_cleanly_and_create_bundle_tables() {
     let temp = NamedTempFile::new().unwrap();
     let bundle_store = SqliteBundleStore::open(temp.path()).expect("open bundle store");
 
-    assert_eq!(bundle_store.get_schema_version().unwrap(), 6);
+    assert_eq!(bundle_store.get_schema_version().unwrap(), 7);
 }
 
 #[test]
@@ -29,6 +29,9 @@ fn bundle_store_crud_and_cascade_operations() {
         captured_at: "2026-08-23T10:00:00Z".to_string(),
         source_monitor: "DISPLAY1".to_string(),
         region: "0,0,1920,1080".to_string(),
+        resolved_long_edge: None,
+        resolved_encoder_quality: None,
+        budget_name: None,
     };
     let note = Note {
         id: "note-1".to_string(),
@@ -45,10 +48,7 @@ fn bundle_store_crud_and_cascade_operations() {
     let bundle = Bundle::new(
         bundle_id.to_string(),
         "Wave 3 Test Bundle".to_string(),
-        "# Summary Review
-
-Finding 1 description"
-            .to_string(),
+        "# Summary Review\n\nFinding 1 description".to_string(),
         "bundles/w3_test.md".to_string(),
         "2026-08-23T12:00:00Z".to_string(),
     )
@@ -114,6 +114,9 @@ fn deleting_a_finding_leaves_its_bundle_item_in_place() {
         captured_at: "2026-08-23T10:00:00Z".to_string(),
         source_monitor: "DISPLAY1".to_string(),
         region: "0,0,1920,1080".to_string(),
+        resolved_long_edge: None,
+        resolved_encoder_quality: None,
+        budget_name: None,
     };
     let note1 = Note {
         id: "note-1".to_string(),
@@ -133,6 +136,9 @@ fn deleting_a_finding_leaves_its_bundle_item_in_place() {
         captured_at: "2026-08-23T10:05:00Z".to_string(),
         source_monitor: "DISPLAY1".to_string(),
         region: "0,0,1280,720".to_string(),
+        resolved_long_edge: None,
+        resolved_encoder_quality: None,
+        budget_name: None,
     };
     let note2 = Note {
         id: "note-2".to_string(),
@@ -148,11 +154,7 @@ fn deleting_a_finding_leaves_its_bundle_item_in_place() {
     let bundle = Bundle::new(
         bundle_id.to_string(),
         "Multi-Item Review Bundle".to_string(),
-        "# Summary
-
-- Finding 1
-- Finding 2"
-            .to_string(),
+        "# Summary\n\n- Finding 1\n- Finding 2".to_string(),
         "bundles/review_b1.md".to_string(),
         "2026-08-23T12:00:00Z".to_string(),
     )
@@ -221,6 +223,9 @@ fn deleting_a_finding_leaves_the_bundle_markdown_byte_identical() {
         captured_at: "2026-08-23T10:00:00Z".to_string(),
         source_monitor: "DISPLAY1".to_string(),
         region: "0,0,1920,1080".to_string(),
+        resolved_long_edge: None,
+        resolved_encoder_quality: None,
+        budget_name: None,
     };
     let note = Note {
         id: "note-golden".to_string(),
@@ -233,13 +238,7 @@ fn deleting_a_finding_leaves_the_bundle_markdown_byte_identical() {
         .expect("create finding");
 
     let bundle_id = "018f2345-6789-7abc-8def-0123456789bc";
-    let original_markdown = "# Executive Report
-
-## Finding 1
-Golden Note Body
-
-![Finding 1](bundles/018f2345-6789-7abc-8def-0123456789bc/finding_1_burned.webp)
-";
+    let original_markdown = "# Executive Report\n\n## Finding 1\nGolden Note Body\n\n![Finding 1](bundles/018f2345-6789-7abc-8def-0123456789bc/finding_1_burned.webp)\n";
 
     let bundle = Bundle::new(
         bundle_id.to_string(),
@@ -310,6 +309,9 @@ fn deleting_a_finding_leaves_the_bundles_own_image_copy_in_the_vault() {
         captured_at: "2026-08-23T10:00:00Z".into(),
         source_monitor: "DISPLAY1".into(),
         region: "0,0,800,600".into(),
+        resolved_long_edge: None,
+        resolved_encoder_quality: None,
+        budget_name: None,
     };
     let note = Note {
         id: "n-ad".into(),

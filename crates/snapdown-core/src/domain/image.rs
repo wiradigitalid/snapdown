@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::domain::setting::QualityBudget;
+use crate::domain::setting::{QualityBudget, ResolvedPair};
 use crate::error::CoreError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,16 +23,16 @@ impl ImageDimensions {
         self.width.max(self.height)
     }
 
-    /// Computes downscaled dimensions according to a QualityBudget.
+    /// Computes downscaled dimensions according to an explicit maximum long edge.
     /// BR-40: An image already within the Quality Budget's long edge is not upscaled.
     /// BR-41: Reduction preserves aspect ratio. Never stretched, never cropped.
-    pub fn compute_reduced_dimensions(&self, budget: &QualityBudget) -> Self {
+    pub fn compute_reduced_dimensions_with_edge(&self, max_long_edge: u32) -> Self {
         let current_long_edge = self.long_edge();
-        if current_long_edge <= budget.max_long_edge {
+        if current_long_edge <= max_long_edge {
             return self.clone();
         }
 
-        let scale = (budget.max_long_edge as f64) / (current_long_edge as f64);
+        let scale = (max_long_edge as f64) / (current_long_edge as f64);
         let new_w = ((self.width as f64) * scale).round().max(1.0) as u32;
         let new_h = ((self.height as f64) * scale).round().max(1.0) as u32;
 
@@ -40,6 +40,17 @@ impl ImageDimensions {
             width: new_w,
             height: new_h,
         }
+    }
+
+    /// Computes downscaled dimensions according to a ResolvedPair.
+    pub fn compute_reduced_dimensions_for_pair(&self, pair: &ResolvedPair) -> Self {
+        self.compute_reduced_dimensions_with_edge(pair.max_long_edge)
+    }
+
+    /// Computes downscaled dimensions according to a QualityBudget.
+    pub fn compute_reduced_dimensions(&self, budget: &QualityBudget) -> Self {
+        let resolved = budget.resolve(self.long_edge());
+        self.compute_reduced_dimensions_for_pair(&resolved)
     }
 
     /// Computes thumbnail dimensions fitting within `max_thumb_edge` while preserving aspect ratio.
@@ -63,6 +74,7 @@ impl ImageDimensions {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::setting::NamedBudget;
 
     #[test]
     fn dimensions_validation_and_long_edge() {
@@ -77,8 +89,8 @@ mod tests {
     }
 
     #[test]
-    fn quality_budget_downscaling_and_aspect_ratio_preservation() {
-        let budget = QualityBudget::new(1600, 75).unwrap();
+    fn quality_budget_downscaling_and_aspect_ratio_preservation_for_balanced_preset() {
+        let budget = QualityBudget::new(NamedBudget::Balanced, None);
 
         // Already smaller -> no upscale (BR-40)
         let small = ImageDimensions::new(800, 600).unwrap();
@@ -86,11 +98,28 @@ mod tests {
         assert_eq!(reduced_small.width, 800);
         assert_eq!(reduced_small.height, 600);
 
-        // Larger 4K -> downscaled to 1600 long edge (BR-41)
+        // Larger 4K -> downscaled to Balanced preset (1600 long edge) (BR-41)
         let large_4k = ImageDimensions::new(3840, 2160).unwrap();
         let reduced_4k = large_4k.compute_reduced_dimensions(&budget);
         assert_eq!(reduced_4k.width, 1600);
         assert_eq!(reduced_4k.height, 900); // 1600 * (2160 / 3840) = 900
+    }
+
+    #[test]
+    fn quality_budget_downscaling_for_sharp_and_small_presets() {
+        let large_4k = ImageDimensions::new(3840, 2160).unwrap();
+
+        // Sharp preset (2560 px long edge)
+        let sharp = QualityBudget::new(NamedBudget::Sharp, None);
+        let reduced_sharp = large_4k.compute_reduced_dimensions(&sharp);
+        assert_eq!(reduced_sharp.width, 2560);
+        assert_eq!(reduced_sharp.height, 1440);
+
+        // Small preset (1280 px long edge)
+        let small = QualityBudget::new(NamedBudget::Small, None);
+        let reduced_small = large_4k.compute_reduced_dimensions(&small);
+        assert_eq!(reduced_small.width, 1280);
+        assert_eq!(reduced_small.height, 720);
     }
 
     #[test]

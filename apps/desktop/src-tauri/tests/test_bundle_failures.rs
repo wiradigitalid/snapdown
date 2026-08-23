@@ -392,6 +392,9 @@ fn a_bundle_whose_source_finding_is_gone_still_copies_the_same_bytes() {
         captured_at: "2026-08-23T10:00:00Z".into(),
         source_monitor: "DISPLAY1".into(),
         region: "0,0,1920,1080".into(),
+        resolved_long_edge: None,
+        resolved_encoder_quality: None,
+        budget_name: None,
     };
     let note = Note {
         id: "note-cb".into(),

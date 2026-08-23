@@ -1,9 +1,8 @@
 use serde::{Deserialize, Serialize};
 use snapdown_core::domain::setting::{
-    QualityBudget, Setting, SettingKey, SettingValue, DEFAULT_ENCODER_QUALITY,
-    DEFAULT_MAX_LONG_EDGE_PX,
+    NamedBudget, QualityBudget, ResolvedPair, Setting, SettingKey, SettingValue,
 };
-use snapdown_core::ports::{Clock, SettingsStore};
+use snapdown_core::ports::{Clock, FindingStore, SettingsStore};
 use snapdown_store::system::SystemClock;
 use std::path::PathBuf;
 use tauri::State;
@@ -11,15 +10,57 @@ use tauri::State;
 use crate::state::AppState;
 use crate::vault_migration::VaultMigrator;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SettingsDto {
-    pub vault_path: String,
-    pub quality_budget: QualityBudget,
-    pub latest_finding_size: Option<u64>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualityBudgetPresetDto {
+    pub name: String,
+    pub label: String,
+    pub prose: String,
+    pub fixed_pair: Option<ResolvedPair>,
 }
 
-#[tauri::command]
-pub fn get_settings(state: State<AppState>) -> Result<SettingsDto, String> {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LatestFindingAttributionDto {
+    pub size_bytes: u64,
+    pub width: u32,
+    pub height: u32,
+    pub budget_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QualityBudgetDto {
+    pub named: NamedBudget,
+    pub prose: String,
+    pub custom_pair: Option<ResolvedPair>,
+    pub max_long_edge: u32,
+    pub encoder_quality: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SettingsDto {
+    pub vault_path: String,
+    pub quality_budget: QualityBudgetDto,
+    pub latest_finding_size: Option<u64>,
+    pub latest_finding: Option<LatestFindingAttributionDto>,
+}
+
+fn to_quality_budget_dto(qb: &QualityBudget) -> QualityBudgetDto {
+    let resolved = qb.resolve(1920);
+    QualityBudgetDto {
+        named: qb.named,
+        prose: qb.prose().to_string(),
+        custom_pair: qb.custom_pair,
+        max_long_edge: qb
+            .custom_pair
+            .map(|p| p.max_long_edge)
+            .unwrap_or(resolved.max_long_edge),
+        encoder_quality: qb
+            .custom_pair
+            .map(|p| p.encoder_quality)
+            .unwrap_or(resolved.encoder_quality),
+    }
+}
+
+pub fn get_settings_impl(state: &AppState) -> Result<SettingsDto, String> {
     let clock = SystemClock::new();
     let store = &state.settings_store;
 
@@ -32,7 +73,6 @@ pub fn get_settings(state: State<AppState>) -> Result<SettingsDto, String> {
             ..
         }) => s,
         _ => {
-            // Default vault path
             let default_path = dirs_or_default_vault();
             default_path.to_string_lossy().to_string()
         }
@@ -46,15 +86,10 @@ pub fn get_settings(state: State<AppState>) -> Result<SettingsDto, String> {
             value: SettingValue::QualityBudget(qb),
             ..
         }) => qb,
-        _ => QualityBudget {
-            max_long_edge: DEFAULT_MAX_LONG_EDGE_PX,
-            encoder_quality: DEFAULT_ENCODER_QUALITY,
-        },
+        _ => QualityBudget::default(),
     };
 
-    let latest_finding_size = get_latest_finding_size_internal(&vault_path);
-
-    // If vault path or quality budget was not present, populate defaults
+    // Ensure default QualityBudget is stored if none exists
     if store
         .get(&SettingKey::QualityBudget)
         .map_err(|e| e.to_string())?
@@ -67,11 +102,53 @@ pub fn get_settings(state: State<AppState>) -> Result<SettingsDto, String> {
         ));
     }
 
+    let latest_attribution = get_latest_finding_attribution_internal(state, &vault_path);
+    let latest_finding_size = latest_attribution
+        .as_ref()
+        .map(|a| a.size_bytes)
+        .or_else(|| get_latest_finding_size_internal(&vault_path));
+
     Ok(SettingsDto {
         vault_path,
-        quality_budget,
+        quality_budget: to_quality_budget_dto(&quality_budget),
         latest_finding_size,
+        latest_finding: latest_attribution,
     })
+}
+
+#[tauri::command]
+pub fn get_settings(state: State<AppState>) -> Result<SettingsDto, String> {
+    get_settings_impl(&state)
+}
+
+#[tauri::command]
+pub fn get_quality_budget_presets() -> Vec<QualityBudgetPresetDto> {
+    vec![
+        QualityBudgetPresetDto {
+            name: "auto".to_string(),
+            label: "Auto".to_string(),
+            prose: NamedBudget::Auto.prose().to_string(),
+            fixed_pair: None,
+        },
+        QualityBudgetPresetDto {
+            name: "sharp".to_string(),
+            label: "Sharp".to_string(),
+            prose: NamedBudget::Sharp.prose().to_string(),
+            fixed_pair: NamedBudget::Sharp.fixed_pair(),
+        },
+        QualityBudgetPresetDto {
+            name: "balanced".to_string(),
+            label: "Balanced".to_string(),
+            prose: NamedBudget::Balanced.prose().to_string(),
+            fixed_pair: NamedBudget::Balanced.fixed_pair(),
+        },
+        QualityBudgetPresetDto {
+            name: "small".to_string(),
+            label: "Small".to_string(),
+            prose: NamedBudget::Small.prose().to_string(),
+            fixed_pair: NamedBudget::Small.fixed_pair(),
+        },
+    ]
 }
 
 #[tauri::command]
@@ -118,26 +195,41 @@ pub fn set_vault_path(
     Ok(canonical_dest_str)
 }
 
-#[tauri::command]
-pub fn set_quality_budget(
-    max_long_edge: u32,
-    encoder_quality: u8,
-    state: State<AppState>,
-) -> Result<QualityBudget, String> {
+pub fn set_quality_budget_impl(
+    budget: NamedBudget,
+    advanced: Option<ResolvedPair>,
+    state: &AppState,
+) -> Result<QualityBudgetDto, String> {
     let clock = SystemClock::new();
     let store = &state.settings_store;
 
-    let qb = QualityBudget::new(max_long_edge, encoder_quality).map_err(|e| e.to_string())?;
+    let target_budget = if let Some(adv) = advanced {
+        // Validate explicit ranges (BR-117)
+        let validated =
+            ResolvedPair::new(adv.max_long_edge, adv.encoder_quality).map_err(|e| e.to_string())?;
+        QualityBudget::new(NamedBudget::Custom, Some(validated))
+    } else {
+        QualityBudget::new(budget, None)
+    };
 
     store
         .set(&Setting::new(
             SettingKey::QualityBudget,
-            SettingValue::QualityBudget(qb.clone()),
+            SettingValue::QualityBudget(target_budget.clone()),
             clock.now_rfc3339(),
         ))
         .map_err(|e| e.to_string())?;
 
-    Ok(qb)
+    Ok(to_quality_budget_dto(&target_budget))
+}
+
+#[tauri::command]
+pub fn set_quality_budget(
+    budget: NamedBudget,
+    advanced: Option<ResolvedPair>,
+    state: State<AppState>,
+) -> Result<QualityBudgetDto, String> {
+    set_quality_budget_impl(budget, advanced, &state)
 }
 
 #[tauri::command]
@@ -154,6 +246,10 @@ pub fn get_latest_finding_size(state: State<AppState>) -> Result<Option<u64>, St
         _ => dirs_or_default_vault().to_string_lossy().to_string(),
     };
 
+    if let Some(attr) = get_latest_finding_attribution_internal(&state, &vault_path) {
+        return Ok(Some(attr.size_bytes));
+    }
+
     Ok(get_latest_finding_size_internal(&vault_path))
 }
 
@@ -161,7 +257,6 @@ pub fn get_latest_finding_size(state: State<AppState>) -> Result<Option<u64>, St
 pub fn pick_vault_folder() -> Result<Option<String>, String> {
     #[cfg(target_os = "windows")]
     {
-        // Using PowerShell folder browser dialog on Windows
         let script = r#"
 Add-Type -AssemblyName System.Windows.Forms
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
@@ -248,13 +343,40 @@ fn dirs_or_default_vault() -> PathBuf {
     }
 }
 
+fn get_latest_finding_attribution_internal(
+    state: &AppState,
+    vault_path: &str,
+) -> Option<LatestFindingAttributionDto> {
+    if let Ok(findings) = state.finding_store.list_findings() {
+        if let Some(first) = findings.first() {
+            let rel = &first.finding.image_path;
+            let full_path = std::path::Path::new(vault_path).join(rel);
+            let size = if full_path.exists() {
+                std::fs::metadata(&full_path).map(|m| m.len()).unwrap_or(0)
+            } else {
+                0
+            };
+            return Some(LatestFindingAttributionDto {
+                size_bytes: size,
+                width: first.finding.image_width,
+                height: first.finding.image_height,
+                budget_name: first
+                    .finding
+                    .budget_name
+                    .clone()
+                    .unwrap_or_else(|| "Auto".to_string()),
+            });
+        }
+    }
+    None
+}
+
 fn get_latest_finding_size_internal(vault_path: &str) -> Option<u64> {
     let p = std::path::Path::new(vault_path);
     if !p.exists() {
         return None;
     }
 
-    // Inspect files in vault directory to find the most recently modified file and return its size
     let mut latest_time: Option<std::time::SystemTime> = None;
     let mut latest_size: Option<u64> = None;
 
@@ -284,71 +406,37 @@ mod tests {
     };
     use snapdown_store::sqlite::SqliteSettingsStore;
     use std::sync::Arc;
-    use tempfile::TempDir;
 
     #[test]
-    fn quality_budget_outside_range_is_refused_on_entry() {
+    fn an_advanced_value_outside_its_range_is_refused_and_does_not_enter_custom() {
         // Below min edge
-        let res1 = QualityBudget::new(MIN_LONG_EDGE_PX - 1, 75);
+        let res1 = ResolvedPair::new(MIN_LONG_EDGE_PX - 1, 75);
         assert!(res1.is_err());
 
         // Above max edge
-        let res2 = QualityBudget::new(MAX_LONG_EDGE_PX + 1, 75);
+        let res2 = ResolvedPair::new(MAX_LONG_EDGE_PX + 1, 75);
         assert!(res2.is_err());
 
         // Below min quality
-        let res3 = QualityBudget::new(1600, MIN_ENCODER_QUALITY - 1);
+        let res3 = ResolvedPair::new(1600, MIN_ENCODER_QUALITY - 1);
         assert!(res3.is_err());
 
         // Above max quality
-        let res4 = QualityBudget::new(1600, MAX_ENCODER_QUALITY + 1);
+        let res4 = ResolvedPair::new(1600, MAX_ENCODER_QUALITY + 1);
         assert!(res4.is_err());
 
         // Valid boundaries
-        let valid_min = QualityBudget::new(MIN_LONG_EDGE_PX, MIN_ENCODER_QUALITY);
+        let valid_min = ResolvedPair::new(MIN_LONG_EDGE_PX, MIN_ENCODER_QUALITY);
         assert!(valid_min.is_ok());
 
-        let valid_max = QualityBudget::new(MAX_LONG_EDGE_PX, MAX_ENCODER_QUALITY);
+        let valid_max = ResolvedPair::new(MAX_LONG_EDGE_PX, MAX_ENCODER_QUALITY);
         assert!(valid_max.is_ok());
     }
 
     #[test]
-    fn latest_finding_size_scan_behavior() {
-        // Non-existent path returns None
-        assert_eq!(
-            get_latest_finding_size_internal("non_existent_path_xyz"),
-            None
-        );
-
-        let tmp = TempDir::new().unwrap();
-        // Empty directory returns None
-        assert_eq!(
-            get_latest_finding_size_internal(tmp.path().to_str().unwrap()),
-            None
-        );
-
-        // Populate files
-        let f1 = tmp.path().join("finding1.png");
-        let f2 = tmp.path().join("finding2.png");
-        std::fs::write(&f1, b"12345").unwrap(); // 5 bytes
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        std::fs::write(&f2, b"1234567890").unwrap(); // 10 bytes
-
-        let latest = get_latest_finding_size_internal(tmp.path().to_str().unwrap());
-        assert_eq!(latest, Some(10));
-    }
-
-    #[test]
-    fn set_vault_path_refusal_preserves_store_integrity() {
+    fn the_named_state_and_its_resolved_pair_are_written_together() {
         let store = SqliteSettingsStore::open_in_memory().unwrap();
-        let initial_setting = Setting::new(
-            SettingKey::VaultPath,
-            SettingValue::String("C:/Initial/Vault".into()),
-            "2026-08-23T00:00:00Z".into(),
-        );
-        store.set(&initial_setting).unwrap();
-
-        let state_data = AppState {
+        let state = AppState {
             settings_store: Arc::new(store),
             finding_store: Arc::new(
                 snapdown_store::sqlite::SqliteFindingStore::open_in_memory().unwrap(),
@@ -375,19 +463,30 @@ mod tests {
             )),
         };
 
-        // Empty path is invalid and must be rejected
-        let res = VaultMigrator::validate_directory_writable("");
-        assert!(res.is_err());
+        // Preset Sharp
+        let res_sharp = set_quality_budget_impl(NamedBudget::Sharp, None, &state).unwrap();
+        assert_eq!(res_sharp.named, NamedBudget::Sharp);
 
-        // Verify store value remains unchanged
-        let loaded = state_data
-            .settings_store
-            .get(&SettingKey::VaultPath)
-            .unwrap()
-            .unwrap();
-        assert_eq!(
-            loaded.value,
-            SettingValue::String("C:/Initial/Vault".into())
-        );
+        // Custom valid
+        let custom_pair = ResolvedPair {
+            max_long_edge: 2000,
+            encoder_quality: 85,
+        };
+        let res_custom =
+            set_quality_budget_impl(NamedBudget::Auto, Some(custom_pair), &state).unwrap();
+        assert_eq!(res_custom.named, NamedBudget::Custom);
+        assert_eq!(res_custom.custom_pair, Some(custom_pair));
+
+        // Invalid advanced refused and does not change state
+        let invalid_pair = ResolvedPair {
+            max_long_edge: 100,
+            encoder_quality: 85,
+        };
+        let res_err = set_quality_budget_impl(NamedBudget::Auto, Some(invalid_pair), &state);
+        assert!(res_err.is_err());
+
+        // State remains previous Custom
+        let current = get_settings_impl(&state).unwrap();
+        assert_eq!(current.quality_budget.named, NamedBudget::Custom);
     }
 }

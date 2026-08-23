@@ -133,6 +133,16 @@ pub const MIGRATIONS: &[Migration] = &[
         ALTER TABLE bundle_item_v6 RENAME TO bundle_item;
     "#,
     },
+    Migration {
+        version: 7,
+        description:
+            "add quality budget derivation and resolution tracking columns to finding table",
+        sql: r#"
+        ALTER TABLE finding ADD COLUMN resolved_long_edge INTEGER;
+        ALTER TABLE finding ADD COLUMN resolved_encoder_quality INTEGER;
+        ALTER TABLE finding ADD COLUMN budget_name TEXT;
+    "#,
+    },
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> Result<(), StoreError> {
