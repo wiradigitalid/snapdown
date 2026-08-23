@@ -352,7 +352,21 @@ waves:
             why: |
               The surface the owner saw as white-on-white. Also lands the keyboard path to every
               Marker through the note pane, which is what makes the accessibility floor real.
+
+              **This story also carries BUG-5, which is critical.** The Editor never renders a
+              Finding's image at all: FindingsEditor.tsx shows metadata, a Note TextArea, and the
+              marker COUNT as text. MarkerLayer is exported and never mounted. So the screenshot the
+              Note describes is not on screen, Markers cannot be placed, and AD-1 — the product's
+              core invariant — has no user interface. BG-1 says a note is unambiguously attached to
+              the image it describes; the attachment lives in the database and is invisible.
+
+              W2-S5 is recorded `done` and built the components without wiring them in. This story
+              is where the composition finally happens, which is also why its test list gains the
+              first composition tests this product has.
             tests:
+              - vitest::the_findings_detail_pane_renders_the_findings_image
+              - vitest::the_marker_canvas_is_mounted_over_that_image
+              - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
               - vitest::findings_renders_correctly_in_both_windows_themes
               - vitest::the_empty_state_teaches_the_bound_capture_combination
               - vitest::nothing_selected_is_visually_distinct_from_empty

@@ -126,7 +126,16 @@
     320px with the Marker list beneath the Note. Every state from
     .how/finding/01-ux/DESIGN.md — empty, loading, nothing-selected, populated, image-missing, error.
   invoke_dev_with: >-
-    This is the surface the owner saw as white-on-white: it paints #ffffff and #f8fafc panels
+    READ BUG-5 FIRST, it outranks the rest of this story. The Editor NEVER RENDERS A FINDING'S IMAGE.
+    FindingsEditor.tsx shows metadata, a Note TextArea, and `{f.markers.length} markers` as TEXT at
+    line 137. MarkerLayer is exported from web/ui/src/index.ts and mounted nowhere. So the screenshot
+    the Note describes is not on screen, Markers cannot be placed or moved or deleted, and AD-1 - the
+    product's core invariant - has no user interface at all. Render the image (Tauri convertFileSrc
+    over the Vault path) and mount MarkerLayer over it per .how/finding/01-ux/DESIGN.md. The tests
+    that matter are COMPOSITION tests - that the image element and the marker canvas are PRESENT in
+    the mounted surface - because MarkerLayer's own unit tests are already green and that is exactly
+    why nobody noticed. Then the rest.
+    This is also the surface the owner saw as white-on-white: it paints #ffffff and #f8fafc panels
     unconditionally inside a shell whose tokens follow prefers-color-scheme. Every panel comes from
     tokens after W6-S1; no literal survives. The Marker list in the note pane is NOT decoration — it is
     the keyboard path to every Marker, and without it the accessibility floor is unreachable because

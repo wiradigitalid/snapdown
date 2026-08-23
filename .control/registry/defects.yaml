@@ -133,3 +133,40 @@ defects:
       The deeper fix is the missing seam contract - .how/finding/02-contracts/ describes the Tauri
       command surface and says nothing about how a window chooses its root component.
     status: open
+  - id: BUG-5
+    title: The Editor never renders a Finding's image, and Markers cannot be placed at all
+    found: "2026-08-23"
+    found_by: narrow UI audit (static verification), confirmed by the coordinator against the source
+    component: finding
+    severity: critical
+    contradicts: [FR-6, FR-8, UC-4, UC-5, AD-1, BG-1]
+    evidence: |
+      grep for MarkerLayer across apps/desktop/src and web/ui/src, excluding its own file and tests:
+        web/ui/src/index.ts:9  export * from './components/MarkerLayer';
+      That is the ONLY hit. It is exported and never mounted.
+      apps/desktop/src/components/FindingsView.tsx renders <FindingsEditor /> from @snapdown/ui and
+      contains no img, no convertFileSrc, no marker anything.
+      web/ui/src/components/FindingsEditor.tsx renders metadata and a Note TextArea. Its only
+      reference to markers is line 137, which prints `{f.markers.length} markers` as TEXT.
+    impact: |
+      THE EDITOR NEVER SHOWS THE SCREENSHOT. A Finding's detail pane is metadata and a text box; the
+      image the Note describes is not on screen. Markers cannot be placed, moved, or deleted, because
+      there is no canvas to place them on.
+      FR-6 (see every Finding with its Note) is met only in the degenerate sense that the Note is
+      visible. FR-8 and UC-5 are entirely unmet. AD-1 - Markers and Note lines are one sequence - is
+      the product's core invariant and has NO user interface.
+      BG-1 is "a note is unambiguously attached to the image it describes". The attachment exists in
+      the database and is invisible to the Reviewer.
+    why_undetected: |
+      Identical in shape to BUG-4, and found in the same pass. MarkerLayer.tsx and MarkerBadge.tsx
+      have their own passing unit tests - marker_layer.test.tsx is green. The COMPONENTS are correct
+      and neither is mounted. W2-S5 "Numbered Marker placement, drag reposition, comment annotation
+      and delete" is recorded `status: done`, and it built the components without wiring them in.
+      Nothing tested the composition, only the parts.
+    fix: |
+      Render the Finding's image in the detail pane (Tauri convertFileSrc over the Vault path) and
+      mount MarkerLayer over it, per .how/finding/01-ux/DESIGN.md. Then a test that asserts the image
+      element and the marker canvas are PRESENT in the mounted Findings surface - a composition test,
+      which is the class of test this product has none of.
+    related: BUG-4
+    status: open

@@ -88,6 +88,17 @@ work** — no dim, no crosshair, no region drag, no note field, no Finding. `FR-
 `UC-2` are unmet in the shipped build. It is folded into `W6-S2`, because deciding which root
 component a window renders is a frame concern and `W6-S2` is where the frame gains an owner.
 
+**A fourth, found in the same pass and equally critical.** `BUG-5`: the Editor never renders a
+Finding's image. `FindingsEditor.tsx` shows metadata, a Note field, and the marker *count* as text;
+`MarkerLayer` is exported and mounted nowhere. Markers cannot be placed, and `AD-1` — Markers and
+Note lines are one sequence, the invariant the whole product is built on — has no user interface.
+Folded into `W6-S7`.
+
+`BUG-4` and `BUG-5` share one shape, and it is the finding underneath both: **every component in
+this product has passing unit tests, and nothing tests composition.** `CaptureOverlay` and
+`MarkerLayer` are both correct and both unmounted. A green suite proved the parts and never asked
+whether they were assembled.
+
 Who is affected: the Reviewer, on every screen. Nothing here is visible to an agent. `DEC-005` freezes
 `sharing` and `agent-access`; their surfaces stay reachable (`BR-120`) and gain no behaviour.
 
@@ -178,6 +189,8 @@ At the end of this wave, on a clean Windows 11 machine, in **both** themes, at 1
 7. Deleting a Finding that belongs to a Bundle leaves that Bundle's item list and Markdown intact.
 8. **Pressing the capture hotkey shows the capture overlay and produces a Finding.** It does not
    today (`BUG-4`), and no other item on this list matters if this one fails.
+9. **Opening that Finding shows its image, and clicking the image places a numbered Marker bound to
+   a numbered Note line.** It does not today (`BUG-5`). Items 8 and 9 together are the product.
 
 ## Assumptions
 
