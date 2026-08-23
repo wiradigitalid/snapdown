@@ -1,4 +1,4 @@
-use std::path::Path;
+﻿use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use rusqlite::{Connection, OpenFlags};
@@ -225,6 +225,13 @@ fn parse_setting_value(key: &SettingKey, raw: &str) -> Result<SettingValue, Core
                     "Invalid boolean for key: {}",
                     key.as_str()
                 )))
+            }
+        }
+        SettingKey::StartupRegistered => {
+            if let Ok(b) = raw.parse::<bool>() {
+                Ok(SettingValue::Boolean(b))
+            } else {
+                Ok(SettingValue::String(raw.to_string()))
             }
         }
         SettingKey::VaultPath

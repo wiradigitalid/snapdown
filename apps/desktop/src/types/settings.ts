@@ -1,4 +1,4 @@
-export type NamedBudget = 'auto' | 'sharp' | 'balanced' | 'small' | 'custom';
+﻿export type NamedBudget = 'auto' | 'sharp' | 'balanced' | 'small' | 'custom';
 
 export interface ResolvedPair {
   max_long_edge: number;
@@ -48,6 +48,9 @@ export interface HotkeySettingsDto {
   startup_warnings: string[];
 }
 
+export type StartupState = 'unknown' | 'on' | 'off' | 'unreadable';
+
 export interface StartupSettingsDto {
   enabled: boolean;
+  state?: 'on' | 'off' | 'unreadable';
 }
