@@ -3,7 +3,7 @@ id: W6-S7
 title: 'W6-S7: Findings — capture rail, canvas, note pane, and every state'
 type: 'feature'
 wave: W6
-status: ready-for-dev
+status: done
 created: '2026-08-23'
 dependencies:
   - W6-S1
@@ -196,4 +196,4 @@ The desktop application currently suffers from two severe defects and a broken f
 
 ## Spec Change Log
 
-<!-- Append-only. Populated during review loops. -->
+- 2026-08-23: Completed W6-S7 Step 2 BUILD. Implemented 3-column FindingsEditor layout, MarkerLayer image canvas overlay (BUG-5), OrphanReportView navigation entry point (BUG-6), SCN-04 asymmetry handling, and composition test suite.
