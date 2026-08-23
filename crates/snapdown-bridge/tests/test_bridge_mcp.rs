@@ -31,7 +31,10 @@ fn test_mcp_handshake_and_tool_dispatch() {
                 // Check auth
                 let mut auth_valid = false;
                 for h in req.headers() {
-                    if h.field.as_str().as_str().eq_ignore_ascii_case("authorization")
+                    if h.field
+                        .as_str()
+                        .as_str()
+                        .eq_ignore_ascii_case("authorization")
                         && h.value == "Bearer valid_key"
                     {
                         auth_valid = true;
