@@ -1,5 +1,6 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Toast } from '@snapdown/ui';
+import { EditorShell, NavigationTab } from './components/EditorShell';
 import { VaultSection } from './components/VaultSection';
 import { QualityBudgetSection } from './components/QualityBudgetSection';
 import { HotkeySection } from './components/HotkeySection';
@@ -18,9 +19,8 @@ import {
   setStartupStatus as apiSetStartupStatus,
   setVaultPath as apiSetVaultPath,
 } from './services/settings';
+import { triggerOverlay } from './services/capture';
 import { HotkeyAction, HotkeySettingsDto, Settings } from './types/settings';
-
-type NavigationTab = 'findings' | 'bundles' | 'agent-access' | 'settings';
 
 export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'settings' }) => {
   const [activeTab, setActiveTab] = useState<NavigationTab>(initialTab);
@@ -144,93 +144,21 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
     }
   };
 
+  const handleCaptureClick = async () => {
+    try {
+      await triggerOverlay();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('Failed to trigger capture overlay:', msg);
+    }
+  };
+
   return (
-    <div
-      data-testid="app-shell"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        width: '100vw',
-        backgroundColor: 'var(--color-bg)',
-        color: 'var(--color-text)',
-        fontFamily: 'var(--font-ui)',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Top App Header & Navigation */}
-      <header
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: 'var(--space-3) var(--space-5)',
-          backgroundColor: 'var(--color-surface)',
-          borderBottom: '1px solid var(--color-border)',
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <div
-            style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: 'var(--radius-sm)',
-              backgroundColor: 'var(--color-accent)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--color-accent-text)',
-              fontWeight: 700,
-              fontSize: 'var(--text-sm)',
-            }}
-          >
-            S
-          </div>
-          <span style={{ fontSize: 'var(--text-lg)', fontWeight: 700, letterSpacing: '-0.02em' }}>
-            Snapdown
-          </span>
-        </div>
-
-        {/* Tab Navigation */}
-        <nav style={{ display: 'flex', gap: 'var(--space-1)' }}>
-          {[
-            { id: 'findings' as NavigationTab, label: 'Findings' },
-            { id: 'bundles' as NavigationTab, label: 'Bundles' },
-            { id: 'agent-access' as NavigationTab, label: 'Agent Access' },
-            { id: 'settings' as NavigationTab, label: 'Settings' },
-          ].map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  padding: 'var(--space-2) var(--space-4)',
-                  borderRadius: 'var(--radius-md)',
-                  border: 'none',
-                  backgroundColor: isActive ? 'var(--color-accent)' : 'transparent',
-                  color: isActive ? 'var(--color-accent-text)' : 'var(--color-text-muted)',
-                  fontWeight: isActive ? 600 : 500,
-                  fontSize: 'var(--text-sm)',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-      </header>
-
-      {/* Main Content Area */}
-      <main
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: activeTab === 'settings' ? 'var(--space-5)' : 0,
-        }}
+    <div data-testid="app-shell" style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      <EditorShell
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onCaptureClick={handleCaptureClick}
       >
         {activeTab === 'findings' && <FindingsView />}
         {activeTab === 'bundles' && <BundleView />}
@@ -244,6 +172,7 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
             style={{
               maxWidth: '56rem',
               margin: '0 auto',
+              padding: 'var(--space-5)',
               display: 'flex',
               flexDirection: 'column',
               gap: 'var(--space-4)',
@@ -278,7 +207,7 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
             />
           </div>
         )}
-      </main>
+      </EditorShell>
 
       {toastMessage && (
         <Toast

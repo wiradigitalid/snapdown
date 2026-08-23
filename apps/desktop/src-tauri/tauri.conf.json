@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Snapdown",
+        "title": "Snapdown Editor",
         "label": "main",
         "url": "index.html",
         "width": 1024,
