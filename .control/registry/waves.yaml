@@ -138,7 +138,7 @@ waves:
 
   - id: W5
     title: Sharing complete — publish, the web service, the reader
-    status: open
+    status: closed
     release: r2
     prd: [agent-handoff]
     fr: [FR-23, FR-24, FR-25, FR-26]
