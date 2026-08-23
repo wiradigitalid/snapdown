@@ -20,6 +20,7 @@ pub mod startup;
 pub mod state;
 pub mod vault_migration;
 
+use commands::agent_access::{generate_access_key, get_access_key_status, revoke_access_key};
 use commands::bundle::{
     copy_bundle_to_clipboard, create_bundle, delete_bundle, get_bundle_detail, list_bundles,
 };
@@ -201,7 +202,10 @@ pub fn run() {
             list_bundles,
             get_bundle_detail,
             delete_bundle,
-            copy_bundle_to_clipboard
+            copy_bundle_to_clipboard,
+            get_access_key_status,
+            generate_access_key,
+            revoke_access_key
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

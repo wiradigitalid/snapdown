@@ -2,7 +2,7 @@
 id: W4-S4
 title: Settings Agent Access UI screen and Tauri IPC commands
 wave: W4
-status: planned
+status: done
 created: 2026-08-23
 dependencies: [W4-S1, W4-S2]
 files:

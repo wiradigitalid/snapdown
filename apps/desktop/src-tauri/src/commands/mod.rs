@@ -1,3 +1,4 @@
+pub mod agent_access;
 pub mod bundle;
 pub mod capture;
 pub mod finding;
