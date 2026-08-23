@@ -1,4 +1,4 @@
-use snapdown_core::domain::finding::FindingDetail;
+use snapdown_core::domain::finding::{FindingDetail, Marker};
 use snapdown_core::ports::FindingStore;
 use tauri::State;
 
@@ -40,6 +40,48 @@ pub fn delete_finding(id: String, state: State<AppState>) -> Result<(), String> 
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub fn add_marker(
+    finding_id: String,
+    marker_id: String,
+    x: f64,
+    y: f64,
+    comment: String,
+    state: State<AppState>,
+) -> Result<Marker, String> {
+    state
+        .finding_store
+        .add_marker(&finding_id, &marker_id, x, y, &comment)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn update_marker(
+    finding_id: String,
+    marker_id: String,
+    x: f64,
+    y: f64,
+    comment: String,
+    state: State<AppState>,
+) -> Result<Marker, String> {
+    state
+        .finding_store
+        .update_marker(&finding_id, &marker_id, x, y, &comment)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_marker(
+    finding_id: String,
+    marker_id: String,
+    state: State<AppState>,
+) -> Result<(), String> {
+    state
+        .finding_store
+        .delete_marker(&finding_id, &marker_id)
+        .map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -76,5 +118,22 @@ mod tests {
             .unwrap();
         let detail2 = store.get_finding(fid).unwrap().unwrap();
         assert_eq!(detail2.note.body, "Modified note");
+
+        // Test marker CRUD & renumbering
+        let m1 = store
+            .add_marker(fid, "m1", 0.2, 0.3, "First marker")
+            .unwrap();
+        assert_eq!(m1.ordinal, 1);
+
+        let m2 = store
+            .add_marker(fid, "m2", 0.4, 0.5, "Second marker")
+            .unwrap();
+        assert_eq!(m2.ordinal, 2);
+
+        store.delete_marker(fid, "m1").unwrap();
+        let detail3 = store.get_finding(fid).unwrap().unwrap();
+        assert_eq!(detail3.markers.len(), 1);
+        assert_eq!(detail3.markers[0].id, "m2");
+        assert_eq!(detail3.markers[0].ordinal, 1);
     }
 }

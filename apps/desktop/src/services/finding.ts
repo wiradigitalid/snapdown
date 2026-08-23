@@ -55,3 +55,45 @@ export const saveNote = async (
 export const deleteFinding = async (id: string): Promise<void> => {
   await invoke<void>('delete_finding', { id });
 };
+
+export const addMarker = async (
+  findingId: string,
+  markerId: string,
+  x: number,
+  y: number,
+  comment: string
+): Promise<MarkerDto> => {
+  return await invoke<MarkerDto>('add_marker', {
+    findingId,
+    markerId,
+    x,
+    y,
+    comment,
+  });
+};
+
+export const updateMarker = async (
+  findingId: string,
+  markerId: string,
+  x: number,
+  y: number,
+  comment: string
+): Promise<MarkerDto> => {
+  return await invoke<MarkerDto>('update_marker', {
+    findingId,
+    markerId,
+    x,
+    y,
+    comment,
+  });
+};
+
+export const deleteMarker = async (
+  findingId: string,
+  markerId: string
+): Promise<void> => {
+  await invoke<void>('delete_marker', {
+    findingId,
+    markerId,
+  });
+};
