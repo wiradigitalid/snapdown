@@ -1,9 +1,9 @@
 ---
 id: W6-S2
-title: 'W6-S2: The editor shell � persona naming, the navigation rail, one executable, and the overlay mount'
+title: 'W6-S2: The editor shell — persona naming, the navigation rail, one executable, and the overlay mount'
 type: 'feature'
 wave: W6
-status: done
+status: ready-for-dev
 created: '2026-08-23'
 dependencies:
   - W6-S1
@@ -38,7 +38,7 @@ deferred: []
 **Problem:** 
 The application currently has two critical defects and architectural gaps:
 1. **`BUG-4` (Critical):** `capture.rs:106` creates the overlay window pointing to `index.html?overlay=true`, but `apps/desktop/src/main.tsx` ignores `window.location.search` and unconditionally renders `<App />` (the Editor shell on Settings) instead of `<CaptureOverlay />`. Pressing the capture hotkey shows Settings rather than the capture scrim/crosshair/drag region, leaving `FR-1`, `FR-2`, `UC-1`, and `UC-2` entirely broken in the shipped desktop app.
-2. **Missing `LC-028 editor-shell` Frame Architecture:** The Editor window frame is currently inline JSX inside `App.tsx` with a top tab bar that wastes ~64px of vertical height (causing Settings to exceed 1024�720 viewport, violating `FR-29`), distinguishes active tabs by color fill alone (violating `NFR-16`), lacks a pinned Capture action in chrome (`FR-28`), sets window title to `Snapdown` rather than `Snapdown Editor` (`DEC-003`, `FR-27`), and lacks build assertions proving exactly one desktop binary is produced (`AD-11`, `BR-121`).
+2. **Missing `LC-028 editor-shell` Frame Architecture:** The Editor window frame is currently inline JSX inside `App.tsx` with a top tab bar that wastes ~64px of vertical height (causing Settings to exceed 1024×720 viewport, violating `FR-29`), distinguishes active tabs by color fill alone (violating `NFR-16`), lacks a pinned Capture action in chrome (`FR-28`), sets window title to `Snapdown` rather than `Snapdown Editor` (`DEC-003`, `FR-27`), and lacks build assertions proving exactly one desktop binary is produced (`AD-11`, `BR-121`).
 
 **Approach:**
 1. **Fix BUG-4 Root Routing:** In `apps/desktop/src/main.tsx` (or a dedicated Root component / router entry), parse `window.location.search` (checking `overlay=true`) and mount `<CaptureOverlay />` when active, or `<App />` (housing `<EditorShell />`) for standard window launches. Add automated unit tests verifying the root mount decision based on URL search query parameters.
@@ -133,4 +133,47 @@ The application currently has two critical defects and architectural gaps:
 - `npm --prefix apps/desktop run lint` -- expected: ESLint passes with zero warnings or errors
 - `npm --prefix apps/desktop run test` -- expected: All Vitest suites pass (including mount.test.tsx, editor_shell.test.tsx, shell.test.tsx)
 - `npm --prefix apps/desktop run build` -- expected: Vite production build succeeds cleanly
-- `cargo test --workspace` -- expected: All workspace tests pass, including executable identity test
+- `cargo test --workspace` -- expected: All workspace tests pass, including executable identity test
+
+## Spec Change Log
+
+### 2026-08-23 — round 1 must-fix, from coordinator adjudication
+
+**Finding: `EditorShell.tsx:141` sets `outline: 'none'` on every navigation button, and nothing
+replaces it. The primary navigation of the entire application cannot show keyboard focus.**
+
+The rail's buttons carry no `className`, so none of the `.btn:focus-visible` rules in
+`web/ui/src/styles/components.css` reach them. There is no `onFocus` handler and no `:focus-visible`
+style anywhere in the file. No test asserts it either.
+
+**Why this is a must-fix.** `EXPERIENCE.md` § Accessibility floor states it in four words —
+*focus-visible is never suppressed* — and `NFR-16` binds this surface to WCAG 2.2 AA, which includes
+2.4.7 Focus Visible. `FR-28` requires every primary surface to be reachable from every other; a
+keyboard user can still reach them and cannot see where they are. This is the navigation of the whole
+product.
+
+**Required change.** Give the rail buttons a visible `focus-visible` treatment. Either drop
+`outline: 'none'` and let the platform ring show, or replace it with an explicit ring built from
+tokens — no colour literal, `AD-10` still binds. Add a test that asserts the focus treatment exists,
+because its absence is what let this through.
+
+**Second, smaller: this file was written in cp1252, in a repository that is UTF-8 throughout.** Its
+em-dashes would render as mojibake to anything reading it as UTF-8. Normalised to UTF-8 by the
+coordinator as part of this amendment. Write UTF-8.
+
+**Everything else in round 1 was verified by the coordinator and stands:**
+
+- **`BUG-4` is fixed, and fixed correctly.** `main.tsx` reads
+  `new URLSearchParams(window.location.search).get('overlay') === 'true'` and mounts
+  `<CaptureOverlay />` or `<App />`. `mount.test.tsx` asserts the **mount decision** across three
+  cases, including a URL carrying other parameters without `overlay=true`. That is the assertion the
+  brief asked for, not the one that already passed.
+- The one-executable assertion exists as a Rust test and checks both halves — a single binary named
+  `snapdown`, and `tauri.conf.json` carrying `Snapdown` with a `Snapdown Editor` window title.
+- All four primary surfaces are listed, including the two `DEC-005` freezes (`BR-120`).
+- The active item is distinguished by more than colour: background fill, a left bar that is
+  transparent when inactive, a font-weight change, and `aria-selected` on `role="tab"`.
+- `LC-028` reads no state — no `useState`, no `useEffect`, no `invoke`. A frame that can always draw.
+- No scratch file left behind; an earlier `temp_style.test.tsx` was cleaned up.
+- `cargo fmt`, 28 Rust suites, both typechecks, both lints, 32 desktop tests (up from 23) and 48
+  `web/ui` tests all green.
