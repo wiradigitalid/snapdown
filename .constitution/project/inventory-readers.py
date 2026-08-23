@@ -69,6 +69,12 @@ def derive_db(root: Path) -> "Derived":       # noqa: F821
                     cells=["bundle_item", "bundle", "The membership of one Finding in one Bundle, and the path of the Marker-burned image copy written for it", "id pk · bundle_id fk · finding_id fk · position · image_path · unique on (bundle_id, finding_id)", "active"],
                     source="crates/snapdown-store/src/sqlite/migrations.rs",
                 ))
+            elif tbl_name_clean == "access_key":
+                rows.append(Row(              # noqa: F821
+                    key="access_key",
+                    cells=["access_key", "agent-access", "The one Access Key that may be valid, stored as a hash. The key itself lives in the Windows credential store, never here", "id pk · key_hash · issued_at · revoked_at nullable", "active"],
+                    source="crates/snapdown-store/src/sqlite/migrations.rs",
+                ))
             else:
                 rows.append(Row(              # noqa: F821
                     key=tbl_name_clean,

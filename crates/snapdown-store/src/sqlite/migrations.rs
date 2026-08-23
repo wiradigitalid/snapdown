@@ -83,6 +83,18 @@ pub const MIGRATIONS: &[Migration] = &[
         );
     "#,
     },
+    Migration {
+        version: 4,
+        description: "create access_key table",
+        sql: r#"
+        CREATE TABLE IF NOT EXISTS access_key (
+            id TEXT PRIMARY KEY,
+            key_hash TEXT NOT NULL,
+            issued_at TEXT NOT NULL,
+            revoked_at TEXT
+        );
+    "#,
+    },
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> Result<(), StoreError> {
