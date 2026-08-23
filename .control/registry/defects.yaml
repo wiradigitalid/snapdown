@@ -170,3 +170,58 @@ defects:
       which is the class of test this product has none of.
     related: BUG-4
     status: open
+  - id: BUG-6
+    title: The orphan report is built, tested, and unreachable — no screen ever mounts it
+    found: "2026-08-23"
+    found_by: systematic never-mounted sweep after BUG-4 and BUG-5
+    component: finding
+    severity: high
+    contradicts: [FR-15, UC-8]
+    evidence: |
+      apps/desktop/src/components/OrphanReportView.tsx exists and orphan_report.test.tsx is green.
+      grep for `<OrphanReportView` across apps/desktop/src and web/ui/src, excluding its own file
+      and tests: NO MATCH.
+      App.tsx line 23: type NavigationTab = 'findings' | 'bundles' | 'agent-access' | 'settings'.
+      There is no orphans route, tab, or entry point of any kind. grep for "orphan" in App.tsx
+      returns nothing.
+    impact: |
+      FR-15 promises the Reviewer can find out what has gone missing or been left behind, and UC-8 is
+      how they do it. The Tauri commands scan_orphans and clean_orphans are registered and work; the
+      screen that calls them cannot be opened. NFR-5's invariant - the Vault holds no file the Library
+      does not point at - names the orphan report of FR-15 as one of its two enforcement mechanisms,
+      so half of that enforcement is unreachable.
+      Lower severity than BUG-4 and BUG-5 because this is a maintenance tool rather than the core
+      loop. A Reviewer who never opens it loses nothing until something has already gone wrong.
+    why_undetected: |
+      The third instance of one pattern in one sweep. See the SYSTEMIC note below.
+    fix: |
+      Give it an entry point. .how/finding/01-ux/DESIGN.md places it as LC-030 with a route of
+      /findings/orphans, and .how/finding/01-ux/DESIGN.md's Findings surface offers it from the
+      image-missing state. Both are in W6-S7's scope.
+    related: [BUG-4, BUG-5]
+    status: open
+
+# SYSTEMIC — the shape shared by BUG-4, BUG-5 and BUG-6, written 2026-08-23
+#
+# A sweep for `<Component` across the whole tree, excluding each component's own file and its tests,
+# found FOUR components that are never mounted anywhere:
+#
+#   CaptureOverlay     BUG-4, critical  — the capture path
+#   MarkerLayer        BUG-5, critical  — marker annotation
+#   OrphanReportView   BUG-6, high      — the orphan report
+#   EmptyState                          — a base element; W6-S1 and W6-S7/S8 mount it
+#
+# Every one of them has passing unit tests. Every one of them is CORRECT in isolation. None is
+# assembled into anything a Reviewer can reach.
+#
+# THE FINDING IS NOT THE THREE BUGS. It is that this repository has no composition test of any kind.
+# Every suite proves a part; nothing asks whether the parts were wired together. Five waves closed
+# green on that basis, and three requirements - FR-1/FR-2, FR-8, FR-15 - are unmet in a build whose
+# tests all pass.
+#
+# The wave-close checklist cannot catch it either: V12 checks that an LC is REGISTERED, not that it
+# is REACHED. A screen with an LC, a component, a passing test and no mount point satisfies every
+# mechanical check this method has.
+#
+# W6-S2 and W6-S7 carry the three fixes. The missing test CLASS is the thing to fix beyond them, and
+# it is filed as OQ-23 rather than bolted onto a story that has enough to do.
