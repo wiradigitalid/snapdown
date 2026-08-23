@@ -3,7 +3,7 @@ id: W6-S1
 title: 'W6-S1: Every colour through tokens, both themes, enforced by a lint rule'
 type: 'feature'
 wave: W6
-status: ready-for-dev
+status: done
 created: '2026-08-23'
 dependencies: []
 files:
@@ -141,22 +141,22 @@ The application currently violates the single colour authority principle (AD-10,
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `web/ui/src/styles/tokens.css` -- Add missing tokens to light (`:root`) and dark (`@media (prefers-color-scheme: dark)`) themes:
+- [x] `web/ui/src/styles/tokens.css` -- Add missing tokens to light (`:root`) and dark (`@media (prefers-color-scheme: dark)`) themes:
   - Meaning pairs: `--color-success-bg`/`--color-success-text`, `--color-warning-bg`/`--color-warning-text`, `--color-info-bg`/`--color-info-text`, `--color-neutral-bg`/`--color-neutral-text`
   - Inset surface: `--color-surface-sunken`
   - Spacing and radius: `--space-0` (`2px`), `--radius-full` (`9999px`)
   - Theme-invariant tokens with explanatory comments: `--color-marker*`, `--color-overlay-scrim`, `--color-overlay-ring`, `--canvas-checker`
   - Correct dark theme `--color-marker-ring` to `#ffffff` and `--color-marker` to `#f59e0b`
-- [ ] `web/ui/src/styles/components.css` -- Add styling classes and focus-visible outlines for new base elements (`SegmentedControl`, `HotkeyChip`, `Toggle`, `Badge`, `EmptyState`, `ErrorState`).
-- [ ] `web/ui/src/components/SegmentedControl.tsx` -- Implement `SegmentedControl` component supporting option list, keyboard arrow navigation, focus-visible outline, and disabled states.
-- [ ] `web/ui/src/components/HotkeyChip.tsx` -- Implement `HotkeyChip` component supporting `bound`, `listening`, `unbound`, and `conflicted` states with key capture and cancel on blur/ESC.
-- [ ] `web/ui/src/components/Toggle.tsx` -- Implement `Toggle` switch component supporting `on`, `off`, `indeterminate`, `focus-visible`, and `disabled` states.
-- [ ] `web/ui/src/components/Badge.tsx` -- Implement `Badge` component with variants (`success`, `warning`, `info`, `neutral`, `danger`) using paired meaning tokens.
-- [ ] `web/ui/src/components/EmptyState.tsx` -- Refactor `EmptyState` to support illustration slot, heading, description, and single action button.
-- [ ] `web/ui/src/components/ErrorState.tsx` -- Implement `ErrorState` component with error details and retry/action handler.
-- [ ] `web/ui/src/index.ts` -- Export new and updated components and types (`SegmentedControl`, `HotkeyChip`, `Toggle`, `Badge`, `EmptyState`, `ErrorState`).
-- [ ] `web/ui/eslint.config.js` & `apps/desktop/eslint.config.js` -- Configure custom ESLint rule / restriction to forbid hex literals (`#[0-9a-fA-F]{3,8}`) and color functions (`rgb`, `rgba`, `hsl`, `hsla`) in source files outside `tokens.css`.
-- [ ] `apps/desktop/src/` & `web/ui/src/` -- Refactor all components to remove all hex and color literals:
+- [x] `web/ui/src/styles/components.css` -- Add styling classes and focus-visible outlines for new base elements (`SegmentedControl`, `HotkeyChip`, `Toggle`, `Badge`, `EmptyState`, `ErrorState`).
+- [x] `web/ui/src/components/SegmentedControl.tsx` -- Implement `SegmentedControl` component supporting option list, keyboard arrow navigation, focus-visible outline, and disabled states.
+- [x] `web/ui/src/components/HotkeyChip.tsx` -- Implement `HotkeyChip` component supporting `bound`, `listening`, `unbound`, and `conflicted` states with key capture and cancel on blur/ESC.
+- [x] `web/ui/src/components/Toggle.tsx` -- Implement `Toggle` switch component supporting `on`, `off`, `indeterminate`, `focus-visible`, and `disabled` states.
+- [x] `web/ui/src/components/Badge.tsx` -- Implement `Badge` component with variants (`success`, `warning`, `info`, `neutral`, `danger`) using paired meaning tokens.
+- [x] `web/ui/src/components/EmptyState.tsx` -- Refactor `EmptyState` to support illustration slot, heading, description, and single action button.
+- [x] `web/ui/src/components/ErrorState.tsx` -- Implement `ErrorState` component with error details and retry/action handler.
+- [x] `web/ui/src/index.ts` -- Export new and updated components and types (`SegmentedControl`, `HotkeyChip`, `Toggle`, `Badge`, `EmptyState`, `ErrorState`).
+- [x] `web/ui/eslint.config.js` & `apps/desktop/eslint.config.js` -- Configure custom ESLint rule / restriction to forbid hex literals (`#[0-9a-fA-F]{3,8}`) and color functions (`rgb`, `rgba`, `hsl`, `hsla`) in source files outside `tokens.css`.
+- [x] `apps/desktop/src/` & `web/ui/src/` -- Refactor all components to remove all hex and color literals:
   - `apps/desktop/src/App.tsx`
   - `apps/desktop/src/components/BundleView.tsx`
   - `apps/desktop/src/components/CaptureOverlay.tsx`
@@ -166,9 +166,9 @@ The application currently violates the single colour authority principle (AD-10,
   - `web/ui/src/components/BundleComposer.tsx`
   - `web/ui/src/components/FindingsEditor.tsx`
   - `web/ui/src/components/MarkerLayer.tsx`
-- [ ] `web/ui/src/test/contrast.test.ts` -- Implement automated WCAG 2.1 AA contrast ratio tests verifying all text/background pairs pass >= 4.5:1 in both light and dark themes.
-- [ ] `web/ui/src/test/tokens.test.ts` -- Implement token parity test (both themes define identical token sets), theme-invariance checks, and codebase regex scanner ensuring zero hex literals survive.
-- [ ] `web/ui/src/test/components.test.tsx` -- Implement component test suite covering `SegmentedControl`, `HotkeyChip`, `Toggle` (including indeterminate), `Badge`, `EmptyState`, and `ErrorState`.
+- [x] `web/ui/src/test/contrast.test.ts` -- Implement automated WCAG 2.1 AA contrast ratio tests verifying all text/background pairs pass >= 4.5:1 in both light and dark themes.
+- [x] `web/ui/src/test/tokens.test.ts` -- Implement token parity test (both themes define identical token sets), theme-invariance checks, and codebase regex scanner ensuring zero hex literals survive.
+- [x] `web/ui/src/test/components.test.tsx` -- Implement component test suite covering `SegmentedControl`, `HotkeyChip`, `Toggle` (including indeterminate), `Badge`, `EmptyState`, and `ErrorState`.
 
 **Acceptance Criteria:**
 - Given `web/ui/src/styles/tokens.css`, all tokens (surface, sunken, meaning pairs, space-0, radius-full, theme-invariant markers/overlay/checker) are defined in both `:root` and `@media (prefers-color-scheme: dark)`.
