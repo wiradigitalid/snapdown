@@ -356,4 +356,10 @@ logical_components:
     component: sharing
     area: web-service
     depends_on: [LC-023]
-
+  - id: LC-032
+    name: desktop-build
+    lc_type: service
+    container: desktop-app
+    component: settings
+    area: build-tooling
+    depends_on: []

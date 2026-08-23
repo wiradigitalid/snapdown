@@ -39,10 +39,10 @@ rtm:
   - vitest::the_empty_state_offers_no_button_that_only_navigates_away
   - vitest::copy_markdown_announces_its_result
   - vitest::an_item_whose_image_copy_is_missing_is_flagged_and_the_bundle_still_opens
-  status: unknown
+  status: done
   exempt: false
-  green: false
-  broken_at: status
+  green: true
+  broken_at: ''
 - BG: BG-1
   CAP: CAP-4
   FR: FR-12
@@ -57,10 +57,10 @@ rtm:
   - vitest::the_empty_state_offers_no_button_that_only_navigates_away
   - vitest::copy_markdown_announces_its_result
   - vitest::an_item_whose_image_copy_is_missing_is_flagged_and_the_bundle_still_opens
-  status: unknown
+  status: done
   exempt: false
-  green: false
-  broken_at: status
+  green: true
+  broken_at: ''
 - BG: BG-5
   CAP: CAP-5
   FR: FR-13
@@ -149,10 +149,10 @@ rtm:
   - vitest::a_cleared_hotkey_reads_disabled_rather_than_empty
   - vitest::a_startup_registration_failure_carries_a_badge_before_the_reviewer_acts
   - vitest::the_active_and_disabled_badges_carry_a_word_not_only_a_colour
-  status: unknown
+  status: done
   exempt: false
-  green: false
-  broken_at: status
+  green: true
+  broken_at: ''
 - BG: BG-6
   CAP: CAP-6
   FR: FR-18
@@ -178,15 +178,17 @@ rtm:
   wave: W6
   release: r3
   test:
+  - cargo::an_unreadable_library_db_is_reported_with_its_path_and_not_recreated
+  - cargo::a_corrupt_library_db_does_not_panic_the_setup_hook
   - cargo::a_first_run_with_nothing_configured_registers_at_startup
   - cargo::a_run_after_the_reviewer_disabled_it_does_not_re_register
   - cargo::a_registration_removed_outside_snapdown_shows_off_and_is_not_restored
   - vitest::the_startup_toggle_renders_unknown_until_the_os_has_answered
   - vitest::the_startup_toggle_never_renders_a_definite_state_before_the_read_resolves
-  status: unknown
+  status: done
   exempt: false
-  green: false
-  broken_at: status
+  green: true
+  broken_at: ''
 - BG: BG-2
   CAP: CAP-7
   FR: FR-19
@@ -366,10 +368,10 @@ rtm:
   - vitest::all_four_settings_groups_are_visible_at_the_minimum_window_size
   - vitest::no_group_is_stretched_to_match_a_neighbours_height
   - vitest::agent_access_is_a_primary_surface_and_not_a_settings_group
-  status: unknown
+  status: done
   exempt: false
-  green: false
-  broken_at: status
+  green: true
+  broken_at: ''
 - BG: BG-2
   CAP: CAP-1
   FR: FR-3
@@ -430,10 +432,10 @@ rtm:
   - vitest::editing_an_advanced_value_moves_the_control_to_custom_visibly
   - vitest::the_readout_names_the_budget_that_produced_the_latest_finding
   - vitest::a_reviewer_who_never_opens_advanced_never_sees_a_raw_number
-  status: unknown
+  status: done
   exempt: false
-  green: false
-  broken_at: status
+  green: true
+  broken_at: ''
 - BG: BG-1
   CAP: CAP-3
   FR: FR-6

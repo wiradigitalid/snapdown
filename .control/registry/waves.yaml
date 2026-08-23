@@ -190,7 +190,7 @@ waves:
 
   - id: W6
     title: The desktop experience rework
-    status: open
+    status: closed
     release: r3
     prd: [capture-to-markdown]
     fr: [FR-5, FR-18, FR-27, FR-28, FR-29]
