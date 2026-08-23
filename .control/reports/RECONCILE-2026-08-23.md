@@ -175,3 +175,31 @@ being right and stops being persuasive.
 
 **The observation D2 ends on stands, and this pass is its first instance.** Each story in this wave
 that removes a defect makes the document describing that defect false. Nine stories remain.
+
+---
+
+## Addendum — one check this sweep got wrong, found 2026-08-23 after the report
+
+The **Registry** row of *Checked and clean* reads *"a container in the C4 set but not in
+`containers`" — none*. That was answered in one direction only, and the other direction is where the
+finding was.
+
+`web-ui` is in **both** the C4 set and `containers`, so the check passed. Neither of them is in the
+tree. It is registered `built: true` as the *Published Bundle Reader*, a React SPA served as static
+assets by `web-api` and running in a reader's browser. There is no `index.html`, no `src/main.tsx`,
+and `apps/web-service` serves no static assets at all — a grep for `FileServer`, `StaticFS`, `embed`,
+`http.Dir` and `ServeFile` returns nothing. What lives at `web/ui/` is `@snapdown/ui`, a component
+**library** consumed by the desktop webview, which deploys nowhere on its own.
+
+**The name collision is what hid it.** `web-ui` the container and `web/ui` the package read as the
+same thing in every document, and one of them is real.
+
+**And `V25` passes on it.** A `built: true` container must have a heading in the code map; `web-ui`
+has one, and the heading describes the library. The validator is not wrong — it asks *does this
+heading exist*, and it cannot ask *does this heading describe the thing it is named after*.
+
+Registered as `BUG-8`. The fix is the same decision as `OQ-22`, and this sweep's Registry check
+should have been two questions rather than one:
+
+1. Is every container in the C4 set registered in `containers`? — the direction that was asked
+2. **Does every registered container exist in the tree?** — the direction that was not

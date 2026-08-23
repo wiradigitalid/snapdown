@@ -265,3 +265,50 @@ defects:
          affects every clone and fork, and an agent must not do it unilaterally. Recorded here so the
          decision is made rather than inherited.
     status: open
+  - id: BUG-8
+    title: "The web-ui container is registered built:true and does not exist; a library shares its name"
+    found: "2026-08-23"
+    found_by: coordinator, checking the container registry against the tree after BUG-2
+    component: sharing
+    severity: medium
+    contradicts: ["C4 L2", "components.yaml containers", "structure-codebase.md"]
+    evidence: |
+      components.yaml registers:
+        - id: web-ui
+          title: Published Bundle Reader
+          technology: React + Vite single-page application, served as static assets by web-api
+          built: true
+          runs: The browser of whoever opens a Publication URL
+      c4-l2-containers.md:33 draws it, :53 argues explicitly that it IS a container rather than
+      "static assets" because it runs in the reader's browser as its own process, and :69 gives it an
+      HTTPS arrow to web-api.
+      NONE OF IT EXISTS.
+        web/ui/ has no index.html and no src/main.tsx. It is @snapdown/ui - a component LIBRARY
+        consumed by the desktop webview, with no entry point and nothing to deploy.
+        apps/web-service serves no static assets: grep for FileServer, StaticFS, embed, http.Dir and
+        ServeFile in server.go and main.go returns nothing. It builds an HTML <pre> block inline.
+    impact: |
+      Three artifacts describe a deployable container that was never built, while pointing at a
+      directory that is a different kind of thing entirely:
+        - components.yaml claims a fourth built container
+        - the C4 L2 draws it, and argues at length for why it is a container
+        - structure-codebase.md has a `### web-ui` heading, which V25 REQUIRES of a built: true
+          container - and the heading describes web/ui/ the library, satisfying the validator with
+          the wrong artifact
+      V25 therefore passes on a container that does not exist. That is the part worth noticing: the
+      validator is not wrong, it is answering "does this heading exist" and cannot ask "does this
+      heading describe the thing it is named after".
+    why_undetected: |
+      Same family as BUG-2 and found by pulling on it. The name collision is what hid it: `web-ui`
+      the container and `web/ui` the package read as the same thing in every document, and one of
+      them is real.
+    fix: |
+      A DECISION, not a task, and the same decision as OQ-22. If the reader SPA is built, the
+      registration becomes true and web/ui needs a name that is not web-ui. If the promise is
+      withdrawn, then `web-ui` leaves `containers`, leaves the C4 L2, loses its structure-map heading,
+      and LC-027 is retired - and `web/ui` keeps its name because nothing else wants it.
+      Withdrawing is the cheaper answer and may be the correct one: Snapdown's reader is a machine.
+      Either way it goes through wdi-blueprint intent `platform`, which owns `containers` and the C4.
+    related: [BUG-2, OQ-22]
+    blocked_by: DEC-005, which freezes `sharing`.
+    status: open
