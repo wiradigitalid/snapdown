@@ -1,7 +1,27 @@
-# Snapdown — Project Handover (All 5 Waves Complete)
+# Snapdown — Project Handover
 
-## Status: ✅ COMPLETE
-All five waves (W1–W5) of the Snapdown product have been delivered, tested, and merged.
+## Status: W1–W5 delivered · W6 open
+
+All five waves W1–W5 were delivered, tested, and merged. Every capability the PRDs promised exists
+and works.
+
+**That was not the same as being done, and 2026-08-23 is where that became clear.** The owner's first
+sustained use of the shipped product produced a list of **experience** defects rather than missing
+features: they could not tell which application they had opened, could not find the Editor, could not
+read the labels on Findings and Bundles against their own background, and were asked to set two
+numbers the PRD itself admits have never been measured.
+
+The root cause was a single absence — **no `wdi-ux` output had ever been written for this product.**
+No document anywhere said what a screen owes.
+
+G1 through G4 were re-run at greater depth on 2026-08-23, the UX gate ran for the first time, and
+**wave W6 is open**: ten stories across four epics, targeting release `r3`. Two of those ten are
+defects found by reading the code against the newly-deepened documents — see below.
+
+| Wave | Status |
+|---|---|
+| W1–W5 | Closed. r1 and r2 |
+| **W6** | **Open.** The desktop experience rework. r3 |
 
 ---
 
@@ -110,3 +130,62 @@ No further work required unless:
 3. Bug reports
 
 The product satisfies all FR/NFR/AD/UC/CR from both PRDs (`capture-to-markdown`, `agent-handoff`).
+---
+
+## 2026-08-23 — what changed, and what it cost
+
+### Three decisions
+
+| | |
+|---|---|
+| **DEC-003** | Snapdown is **one process wearing two window personas**, not two executables. The tray is **Snapdown**; the workspace window titles itself **Snapdown Editor**. Snagit splits into two processes; that is a consequence of its C++/WPF lineage, not a property of the problem, and Tauri v2 removes every constraint that forced it. |
+| **DEC-004** | The Quality Budget is chosen as a **named intent** — `Auto` (default), `Sharp`, `Balanced`, `Small` — with the raw numbers behind **Advanced** and a fifth state, `Custom`. `Auto` derives the long edge and encoder quality **per capture**: a 312×118 tooltip and a 3840×2160 screen cannot be served by one constant. |
+| **DEC-005** | The desktop experience is finished **before** `sharing` and `agent-access` are touched again. Neither is cancelled; both keep their shipped code, and their surfaces stay reachable. |
+
+### Depth raised
+
+`finding` guarded → deep · `bundle` outline → deep · `settings` **catalog → deep**.
+
+The `settings` change is the finding of the pass. At `mode: catalog` **G4 is skipped by design**, so
+that component had no flow, no state machine, no failure behaviour, and no screen specification —
+for five waves. Every one of the owner's Settings complaints was a question the corpus had no slot to
+answer, because the gate that would have answered it was configured off.
+
+### Two defects, found by reading code against the deepened documents
+
+**`BUG-1` — deleting a Finding silently guts every Bundle that holds it.**
+`bundle_item.finding_id` carries `ON DELETE CASCADE`, and `foreign_keys` is `ON`. `FR-13`'s third
+consequence has said the opposite since G2: *a Finding that belongs to a Bundle can still be deleted;
+the Bundle keeps its own copy and stays readable.* The Bundle's stored Markdown survives, so the
+document still reads correctly and still copies the same bytes — only the **item list** loses a row.
+The delivered document and the record of it disagree, and nothing reports it.
+
+It went undetected for five waves because a test that a cascade does **not** fire is one nobody writes
+unless a document says the cascade must not exist. That document did not exist until G4 ran at `deep`.
+
+**The Vault move reports success while leaving an unreported duplicate.**
+`vault_migration.rs` swallows both `fs::remove_file` results. The move itself is *stronger* than the
+documents assumed — copy everything, verify everything, delete sources last, so no file ever exists in
+neither place — but a source file that will not delete leaves a second copy of an image that may hold
+personal data, and the Reviewer is told the move succeeded.
+
+### One repository finding
+
+The brief's constraint — *this repository is public; forbids committing a captured screenshot* — has
+been `active` since G1 and **nothing enforces it**. A UX audit staged five screenshots of the owner's
+machine for commit and was caught by hand. `.gitignore` now covers them; CI still has no guard.
+
+### The false alarm worth remembering
+
+The owner reported the application was called "Desktop", that they could only see Settings, that the
+Vault folder had no Browse button, and that hotkeys could not be set manually.
+
+All four traced to **one stale binary**: `target/release/desktop.exe`, older than the commit that
+renamed the product and added tab navigation, the Browse button, and the hotkey recorder. They had
+been running it. `FR-27` now makes a second desktop executable in the output directory a **build
+failure**, not clutter.
+
+The white-on-white was real, and on a different screen than reported: `FindingsView` and `BundleView`
+paint light-theme panels unconditionally inside a shell whose tokens follow `prefers-color-scheme`.
+23 hex literals live outside the token file. `AD-10` now makes a colour literal in a component a
+defect, enforced by a lint rule.
