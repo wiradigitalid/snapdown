@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Button } from '@snapdown/ui';
+﻿import React, { useState } from 'react';
+import { Badge, Button, HotkeyChip } from '@snapdown/ui';
 import { HotkeyAction, HotkeySettingsDto } from '../types/settings';
 
 interface HotkeySectionProps {
@@ -14,30 +14,6 @@ const ACTION_LABELS: Record<HotkeyAction, string> = {
   open_editor: 'Open Workspace / Editor',
 };
 
-const formatKeyCombination = (e: React.KeyboardEvent): string | null => {
-  if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
-    return null; // Ignore pure modifier press
-  }
-
-  const parts: string[] = [];
-  if (e.ctrlKey || e.metaKey) {
-    parts.push('CommandOrControl');
-  }
-  if (e.altKey) {
-    parts.push('Alt');
-  }
-  if (e.shiftKey) {
-    parts.push('Shift');
-  }
-
-  let key = e.key.toUpperCase();
-  if (key === ' ') key = 'SPACE';
-  if (key === 'ESCAPE') return null;
-
-  parts.push(key);
-  return parts.join('+');
-};
-
 export const HotkeySection: React.FC<HotkeySectionProps> = ({
   hotkeySettings,
   onSaveHotkey,
@@ -47,29 +23,14 @@ export const HotkeySection: React.FC<HotkeySectionProps> = ({
   const [localInputs, setLocalInputs] = useState<Record<string, string>>({});
   const [errorMessages, setErrorMessages] = useState<Record<string, string>>({});
   const [savingAction, setSavingAction] = useState<string | null>(null);
-  const [recordingAction, setRecordingAction] = useState<string | null>(null);
 
   const getInputValue = (action: HotkeyAction, defaultVal: string) => {
     return localInputs[action] !== undefined ? localInputs[action] : defaultVal;
   };
 
-  const handleKeyDown = (action: HotkeyAction, e: React.KeyboardEvent) => {
-    if (recordingAction !== action) return;
-
-    if (e.key === 'Escape') {
-      setRecordingAction(null);
-      return;
-    }
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    const combination = formatKeyCombination(e);
-    if (combination) {
-      setLocalInputs((prev) => ({ ...prev, [action]: combination }));
-      setErrorMessages((prev) => ({ ...prev, [action]: '' }));
-      setRecordingAction(null);
-    }
+  const handleRecord = (action: HotkeyAction, combo: string) => {
+    setLocalInputs((prev) => ({ ...prev, [action]: combo }));
+    setErrorMessages((prev) => ({ ...prev, [action]: '' }));
   };
 
   const handleSave = async (action: HotkeyAction) => {
@@ -153,9 +114,9 @@ export const HotkeySection: React.FC<HotkeySectionProps> = ({
           style={{
             padding: 'var(--space-2) var(--space-3)',
             borderRadius: 'var(--radius-sm)',
-            backgroundColor: '#fef3c7',
-            border: '1px solid #fde047',
-            color: '#854d0e',
+            backgroundColor: 'var(--color-warning-bg)',
+            border: '1px solid var(--color-border)',
+            color: 'var(--color-warning-text)',
             fontSize: 'var(--text-xs)',
             fontFamily: 'var(--font-ui)',
             display: 'flex',
@@ -177,7 +138,6 @@ export const HotkeySection: React.FC<HotkeySectionProps> = ({
           const currentVal = getInputValue(action, item.shortcut);
           const isDirty = currentVal !== item.shortcut;
           const isBusy = savingAction === action || disabled;
-          const isRecording = recordingAction === action;
           const error = errorMessages[action];
 
           return (
@@ -211,19 +171,10 @@ export const HotkeySection: React.FC<HotkeySectionProps> = ({
                 >
                   {label}
                 </span>
-                <span
-                  data-testid={`status-badge-${action}`}
-                  style={{
-                    fontSize: 'var(--text-xs)',
-                    fontFamily: 'var(--font-mono)',
-                    padding: '2px 8px',
-                    borderRadius: 'var(--radius-sm)',
-                    backgroundColor: item.is_active ? '#dcfce7' : '#f1f5f9',
-                    color: item.is_active ? '#166534' : '#64748b',
-                    fontWeight: 500,
-                  }}
-                >
-                  {item.is_active ? 'Active' : 'Disabled'}
+                <span data-testid={`status-badge-${action}`}>
+                  <Badge variant={item.is_active ? 'success' : 'neutral'}>
+                    {item.is_active ? 'Active' : 'Disabled'}
+                  </Badge>
                 </span>
               </div>
 
@@ -234,31 +185,14 @@ export const HotkeySection: React.FC<HotkeySectionProps> = ({
                   alignItems: 'center',
                 }}
               >
-                <div
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`Record shortcut for ${label}`}
-                  onClick={() => setRecordingAction(action)}
-                  onKeyDown={(e) => handleKeyDown(action, e)}
-                  onBlur={() => {
-                    if (recordingAction === action) setRecordingAction(null);
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-sm)',
-                    border: isRecording ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
-                    backgroundColor: isRecording ? '#eff6ff' : 'var(--color-surface)',
-                    color: isRecording ? 'var(--color-accent)' : 'var(--color-text)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 'var(--text-xs)',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    outline: 'none',
-                    textAlign: 'center',
-                  }}
-                >
-                  {isRecording ? 'Press shortcut keys on keyboard (ESC to cancel)...' : currentVal || 'Click to record shortcut'}
+                <div style={{ flex: 1 }}>
+                  <HotkeyChip
+                    shortcut={currentVal}
+                    onRecord={(combo) => handleRecord(action, combo)}
+                    disabled={isBusy}
+                    aria-label={`Record shortcut for ${label}`}
+                    style={{ width: '100%' }}
+                  />
                 </div>
 
                 <Button

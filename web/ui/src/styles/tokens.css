@@ -1,33 +1,56 @@
-@import "./components.css";
+﻿@import "./components.css";
 
 :root {
   /* Color Scheme - Light */
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
+  --color-surface-sunken: #f1f5f9;
   --color-text: #0f172a;
-  --color-text-muted: #64748b;
+  --color-text-muted: #475569;
   --color-border: #e2e8f0;
   --color-border-strong: #cbd5e1;
   --color-accent: #2563eb;
   --color-accent-text: #ffffff;
   --color-danger: #dc2626;
   --color-danger-text: #ffffff;
+
+  /* Meaning token pairs (Light Theme) */
+  --color-success-bg: #dcfce7;
+  --color-success-text: #166534;
+  --color-warning-bg: #fef3c7;
+  --color-warning-text: #854d0e;
+  --color-info-bg: #eff6ff;
+  --color-info-text: #1e40af;
+  --color-neutral-bg: #f1f5f9;
+  --color-neutral-text: #334155;
+  --color-danger-bg: #fee2e2;
+
+  /* Theme-invariant tokens - deliberately invariant across themes */
+  /* Marker badges are burned into exported images read across different machines/themes */
   --color-marker: #f59e0b;
   --color-marker-text: #000000;
   --color-marker-ring: #ffffff;
+  /* Capture overlay scrim and region ring drawn over arbitrary desktop content */
+  --color-overlay-scrim: rgba(0, 0, 0, 0.4);
+  --color-overlay-ring: #3b82f6;
+  --color-overlay-selection-bg: rgba(59, 130, 246, 0.15);
+  /* Canvas checkerboard pattern for transparent areas */
+  --canvas-checker: #e2e8f0;
 
   /* Spacing */
-  --space-1: 0.25rem; /* 4px */
-  --space-2: 0.5rem;  /* 8px */
-  --space-3: 0.75rem; /* 12px */
-  --space-4: 1rem;    /* 16px */
-  --space-5: 1.5rem;  /* 24px */
-  --space-6: 2rem;    /* 32px */
+  --space-0: 0.125rem; /* 2px */
+  --space-1: 0.25rem;  /* 4px */
+  --space-2: 0.5rem;   /* 8px */
+  --space-3: 0.75rem;  /* 12px */
+  --space-4: 1rem;     /* 16px */
+  --space-5: 1.5rem;   /* 24px */
+  --space-6: 2rem;     /* 32px */
 
   /* Radius */
   --radius-sm: 0.25rem; /* 4px */
   --radius-md: 0.5rem;  /* 8px */
+  --radius-full: 9999px;
 
   /* Typography */
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -49,20 +72,44 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    /* Color Scheme - Dark */
     --color-bg: #090d16;
     --color-surface: #131b2e;
     --color-surface-raised: #1e293b;
+    --color-surface-sunken: #0f172a;
     --color-text: #f8fafc;
     --color-text-muted: #94a3b8;
     --color-border: #334155;
     --color-border-strong: #475569;
-    --color-accent: #3b82f6;
+    --color-accent: #2563eb;
     --color-accent-text: #ffffff;
-    --color-danger: #ef4444;
+    --color-danger: #dc2626;
     --color-danger-text: #ffffff;
-    --color-marker: #fbbf24;
+
+    /* Meaning token pairs (Dark Theme) */
+    --color-success-bg: #052e16;
+    --color-success-text: #4ade80;
+    --color-warning-bg: #451a03;
+    --color-warning-text: #fef08a;
+    --color-info-bg: #172554;
+    --color-info-text: #93c5fd;
+    --color-neutral-bg: #1e293b;
+    --color-neutral-text: #e2e8f0;
+    --color-danger-bg: #450a0a;
+
+    /* Theme-invariant tokens - deliberately invariant across themes */
+    /* Marker badges are burned into exported images read across different machines/themes */
+    --color-marker: #f59e0b;
     --color-marker-text: #000000;
-    --color-marker-ring: #000000;
+    --color-marker-ring: #ffffff;
+    /* Capture overlay scrim and region ring drawn over arbitrary desktop content */
+    --color-overlay-scrim: rgba(0, 0, 0, 0.4);
+    --color-overlay-ring: #3b82f6;
+    --color-overlay-selection-bg: rgba(59, 130, 246, 0.15);
+    /* Canvas checkerboard pattern for transparent areas */
+    --canvas-checker: #e2e8f0;
+
+    /* Elevation */
     --shadow-raised: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5);
   }
 }

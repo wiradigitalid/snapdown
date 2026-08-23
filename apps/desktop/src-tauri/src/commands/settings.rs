@@ -172,7 +172,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 }
 "#;
         let output = std::process::Command::new("powershell")
-            .args(&["-NoProfile", "-NonInteractive", "-Command", script])
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
             .output()
             .map_err(|e| format!("Failed to launch folder picker: {e}"))?;
 

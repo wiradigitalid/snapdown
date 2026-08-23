@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import {
@@ -11,6 +11,11 @@ import {
   ConfirmDialog,
   MarkerBadge,
   EmptyState,
+  ErrorState,
+  Badge,
+  Toggle,
+  SegmentedControl,
+  HotkeyChip,
 } from '../index';
 
 describe('web/ui components suite', () => {
@@ -32,6 +37,186 @@ describe('web/ui components suite', () => {
       rerender(<Button loading>Loading</Button>);
       expect(screen.getByRole('button', { name: '... Loading' })).toBeDisabled();
       expect(screen.getByRole('button', { name: '... Loading' })).toHaveClass('loading');
+    });
+  });
+
+  describe('Badge', () => {
+    it('renders different variants with semantic meaning classes', () => {
+      const { rerender } = render(<Badge variant="success">Active</Badge>);
+      expect(screen.getByText('Active')).toHaveClass('badge-success');
+
+      rerender(<Badge variant="warning">Warning</Badge>);
+      expect(screen.getByText('Warning')).toHaveClass('badge-warning');
+
+      rerender(<Badge variant="info">Info</Badge>);
+      expect(screen.getByText('Info')).toHaveClass('badge-info');
+
+      rerender(<Badge variant="danger">Danger</Badge>);
+      expect(screen.getByText('Danger')).toHaveClass('badge-danger');
+
+      rerender(<Badge variant="neutral">Neutral</Badge>);
+      expect(screen.getByText('Neutral')).toHaveClass('badge-neutral');
+    });
+  });
+
+  describe('Toggle', () => {
+    it('renders on and off states and triggers onChange', () => {
+      const handleChange = vi.fn();
+      const { rerender } = render(<Toggle checked={false} onChange={handleChange} aria-label="Dark Mode" />);
+      const toggle = screen.getByRole('switch', { name: 'Dark Mode' });
+      expect(toggle).toHaveAttribute('aria-checked', 'false');
+      expect(toggle).toHaveAttribute('data-state', 'off');
+
+      fireEvent.click(toggle);
+      expect(handleChange).toHaveBeenCalledWith(true);
+
+      rerender(<Toggle checked={true} onChange={handleChange} aria-label="Dark Mode" />);
+      expect(toggle).toHaveAttribute('aria-checked', 'true');
+      expect(toggle).toHaveAttribute('data-state', 'on');
+    });
+
+    it('renders distinct indeterminate state (FR-18, load-bearing for async OS reads)', () => {
+      render(<Toggle indeterminate checked={false} aria-label="Startup Status" />);
+      const toggle = screen.getByRole('switch', { name: 'Startup Status' });
+      expect(toggle).toHaveAttribute('aria-checked', 'mixed');
+      expect(toggle).toHaveAttribute('data-state', 'indeterminate');
+    });
+
+    it('supports keyboard Space and Enter keys', () => {
+      const handleChange = vi.fn();
+      render(<Toggle checked={false} onChange={handleChange} aria-label="Toggle Option" />);
+      const toggle = screen.getByRole('switch', { name: 'Toggle Option' });
+
+      fireEvent.keyDown(toggle, { key: ' ' });
+      expect(handleChange).toHaveBeenCalledWith(true);
+
+      fireEvent.keyDown(toggle, { key: 'Enter' });
+      expect(handleChange).toHaveBeenCalledWith(true);
+    });
+
+    it('ignores clicks and key presses when disabled', () => {
+      const handleChange = vi.fn();
+      render(<Toggle disabled checked={false} onChange={handleChange} aria-label="Disabled Toggle" />);
+      const toggle = screen.getByRole('switch', { name: 'Disabled Toggle' });
+      expect(toggle).toBeDisabled();
+
+      fireEvent.click(toggle);
+      fireEvent.keyDown(toggle, { key: ' ' });
+      expect(handleChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('SegmentedControl', () => {
+    const options = [
+      { value: 'tab1', label: 'Tab 1' },
+      { value: 'tab2', label: 'Tab 2' },
+      { value: 'tab3', label: 'Tab 3', disabled: true },
+    ];
+
+    it('renders options and updates value on click', () => {
+      const handleChange = vi.fn();
+      render(
+        <SegmentedControl
+          options={options}
+          value="tab1"
+          onChange={handleChange}
+          aria-label="View Switcher"
+        />
+      );
+
+      const tab2 = screen.getByRole('radio', { name: 'Tab 2' });
+      expect(tab2).toHaveAttribute('aria-selected', 'false');
+
+      fireEvent.click(tab2);
+      expect(handleChange).toHaveBeenCalledWith('tab2');
+    });
+
+    it('supports arrow key navigation (ArrowRight / ArrowLeft)', () => {
+      const handleChange = vi.fn();
+      render(
+        <SegmentedControl
+          options={options}
+          value="tab1"
+          onChange={handleChange}
+          aria-label="View Switcher"
+        />
+      );
+
+      const tab1 = screen.getByRole('radio', { name: 'Tab 1' });
+      fireEvent.keyDown(tab1, { key: 'ArrowRight' });
+      expect(handleChange).toHaveBeenCalledWith('tab2');
+    });
+  });
+
+  describe('HotkeyChip', () => {
+    it('renders bound shortcut at rest', () => {
+      render(<HotkeyChip shortcut="Ctrl+Alt+S" />);
+      expect(screen.getByText('Ctrl+Alt+S')).toBeInTheDocument();
+      expect(screen.getByRole('button')).toHaveAttribute('data-state', 'bound');
+    });
+
+    it('enters listening state on click and captures key combo', () => {
+      const handleRecord = vi.fn();
+      render(<HotkeyChip shortcut="Ctrl+S" onRecord={handleRecord} />);
+      const chip = screen.getByRole('button');
+
+      fireEvent.click(chip);
+      expect(screen.getByText('Press shortcut keys (ESC to cancel)...')).toBeInTheDocument();
+
+      fireEvent.keyDown(chip, { key: 'K', ctrlKey: true });
+      expect(handleRecord).toHaveBeenCalledWith('CommandOrControl+K');
+    });
+
+    it('cancels listening on Escape key', () => {
+      const handleCancel = vi.fn();
+      render(<HotkeyChip shortcut="Ctrl+S" onCancel={handleCancel} />);
+      const chip = screen.getByRole('button');
+
+      fireEvent.click(chip);
+      fireEvent.keyDown(chip, { key: 'Escape' });
+      expect(handleCancel).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('EmptyState', () => {
+    it('renders illustration, heading, description, and single action button', () => {
+      const handleAction = vi.fn();
+      render(
+        <EmptyState
+          illustration={<span data-testid="test-illustration">Icon</span>}
+          heading="No Findings Yet"
+          description="Use your hotkey to capture your first finding."
+          actionLabel="Open Settings"
+          onAction={handleAction}
+        />
+      );
+
+      expect(screen.getByTestId('test-illustration')).toBeInTheDocument();
+      expect(screen.getByText('No Findings Yet')).toBeInTheDocument();
+      expect(screen.getByText('Use your hotkey to capture your first finding.')).toBeInTheDocument();
+      const actionBtn = screen.getByRole('button', { name: 'Open Settings' });
+      fireEvent.click(actionBtn);
+      expect(handleAction).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('ErrorState', () => {
+    it('renders title, failure message, and actionable retry button', () => {
+      const handleRetry = vi.fn();
+      render(
+        <ErrorState
+          title="Capture Failed"
+          message="DirectX capture device was disconnected."
+          actionLabel="Retry Capture"
+          onAction={handleRetry}
+        />
+      );
+
+      expect(screen.getByText('Capture Failed')).toBeInTheDocument();
+      expect(screen.getByText('DirectX capture device was disconnected.')).toBeInTheDocument();
+      const retryBtn = screen.getByRole('button', { name: 'Retry Capture' });
+      fireEvent.click(retryBtn);
+      expect(handleRetry).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -256,26 +441,6 @@ describe('web/ui components suite', () => {
 
       rerender(<MarkerBadge number={0} />);
       expect(screen.getByText('1')).toBeInTheDocument();
-    });
-  });
-
-  describe('EmptyState', () => {
-    it('renders heading, description, and optional action', () => {
-      const handleAction = vi.fn();
-      render(
-        <EmptyState
-          heading="No Findings Yet"
-          description="Use your hotkey to capture your first finding."
-          actionLabel="Open Settings"
-          onAction={handleAction}
-        />
-      );
-
-      expect(screen.getByText('No Findings Yet')).toBeInTheDocument();
-      expect(screen.getByText('Use your hotkey to capture your first finding.')).toBeInTheDocument();
-      const actionBtn = screen.getByRole('button', { name: 'Open Settings' });
-      fireEvent.click(actionBtn);
-      expect(handleAction).toHaveBeenCalledTimes(1);
     });
   });
 });

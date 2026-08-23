@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+﻿import React, { useCallback, useEffect, useState } from 'react';
 import { captureScreenRegion, dismissOverlay } from '../services/capture';
 
 export interface CaptureOverlayProps {
@@ -121,7 +121,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
         left: 0,
         width: '100vw',
         height: '100vh',
-        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+        backgroundColor: 'var(--color-overlay-scrim)',
         cursor: 'crosshair',
         zIndex: 9999,
         userSelect: 'none',
@@ -136,8 +136,8 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
             top: `${boxY}px`,
             width: `${boxWidth}px`,
             height: `${boxHeight}px`,
-            border: '2px solid var(--color-primary, #3b82f6)',
-            backgroundColor: 'rgba(59, 130, 246, 0.15)',
+            border: '2px solid var(--color-overlay-ring)',
+            backgroundColor: 'var(--color-overlay-selection-bg)',
             pointerEvents: 'none',
           }}
         >
@@ -147,11 +147,13 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
               position: 'absolute',
               bottom: '-24px',
               left: '0px',
-              backgroundColor: '#1e293b',
-              color: '#f8fafc',
-              padding: '2px 6px',
-              fontSize: '12px',
-              borderRadius: '4px',
+              backgroundColor: 'var(--color-surface-sunken)',
+              color: 'var(--color-text)',
+              border: '1px solid var(--color-border)',
+              padding: 'var(--space-0) var(--space-2)',
+              fontSize: 'var(--text-xs)',
+              fontFamily: 'var(--font-mono)',
+              borderRadius: 'var(--radius-sm)',
               whiteSpace: 'nowrap',
             }}
           >
@@ -168,11 +170,12 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
             top: '20px',
             left: '50%',
             transform: 'translateX(-50%)',
-            backgroundColor: '#ef4444',
-            color: '#ffffff',
-            padding: '8px 16px',
-            borderRadius: '6px',
-            fontSize: '14px',
+            backgroundColor: 'var(--color-danger)',
+            color: 'var(--color-danger-text)',
+            padding: 'var(--space-2) var(--space-4)',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: 'var(--text-sm)',
+            fontFamily: 'var(--font-ui)',
           }}
         >
           {errorMsg}

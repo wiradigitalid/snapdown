@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+﻿import React, { useRef, useState } from 'react';
 import { MarkerBadge } from './MarkerBadge';
 
 export interface MarkerItem {
@@ -76,7 +76,7 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
         width: '100%',
         height: '100%',
         minHeight: '300px',
-        backgroundColor: '#1e293b',
+        backgroundColor: 'var(--color-surface-sunken)',
         cursor: 'crosshair',
         overflow: 'hidden',
         userSelect: 'none',

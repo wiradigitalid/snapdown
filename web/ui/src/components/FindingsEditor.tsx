@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Button } from './Button';
 import { TextArea } from './TextArea';
 
@@ -80,8 +80,8 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
         display: 'flex',
         height: '100%',
         minHeight: '400px',
-        border: '1px solid var(--color-border, #e2e8f0)',
-        borderRadius: '8px',
+        border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius-md)',
         overflow: 'hidden',
       }}
     >
@@ -90,18 +90,18 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
         data-testid="findings-sidebar"
         style={{
           width: '280px',
-          borderRight: '1px solid var(--color-border, #e2e8f0)',
+          borderRight: '1px solid var(--color-border)',
           overflowY: 'auto',
-          backgroundColor: 'var(--color-bg-subtle, #f8fafc)',
-          padding: '12px',
+          backgroundColor: 'var(--color-bg)',
+          padding: 'var(--space-3)',
         }}
       >
         <h3
           style={{
-            margin: '0 0 12px 0',
-            fontSize: '14px',
+            margin: '0 0 var(--space-3) 0',
+            fontSize: 'var(--text-sm)',
             fontWeight: 600,
-            color: 'var(--color-text, #1e293b)',
+            color: 'var(--color-text)',
           }}
         >
           Findings ({findings.length})
@@ -109,12 +109,12 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
         {findings.length === 0 ? (
           <p
             data-testid="empty-findings-message"
-            style={{ fontSize: '13px', color: 'var(--color-text-muted, #64748b)' }}
+            style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}
           >
             No findings captured yet.
           </p>
         ) : (
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
             {findings.map((f) => {
               const isSelected = f.finding.id === selectedFindingId;
               return (
@@ -123,17 +123,17 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
                   data-testid={`finding-item-${f.finding.id}`}
                   onClick={() => onSelectFinding(f.finding.id)}
                   style={{
-                    padding: '8px 12px',
-                    borderRadius: '6px',
+                    padding: 'var(--space-2) var(--space-3)',
+                    borderRadius: 'var(--radius-sm)',
                     cursor: 'pointer',
-                    backgroundColor: isSelected ? 'var(--color-primary-subtle, #e0f2fe)' : '#ffffff',
-                    border: isSelected ? '1px solid var(--color-primary, #3b82f6)' : '1px solid var(--color-border, #e2e8f0)',
+                    backgroundColor: isSelected ? 'var(--color-info-bg)' : 'var(--color-surface)',
+                    border: isSelected ? '1px solid var(--color-accent)' : '1px solid var(--color-border)',
                   }}
                 >
-                  <div style={{ fontWeight: 500, fontSize: '13px', color: '#1e293b' }}>
+                  <div style={{ fontWeight: 500, fontSize: 'var(--text-sm)', color: isSelected ? 'var(--color-info-text)' : 'var(--color-text)' }}>
                     {f.finding.image_path}
                   </div>
-                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 'var(--space-1)' }}>
                     {f.finding.image_width} × {f.finding.image_height} px • {f.markers.length} markers
                   </div>
                 </li>
@@ -148,15 +148,15 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
         data-testid="findings-detail-pane"
         style={{
           flex: 1,
-          padding: '16px',
+          padding: 'var(--space-4)',
           overflowY: 'auto',
-          backgroundColor: '#ffffff',
+          backgroundColor: 'var(--color-surface)',
         }}
       >
         {selectedFinding ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>
+              <h2 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--color-text)' }}>
                 Finding Details
               </h2>
               {onDeleteFinding && (
@@ -173,11 +173,11 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
             <div
               data-testid="finding-metadata"
               style={{
-                fontSize: '12px',
-                color: '#475569',
-                backgroundColor: '#f1f5f9',
-                padding: '8px 12px',
-                borderRadius: '6px',
+                fontSize: 'var(--text-xs)',
+                color: 'var(--color-neutral-text)',
+                backgroundColor: 'var(--color-neutral-bg)',
+                padding: 'var(--space-2) var(--space-3)',
+                borderRadius: 'var(--radius-sm)',
               }}
             >
               <div><strong>ID:</strong> {selectedFinding.finding.id}</div>
@@ -187,8 +187,8 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
             </div>
 
             {/* Note Editor */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label htmlFor="note-body-textarea" style={{ fontSize: '13px', fontWeight: 500 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+              <label htmlFor="note-body-textarea" style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text)' }}>
                 Note
               </label>
               <TextArea
@@ -198,7 +198,7 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
                 placeholder="Enter finding note..."
                 rows={5}
               />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                 <Button
                   variant="primary"
                   onClick={handleSave}
@@ -207,7 +207,7 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
                   {isSaving ? 'Saving...' : 'Save Note'}
                 </Button>
                 {saveSuccess && (
-                  <span data-testid="save-success-indicator" style={{ fontSize: '12px', color: '#16a34a' }}>
+                  <span data-testid="save-success-indicator" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-text)', fontWeight: 600 }}>
                     Saved!
                   </span>
                 )}
@@ -222,8 +222,8 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
               height: '100%',
-              color: '#94a3b8',
-              fontSize: '14px',
+              color: 'var(--color-text-muted)',
+              fontSize: 'var(--text-sm)',
             }}
           >
             Select a finding from the sidebar to inspect details.

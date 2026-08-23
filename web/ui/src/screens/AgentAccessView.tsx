@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Button } from '../components/Button';
+import { Badge } from '../components/Badge';
 
 export interface AgentAccessViewProps {
   hasActiveKey: boolean;
@@ -54,18 +55,18 @@ export const AgentAccessView: React.FC<AgentAccessViewProps> = ({
     <div
       data-testid="agent-access-panel"
       style={{
-        padding: '24px',
-        backgroundColor: '#ffffff',
-        border: '1px solid #e2e8f0',
-        borderRadius: '8px',
+        padding: 'var(--space-5)',
+        backgroundColor: 'var(--color-surface)',
+        border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius-md)',
         display: 'flex',
         flexDirection: 'column',
-        gap: '20px',
+        gap: 'var(--space-4)',
       }}
     >
       <div>
-        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Local Agent Access</h2>
-        <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
+        <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600, color: 'var(--color-text)' }}>Local Agent Access</h2>
+        <p style={{ margin: 'var(--space-1) 0 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
           Grant local AI coding agents read-only access to review bundles via stdio bridge or local HTTP API.
         </p>
       </div>
@@ -74,41 +75,33 @@ export const AgentAccessView: React.FC<AgentAccessViewProps> = ({
       <div
         data-testid="key-status-block"
         style={{
-          padding: '16px',
-          backgroundColor: '#f8fafc',
-          border: '1px solid #e2e8f0',
-          borderRadius: '6px',
+          padding: 'var(--space-4)',
+          backgroundColor: 'var(--color-bg)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-sm)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
         }}
       >
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '13px', fontWeight: 600 }}>Status:</span>
-            <span
-              data-testid="key-active-badge"
-              style={{
-                fontSize: '12px',
-                fontWeight: 600,
-                padding: '2px 8px',
-                borderRadius: '4px',
-                backgroundColor: hasActiveKey ? '#dcfce7' : '#f1f5f9',
-                color: hasActiveKey ? '#15803d' : '#64748b',
-              }}
-            >
-              {hasActiveKey ? 'Active Key Configured' : 'No Active Key'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)' }}>Status:</span>
+            <span data-testid="key-active-badge">
+              <Badge variant={hasActiveKey ? 'success' : 'neutral'}>
+                {hasActiveKey ? 'Active Key Configured' : 'No Active Key'}
+              </Badge>
             </span>
           </div>
 
           {hasActiveKey && issuedAt && (
-            <div style={{ marginTop: '6px', fontSize: '12px', color: '#64748b' }}>
+            <div style={{ marginTop: 'var(--space-1)', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
               Issued at: {issuedAt} (Key ID: {keyId})
             </div>
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
           <Button variant="primary" onClick={handleGenerate} disabled={isGenerating}>
             {isGenerating ? 'Generating...' : hasActiveKey ? 'Rotate / New Key' : 'Generate Access Key'}
           </Button>
@@ -125,30 +118,30 @@ export const AgentAccessView: React.FC<AgentAccessViewProps> = ({
         <div
           data-testid="generated-key-banner"
           style={{
-            padding: '16px',
-            backgroundColor: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            borderRadius: '6px',
+            padding: 'var(--space-4)',
+            backgroundColor: 'var(--color-info-bg)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-sm)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '10px',
+            gap: 'var(--space-2)',
           }}
         >
-          <div style={{ fontWeight: 600, fontSize: '13px', color: '#1e40af' }}>
-            🔑 Save your Access Key now (it will not be displayed again):
+          <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-info-text)' }}>
+            Save your Access Key now (it will not be displayed again):
           </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
             <code
               data-testid="secret-token-display"
               style={{
                 flex: 1,
-                padding: '8px 12px',
-                backgroundColor: '#ffffff',
-                border: '1px solid #93c5fd',
-                borderRadius: '4px',
-                fontFamily: 'monospace',
-                fontSize: '13px',
-                color: '#1e3a8a',
+                padding: 'var(--space-2) var(--space-3)',
+                backgroundColor: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-sm)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 'var(--text-sm)',
+                color: 'var(--color-text)',
               }}
             >
               {newSecret}
@@ -157,12 +150,12 @@ export const AgentAccessView: React.FC<AgentAccessViewProps> = ({
               Copy Key
             </Button>
             {copyFeedback && (
-              <span data-testid="copy-feedback" style={{ fontSize: '12px', color: '#16a34a' }}>
+              <span data-testid="copy-feedback" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-text)', fontWeight: 600 }}>
                 Copied!
               </span>
             )}
           </div>
-          <p style={{ margin: 0, fontSize: '12px', color: '#3b82f6' }}>
+          <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-info-text)' }}>
             Configure your AI assistant using: <code>mcp:set_access_key</code> or <code>Authorization: Bearer &lt;key&gt;</code>
           </p>
         </div>
