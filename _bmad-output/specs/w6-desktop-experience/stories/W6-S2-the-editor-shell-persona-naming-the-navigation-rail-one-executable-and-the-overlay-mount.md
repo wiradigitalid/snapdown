@@ -3,7 +3,7 @@ id: W6-S2
 title: 'W6-S2: The editor shell — persona naming, the navigation rail, one executable, and the overlay mount'
 type: 'feature'
 wave: W6
-status: ready-for-dev
+status: done
 created: '2026-08-23'
 dependencies:
   - W6-S1
@@ -103,14 +103,14 @@ The application currently has two critical defects and architectural gaps:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `apps/desktop/src/main.tsx` -- Update root bootstrap to inspect `window.location.search` and mount `<CaptureOverlay />` when `?overlay=true`, otherwise `<App />` -- Fixes `BUG-4` capture overlay routing.
-- [ ] `apps/desktop/src/test/mount.test.tsx` -- Create test asserting the mount decision from `window.location.search` (`?overlay=true` -> `CaptureOverlay`, default -> `App`) -- Provides seam testing for window entry.
-- [ ] `apps/desktop/src/components/EditorShell.tsx` -- Implement `LC-028` `EditorShell` component with 200px left rail, 4 surface tabs with left edge bars (`NFR-16`), wordmark, and pinned Capture button (`FR-28`, `BR-120`) -- Provides dedicated, resilient frame architecture.
-- [ ] `apps/desktop/src/App.tsx` -- Refactor `App.tsx` to utilize `EditorShell` as its layout container instead of inline top-header JSX -- Eliminates top bar vertical overhead (`FR-29`).
-- [ ] `apps/desktop/src/test/editor_shell.test.tsx` -- Implement unit tests for `EditorShell` verifying rail width, all four tabs present, active tab edge bar, keyboard accessibility, and capture button click handler -- Enforces `LC-028` contract.
-- [ ] `apps/desktop/src/test/shell.test.tsx` -- Update existing shell tests to align with `EditorShell` layout and navigation expectations -- Ensures full regression coverage.
-- [ ] `apps/desktop/src-tauri/tauri.conf.json` -- Set main window title to `"Snapdown Editor"` -- Fulfills `FR-27` and `DEC-003`.
-- [ ] `apps/desktop/src-tauri/tests/test_executable_identity.rs` -- Implement integration test checking that only one binary `Snapdown` is defined in Cargo configuration -- Enforces `AD-11` and `BR-121`.
+- [x] `apps/desktop/src/main.tsx` -- Update root bootstrap to inspect `window.location.search` and mount `<CaptureOverlay />` when `?overlay=true`, otherwise `<App />` -- Fixes `BUG-4` capture overlay routing.
+- [x] `apps/desktop/src/test/mount.test.tsx` -- Create test asserting the mount decision from `window.location.search` (`?overlay=true` -> `CaptureOverlay`, default -> `App`) -- Provides seam testing for window entry.
+- [x] `apps/desktop/src/components/EditorShell.tsx` -- Implement `LC-028` `EditorShell` component with 200px left rail, 4 surface tabs with left edge bars (`NFR-16`), wordmark, and pinned Capture button (`FR-28`, `BR-120`) -- Provides dedicated, resilient frame architecture.
+- [x] `apps/desktop/src/App.tsx` -- Refactor `App.tsx` to utilize `EditorShell` as its layout container instead of inline top-header JSX -- Eliminates top bar vertical overhead (`FR-29`).
+- [x] `apps/desktop/src/test/editor_shell.test.tsx` -- Implement unit tests for `EditorShell` verifying rail width, all four tabs present, active tab edge bar, keyboard accessibility, and capture button click handler -- Enforces `LC-028` contract.
+- [x] `apps/desktop/src/test/shell.test.tsx` -- Update existing shell tests to align with `EditorShell` layout and navigation expectations -- Ensures full regression coverage.
+- [x] `apps/desktop/src-tauri/tauri.conf.json` -- Set main window title to `"Snapdown Editor"` -- Fulfills `FR-27` and `DEC-003`.
+- [x] `apps/desktop/src-tauri/tests/test_executable_identity.rs` -- Implement integration test checking that only one binary `Snapdown` is defined in Cargo configuration -- Enforces `AD-11` and `BR-121`.
 
 **Acceptance Criteria:**
 - Given `window.location.search` is `?overlay=true`, when the application initializes, then `<CaptureOverlay />` is mounted and `<App />` is not mounted.
@@ -134,4 +134,3 @@ The application currently has two critical defects and architectural gaps:
 - `npm --prefix apps/desktop run test` -- expected: All Vitest suites pass (including mount.test.tsx, editor_shell.test.tsx, shell.test.tsx)
 - `npm --prefix apps/desktop run build` -- expected: Vite production build succeeds cleanly
 - `cargo test --workspace` -- expected: All workspace tests pass, including executable identity test
-
