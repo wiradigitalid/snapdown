@@ -448,7 +448,28 @@ waves:
             why: |
               SCN-02's five runs. Needs the startup.registered key so that "nothing was ever
               configured" and "the Reviewer turned it off" stop being indistinguishable.
+
+              **This story also carries BUG-12.** lib.rs:109-119 opens all five stores with
+              .expect(), so an unreadable or corrupt library.db panics inside the Tauri setup hook.
+              A Tauri release binary on Windows has no console: the Reviewer double-clicks
+              Snapdown.exe and NOTHING HAPPENS - no window, no tray, no message, no file named. The
+              product does not look broken, it looks absent.
+
+              SDD-settings.md's Failure Behaviour already specifies the right answer - "reported with
+              the file's path, and nothing is created over it" - and half of it is kept: the panic
+              does guarantee nothing is created over the corrupt store. The reporting half is simply
+              not implemented.
+
+              It belongs here rather than in a story of its own because this story already owns the
+              startup path and the honest-state question - SCN-02 is about a control that must not
+              claim a state it has not read, and BUG-12 is about a startup that must not fail
+              silently. Same surface, same principle.
+
+              DEC-003's Cost section predicted this class in writing and nobody went and looked. That
+              is the useful part: the prediction was recorded and never turned into a check.
             tests:
+              - cargo::an_unreadable_library_db_is_reported_with_its_path_and_not_recreated
+              - cargo::a_corrupt_library_db_does_not_panic_the_setup_hook
               - cargo::a_first_run_with_nothing_configured_registers_at_startup
               - cargo::a_run_after_the_reviewer_disabled_it_does_not_re_register
               - cargo::a_registration_removed_outside_snapdown_shows_off_and_is_not_restored

@@ -489,3 +489,49 @@ defects:
       "Snapdown Editor". W6-S2's persona naming (DEC-003, FR-27) is correct in a real running window,
       which is the first time anything about the product has been confirmed outside jsdom.
     status: open
+  - id: BUG-12
+    title: "A corrupt or unreadable library.db makes the application vanish on launch"
+    found: "2026-08-23"
+    found_by: coordinator, sweeping the panic surface that DEC-003's Cost section predicted
+    component: settings
+    severity: high
+    contradicts: [BR-118, AD-11, "SDD-settings.md Failure Behaviour"]
+    evidence: |
+      apps/desktop/src-tauri/src/lib.rs:109-119 - five store opens, every one .expect():
+        SqliteSettingsStore::open(&db_path).expect("Failed to initialize SqliteSettingsStore")
+        SqliteFindingStore::open(&db_path).expect("Failed to initialize SqliteFindingStore")
+        SqliteBundleStore::open(&db_path).expect("Failed to initialize SqliteBundleStore")
+        SqliteAccessKeyStore::open(&db_path).expect("Failed to initialize SqliteAccessKeyStore")
+        SqlitePublicationStore::open(&db_path).expect("Failed to initialize SqlitePublicationStore")
+      SDD-settings.md Failure Behaviour, the LC-025 -> library.db row, promises the opposite:
+        "Reported with the file's path, and NOTHING IS CREATED OVER IT (BR-118). A store recreated
+         beside a corrupt one is silent data loss."
+    impact: |
+      Half the promise is kept and half is not. Nothing IS created over the corrupt store - the panic
+      guarantees that much. But nothing is REPORTED either.
+      A Tauri release binary on Windows has no console. A panic inside the setup hook unwinds and the
+      process exits, so the Reviewer double-clicks Snapdown.exe and NOTHING HAPPENS - no window, no
+      tray icon, no message, no file named. The product does not appear to be broken; it appears not
+      to be there.
+      AD-11 sharpens it: one process owns the tray, the hotkeys, the overlay and the Editor. There is
+      no surviving surface to report into, which is exactly the cost DEC-003 accepted and wrote down.
+    why_undetected: |
+      DEC-003's Cost section PREDICTED this class in writing - "a panic in the editor's Tauri commands
+      kills the tray, the hotkeys, and the overlay with it ... this raises the bar on every unwrap in
+      the command layer" - and nobody then went and looked at the unwraps. The prediction was recorded
+      and never turned into a check.
+      No test opens a corrupt database. Every store test uses open_in_memory().
+    fix: |
+      Do not panic. Open the stores fallibly, and on failure show a window - or a native dialog -
+      naming the file that could not be opened and offering to open its folder. That is what the SDD
+      already specifies; the code simply does not do it.
+      The store must still never be recreated beside a corrupt one. BR-118 is not in question.
+    note: |
+      Also swept and deliberately NOT registered, so the next sweep does not re-raise them:
+        server/handlers.rs - 26 unwraps, ALL Header::from_bytes over compile-time byte constants
+          such as b"Content-Type" / b"application/json". These cannot fail.
+        lib.rs:226 - .expect("error while running tauri application") on the Tauri run call. If that
+          fails there is nothing left to report with.
+        bridge mcp.rs:55,81 - serde_json::to_string on a well-formed response struct. Effectively
+          infallible, and the bridge has no channel to report a serialisation failure over anyway.
+    status: open

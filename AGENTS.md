@@ -259,6 +259,15 @@ that adds a component, grep for `<ComponentName` across `apps/desktop/src` and `
 excluding its own file and its tests.** No hit means nobody can reach it. `V12` will not catch this:
 it checks that an `LC` is *registered*, not that it is *reached*.
 
+**A panic in the desktop process takes the whole product with it.** `AD-11` puts the tray, the
+hotkeys, the capture overlay and the Editor in one process, and `DEC-003` accepted that cost in
+writing: *"a panic in the editor's Tauri commands kills the tray, the hotkeys, and the overlay with
+it."* A Tauri release binary on Windows has no console, so a panic in the setup hook means the
+Reviewer double-clicks the exe and **nothing happens at all** — see `BUG-12`, five `.expect()` calls
+on store opens. Before writing `unwrap`/`expect` outside a test, ask what the Reviewer sees when it
+fires. Genuinely infallible cases exist and are fine — `Header::from_bytes` over a compile-time byte
+constant is one — but they are rarer than they look.
+
 **`let _ =` on a Result an invariant depends on is a defect, not a style.** Five instances found on
 2026-08-23 across two files: `vault_migration.rs` swallowed both `fs::remove_file` results, and
 `bundle.rs` swallowed the Markdown write, the Vault open, the unpublish, and two blob deletes. The
