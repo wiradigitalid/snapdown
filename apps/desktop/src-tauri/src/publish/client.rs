@@ -73,8 +73,8 @@ impl PublishClient {
                 resp.into_reader()
                     .read_to_string(&mut body)
                     .map_err(|e| e.to_string())?;
-                let pub_resp: PublishResponse =
-                    serde_json::from_str(&body).map_err(|e| format!("Invalid JSON response: {e}"))?;
+                let pub_resp: PublishResponse = serde_json::from_str(&body)
+                    .map_err(|e| format!("Invalid JSON response: {e}"))?;
                 Ok(pub_resp)
             }
             Err(ureq::Error::Status(code, resp)) => {
@@ -120,8 +120,8 @@ impl PublishClient {
                     resp.into_reader()
                         .read_to_string(&mut body)
                         .map_err(|e| e.to_string())?;
-                    let rec: ReconcileResponse =
-                        serde_json::from_str(&body).map_err(|e| format!("Invalid JSON response: {e}"))?;
+                    let rec: ReconcileResponse = serde_json::from_str(&body)
+                        .map_err(|e| format!("Invalid JSON response: {e}"))?;
                     Ok(rec.status == "served")
                 } else {
                     Ok(false)
