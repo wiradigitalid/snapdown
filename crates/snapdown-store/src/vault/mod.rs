@@ -4,6 +4,9 @@ use std::path::{Component, Path, PathBuf};
 use snapdown_core::error::CoreError;
 use snapdown_core::ports::BlobStore;
 
+pub mod sweeper;
+pub use sweeper::{OrphanScanReport, OrphanSweeper};
+
 #[derive(Debug, Clone)]
 pub struct VaultBlobStore {
     root: PathBuf,
@@ -64,8 +67,6 @@ impl VaultBlobStore {
         let target = self.root.join(rel);
 
         // Canonicalize
-        // If target exists, canonicalize directly.
-        // If target does not exist, canonicalize existing parent prefix or normalize.
         let canonical_target = if target.exists() {
             target
                 .canonicalize()

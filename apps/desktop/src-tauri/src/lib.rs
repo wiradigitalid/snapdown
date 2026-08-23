@@ -18,7 +18,10 @@ pub mod state;
 pub mod vault_migration;
 
 use commands::capture::{capture_screen_region, dismiss_overlay, trigger_overlay};
-use commands::finding::{delete_finding, get_finding_detail, list_findings, save_note};
+use commands::finding::{
+    add_marker, clean_orphans, delete_finding, delete_marker, get_finding_detail, list_findings,
+    save_note, scan_orphans, update_marker,
+};
 use commands::hotkey::{clear_hotkey, get_hotkeys, set_hotkey};
 use commands::settings::{
     get_latest_finding_size, get_settings, open_vault_folder, set_quality_budget, set_vault_path,
@@ -173,7 +176,12 @@ pub fn run() {
             list_findings,
             get_finding_detail,
             save_note,
-            delete_finding
+            delete_finding,
+            scan_orphans,
+            clean_orphans,
+            add_marker,
+            update_marker,
+            delete_marker
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

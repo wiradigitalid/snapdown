@@ -32,6 +32,13 @@ export interface FindingDetailDto {
   markers: MarkerDto[];
 }
 
+export interface OrphanScanReportDto {
+  total_vault_files: number;
+  referenced_files: number;
+  orphan_files: string[];
+  missing_files: string[];
+}
+
 export const listFindings = async (): Promise<FindingDetailDto[]> => {
   return await invoke<FindingDetailDto[]>('list_findings');
 };
@@ -54,4 +61,56 @@ export const saveNote = async (
 
 export const deleteFinding = async (id: string): Promise<void> => {
   await invoke<void>('delete_finding', { id });
+};
+
+export const scanOrphans = async (): Promise<OrphanScanReportDto> => {
+  return await invoke<OrphanScanReportDto>('scan_orphans');
+};
+
+export const cleanOrphans = async (
+  orphanFiles: string[]
+): Promise<number> => {
+  return await invoke<number>('clean_orphans', { orphanFiles });
+};
+
+export const addMarker = async (
+  findingId: string,
+  markerId: string,
+  x: number,
+  y: number,
+  comment: string
+): Promise<MarkerDto> => {
+  return await invoke<MarkerDto>('add_marker', {
+    findingId,
+    markerId,
+    x,
+    y,
+    comment,
+  });
+};
+
+export const updateMarker = async (
+  findingId: string,
+  markerId: string,
+  x: number,
+  y: number,
+  comment: string
+): Promise<MarkerDto> => {
+  return await invoke<MarkerDto>('update_marker', {
+    findingId,
+    markerId,
+    x,
+    y,
+    comment,
+  });
+};
+
+export const deleteMarker = async (
+  findingId: string,
+  markerId: string
+): Promise<void> => {
+  await invoke<void>('delete_marker', {
+    findingId,
+    markerId,
+  });
 };
