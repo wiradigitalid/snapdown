@@ -667,3 +667,78 @@ defects:
       A new workspace binary now requires adding its name to the list in that step, which is the
       right friction: a second executable appearing unannounced is what the guard is for.
     status: resolved
+
+  - id: BUG-14
+    title: "Snapdown does not take screenshots. The capture path writes a 17-byte placeholder."
+    found: "2026-08-24"
+    found_by: coordinator, closing wave W6 — inventory.py flagged a missing Capture note field, and reading the capture path to check it exposed this
+    component: finding
+    severity: critical
+    contradicts: [BG-1, FR-1, FR-2, FR-5, FR-6, FR-8, UC-1, UC-2, AD-2, NFR-18]
+    evidence: |
+      apps/desktop/src-tauri/src/commands/capture.rs:197 — the whole of what is written to the Vault:
+
+        fn generate_placeholder_image(width: u32, height: u32, encoder_quality: u8) -> Vec<u8> {
+            let mut bytes = Vec::new();
+            bytes.extend_from_slice(b"\x89PNG\r\n\x1a\n");   // 8-byte signature
+            bytes.extend_from_slice(&width.to_be_bytes());   // 4
+            bytes.extend_from_slice(&height.to_be_bytes());  // 4
+            bytes.push(encoder_quality);                     // 1
+            bytes
+        }
+
+      Seventeen bytes. No IHDR, no IDAT, no IEND. It is not a PNG and no viewer will open it.
+
+      capture.rs:93-100 calls it and writes the result as the Finding's image. Nothing in the file
+      reads the screen.
+
+      NO SCREEN-CAPTURE DEPENDENCY EXISTS IN THE WORKSPACE. Every dependency in Cargo.toml:
+        serde serde_json thiserror uuid chrono rusqlite rand tempfile tiny_http ureq base64
+        tauri tauri-build tauri-plugin-single-instance tauri-plugin-global-shortcut
+        tauri-plugin-autostart winreg
+      A case-insensitive search of every .rs and .toml for xcap, screenshots, scrap, captrs,
+      win_screenshot, BitBlt and GetDC returns nothing. There is also no `image` crate, so nothing
+      can decode or encode a real image either.
+
+      crates/snapdown-store/src/image/pipeline.rs:26-37 says so in its own comment — "downscaled
+      payload simulation". reduce_image writes the same fake header and then copies input_bytes[16..]
+      through. No decode, no scale, no encode.
+    impact: |
+      The product does not do the thing it is named for. Everything downstream is built on bytes that
+      are not an image: a Finding's screenshot cannot render, Markers annotate nothing, a Bundle
+      copies those bytes into its own folder, and the Markdown it hands over references a file no
+      reader can open. BG-1 - a note unambiguously attached to the image it describes - has no image.
+
+      NFR-18 and the whole Quality Budget that W6-S4 just built resolve parameters for an encoder
+      that does not run. The numbers are correct and they are applied to nothing.
+
+      This is why AUDIT-4 could not create a Finding to test BUG-5 with, and it is the most likely
+      reason its overlay screenshot came back blank.
+    why_undetected: |
+      Every test in this repository asserts DIMENSIONS, never pixels. compute_reduced_dimensions is
+      pure arithmetic and is correct; test_image_reduction.rs checks widths and heights; the store
+      tests write and read byte arrays without asking what the bytes are. A fake PNG passes all of it
+      because none of it ever decodes one.
+
+      The same blind spot that let four components ship mounted nowhere: the unit is right, and
+      nothing checks that the unit is connected to reality. Here the unit is right and there is no
+      reality behind it at all.
+
+      Six waves, twelve use cases and four UI audits went past it. AUDIT-2 came closest by concluding
+      there was nothing to photograph.
+    fix: |
+      Add a real screen-capture dependency and a real image codec, then replace
+      generate_placeholder_image with an actual grab of the requested region, and
+      ImageReducer::reduce_image with a real decode-scale-encode. The dimension arithmetic already
+      written is correct and should be kept - it is the only part of this that works.
+
+      This is a wave of its own, not a story. It reaches capture, the image pipeline, the Vault, the
+      Markdown serializer's byte-identity guarantee, and every test that currently asserts a
+      dimension where it should assert an image.
+    note: |
+      W6 is not thereby wasted. It fixed the experience around this core - the build, the shell, the
+      Settings surface, the swallowed failures, the Bundle cascade - and every one of those was a
+      real defect that would still be there. What W6 could not do is notice that the core was hollow,
+      because nothing in its scope decoded an image either.
+    related: BUG-4
+    status: open

@@ -25,8 +25,19 @@ def derive_db(root: Path) -> "Derived":       # noqa: F821
         content = read(mig_path)
         # Parse CREATE TABLE statements
         matches = re.findall(r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_]+)\s*\((.*?)\);", content, re.S | re.I)
+        # A table that a later statement renames away is migration scaffolding, not a
+        # schema table. SQLite has no DROP COLUMN / DROP CONSTRAINT, so the only way to
+        # remove one is create-copy-drop-rename; migration v6 does exactly that to take
+        # the finding_id foreign key off bundle_item. Without this, the scaffold name is
+        # reported as an unrecorded table forever.
+        renamed_away = {
+            m.strip()
+            for m in re.findall(r"ALTER\s+TABLE\s+([a-zA-Z0-9_]+)\s+RENAME\s+TO\s+", content, re.I)
+        }
         for tbl_name, tbl_body in matches:
             tbl_name_clean = tbl_name.strip()
+            if tbl_name_clean in renamed_away:
+                continue
             if tbl_name_clean == "schema_version":
                 rows.append(Row(              # noqa: F821
                     key="schema_version",
