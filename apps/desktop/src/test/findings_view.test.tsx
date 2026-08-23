@@ -72,7 +72,7 @@ describe('FindingsView Composition Tests (BUG-5, BUG-6, SCN-04)', () => {
     vi.clearAllMocks();
     vi.mocked(settingsService.getSettings).mockResolvedValue({
       vault_path: '/path/to/vault',
-      quality_budget: { max_long_edge: 1600, encoder_quality: 75 },
+      quality_budget: { named: 'balanced', max_long_edge: 1600, encoder_quality: 75 },
       latest_finding_size: 188416,
     });
     vi.mocked(settingsService.getHotkeys).mockResolvedValue({

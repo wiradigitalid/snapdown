@@ -98,7 +98,9 @@ mod tests {
         let orig_dims = ImageDimensions::new(3840, 2160).unwrap();
         let input_bytes = vec![0u8; 1024];
 
-        let result = ImageReducer::reduce_image_with_budget(&input_bytes, orig_dims, &balanced, true).unwrap();
+        let result =
+            ImageReducer::reduce_image_with_budget(&input_bytes, orig_dims, &balanced, true)
+                .unwrap();
 
         assert_eq!(result.dimensions.width, 1600);
         assert_eq!(result.dimensions.height, 900);

@@ -90,7 +90,11 @@ pub fn capture_screen_region(
     let timestamp_str = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
     let filename = format!("findings/capture_{timestamp_str}.png");
 
-    let placeholder_bytes = generate_placeholder_image(target_dims.width, target_dims.height, resolved.encoder_quality);
+    let placeholder_bytes = generate_placeholder_image(
+        target_dims.width,
+        target_dims.height,
+        resolved.encoder_quality,
+    );
 
     vault_store
         .write_blob(&filename, &placeholder_bytes)
@@ -99,7 +103,8 @@ pub fn capture_screen_region(
     // Create finding record with resolved derivation parameters (NFR-18, BR-105)
     let clock = SystemClock::new();
     let entropy = SystemEntropySource::new();
-    let finding_id = snapdown_core::util::id::id_from_parts(clock.now_unix_millis(), entropy.random_bytes_10());
+    let finding_id =
+        snapdown_core::util::id::id_from_parts(clock.now_unix_millis(), entropy.random_bytes_10());
     let captured_at = clock.now_rfc3339();
 
     let finding = Finding {

@@ -13,13 +13,15 @@ fn auto_derivation_varies_reduction_between_small_tooltip_and_4k_screen() {
     let dims_a = ImageDimensions::new(312, 118).unwrap();
     let bytes_a = vec![128u8; 2048];
     let resolved_a = auto_budget.resolve(dims_a.long_edge());
-    let result_a = ImageReducer::reduce_image(&bytes_a, dims_a.clone(), &resolved_a, false).unwrap();
+    let result_a =
+        ImageReducer::reduce_image(&bytes_a, dims_a.clone(), &resolved_a, false).unwrap();
 
     // Capture B: 4K dashboard (3840 x 2160)
     let dims_b = ImageDimensions::new(3840, 2160).unwrap();
     let bytes_b = vec![64u8; 8192];
     let resolved_b = auto_budget.resolve(dims_b.long_edge());
-    let result_b = ImageReducer::reduce_image(&bytes_b, dims_b.clone(), &resolved_b, false).unwrap();
+    let result_b =
+        ImageReducer::reduce_image(&bytes_b, dims_b.clone(), &resolved_b, false).unwrap();
 
     // SCN-03 core assertion: resolved(A) != resolved(B)
     assert_ne!(resolved_a, resolved_b);
@@ -36,19 +38,33 @@ fn fixed_presets_downscale_to_pinned_constants() {
 
     // Sharp: 2560 px long edge, 90 quality
     let sharp_budget = QualityBudget::new(NamedBudget::Sharp, None);
-    let sharp_res = ImageReducer::reduce_image_with_budget(&input_bytes, orig_dims.clone(), &sharp_budget, true).unwrap();
+    let sharp_res = ImageReducer::reduce_image_with_budget(
+        &input_bytes,
+        orig_dims.clone(),
+        &sharp_budget,
+        true,
+    )
+    .unwrap();
     assert_eq!(sharp_res.dimensions.width, 2560);
     assert_eq!(sharp_res.dimensions.height, 1440);
 
     // Balanced: 1600 px long edge, 75 quality
     let balanced_budget = QualityBudget::new(NamedBudget::Balanced, None);
-    let balanced_res = ImageReducer::reduce_image_with_budget(&input_bytes, orig_dims.clone(), &balanced_budget, true).unwrap();
+    let balanced_res = ImageReducer::reduce_image_with_budget(
+        &input_bytes,
+        orig_dims.clone(),
+        &balanced_budget,
+        true,
+    )
+    .unwrap();
     assert_eq!(balanced_res.dimensions.width, 1600);
     assert_eq!(balanced_res.dimensions.height, 900);
 
     // Small: 1280 px long edge, 50 quality
     let small_budget = QualityBudget::new(NamedBudget::Small, None);
-    let small_res = ImageReducer::reduce_image_with_budget(&input_bytes, orig_dims, &small_budget, true).unwrap();
+    let small_res =
+        ImageReducer::reduce_image_with_budget(&input_bytes, orig_dims, &small_budget, true)
+            .unwrap();
     assert_eq!(small_res.dimensions.width, 1280);
     assert_eq!(small_res.dimensions.height, 720);
 }
@@ -60,7 +76,9 @@ fn custom_pair_reduction_honors_explicit_limits() {
     let orig_dims = ImageDimensions::new(3840, 2160).unwrap();
     let input_bytes = vec![200u8; 4096];
 
-    let res = ImageReducer::reduce_image_with_budget(&input_bytes, orig_dims, &custom_budget, false).unwrap();
+    let res =
+        ImageReducer::reduce_image_with_budget(&input_bytes, orig_dims, &custom_budget, false)
+            .unwrap();
     assert_eq!(res.dimensions.width, 1920);
     assert_eq!(res.dimensions.height, 1080);
 }

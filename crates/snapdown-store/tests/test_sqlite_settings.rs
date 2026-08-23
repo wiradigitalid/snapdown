@@ -96,7 +96,7 @@ fn corrupt_library_refuses_to_open_and_does_not_recreate() {
 }
 
 #[test]
-fn quality_budget_atomic_write_preserves_consistency() {
+fn the_named_state_and_its_resolved_pair_are_written_together() {
     let store = SqliteSettingsStore::open_in_memory().unwrap();
     let clock = SystemClock::new();
 
@@ -127,7 +127,7 @@ fn quality_budget_atomic_write_preserves_consistency() {
 }
 
 #[test]
-fn invalid_advanced_values_are_refused_and_do_not_transition_to_custom() {
+fn an_advanced_value_outside_its_range_is_refused_and_does_not_enter_custom() {
     // Attempting to construct out-of-bounds ResolvedPair fails (BR-117)
     let below_min_edge = ResolvedPair::new(MIN_LONG_EDGE_PX - 1, 80);
     assert!(below_min_edge.is_err());

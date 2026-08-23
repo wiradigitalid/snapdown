@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Button, SegmentedControl, SegmentedControlOption, TextField } from '@snapdown/ui';
+import { SegmentedControl, SegmentedControlOption, TextField } from '@snapdown/ui';
 import { LatestFindingAttributionDto, NamedBudget, QualityBudget, ResolvedPair } from '../types/settings';
 
 export interface QualityBudgetSectionProps {
@@ -10,12 +10,12 @@ export interface QualityBudgetSectionProps {
   disabled?: boolean;
 }
 
-export const MIN_LONG_EDGE_PX = 320;
-export const MAX_LONG_EDGE_PX = 7680;
-export const MIN_ENCODER_QUALITY = 10;
-export const MAX_ENCODER_QUALITY = 100;
+const MIN_LONG_EDGE_PX = 320;
+const MAX_LONG_EDGE_PX = 7680;
+const MIN_ENCODER_QUALITY = 10;
+const MAX_ENCODER_QUALITY = 100;
 
-export const PRESET_PROSE: Record<NamedBudget, string> = {
+const PRESET_PROSE: Record<NamedBudget, string> = {
   auto: 'Sizes each capture to what it is. Most captures land near 120 KB.',
   sharp: 'Keeps small text crisp. Files are larger.',
   balanced: 'A middle setting that does not change with the capture.',
@@ -23,7 +23,7 @@ export const PRESET_PROSE: Record<NamedBudget, string> = {
   custom: 'Custom limits set in Advanced.',
 };
 
-export const PRESET_DEFAULTS: Record<Exclude<NamedBudget, 'custom'>, ResolvedPair> = {
+const PRESET_DEFAULTS: Record<Exclude<NamedBudget, 'custom'>, ResolvedPair> = {
   auto: { max_long_edge: 1600, encoder_quality: 82 },
   sharp: { max_long_edge: 2560, encoder_quality: 90 },
   balanced: { max_long_edge: 1600, encoder_quality: 75 },
@@ -101,13 +101,12 @@ export const QualityBudgetSection: React.FC<QualityBudgetSectionProps> = ({
     }
   };
 
-  const handleAdvancedChange = async (edgeStr: string, qualityStr: string) => {
+  const handleEdgeChange = async (edgeStr: string) => {
     setMaxLongEdge(edgeStr);
-    setEncoderQuality(qualityStr);
     setErrorMessage(null);
 
     const edge = Number(edgeStr);
-    const quality = Number(qualityStr);
+    const quality = Number(encoderQuality);
 
     if (isNaN(edge) || edge < MIN_LONG_EDGE_PX || edge > MAX_LONG_EDGE_PX) {
       setErrorMessage(`Max long edge must be between ${MIN_LONG_EDGE_PX} and ${MAX_LONG_EDGE_PX} px`);
@@ -119,7 +118,35 @@ export const QualityBudgetSection: React.FC<QualityBudgetSectionProps> = ({
       return;
     }
 
-    // Valid advanced value -> visibly switch to Custom (BR-117) and save atomically (BR-116)
+    setActiveBudget('custom');
+    setIsSaving(true);
+    try {
+      await onSaveQualityBudget('custom', { max_long_edge: edge, encoder_quality: quality });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMessage(msg);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleQualityChange = async (qualityStr: string) => {
+    setEncoderQuality(qualityStr);
+    setErrorMessage(null);
+
+    const edge = Number(maxLongEdge);
+    const quality = Number(qualityStr);
+
+    if (isNaN(quality) || quality < MIN_ENCODER_QUALITY || quality > MAX_ENCODER_QUALITY) {
+      setErrorMessage(`Quality must be between ${MIN_ENCODER_QUALITY}% and ${MAX_ENCODER_QUALITY}%`);
+      return;
+    }
+
+    if (isNaN(edge) || edge < MIN_LONG_EDGE_PX || edge > MAX_LONG_EDGE_PX) {
+      setErrorMessage(`Max long edge must be between ${MIN_LONG_EDGE_PX} and ${MAX_LONG_EDGE_PX} px`);
+      return;
+    }
+
     setActiveBudget('custom');
     setIsSaving(true);
     try {
@@ -288,7 +315,7 @@ export const QualityBudgetSection: React.FC<QualityBudgetSectionProps> = ({
               min={MIN_LONG_EDGE_PX}
               max={MAX_LONG_EDGE_PX}
               value={maxLongEdge}
-              onChange={(e) => handleAdvancedChange(e.target.value, encoderQuality)}
+              onChange={(e) => handleEdgeChange(e.target.value)}
               disabled={disabled || isSaving}
             />
 
@@ -299,7 +326,7 @@ export const QualityBudgetSection: React.FC<QualityBudgetSectionProps> = ({
               min={MIN_ENCODER_QUALITY}
               max={MAX_ENCODER_QUALITY}
               value={encoderQuality}
-              onChange={(e) => handleAdvancedChange(maxLongEdge, e.target.value)}
+              onChange={(e) => handleQualityChange(e.target.value)}
               disabled={disabled || isSaving}
             />
           </div>

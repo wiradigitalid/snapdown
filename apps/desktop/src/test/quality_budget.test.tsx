@@ -138,7 +138,7 @@ describe('Quality Budget Intent and Derivation UI (W6-S4 / DEC-004 / SCN-03 / FR
     });
   });
 
-  it('attributed_readout_shows_size_dimension_and_budget_name', () => {
+  it('the_readout_names_the_budget_that_produced_the_latest_finding', () => {
     const handleSave = vi.fn().mockResolvedValue(undefined);
 
     const latestFinding: LatestFindingAttributionDto = {

@@ -2,7 +2,9 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use rusqlite::{Connection, OpenFlags};
-use snapdown_core::domain::setting::{QualityBudget, ResolvedPair, Setting, SettingKey, SettingValue};
+use snapdown_core::domain::setting::{
+    QualityBudget, ResolvedPair, Setting, SettingKey, SettingValue,
+};
 use snapdown_core::error::CoreError;
 use snapdown_core::ports::SettingsStore;
 
