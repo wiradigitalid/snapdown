@@ -1,4 +1,17 @@
+  V18  W6-S10: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
+  V18  W6-S2: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
+  V18  W6-S3: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
+  V18  W6-S4: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
+  V18  W6-S5: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
+  V18  W6-S6: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
+  V18  W6-S7: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
+  V18  W6-S8: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
+  V18  W6-S9: has no story file in _bmad-output/specs/w6-desktop-experience/stories/
   V24  .agent/skills/bmad-project-context/references/template.md: cites `src/lib/money.ts` which does not exist
   V24  .agent/skills/bmad-project-context/references/template.md: cites `src/routes/webhooks.ts` which does not exist
-  V25  mcp-bridge: `built: true` MUST have a heading in the code map
-  V25  web-api: `built: true` MUST have a heading in the code map
+  V3   UC-1: component `finding` has already been touched by a wave, but this UC is not scheduled to any story
+  V3   UC-12: component `bundle` has already been touched by a wave, but this UC is not scheduled to any story
+  V3   UC-2: component `finding` has already been touched by a wave, but this UC is not scheduled to any story
+  V3   UC-7: component `finding` has already been touched by a wave, but this UC is not scheduled to any story
+  V3   UC-8: component `finding` has already been touched by a wave, but this UC is not scheduled to any story
+  V3   UC-9: component `bundle` has already been touched by a wave, but this UC is not scheduled to any story

@@ -30,10 +30,15 @@ gen/schemas
 # The product brief makes this a hard constraint, not a preference: this repository is public, and a
 # Capture may contain personal data. Nothing enforced it until 2026-08-23, when a UX audit staged five
 # screenshots of the owner's own machine for commit and was caught by hand.
-.work/**/*.png
-.work/**/*.jpg
-.work/**/*.jpeg
-.work/**/*.webp
+# Widened 2026-08-23 from `.work/**` to everywhere, after the CI guard's first run found twelve
+# screenshots of the running product committed under _bmad-output/ since W1 — see BUG-7. The
+# constraint was never about one directory.
+*.png
+*.jpg
+*.jpeg
+*.webp
+!apps/desktop/src-tauri/icons/*.png
+!apps/desktop/src-tauri/icons/*.ico
 
 # Raw accessibility-tree dumps from UI audit workers. They are JSON snapshots of the RUNNING
 # product and they embed absolute paths under the operator's home directory, so they fall under the

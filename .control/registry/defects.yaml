@@ -225,3 +225,36 @@ defects:
 #
 # W6-S2 and W6-S7 carry the three fixes. The missing test CLASS is the thing to fix beyond them, and
 # it is filed as OQ-23 rather than bolted onto a story that has enough to do.
+  - id: BUG-7
+    title: Twelve screenshots of the running product have been committed to this public repository since W1
+    found: "2026-08-23"
+    found_by: the new korpus.yml forbidden-content guard, on its first local run
+    component: _repo
+    severity: high
+    contradicts: ["product brief § Constraints"]
+    evidence: |
+      git ls-files -- '*.png' '*.jpg' '*.jpeg' '*.webp', excluding apps/desktop/src-tauri/icons/,
+      returns 12 files. Eleven are in _bmad-output/specs/w1-settings/ui-verify-W1-S1/ and were
+      committed in 7abde7b, "docs(w1-s1): UI verification finished". That commit is ON origin/main.
+      The brief has said since G1: "This repository is public. Forbids committing a captured
+      screenshot, a token, a client's name, or any test fixture derived from real capture output."
+    impact: |
+      They are screenshots of the product running on the operator's machine. claim6_vault_path_typed
+      and claim4_window_rendered_live show the Settings surface, which displays the Vault path - an
+      absolute path under a real home directory. Whatever else was on screen is in them too.
+      ALREADY PUBLIC. Unlike the accessibility-tree dumps caught earlier the same day, these are not
+      on an unpushed branch: they are on main and have been fetchable for as long as main has been.
+      Removing them now stops it getting worse and does NOT un-publish them.
+    why_undetected: |
+      Nothing enforced the constraint. korpus.yml validated the corpus and desktop-ci.yml built the
+      code; no workflow ever refused a path. The constraint was written at G1 and read by nobody
+      since. The guard that finds it was added on 2026-08-23 and found it on its first run.
+    fix: |
+      Two parts, and only the first is the agent's.
+      1. Remove them from the working tree, which this defect does, and let the new guard prevent
+         recurrence.
+      2. Whether to rewrite main's history - and whether anything visible in them warrants any other
+         action - is the REPO OWNER'S CALL. Rewriting published history on a public repository
+         affects every clone and fork, and an agent must not do it unilaterally. Recorded here so the
+         decision is made rather than inherited.
+    status: open
