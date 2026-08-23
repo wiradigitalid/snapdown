@@ -31,9 +31,9 @@ work_progress:
   work_progress: n/a
 - wave: W6
   status: open
-  stories_done: 0
+  stories_done: 1
   stories_total: 10
-  work_progress: 0%
+  work_progress: 10%
 gate_readiness: 88%
 validators_red:
 - V18

@@ -201,7 +201,7 @@ waves:
     opened: "2026-08-23"
     spec_reviewed:
       date: "2026-08-23"
-      sha: 24452d6
+      sha: 8bf08b4
       lenses: [structure, prose, edge-case-hunter]
     known_gaps:
       # Named here rather than discovered at wave close. Neither blocks W6; both would otherwise

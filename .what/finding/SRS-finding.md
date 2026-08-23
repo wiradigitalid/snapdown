@@ -7,7 +7,7 @@ updated: "2026-08-22"
 satisfies: [FR-1, FR-2, FR-3, FR-4, FR-6, FR-7, FR-8, FR-9, FR-13, FR-15, NFR-1, NFR-2, NFR-3, NFR-4, NFR-5]
 reviewed:
   date: '2026-08-23'
-  sha: '4aabb93'
+  sha: '783a561'
   lenses: [structure, prose, edge-case-hunter]
 ---
 
