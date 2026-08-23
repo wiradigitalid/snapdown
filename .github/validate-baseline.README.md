@@ -17,7 +17,7 @@ supports and what it does not.
 
 **A green validator on these six would mean somebody guessed.** These lines stay.
 
-## `V18` ×7 — seven W6 stories with no story file
+## `V18` ×7 — the W6 stories with no story file yet
 
 **Temporary, and expected.** A story file is written by `wdi-build` Phase 3 Step 1, one story at a
 time. `W6-S1`, `W6-S2` and `W6-S7` exist; the other seven do not yet. The count ROSE by one on 2026-08-23 when W6-S11 was added to the wave for BUG-11 - a story added is a V18 line added, and that is the validator working. Each line leaves this file as its story is planned,

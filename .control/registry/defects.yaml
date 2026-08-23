@@ -176,7 +176,14 @@ defects:
       element and the marker canvas are PRESENT in the mounted Findings surface - a composition test,
       which is the class of test this product has none of.
     related: BUG-4
-    status: open
+    resolved: |
+      W6-S7, 2026-08-23. FindingsView converts the Vault path with convertFileSrc and passes it as
+      imageSrc; FindingsEditor renders the screenshot and mounts MarkerLayer over it. Verified by the
+      coordinator: the never-mounted sweep is now clean for all six components, and four composition
+      tests assert presence in the MOUNTED surface rather than in isolation.
+      Still unproven in a RUNNING application - see BUG-11. jsdom does not fetch images, so the test
+      passes on a mocked convertFileSrc either way.
+    status: resolved-pending-product-verification
   - id: BUG-6
     title: The orphan report is built, tested, and unreachable — no screen ever mounts it
     found: "2026-08-23"
@@ -201,12 +208,16 @@ defects:
       loop. A Reviewer who never opens it loses nothing until something has already gone wrong.
     why_undetected: |
       The third instance of one pattern in one sweep. See the SYSTEMIC note below.
+      RESOLVED by W6-S7 on 2026-08-23 - see the resolved: field above.
     fix: |
       Give it an entry point. .how/finding/01-ux/DESIGN.md places it as LC-030 with a route of
       /findings/orphans, and .how/finding/01-ux/DESIGN.md's Findings surface offers it from the
       image-missing state. Both are in W6-S7's scope.
     related: [BUG-4, BUG-5]
-    status: open
+    resolved: |
+      W6-S7, 2026-08-23. OrphanReportView is mounted behind a viewMode on FindingsView and reachable
+      from the image-missing state. FR-15 and UC-8 are reachable again.
+    status: resolved
 
 # SYSTEMIC — the shape shared by BUG-4, BUG-5 and BUG-6, written 2026-08-23
 #
