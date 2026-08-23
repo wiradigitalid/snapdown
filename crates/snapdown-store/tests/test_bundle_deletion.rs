@@ -26,6 +26,9 @@ fn bundle_deletion_with_file_synchronization_and_cascade() {
         captured_at: "2026-08-23T10:00:00Z".into(),
         source_monitor: "DISPLAY1".into(),
         region: "0,0,800,600".into(),
+        resolved_long_edge: None,
+        resolved_encoder_quality: None,
+        budget_name: None,
     };
     let note = Note {
         id: "n1".into(),

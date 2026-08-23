@@ -10,6 +10,13 @@ pub const MAX_LONG_EDGE_PX: u32 = 7680;
 pub const MIN_ENCODER_QUALITY: u8 = 10;
 pub const MAX_ENCODER_QUALITY: u8 = 100;
 
+pub const PRESET_SHARP_LONG_EDGE: u32 = 2560;
+pub const PRESET_SHARP_QUALITY: u8 = 90;
+pub const PRESET_BALANCED_LONG_EDGE: u32 = 1600;
+pub const PRESET_BALANCED_QUALITY: u8 = 75;
+pub const PRESET_SMALL_LONG_EDGE: u32 = 1280;
+pub const PRESET_SMALL_QUALITY: u8 = 50;
+
 pub const DEFAULT_HOTKEY_CAPTURE: &str = "CommandOrControl+Shift+S";
 pub const DEFAULT_HOTKEY_OPEN_EDITOR: &str = "CommandOrControl+Shift+E";
 
@@ -59,22 +66,84 @@ impl HotkeyAction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct QualityBudget {
-    pub max_long_edge: u32,
-    pub encoder_quality: u8,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NamedBudget {
+    Auto,
+    Sharp,
+    Balanced,
+    Small,
+    Custom,
 }
 
-impl Default for QualityBudget {
-    fn default() -> Self {
-        Self {
-            max_long_edge: DEFAULT_MAX_LONG_EDGE_PX,
-            encoder_quality: DEFAULT_ENCODER_QUALITY,
+impl NamedBudget {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Sharp => "sharp",
+            Self::Balanced => "balanced",
+            Self::Small => "small",
+            Self::Custom => "custom",
+        }
+    }
+
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::Sharp => "Sharp",
+            Self::Balanced => "Balanced",
+            Self::Small => "Small",
+            Self::Custom => "Custom",
+        }
+    }
+
+    pub fn prose(&self) -> &'static str {
+        match self {
+            Self::Auto => "Sizes each capture to what it is. Most captures land near 120 KB.",
+            Self::Sharp => "Keeps small text crisp. Files are larger.",
+            Self::Balanced => "A middle setting that does not change with the capture.",
+            Self::Small => "The smallest file that is still readable.",
+            Self::Custom => "Custom limits set in Advanced.",
+        }
+    }
+
+    pub fn fixed_pair(&self) -> Option<ResolvedPair> {
+        match self {
+            Self::Sharp => Some(ResolvedPair {
+                max_long_edge: PRESET_SHARP_LONG_EDGE,
+                encoder_quality: PRESET_SHARP_QUALITY,
+            }),
+            Self::Balanced => Some(ResolvedPair {
+                max_long_edge: PRESET_BALANCED_LONG_EDGE,
+                encoder_quality: PRESET_BALANCED_QUALITY,
+            }),
+            Self::Small => Some(ResolvedPair {
+                max_long_edge: PRESET_SMALL_LONG_EDGE,
+                encoder_quality: PRESET_SMALL_QUALITY,
+            }),
+            Self::Auto | Self::Custom => None,
+        }
+    }
+
+    pub fn from_name_str(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "auto" => Some(Self::Auto),
+            "sharp" => Some(Self::Sharp),
+            "balanced" => Some(Self::Balanced),
+            "small" => Some(Self::Small),
+            "custom" => Some(Self::Custom),
+            _ => None,
         }
     }
 }
 
-impl QualityBudget {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResolvedPair {
+    pub max_long_edge: u32,
+    pub encoder_quality: u8,
+}
+
+impl ResolvedPair {
     pub fn new(max_long_edge: u32, encoder_quality: u8) -> Result<Self, CoreError> {
         if !(MIN_LONG_EDGE_PX..=MAX_LONG_EDGE_PX).contains(&max_long_edge) {
             return Err(CoreError::Validation(format!(
@@ -90,6 +159,119 @@ impl QualityBudget {
             max_long_edge,
             encoder_quality,
         })
+    }
+}
+
+pub fn derive_auto_budget(region_long_edge: u32) -> ResolvedPair {
+    if region_long_edge <= 800 {
+        ResolvedPair {
+            max_long_edge: 1280,
+            encoder_quality: 92,
+        }
+    } else if region_long_edge <= 1920 {
+        ResolvedPair {
+            max_long_edge: 1600,
+            encoder_quality: 82,
+        }
+    } else {
+        ResolvedPair {
+            max_long_edge: 1600,
+            encoder_quality: 70,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "QualityBudgetRaw", into = "QualityBudgetRaw")]
+pub struct QualityBudget {
+    pub named: NamedBudget,
+    pub custom_pair: Option<ResolvedPair>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct QualityBudgetRaw {
+    #[serde(default = "default_named_budget")]
+    pub named: NamedBudget,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_pair: Option<ResolvedPair>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_long_edge: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoder_quality: Option<u8>,
+}
+
+fn default_named_budget() -> NamedBudget {
+    NamedBudget::Auto
+}
+
+impl From<QualityBudget> for QualityBudgetRaw {
+    fn from(qb: QualityBudget) -> Self {
+        Self {
+            named: qb.named,
+            custom_pair: qb.custom_pair,
+            max_long_edge: None,
+            encoder_quality: None,
+        }
+    }
+}
+
+impl From<QualityBudgetRaw> for QualityBudget {
+    fn from(raw: QualityBudgetRaw) -> Self {
+        if let (Some(edge), Some(qual)) = (raw.max_long_edge, raw.encoder_quality) {
+            if raw.named == NamedBudget::Auto && raw.custom_pair.is_none() {
+                let pair = ResolvedPair {
+                    max_long_edge: edge,
+                    encoder_quality: qual,
+                };
+                return Self {
+                    named: NamedBudget::Custom,
+                    custom_pair: Some(pair),
+                };
+            }
+        }
+        Self {
+            named: raw.named,
+            custom_pair: raw.custom_pair,
+        }
+    }
+}
+
+impl Default for QualityBudget {
+    fn default() -> Self {
+        Self {
+            named: NamedBudget::Auto,
+            custom_pair: None,
+        }
+    }
+}
+
+impl QualityBudget {
+    pub fn new(named: NamedBudget, custom_pair: Option<ResolvedPair>) -> Self {
+        Self { named, custom_pair }
+    }
+
+    pub fn prose(&self) -> &'static str {
+        self.named.prose()
+    }
+
+    /// Resolves the effective (max_long_edge, encoder_quality) pair for a given captured region.
+    /// Under Auto, derivation varies dynamically based on region dimensions (SCN-03, LC-003, OQ-3):
+    /// - Small region (long edge <= 800 px, e.g. 312x118 tooltip): no downscale cap needed (1280 px),
+    ///   encoder quality is high (92), preserving sharp text without lossy compression artifacts.
+    /// - Medium region (800 < long edge <= 1920 px): max long edge 1600 px, encoder quality 82.
+    /// - Large / 4K region (long edge > 1920 px, e.g. 3840x2160 dashboard): max long edge 1600 px,
+    ///   encoder quality 70 (downscaling already removed high-frequency detail).
+    pub fn resolve(&self, region_long_edge: u32) -> ResolvedPair {
+        match self.named {
+            NamedBudget::Sharp => self.named.fixed_pair().unwrap(),
+            NamedBudget::Balanced => self.named.fixed_pair().unwrap(),
+            NamedBudget::Small => self.named.fixed_pair().unwrap(),
+            NamedBudget::Custom => self.custom_pair.unwrap_or(ResolvedPair {
+                max_long_edge: DEFAULT_MAX_LONG_EDGE_PX,
+                encoder_quality: DEFAULT_ENCODER_QUALITY,
+            }),
+            NamedBudget::Auto => derive_auto_budget(region_long_edge),
+        }
     }
 }
 
@@ -166,19 +348,49 @@ mod tests {
     use super::*;
 
     #[test]
-    fn quality_budget_defaults_and_validation() {
+    fn quality_budget_defaults_and_named_states() {
         let default_qb = QualityBudget::default();
-        assert_eq!(default_qb.max_long_edge, 1600);
-        assert_eq!(default_qb.encoder_quality, 75);
+        assert_eq!(default_qb.named, NamedBudget::Auto);
+        assert_eq!(default_qb.custom_pair, None);
 
-        let valid = QualityBudget::new(1920, 80);
+        let valid = ResolvedPair::new(1920, 80);
         assert!(valid.is_ok());
 
-        let invalid_edge = QualityBudget::new(100, 80);
+        let invalid_edge = ResolvedPair::new(100, 80);
         assert!(invalid_edge.is_err());
 
-        let invalid_quality = QualityBudget::new(1920, 5);
+        let invalid_quality = ResolvedPair::new(1920, 5);
         assert!(invalid_quality.is_err());
+    }
+
+    #[test]
+    fn fixed_presets_resolve_pinned_constants() {
+        let sharp = QualityBudget::new(NamedBudget::Sharp, None);
+        assert_eq!(
+            sharp.resolve(3840),
+            ResolvedPair {
+                max_long_edge: 2560,
+                encoder_quality: 90,
+            }
+        );
+
+        let balanced = QualityBudget::new(NamedBudget::Balanced, None);
+        assert_eq!(
+            balanced.resolve(3840),
+            ResolvedPair {
+                max_long_edge: 1600,
+                encoder_quality: 75,
+            }
+        );
+
+        let small = QualityBudget::new(NamedBudget::Small, None);
+        assert_eq!(
+            small.resolve(3840),
+            ResolvedPair {
+                max_long_edge: 1280,
+                encoder_quality: 50,
+            }
+        );
     }
 
     #[test]

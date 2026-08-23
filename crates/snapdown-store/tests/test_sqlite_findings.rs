@@ -7,7 +7,7 @@ use snapdown_store::sqlite::SqliteFindingStore;
 use tempfile::NamedTempFile;
 
 #[test]
-fn migrations_v2_apply_cleanly_and_idempotently() {
+fn migrations_v7_apply_cleanly_and_idempotently() {
     let mut conn = Connection::open_in_memory().expect("open in memory db");
 
     // Apply v1 migration manually
@@ -29,9 +29,9 @@ fn migrations_v2_apply_cleanly_and_idempotently() {
 
     assert_eq!(get_schema_version(&conn).unwrap(), 1);
 
-    // Run migrations up to v5
-    run_migrations(&mut conn).expect("run migrations to v5");
-    assert_eq!(get_schema_version(&conn).unwrap(), 6);
+    // Run migrations up to v7
+    run_migrations(&mut conn).expect("run migrations to v7");
+    assert_eq!(get_schema_version(&conn).unwrap(), 7);
 
     // Verify tables exist
     {
@@ -57,7 +57,72 @@ fn migrations_v2_apply_cleanly_and_idempotently() {
 
     // Idempotency: Running migrations again should succeed without modifying version
     run_migrations(&mut conn).expect("run migrations idempotent");
-    assert_eq!(get_schema_version(&conn).unwrap(), 6);
+    assert_eq!(get_schema_version(&conn).unwrap(), 7);
+}
+
+#[test]
+fn every_stored_finding_carries_the_pair_that_was_applied_to_it() {
+    let store = SqliteFindingStore::open_in_memory().expect("open memory store");
+
+    let fid = "fid-attributed-1";
+    let finding = Finding {
+        id: fid.to_string(),
+        image_path: "findings/capture1.png".to_string(),
+        image_width: 312,
+        image_height: 118,
+        captured_at: "2026-08-24T12:00:00Z".to_string(),
+        source_monitor: "DISPLAY1".to_string(),
+        region: "10,10,312,118".to_string(),
+        resolved_long_edge: Some(1280),
+        resolved_encoder_quality: Some(92),
+        budget_name: Some("Auto".to_string()),
+    };
+    let note = Note {
+        id: "note-fid".to_string(),
+        finding_id: fid.to_string(),
+        body: "Tooltip finding".to_string(),
+        updated_at: "2026-08-24T12:00:00Z".to_string(),
+    };
+
+    store.create_finding(&finding, &note, &[]).unwrap();
+
+    let loaded = store.get_finding(fid).unwrap().unwrap();
+    assert_eq!(loaded.finding.resolved_long_edge, Some(1280));
+    assert_eq!(loaded.finding.resolved_encoder_quality, Some(92));
+    assert_eq!(loaded.finding.budget_name.as_deref(), Some("Auto"));
+}
+
+#[test]
+fn a_finding_stored_before_a_derivation_change_is_not_re_encoded() {
+    let store = SqliteFindingStore::open_in_memory().expect("open memory store");
+
+    let fid = "fid-legacy-1";
+    let finding = Finding {
+        id: fid.to_string(),
+        image_path: "findings/capture_old.png".to_string(),
+        image_width: 1920,
+        image_height: 1080,
+        captured_at: "2026-08-24T08:00:00Z".to_string(),
+        source_monitor: "DISPLAY1".to_string(),
+        region: "0,0,1920,1080".to_string(),
+        resolved_long_edge: Some(1600),
+        resolved_encoder_quality: Some(75),
+        budget_name: Some("Balanced".to_string()),
+    };
+    let note = Note {
+        id: "note-old".to_string(),
+        finding_id: fid.to_string(),
+        body: "Legacy finding".to_string(),
+        updated_at: "2026-08-24T08:00:00Z".to_string(),
+    };
+
+    store.create_finding(&finding, &note, &[]).unwrap();
+
+    // Verify finding preserves exact recorded pair (BR-9)
+    let detail = store.get_finding(fid).unwrap().unwrap();
+    assert_eq!(detail.finding.resolved_long_edge, Some(1600));
+    assert_eq!(detail.finding.resolved_encoder_quality, Some(75));
+    assert_eq!(detail.finding.budget_name.as_deref(), Some("Balanced"));
 }
 
 #[test]
@@ -65,7 +130,7 @@ fn finding_store_crud_and_transaction_guarantees() {
     let temp = NamedTempFile::new().unwrap();
     let store = SqliteFindingStore::open(temp.path()).expect("open finding store");
 
-    assert_eq!(store.get_schema_version().unwrap(), 6);
+    assert_eq!(store.get_schema_version().unwrap(), 7);
 
     let finding_id = "018f2345-6789-7abc-8def-0123456789ab";
     let finding = Finding {
@@ -76,6 +141,9 @@ fn finding_store_crud_and_transaction_guarantees() {
         captured_at: "2026-08-23T10:00:00Z".to_string(),
         source_monitor: "DISPLAY1".to_string(),
         region: "0,0,1920,1080".to_string(),
+        resolved_long_edge: Some(1600),
+        resolved_encoder_quality: Some(82),
+        budget_name: Some("Auto".to_string()),
     };
 
     let note = Note {
@@ -117,6 +185,9 @@ fn finding_store_crud_and_transaction_guarantees() {
         .expect("finding must exist");
     assert_eq!(detail.finding.id, finding_id);
     assert_eq!(detail.finding.image_width, 1920);
+    assert_eq!(detail.finding.resolved_long_edge, Some(1600));
+    assert_eq!(detail.finding.resolved_encoder_quality, Some(82));
+    assert_eq!(detail.finding.budget_name.as_deref(), Some("Auto"));
     assert_eq!(detail.note.body, "Primary note body text");
     assert_eq!(detail.markers.len(), 2);
     assert_eq!(detail.markers[0].ordinal, 1);
@@ -162,6 +233,9 @@ fn finding_store_crud_and_transaction_guarantees() {
         captured_at: "2026-08-23T12:00:00Z".to_string(),
         source_monitor: "DISPLAY1".to_string(),
         region: "10,10,800,600".to_string(),
+        resolved_long_edge: Some(1280),
+        resolved_encoder_quality: Some(92),
+        budget_name: Some("Auto".to_string()),
     };
     let note2 = Note {
         id: "note-2".to_string(),
@@ -200,6 +274,9 @@ fn marker_renumber_preserves_single_sequence_invariant() {
         captured_at: "2026-08-23T00:00:00Z".to_string(),
         source_monitor: "DISPLAY1".to_string(),
         region: "0,0,1000,1000".to_string(),
+        resolved_long_edge: None,
+        resolved_encoder_quality: None,
+        budget_name: None,
     };
     let note = Note {
         id: "note-fid".to_string(),
@@ -262,6 +339,9 @@ fn coordinate_validation_and_transaction_rollback_guarantees() {
         captured_at: "2026-08-23T00:00:00Z".to_string(),
         source_monitor: "DISPLAY1".to_string(),
         region: "0,0,1000,1000".to_string(),
+        resolved_long_edge: None,
+        resolved_encoder_quality: None,
+        budget_name: None,
     };
     let note = Note {
         id: "note-fid".to_string(),

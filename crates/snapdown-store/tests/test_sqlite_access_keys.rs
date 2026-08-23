@@ -4,11 +4,11 @@ use snapdown_store::sqlite::SqliteAccessKeyStore;
 use tempfile::NamedTempFile;
 
 #[test]
-fn migrations_v4_apply_cleanly_and_create_access_key_table() {
+fn migrations_apply_cleanly_and_create_access_key_table() {
     let temp = NamedTempFile::new().unwrap();
     let store = SqliteAccessKeyStore::open(temp.path()).expect("open access key store");
 
-    assert_eq!(store.get_schema_version().unwrap(), 6);
+    assert_eq!(store.get_schema_version().unwrap(), 7);
 }
 
 #[test]

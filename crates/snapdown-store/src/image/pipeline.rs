@@ -1,5 +1,5 @@
 use snapdown_core::domain::image::ImageDimensions;
-use snapdown_core::domain::setting::QualityBudget;
+use snapdown_core::domain::setting::{QualityBudget, ResolvedPair};
 use snapdown_core::error::CoreError;
 
 #[derive(Debug, Clone)]
@@ -13,15 +13,14 @@ pub struct ReducedImageResult {
 pub struct ImageReducer;
 
 impl ImageReducer {
-    /// Reduces raw image bytes (e.g. PNG / uncompressed) according to the QualityBudget.
-    /// Uses pure standard encoding logic / header transformation if full decoders are unavailable.
+    /// Reduces raw image bytes according to a ResolvedPair (max_long_edge, encoder_quality).
     pub fn reduce_image(
         input_bytes: &[u8],
         original_dims: ImageDimensions,
-        budget: &QualityBudget,
+        resolved: &ResolvedPair,
         generate_thumbnail: bool,
     ) -> Result<ReducedImageResult, CoreError> {
-        let target_dims = original_dims.compute_reduced_dimensions(budget);
+        let target_dims = original_dims.compute_reduced_dimensions_for_pair(resolved);
 
         // Compress / reduce data bytes
         let mut out_bytes = Vec::new();
@@ -29,7 +28,7 @@ impl ImageReducer {
         out_bytes.extend_from_slice(b"\x89PNG\r\n\x1a\n");
         out_bytes.extend_from_slice(&target_dims.width.to_be_bytes());
         out_bytes.extend_from_slice(&target_dims.height.to_be_bytes());
-        out_bytes.push(budget.encoder_quality);
+        out_bytes.push(resolved.encoder_quality);
 
         // Include payload compressed slice
         if input_bytes.len() > 16 {
@@ -58,6 +57,17 @@ impl ImageReducer {
         })
     }
 
+    /// Reduces raw image bytes by resolving a QualityBudget against original image dimensions.
+    pub fn reduce_image_with_budget(
+        input_bytes: &[u8],
+        original_dims: ImageDimensions,
+        budget: &QualityBudget,
+        generate_thumbnail: bool,
+    ) -> Result<ReducedImageResult, CoreError> {
+        let resolved = budget.resolve(original_dims.long_edge());
+        Self::reduce_image(input_bytes, original_dims, &resolved, generate_thumbnail)
+    }
+
     /// Performs zero-byte reservation and asynchronous write pipeline.
     /// Synchronously reserves zero-byte placeholder at `dest_path`, then completes full image write.
     pub fn reserve_and_write(
@@ -80,14 +90,15 @@ impl ImageReducer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use snapdown_core::domain::setting::NamedBudget;
 
     #[test]
-    fn quality_budget_downscaling_and_compression() {
-        let budget = QualityBudget::new(1600, 80).unwrap();
+    fn quality_budget_downscaling_and_compression_for_balanced_preset() {
+        let balanced = QualityBudget::new(NamedBudget::Balanced, None);
         let orig_dims = ImageDimensions::new(3840, 2160).unwrap();
         let input_bytes = vec![0u8; 1024];
 
-        let result = ImageReducer::reduce_image(&input_bytes, orig_dims, &budget, true).unwrap();
+        let result = ImageReducer::reduce_image_with_budget(&input_bytes, orig_dims, &balanced, true).unwrap();
 
         assert_eq!(result.dimensions.width, 1600);
         assert_eq!(result.dimensions.height, 900);

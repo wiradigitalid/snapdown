@@ -13,6 +13,9 @@ fn golden_file_bundle_markdown_exact_snapshot() {
             captured_at: "2026-08-23T10:00:00Z".into(),
             source_monitor: "DISPLAY1".into(),
             region: "100,100,1920,1080".into(),
+            resolved_long_edge: None,
+            resolved_encoder_quality: None,
+            budget_name: None,
         },
         note: Note {
             id: "n-1".into(),

@@ -8,6 +8,9 @@ export interface FindingDto {
   captured_at: string;
   source_monitor: string;
   region: string;
+  resolved_long_edge?: number | null;
+  resolved_encoder_quality?: number | null;
+  budget_name?: string | null;
 }
 
 export interface NoteDto {

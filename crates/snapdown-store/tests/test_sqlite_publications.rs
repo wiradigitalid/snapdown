@@ -5,11 +5,11 @@ use snapdown_store::sqlite::{SqliteBundleStore, SqlitePublicationStore};
 use tempfile::NamedTempFile;
 
 #[test]
-fn migrations_v5_apply_cleanly_and_create_publication_table() {
+fn migrations_apply_cleanly_and_create_publication_table() {
     let temp = NamedTempFile::new().unwrap();
     let store = SqlitePublicationStore::open(temp.path()).expect("open pub store");
 
-    assert_eq!(store.get_schema_version().unwrap(), 6);
+    assert_eq!(store.get_schema_version().unwrap(), 7);
 }
 
 #[test]

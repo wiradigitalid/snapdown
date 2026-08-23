@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
-use snapdown_core::domain::setting::{Setting, SettingKey, SettingValue};
-use snapdown_core::ports::{BlobStore, SettingsStore};
+use snapdown_core::domain::finding::{Finding, Note};
+use snapdown_core::domain::image::ImageDimensions;
+use snapdown_core::domain::setting::{QualityBudget, Setting, SettingKey, SettingValue};
+use snapdown_core::ports::{BlobStore, Clock, EntropySource, FindingStore, SettingsStore};
+use snapdown_store::system::{SystemClock, SystemEntropySource};
 use snapdown_store::vault::VaultBlobStore;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
@@ -18,15 +21,14 @@ pub struct CaptureRegionInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CaptureResultDto {
-    pub image_path: string_path::StringPath,
+    pub image_path: String,
     pub image_width: u32,
     pub image_height: u32,
     pub source_monitor: String,
     pub region: String,
-}
-
-mod string_path {
-    pub type StringPath = String;
+    pub resolved_long_edge: u32,
+    pub resolved_encoder_quality: u8,
+    pub budget_name: String,
 }
 
 #[tauri::command]
@@ -64,16 +66,65 @@ pub fn capture_screen_region(
         region.x, region.y, region.width, region.height
     );
 
-    // Generate relative filename for finding
-    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
-    let filename = format!("findings/capture_{timestamp}.png");
+    // Get current QualityBudget and derive parameters dynamically for this region (LC-003, SCN-03)
+    let qb = match state
+        .settings_store
+        .get(&SettingKey::QualityBudget)
+        .map_err(|e| e.to_string())?
+    {
+        Some(Setting {
+            value: SettingValue::QualityBudget(budget),
+            ..
+        }) => budget,
+        _ => QualityBudget::default(),
+    };
 
-    // In a headless or test environment, create placeholder bitmap bytes
-    // Real desktop capture will grab pixels and encode
-    let placeholder_bytes = generate_placeholder_image(region.width, region.height);
+    let region_long_edge = region.width.max(region.height);
+    let resolved = qb.resolve(region_long_edge);
+    let budget_name = qb.named.display_name().to_string();
+
+    let orig_dims = ImageDimensions::new(region.width, region.height).map_err(|e| e.to_string())?;
+    let target_dims = orig_dims.compute_reduced_dimensions_for_pair(&resolved);
+
+    // Generate relative filename for finding
+    let timestamp_str = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+    let filename = format!("findings/capture_{timestamp_str}.png");
+
+    let placeholder_bytes = generate_placeholder_image(target_dims.width, target_dims.height, resolved.encoder_quality);
 
     vault_store
         .write_blob(&filename, &placeholder_bytes)
+        .map_err(|e| e.to_string())?;
+
+    // Create finding record with resolved derivation parameters (NFR-18, BR-105)
+    let clock = SystemClock::new();
+    let entropy = SystemEntropySource::new();
+    let finding_id = snapdown_core::util::id::id_from_parts(clock.now_unix_millis(), entropy.random_bytes_10());
+    let captured_at = clock.now_rfc3339();
+
+    let finding = Finding {
+        id: finding_id.clone(),
+        image_path: filename.clone(),
+        image_width: target_dims.width,
+        image_height: target_dims.height,
+        captured_at: captured_at.clone(),
+        source_monitor: monitor_name.clone(),
+        region: region_str.clone(),
+        resolved_long_edge: Some(resolved.max_long_edge),
+        resolved_encoder_quality: Some(resolved.encoder_quality),
+        budget_name: Some(budget_name.clone()),
+    };
+
+    let note = Note {
+        id: format!("note-{finding_id}"),
+        finding_id: finding_id.clone(),
+        body: String::new(),
+        updated_at: captured_at,
+    };
+
+    state
+        .finding_store
+        .create_finding(&finding, &note, &[])
         .map_err(|e| e.to_string())?;
 
     // Close capture overlay window if present
@@ -85,10 +136,13 @@ pub fn capture_screen_region(
 
     Ok(CaptureResultDto {
         image_path: filename,
-        image_width: region.width,
-        image_height: region.height,
+        image_width: target_dims.width,
+        image_height: target_dims.height,
         source_monitor: monitor_name,
         region: region_str,
+        resolved_long_edge: resolved.max_long_edge,
+        resolved_encoder_quality: resolved.encoder_quality,
+        budget_name,
     })
 }
 
@@ -135,12 +189,12 @@ fn dirs_or_default_vault() -> PathBuf {
     }
 }
 
-fn generate_placeholder_image(width: u32, height: u32) -> Vec<u8> {
-    // Generates a minimal 1x1 or raw placeholder image bytes
+fn generate_placeholder_image(width: u32, height: u32, encoder_quality: u8) -> Vec<u8> {
     let mut bytes = Vec::new();
-    bytes.extend_from_slice(b"\x89PNG\r\n\x1a\n"); // PNG magic header
+    bytes.extend_from_slice(b"\x89PNG\r\n\x1a\n");
     bytes.extend_from_slice(&width.to_be_bytes());
     bytes.extend_from_slice(&height.to_be_bytes());
+    bytes.push(encoder_quality);
     bytes
 }
 
