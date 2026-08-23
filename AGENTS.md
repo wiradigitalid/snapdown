@@ -212,5 +212,54 @@ MUST anything in `.constitution/method/why/`; `status: Reference` forbids it. A 
 
 ## Code
 
-Rewrite this section for the product. Stack, how to run tests, and known pitfalls belong here.
-`wdi-init` intent `structure` derives `.control/structure-codebase.md`; do not duplicate that map.
+Tauri v2 desktop app. Rust workspace (`crates/snapdown-core` pure domain, `crates/snapdown-store`
+adapters, `crates/snapdown-bridge` the MCP executable), a React + Vite webview in `apps/desktop`, a
+shared UI package in `web/ui` consumed as `@snapdown/ui`, and a Go service in `apps/web-service`.
+`.control/structure-codebase.md` is the map; this section does not duplicate it.
+
+### Verification — run all of it, from the repo root
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+npm --prefix web/ui run typecheck && npm --prefix web/ui run lint && npm --prefix web/ui run test
+npm --prefix apps/desktop run typecheck && npm --prefix apps/desktop run lint
+npm --prefix apps/desktop run test && npm --prefix apps/desktop run build
+```
+
+A green `korpus.yml` is **not** proof the code compiles. They answer different questions.
+
+### Pitfalls
+
+**A green unit test does not mean the component is reachable.** This is the most expensive mistake
+this repository has made. On 2026-08-23 a sweep found **four** components built, unit-tested, and
+mounted nowhere: `CaptureOverlay` (the capture path — `BUG-4`), `MarkerLayer` (marker annotation —
+`BUG-5`), `OrphanReportView` (`BUG-6`), and `EmptyState`. Three requirements — `FR-1`/`FR-2`, `FR-8`,
+`FR-15` — were unmet in a build whose tests all passed, for four waves.
+
+There is no composition test class here yet (`OQ-23`). Until there is, **before closing any story
+that adds a component, grep for `<ComponentName` across `apps/desktop/src` and `web/ui/src`,
+excluding its own file and its tests.** No hit means nobody can reach it. `V12` will not catch this:
+it checks that an `LC` is *registered*, not that it is *reached*.
+
+**Colour lives in exactly one file.** `web/ui/src/styles/tokens.css`, defined for both themes
+(`AD-10`). A lint rule refuses a colour literal anywhere else. The four deliberately theme-invariant
+groups — `--color-marker*`, `--color-overlay-scrim`, `--color-overlay-ring`, `--canvas-checker` —
+are the one exception and they live in that file too, each with a comment saying why.
+
+**A test that asserts a literal is a test that cannot fail.** `contrast.test.ts` originally hardcoded
+its own copy of the token values; changing a token to a 2:1 ratio left it green. It now parses
+`tokens.css` and was verified by mutation. Assert the behaviour, not a copy of the input.
+
+**Two SQLite stores, not one.** `library.db` (Rust, `crates/snapdown-store/src/sqlite/migrations.rs`)
+and the web service's own (Go, `apps/web-service/internal/store/store.go`). A reader that looks at
+only the first will report the second's tables as missing — that is what
+`.constitution/project/inventory-readers.py` did for two waves.
+
+**Never commit a captured screenshot.** This repository is public and the product brief forbids it.
+`.gitignore` covers `.work/**/*.png`; CI still has no guard.
+
+**Stale binaries mislead.** Renaming the product left `desktop.exe` beside `Snapdown.exe` in
+`target/release/`, the owner ran the old one, and reported four defects that did not exist. `FR-27`
+now makes a second desktop executable a build failure.

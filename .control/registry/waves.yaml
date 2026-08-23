@@ -235,13 +235,34 @@ waves:
               out. 23 hex literals live outside the token file; the meaning pairs, the sunken surface,
               --space-0 and --radius-full do not exist yet. Every later story in this wave writes UI
               and would otherwise each invent its own colours again.
+            # As-built after round 2. The names below are what the suites actually declare; the
+            # intent names written when this wave opened are kept beside them so the trace survives.
             tests:
-              - vitest::no_component_contains_a_colour_literal
-              - vitest::every_token_is_defined_in_both_themes
-              - vitest::every_text_element_meets_wcag_aa_in_the_light_theme
-              - vitest::every_text_element_meets_wcag_aa_in_the_dark_theme
-              - vitest::a_theme_change_while_running_repaints_every_surface
-              - vitest::a_theme_invariant_token_is_declared_as_one_in_the_token_file
+              # intent: no_component_contains_a_colour_literal
+              - vitest::ensures_zero_color_literals_exist_in_source_trees_outside_tokens_css
+              # intent: every_token_is_defined_in_both_themes
+              - vitest::defines_all_required_design_tokens_in_root_light_theme
+              - vitest::defines_dark_theme_overrides_under_media_prefers_color_scheme_dark
+              # intent: every_text_element_meets_wcag_aa_in_the_light_theme / _dark_theme
+              - vitest::light_theme_satisfies_wcag_aa_for_body_muted_actions_and_meaning_pairs
+              - vitest::dark_theme_satisfies_wcag_aa_for_body_muted_actions_and_meaning_pairs
+              # intent: a_theme_invariant_token_is_declared_as_one_in_the_token_file
+              - vitest::ensures_theme_invariant_tokens_retain_identical_values_in_both_themes
+              # Added in round 2 as the must-fix's proof: the contrast suite parses tokens.css and
+              # fails when a token is changed to a low-contrast value. Verified by mutation.
+              - vitest::proves_the_contrast_parse_is_live_from_tokens_css_file
+            tests_deliberately_not_written:
+              # intent: a_theme_change_while_running_repaints_every_surface
+              - name: a_theme_change_while_running_repaints_every_surface
+                why: |
+                  NFR-17 requires a theme change while running to be honoured. After this story there
+                  is no application code in that path to break: every colour is a CSS custom property
+                  inside a prefers-color-scheme media query, and a grep for getComputedStyle and
+                  getPropertyValue across apps/desktop/src and web/ui/src returns nothing, so no
+                  JavaScript ever reads a token value. The browser does the repaint.
+                  A test here would assert that the CSS engine works. It is not written, and this row
+                  exists so that the absence is a decision rather than an omission — if any component
+                  later reads a token in JS, this becomes a real gap and the row is the reminder.
           - id: W6-S2
             title: The editor shell — persona naming, the navigation rail, one executable, and the overlay mount
             component: settings
