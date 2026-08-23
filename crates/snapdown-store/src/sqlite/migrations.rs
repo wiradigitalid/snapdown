@@ -95,6 +95,22 @@ pub const MIGRATIONS: &[Migration] = &[
         );
     "#,
     },
+    Migration {
+        version: 5,
+        description: "create publication table",
+        sql: r#"
+        CREATE TABLE IF NOT EXISTS publication (
+            id TEXT PRIMARY KEY,
+            bundle_id TEXT NOT NULL UNIQUE,
+            slug TEXT NOT NULL UNIQUE,
+            base_url TEXT NOT NULL,
+            published_at TEXT NOT NULL,
+            unpublished_at TEXT,
+            last_error TEXT,
+            FOREIGN KEY(bundle_id) REFERENCES bundle(id) ON DELETE CASCADE
+        );
+    "#,
+    },
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> Result<(), StoreError> {

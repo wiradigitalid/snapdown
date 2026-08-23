@@ -75,6 +75,12 @@ def derive_db(root: Path) -> "Derived":       # noqa: F821
                     cells=["access_key", "agent-access", "The one Access Key that may be valid, stored as a hash. The key itself lives in the Windows credential store, never here", "id pk · key_hash · issued_at · revoked_at nullable", "active"],
                     source="crates/snapdown-store/src/sqlite/migrations.rs",
                 ))
+            elif tbl_name_clean == "publication":
+                rows.append(Row(              # noqa: F821
+                    key="publication",
+                    cells=["publication", "sharing", "Where a Bundle is published and whether it is still live. slug is generated independently of every id here (AD-8)", "id pk · bundle_id fk unique · slug unique · base_url · published_at · unpublished_at nullable · last_error nullable", "active"],
+                    source="crates/snapdown-store/src/sqlite/migrations.rs",
+                ))
             else:
                 rows.append(Row(              # noqa: F821
                     key=tbl_name_clean,

@@ -1,8 +1,10 @@
 pub mod access_key_store;
 pub mod bundle_store;
+pub mod publication_store;
 
 pub use access_key_store::AccessKeyStore;
 pub use bundle_store::BundleStore;
+pub use publication_store::PublicationStore;
 
 use crate::domain::finding::{Finding, FindingDetail, Marker, Note};
 use crate::domain::setting::{Setting, SettingKey};
