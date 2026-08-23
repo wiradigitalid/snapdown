@@ -151,7 +151,26 @@ defects:
       mount decision from the URL, and an end-to-end check that the hotkey produces a Finding.
       The deeper fix is the missing seam contract - .how/finding/02-contracts/ describes the Tauri
       command surface and says nothing about how a window chooses its root component.
-    status: open
+    resolved: |
+      W6-S2, 2026-08-23. main.tsx now routes on the query parameter:
+
+        const isOverlay = new URLSearchParams(window.location.search).get('overlay') === 'true';
+        return isOverlay ? <CaptureOverlay /> : <App />;
+
+      mount.test.tsx proves the mount decision, and the never-mounted sweep is clean - CaptureOverlay
+      is reachable from main.tsx, which it was not for four waves.
+
+      NOT PROVEN IN A RUNNING PRODUCT, and the attempt to prove it failed. AUDIT-4 ran the first
+      properly built binary on 2026-08-24 and reported this fixed. Its evidence does not support
+      that: shot-4-overlay.png is a blank white 3840x2160 image with nothing drawn in it, and
+      shot-4-note.png is a byte-identical copy of it. No region was ever dragged and no Finding was
+      created. Whether the overlay fails to paint its scrim or the capture tool cannot photograph a
+      transparent fullscreen window is still unknown.
+
+      The deeper fix named below is still outstanding: .how/finding/02-contracts/ still says nothing
+      about how a window chooses its root component, so the seam that produced this defect still has
+      no owner.
+    status: resolved-pending-product-verification
   - id: BUG-5
     title: The Editor never renders a Finding's image, and Markers cannot be placed at all
     found: "2026-08-23"
