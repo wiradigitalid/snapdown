@@ -57,6 +57,18 @@ def derive_db(root: Path) -> "Derived":       # noqa: F821
                     cells=["marker", "finding", "One numbered Marker and the Note line that is the same thing as it. ordinal is the badge number and the line number at once", "id pk · finding_id fk · ordinal unique per finding, from 1, no gaps · x · y normalised 0–1 (AD-3) · comment", "active"],
                     source="crates/snapdown-store/src/sqlite/migrations.rs",
                 ))
+            elif tbl_name_clean == "bundle":
+                rows.append(Row(              # noqa: F821
+                    key="bundle",
+                    cells=["bundle", "bundle", "One composed Bundle, including the composed Markdown itself so that every handoff path serves identical bytes (AD-9)", "id pk · name · markdown · markdown_path relative to the Vault · composed_at", "active"],
+                    source="crates/snapdown-store/src/sqlite/migrations.rs",
+                ))
+            elif tbl_name_clean == "bundle_item":
+                rows.append(Row(              # noqa: F821
+                    key="bundle_item",
+                    cells=["bundle_item", "bundle", "The membership of one Finding in one Bundle, and the path of the Marker-burned image copy written for it", "id pk · bundle_id fk · finding_id fk · position · image_path · unique on (bundle_id, finding_id)", "active"],
+                    source="crates/snapdown-store/src/sqlite/migrations.rs",
+                ))
             else:
                 rows.append(Row(              # noqa: F821
                     key=tbl_name_clean,

@@ -1,0 +1,22 @@
+---
+wave: W3
+title: Bundle complete — compose, list, copy, delete
+stories:
+  - id: W3-S1
+    title: SQLite Schema Migration v3 (bundle, bundle_item) and BundleStore
+    dependencies: []
+  - id: W3-S2
+    title: Markdown serialization engine with pure relative path formatting
+    dependencies: [W3-S1]
+  - id: W3-S3
+    title: Marker burning pipeline onto exported screenshot images
+    dependencies: [W3-S1]
+  - id: W3-S4
+    title: Bundle Composer UI and bundle listing view
+    dependencies: [W3-S1, W3-S2]
+  - id: W3-S5
+    title: Clipboard export bridge and golden-file verification suite
+    dependencies: [W3-S2, W3-S3, W3-S4]
+  - id: W3-S6
+    title: Bundle deletion with file synchronization
+    dependencies: [W3-S1, W3-S4]

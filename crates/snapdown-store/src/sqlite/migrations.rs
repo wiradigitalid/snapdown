@@ -59,6 +59,30 @@ pub const MIGRATIONS: &[Migration] = &[
         );
     "#,
     },
+    Migration {
+        version: 3,
+        description: "create bundle and bundle_item tables",
+        sql: r#"
+        CREATE TABLE IF NOT EXISTS bundle (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            markdown TEXT NOT NULL,
+            markdown_path TEXT NOT NULL,
+            composed_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS bundle_item (
+            id TEXT PRIMARY KEY,
+            bundle_id TEXT NOT NULL,
+            finding_id TEXT NOT NULL,
+            position INTEGER NOT NULL,
+            image_path TEXT NOT NULL,
+            FOREIGN KEY(bundle_id) REFERENCES bundle(id) ON DELETE CASCADE,
+            FOREIGN KEY(finding_id) REFERENCES finding(id) ON DELETE CASCADE,
+            UNIQUE(bundle_id, finding_id)
+        );
+    "#,
+    },
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> Result<(), StoreError> {

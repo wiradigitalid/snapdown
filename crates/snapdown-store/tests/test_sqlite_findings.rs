@@ -29,9 +29,9 @@ fn migrations_v2_apply_cleanly_and_idempotently() {
 
     assert_eq!(get_schema_version(&conn).unwrap(), 1);
 
-    // Run migrations up to v2
-    run_migrations(&mut conn).expect("run migrations to v2");
-    assert_eq!(get_schema_version(&conn).unwrap(), 2);
+    // Run migrations up to v3
+    run_migrations(&mut conn).expect("run migrations to v3");
+    assert_eq!(get_schema_version(&conn).unwrap(), 3);
 
     // Verify tables exist
     {
@@ -47,13 +47,15 @@ fn migrations_v2_apply_cleanly_and_idempotently() {
         assert!(tables.contains(&"finding".to_string()));
         assert!(tables.contains(&"note".to_string()));
         assert!(tables.contains(&"marker".to_string()));
+        assert!(tables.contains(&"bundle".to_string()));
+        assert!(tables.contains(&"bundle_item".to_string()));
         assert!(tables.contains(&"setting".to_string()));
         assert!(tables.contains(&"schema_version".to_string()));
     }
 
     // Idempotency: Running migrations again should succeed without modifying version
     run_migrations(&mut conn).expect("run migrations idempotent");
-    assert_eq!(get_schema_version(&conn).unwrap(), 2);
+    assert_eq!(get_schema_version(&conn).unwrap(), 3);
 }
 
 #[test]
@@ -61,7 +63,7 @@ fn finding_store_crud_and_transaction_guarantees() {
     let temp = NamedTempFile::new().unwrap();
     let store = SqliteFindingStore::open(temp.path()).expect("open finding store");
 
-    assert_eq!(store.get_schema_version().unwrap(), 2);
+    assert_eq!(store.get_schema_version().unwrap(), 3);
 
     let finding_id = "018f2345-6789-7abc-8def-0123456789ab";
     let finding = Finding {
