@@ -52,6 +52,11 @@
   --radius-md: 0.5rem;  /* 8px */
   --radius-full: 9999px;
 
+  /* Bundle Layout */
+  --preview-line-height: 1.55;
+  --bundle-list-width: 240px;
+  --item-list-width: 280px;
+
   /* Settings Layout */
   --settings-group-gap: var(--space-4);
   --settings-column-min: 380px;
@@ -115,6 +120,9 @@
     --canvas-checker: #e2e8f0;
 
   /* Settings Layout */
+    --preview-line-height: 1.55;
+    --bundle-list-width: 240px;
+    --item-list-width: 280px;
     --settings-group-gap: var(--space-4);
     --settings-column-min: 380px;
     --settings-row-height: 32px;

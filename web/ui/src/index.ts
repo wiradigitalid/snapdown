@@ -16,3 +16,5 @@ export * from './components/HotkeyChip';
 export * from './components/FindingsEditor';
 export * from './components/BundleComposer';
 export * from './screens/AgentAccessView';
+export * from './components/BundlesEditor';
+
