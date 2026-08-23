@@ -418,7 +418,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
       latest_finding_size: null,
     });
     vi.mocked(settingsService.setHotkey).mockRejectedValue(
-      new Error('Two actions cannot share the same hotkey combination')
+      new Error('Another Snapdown action already uses this combination')
     );
 
     render(<App />);
@@ -436,7 +436,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText('Two actions cannot share the same hotkey combination')
+        screen.getByText('Another Snapdown action already uses this combination')
       ).toBeInTheDocument();
     });
   });
@@ -474,7 +474,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('startup-warning-banner')).toBeInTheDocument();
+      expect(screen.getByTestId('startup-error-capture')).toBeInTheDocument();
       expect(
         screen.getByText(/Failed to register shortcut for action 'capture' at startup/)
       ).toBeInTheDocument();

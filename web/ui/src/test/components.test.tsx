@@ -157,13 +157,26 @@ describe('web/ui components suite', () => {
       expect(screen.getByRole('button')).toHaveAttribute('data-state', 'bound');
     });
 
+    it('renders unbound state with Click to set text', () => {
+      render(<HotkeyChip shortcut="" />);
+      expect(screen.getByText('Click to set')).toBeInTheDocument();
+      expect(screen.getByRole('button')).toHaveAttribute('data-state', 'unbound');
+    });
+
+    it('renders conflicted state with appropriate data attribute', () => {
+      render(<HotkeyChip shortcut="Ctrl+Alt+S" state="conflicted" />);
+      expect(screen.getByText('Ctrl+Alt+S')).toBeInTheDocument();
+      expect(screen.getByRole('button')).toHaveAttribute('data-state', 'conflicted');
+    });
+
     it('enters listening state on click and captures key combo', () => {
       const handleRecord = vi.fn();
       render(<HotkeyChip shortcut="Ctrl+S" onRecord={handleRecord} />);
       const chip = screen.getByRole('button');
 
       fireEvent.click(chip);
-      expect(screen.getByText('Press shortcut keys (ESC to cancel)...')).toBeInTheDocument();
+      expect(screen.getByText('Press keys… Esc to cancel')).toBeInTheDocument();
+      expect(chip).toHaveAttribute('data-state', 'listening');
 
       fireEvent.keyDown(chip, { key: 'K', ctrlKey: true });
       expect(handleRecord).toHaveBeenCalledWith('CommandOrControl+K');
@@ -176,6 +189,27 @@ describe('web/ui components suite', () => {
 
       fireEvent.click(chip);
       fireEvent.keyDown(chip, { key: 'Escape' });
+      expect(handleCancel).toHaveBeenCalledTimes(1);
+      expect(chip).toHaveAttribute('data-state', 'bound');
+      expect(screen.getByText('Ctrl+S')).toBeInTheDocument();
+    });
+
+    it('a_listening_chip_stops_listening_when_focus_leaves_it', () => {
+      const handleCancel = vi.fn();
+      render(<HotkeyChip shortcut="Ctrl+Shift+S" onCancel={handleCancel} />);
+      const chip = screen.getByRole('button');
+
+      // Click to start listening
+      fireEvent.click(chip);
+      expect(chip).toHaveAttribute('data-state', 'listening');
+      expect(screen.getByText('Press keys… Esc to cancel')).toBeInTheDocument();
+
+      // Focus leaves chip (blur event)
+      fireEvent.blur(chip);
+
+      // Verify listening cancelled, previous bound state restored, handleCancel called
+      expect(chip).toHaveAttribute('data-state', 'bound');
+      expect(screen.getByText('Ctrl+Shift+S')).toBeInTheDocument();
       expect(handleCancel).toHaveBeenCalledTimes(1);
     });
   });
