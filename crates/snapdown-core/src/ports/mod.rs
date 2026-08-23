@@ -1,3 +1,7 @@
+pub mod bundle_store;
+
+pub use bundle_store::BundleStore;
+
 use crate::domain::finding::{Finding, FindingDetail, Marker, Note};
 use crate::domain::setting::{Setting, SettingKey};
 use crate::error::CoreError;
