@@ -85,9 +85,17 @@ jobs:
             Write-Error "Snapdown.exe not found at target/release/Snapdown.exe"
             exit 1
           }
-          $exeCount = (Get-ChildItem -Path "target/release/*.exe").Count
-          if ($exeCount -ne 1) {
-            Write-Error "Expected exactly 1 desktop executable in target/release, found $exeCount"
+          # FR-27: the build produces exactly one DESKTOP executable. snapdown-bridge is a
+          # legitimate second workspace binary (the MCP executable) and is not a desktop app,
+          # so counting every .exe would fail a correct build. What must fail is a SECOND
+          # executable claiming to be the desktop app - a stale desktop.exe beside Snapdown.exe
+          # is what made the Reviewer run the wrong binary and report defects that did not exist.
+          $known = @("Snapdown.exe", "snapdown-bridge.exe")
+          $unexpected = Get-ChildItem -Path "target/release/*.exe" |
+            Where-Object { $known -notcontains $_.Name }
+          if ($unexpected) {
+            $names = ($unexpected | ForEach-Object { $_.Name }) -join ", "
+            Write-Error "Unexpected executable(s) in target/release: $names. A second desktop executable is a build failure, not clutter (FR-27, BR-121). If this is a new workspace binary, add it to the known list in this step."
             exit 1
           }
 
