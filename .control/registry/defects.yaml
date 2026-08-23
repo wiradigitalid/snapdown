@@ -703,6 +703,20 @@ defects:
       crates/snapdown-store/src/image/pipeline.rs:26-37 says so in its own comment — "downscaled
       payload simulation". reduce_image writes the same fake header and then copies input_bytes[16..]
       through. No decode, no scale, no encode.
+
+      THIRD SIMULATION, found 2026-08-24 while scoping the fix:
+      crates/snapdown-store/src/image/burner.rs:20 — burn_markers writes the same fake header and
+      never draws a Marker onto anything. Its test asserts only that the first 8 bytes are a PNG
+      signature and that dimensions are preserved. FR-8's promise that a handed-over Bundle carries
+      its Markers ON the image rests entirely on this, and AD-4 governs it.
+
+      AND THE ARCHITECTURE ALREADY PLANNED FOR ALL OF IT. ARCHITECTURE-SPINE.md:245 lays out a crate
+      `snapdown-capture/  # screen capture, overlay geometry, image reduction`, and assigns CAP-1 and
+      CAP-2 to it. crates/ contains snapdown-bridge, snapdown-core and snapdown-store. There is no
+      snapdown-capture. components.yaml registers LC entries for region-capturer and
+      capture-note-field; neither has an implementation.
+
+      This is therefore not a design gap. The design is right and was never built.
     impact: |
       The product does not do the thing it is named for. Everything downstream is built on bytes that
       are not an image: a Finding's screenshot cannot render, Markers annotate nothing, a Bundle
@@ -726,6 +740,7 @@ defects:
 
       Six waves, twelve use cases and four UI audits went past it. AUDIT-2 came closest by concluding
       there was nothing to photograph.
+    assessment: .control/reports/ASSESS-BUG-14.md
     fix: |
       Add a real screen-capture dependency and a real image codec, then replace
       generate_placeholder_image with an actual grab of the requested region, and
