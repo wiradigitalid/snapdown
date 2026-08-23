@@ -42,8 +42,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm --prefix web/ui install
-          npm --prefix apps/desktop install
+          npm --prefix web/ui ci
+          npm --prefix apps/desktop ci
 
       - name: Shared UI typecheck
         run: npm --prefix web/ui run typecheck

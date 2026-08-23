@@ -1,3 +1,5 @@
+#![warn(clippy::disallowed_methods)]
+
 pub mod domain;
 pub mod error;
 pub mod ports;

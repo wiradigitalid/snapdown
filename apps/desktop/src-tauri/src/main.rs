@@ -1,6 +1,7 @@
 // Desktop Tauri shell - Native entry point
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use snapdown_store::sqlite::SqliteSettingsStore;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -12,6 +13,26 @@ fn show_settings_window(app: &AppHandle) {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
+    }
+}
+
+fn check_is_first_run(app: &AppHandle) -> bool {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+
+    if !app_data_dir.exists() {
+        let _ = std::fs::create_dir_all(&app_data_dir);
+    }
+
+    let db_path = app_data_dir.join("library.db");
+    match SqliteSettingsStore::open(&db_path) {
+        Ok(store) => store.is_empty().unwrap_or(true),
+        Err(e) => {
+            eprintln!("Failed to open library.db: {e}");
+            true
+        }
     }
 }
 
@@ -53,9 +74,10 @@ fn main() {
                 })
                 .build(app)?;
 
-            // Per MF-8: First run will be derived from setting table being empty once W1-S2 lands.
-            // Until W1-S2 store lands, open Settings unconditionally.
-            show_settings_window(&handle);
+            // Per MF-8: First run is defined as the setting table holding zero rows.
+            if check_is_first_run(&handle) {
+                show_settings_window(&handle);
+            }
 
             Ok(())
         })

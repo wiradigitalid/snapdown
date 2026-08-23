@@ -20,6 +20,8 @@ thiserror = "2.0"
 uuid = { version = "1.10", default-features = false, features = ["v7", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
+rand = "0.8"
+tempfile = "3.10"
 tauri = { version = "2.0", features = ["tray-icon"] }
 tauri-build = { version = "2.0" }
 tauri-plugin-single-instance = { version = "2.0" }

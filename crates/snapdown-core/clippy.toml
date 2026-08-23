@@ -1,0 +1,19 @@
+# Deny direct OS/IO calls in snapdown-core
+disallowed-methods = [
+    { path = "std::time::SystemTime::now", reason = "snapdown-core must not query the system clock directly; use Clock port" },
+    { path = "std::time::Instant::now", reason = "snapdown-core must not query instant directly; use Clock port" },
+    { path = "std::fs::read", reason = "snapdown-core must not perform filesystem I/O directly" },
+    { path = "std::fs::write", reason = "snapdown-core must not perform filesystem I/O directly" },
+    { path = "std::fs::read_to_string", reason = "snapdown-core must not perform filesystem I/O directly" },
+    { path = "std::fs::remove_file", reason = "snapdown-core must not perform filesystem I/O directly" },
+    { path = "std::fs::remove_dir", reason = "snapdown-core must not perform filesystem I/O directly" },
+    { path = "std::fs::remove_dir_all", reason = "snapdown-core must not perform filesystem I/O directly" },
+    { path = "std::fs::create_dir", reason = "snapdown-core must not perform filesystem I/O directly" },
+    { path = "std::fs::create_dir_all", reason = "snapdown-core must not perform filesystem I/O directly" },
+    { path = "std::fs::copy", reason = "snapdown-core must not perform filesystem I/O directly" },
+    { path = "std::fs::rename", reason = "snapdown-core must not perform filesystem I/O directly" },
+    { path = "std::fs::File::open", reason = "snapdown-core must not perform filesystem I/O directly" },
+    { path = "std::fs::File::create", reason = "snapdown-core must not perform filesystem I/O directly" },
+    { path = "std::env::var", reason = "snapdown-core must not read environment variables directly" },
+    { path = "std::env::var_os", reason = "snapdown-core must not read environment variables directly" },
+]
