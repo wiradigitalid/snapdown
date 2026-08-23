@@ -3,7 +3,7 @@ id: W6-S6
 title: 'W6-S6: Hotkey rows — chip states, honest conflicts, and readable badges'
 type: 'feature'
 wave: W6
-status: ready-for-dev
+status: done
 created: '2026-08-24'
 dependencies:
   - W6-S5

@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 
 export type HotkeyChipState = 'bound' | 'listening' | 'unbound' | 'conflicted';
 
@@ -91,11 +91,11 @@ export const HotkeyChip: React.FC<HotkeyChipProps> = ({
     }
   };
 
-  let displayText = shortcut || 'None';
+  let displayText = shortcut || 'Click to set';
   if (isListening) {
-    displayText = 'Press shortcut keys (ESC to cancel)...';
+    displayText = 'Press keys… Esc to cancel';
   } else if (computedState === 'unbound') {
-    displayText = 'Click to record';
+    displayText = 'Click to set';
   }
 
   return (

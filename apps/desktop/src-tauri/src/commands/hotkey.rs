@@ -11,6 +11,8 @@ pub struct HotkeyItemDto {
     pub shortcut: String,
     pub is_registered: bool,
     pub is_active: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub startup_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,12 +38,14 @@ pub fn get_hotkeys(state: State<AppState>) -> Result<HotkeySettingsDto, String> 
             .unwrap_or_else(|| action.default_shortcut().to_string());
         let is_registered = registrar.is_registered(action_str);
         let is_active = !shortcut.trim().is_empty() && is_registered;
+        let startup_error = registrar.get_startup_failures().get(&action).cloned();
 
         hotkeys.push(HotkeyItemDto {
             action: action_str.to_string(),
             shortcut,
             is_registered,
             is_active,
+            startup_error,
         });
     }
 

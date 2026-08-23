@@ -1,4 +1,4 @@
-﻿export type NamedBudget = 'auto' | 'sharp' | 'balanced' | 'small' | 'custom';
+export type NamedBudget = 'auto' | 'sharp' | 'balanced' | 'small' | 'custom';
 
 export interface ResolvedPair {
   max_long_edge: number;
@@ -41,6 +41,7 @@ export interface HotkeyItem {
   shortcut: string;
   is_registered: boolean;
   is_active: boolean;
+  startup_error?: string;
 }
 
 export interface HotkeySettingsDto {
