@@ -199,6 +199,26 @@ waves:
     depends_on: []
     spec_folder: _bmad-output/specs/w6-desktop-experience/
     opened: "2026-08-23"
+    # RESEQUENCED 2026-08-23, after W6-S1 landed and before W6-S2 finished.
+    #
+    # The original chain was S1->S2->S3->S4->S5->S6->S7->S8 with S9 and S10 hanging off it, and it
+    # put the four DEFECT-BEARING stories at positions 7, 9 and 10 - behind six stories of UI work.
+    # Nobody chose that. It fell out of linearising the DAG over shared `touches` to satisfy V11,
+    # and a sequencing artifact is a bad reason to leave BUG-1 corrupting the record of what was
+    # handed over for six more stories.
+    #
+    # The chain is now RISK FIRST: S1 -> S2 -> S7 -> S9 -> S10 -> S3 -> S4 -> S5 -> S6 -> S8.
+    #   S2  BUG-4 critical  the capture path does not work
+    #   S7  BUG-5 critical  the Editor never renders a Finding's image
+    #       BUG-6 high      the orphan report is unreachable
+    #   S9  BUG-1 high      deleting a Finding guts every Bundle holding it
+    #   S10                 the Vault move reports success while leaving a duplicate
+    # All four defects now land in the first five positions. Everything after them is UI work that
+    # is unpleasant rather than wrong.
+    #
+    # It stays a pure chain. Every pair still shares at least one `touches` value or sits on a
+    # depends_on path, so V11 holds. The parallelism given up is theoretical - stories are being run
+    # one at a time.
     spec_reviewed:
       date: "2026-08-23"
       sha: 8bf08b4
@@ -304,7 +324,7 @@ waves:
             title: Two columns packed by content height, four groups visible at 1024x720
             component: settings
             satisfies: [UC-26]
-            depends_on: [W6-S2]
+            depends_on: [W6-S10]
             touches: [editor-ui, settings-store]
             spec_folder: _bmad-output/specs/w6-desktop-experience/
             tests:
@@ -367,7 +387,7 @@ waves:
             title: Findings — capture rail, canvas, note pane, and every state
             component: finding
             satisfies: [UC-3, UC-4, UC-5, UC-6]
-            depends_on: [W6-S6]
+            depends_on: [W6-S2]
             touches: [editor-ui, marker-canvas]
             spec_folder: _bmad-output/specs/w6-desktop-experience/
             why: |
@@ -400,7 +420,7 @@ waves:
             title: Bundles — preview as the centre, and a read-only region not a disabled input
             component: bundle
             satisfies: [UC-10, UC-11]
-            depends_on: [W6-S7]
+            depends_on: [W6-S6]
             touches: [editor-ui, bundle-render]
             spec_folder: _bmad-output/specs/w6-desktop-experience/
             tests:
@@ -417,7 +437,7 @@ waves:
             title: A Bundle survives the deletion of a Finding it holds
             component: bundle
             satisfies: []
-            depends_on: [W6-S4]
+            depends_on: [W6-S7]
             touches: [local-db]
             spec_folder: _bmad-output/specs/w6-desktop-experience/
             why: |
@@ -435,7 +455,7 @@ waves:
             title: The Vault move reports a file it could not remove
             component: settings
             satisfies: []
-            depends_on: [W6-S6]
+            depends_on: [W6-S9]
             touches: [vault-fs, settings-store]
             spec_folder: _bmad-output/specs/w6-desktop-experience/
             why: |

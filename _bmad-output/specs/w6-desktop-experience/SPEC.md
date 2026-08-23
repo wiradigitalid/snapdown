@@ -192,6 +192,30 @@ At the end of this wave, on a clean Windows 11 machine, in **both** themes, at 1
 9. **Opening that Finding shows its image, and clicking the image places a numbered Marker bound to
    a numbered Note line.** It does not today (`BUG-5`). Items 8 and 9 together are the product.
 
+## Order
+
+Resequenced 2026-08-23, **risk first**:
+
+`S1 → S2 → S7 → S9 → S10 → S3 → S4 → S5 → S6 → S8`
+
+| Position | Story | Carries |
+|---|---|---|
+| 1 | `W6-S1` | The colour foundation every later story writes against. **Done** |
+| 2 | `W6-S2` | `BUG-4` — the capture path does not work |
+| 3 | `W6-S7` | `BUG-5` — the Editor never renders a Finding's image · `BUG-6` — the orphan report is unreachable |
+| 4 | `W6-S9` | `BUG-1` — deleting a Finding guts every Bundle holding it |
+| 5 | `W6-S10` | The Vault move reports success while leaving an unreported duplicate |
+| 6–10 | `S3` `S4` `S5` `S6` `S8` | Everything the owner originally reported. Unpleasant rather than wrong |
+
+The original order put those four at positions 7, 9 and 10. Nobody chose that — it fell out of
+linearising the DAG over shared `touches` to satisfy `V11`, and a sequencing artifact is a bad reason
+to leave `BUG-1` corrupting the record of what was handed over for six more stories.
+
+Worth being plain about what this reorders **behind** the defects: every complaint the owner actually
+made — the unreadable panels, the wasted third of the Settings window, the two numbers nobody can
+judge, the startup toggle. Those are real and they are the reason this wave exists. They are also
+survivable in a way that a capture hotkey doing nothing is not.
+
 ## Assumptions
 
 - `OQ-18` — four named budgets are distinguishable enough that a Reviewer picks between them rather
