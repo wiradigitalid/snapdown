@@ -1,0 +1,19 @@
+---
+wave: W4
+title: Agent access complete — the key, the Local API, the MCP bridge
+stories:
+  - id: W4-S1
+    title: SQLite schema migration v4 (access_key) and AccessKeyStore
+    dependencies: []
+  - id: W4-S2
+    title: Local API HTTP server with constant-time auth and bundle routes
+    dependencies: [W4-S1]
+  - id: W4-S3
+    title: Stateless stdio MCP bridge binary (snapdown-bridge)
+    dependencies: [W4-S2]
+  - id: W4-S4
+    title: Settings Agent Access UI screen and Tauri IPC commands
+    dependencies: [W4-S1, W4-S2]
+  - id: W4-S5
+    title: Integration verification suite for agent access and refusal envelopes
+    dependencies: [W4-S1, W4-S2, W4-S3, W4-S4]
