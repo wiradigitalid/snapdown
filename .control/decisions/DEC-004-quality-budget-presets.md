@@ -1,8 +1,25 @@
 ---
 type: decision
 id: DEC-004
-status: accepted
-touches: []
+status: applied
+touches:
+  - .control/product-glossary.md
+  - .control/registry/waves.yaml
+  - .how/finding/02-contracts/contract-inventory.md
+  - .how/finding/04-components/LC-003-image-reducer.md
+  - .how/finding/SDD-finding.md
+  - .how/settings/01-ux/DESIGN.md
+  - .how/settings/02-contracts/contract-inventory.md
+  - .how/settings/05-model/data-model.md
+  - .how/settings/SDD-settings.md
+  - .what/_prd/capture-to-markdown/prd.md
+  - .what/_product-brief/brief.md
+  - .what/business-rules.md
+  - .what/finding/05-scenarios/SCN-03-the-quality-budget-that-resolves-differently.md
+  - .what/settings/02-rules/rules-settings.md
+  - .what/settings/03-domain/domain-model.md
+  - .what/settings/04-usecases/UC-13-decide-how-much-picture-quality-a-screenshot-is-worth.md
+  - .what/settings/SRS-settings.md
 supersedes: null
 superseded_by: null
 created: "2026-08-23"

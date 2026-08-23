@@ -1,8 +1,19 @@
 ---
 type: decision
 id: DEC-005
-status: accepted
-touches: []
+status: applied
+touches:
+  - .control/registry/defects.yaml
+  - .control/registry/waves.yaml
+  - .how/_platform/inventory-screen.md
+  - .how/bundle/01-ux/DESIGN.md
+  - .how/bundle/SDD-bundle.md
+  - .how/settings/01-ux/DESIGN.md
+  - .how/settings/04-components/LC-028-editor-shell.md
+  - .what/_product-brief/brief.md
+  - .what/bundle/04-usecases/EXPERIENCE.md
+  - .what/business-rules.md
+  - .what/settings/04-usecases/EXPERIENCE.md
 supersedes: null
 superseded_by: null
 created: "2026-08-23"

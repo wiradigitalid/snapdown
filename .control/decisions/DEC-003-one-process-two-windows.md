@@ -1,8 +1,18 @@
 ---
 type: decision
 id: DEC-003
-status: accepted
-touches: []
+status: applied
+touches:
+  - .control/product-glossary.md
+  - .how/_platform/ARCHITECTURE-SPINE.md
+  - .how/_platform/c4-l2-containers.md
+  - .how/_platform/c4-l3-desktop-app.md
+  - .how/_platform/inventory-screen.md
+  - .how/settings/04-components/LC-028-editor-shell.md
+  - .what/_prd/capture-to-markdown/prd.md
+  - .what/_product-brief/brief.md
+  - .what/business-rules.md
+  - .what/settings/04-usecases/EXPERIENCE.md
 supersedes: null
 superseded_by: null
 created: "2026-08-23"

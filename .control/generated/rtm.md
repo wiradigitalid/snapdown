@@ -329,7 +329,7 @@ rtm:
   - vitest::a_frozen_components_surface_is_still_listed
   - vitest::the_active_surface_is_distinguished_by_more_than_colour
   - vitest::the_rail_still_renders_when_a_surface_fails_to_load
-  status: unknown
+  status: ready-for-dev
   exempt: false
   green: false
   broken_at: status
@@ -353,7 +353,7 @@ rtm:
   - vitest::a_frozen_components_surface_is_still_listed
   - vitest::the_active_surface_is_distinguished_by_more_than_colour
   - vitest::the_rail_still_renders_when_a_surface_fails_to_load
-  status: unknown
+  status: ready-for-dev
   exempt: false
   green: false
   broken_at: status
