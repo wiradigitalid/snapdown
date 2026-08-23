@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { BundleComposer, Button } from '@snapdown/ui';
-import { BundleDetailDto, createBundle, deleteBundle, listBundles } from '../services/bundle';
+import {
+  BundleDetailDto,
+  copyBundleToClipboard,
+  createBundle,
+  deleteBundle,
+  listBundles,
+} from '../services/bundle';
 import { FindingDetailDto, listFindings } from '../services/finding';
 
 export const BundleView: React.FC = () => {
@@ -8,6 +14,7 @@ export const BundleView: React.FC = () => {
   const [findings, setFindings] = useState<FindingDetailDto[]>([]);
   const [selectedBundleId, setSelectedBundleId] = useState<string | null>(null);
   const [showComposer, setShowComposer] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState(false);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -35,6 +42,19 @@ export const BundleView: React.FC = () => {
   const handleDeleteBundle = async (id: string) => {
     await deleteBundle(id);
     await fetchAll();
+  };
+
+  const handleCopyMarkdown = async (id: string) => {
+    try {
+      const text = await copyBundleToClipboard(id);
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(text);
+      }
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy markdown:', err);
+    }
   };
 
   const selectedBundle = bundles.find((b) => b.bundle.id === selectedBundleId);
@@ -126,9 +146,19 @@ export const BundleView: React.FC = () => {
                 <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>
                   {selectedBundle.bundle.name}
                 </h2>
-                <Button variant="secondary" onClick={() => handleDeleteBundle(selectedBundle.bundle.id)}>
-                  Delete Bundle
-                </Button>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <Button variant="primary" onClick={() => handleCopyMarkdown(selectedBundle.bundle.id)}>
+                    Copy Markdown
+                  </Button>
+                  {copyFeedback && (
+                    <span data-testid="copy-feedback-msg" style={{ fontSize: '12px', color: '#16a34a' }}>
+                      Copied!
+                    </span>
+                  )}
+                  <Button variant="secondary" onClick={() => handleDeleteBundle(selectedBundle.bundle.id)}>
+                    Delete Bundle
+                  </Button>
+                </div>
               </div>
 
               <div style={{ fontSize: '12px', color: '#64748b' }}>

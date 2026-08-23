@@ -115,6 +115,17 @@ pub fn delete_bundle(id: String, state: State<AppState>) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub fn copy_bundle_to_clipboard(id: String, state: State<AppState>) -> Result<String, String> {
+    let detail = state
+        .bundle_store
+        .get_bundle(&id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Bundle not found: {id}"))?;
+
+    Ok(detail.bundle.markdown)
+}
+
 fn dirs_or_default_vault() -> PathBuf {
     if let Some(user_dirs) = std::env::var_os("USERPROFILE")
         .or_else(|| std::env::var_os("HOME"))
