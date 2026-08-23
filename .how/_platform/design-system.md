@@ -73,8 +73,8 @@ all three live here rather than in a component's own `DESIGN.md`:
 | Token | For | Why it does not follow the theme |
 |---|---|---|
 | `--color-marker` / `-text` / `-ring` | A numbered Marker badge | Burned into an exported image read on another machine under another theme |
-| `--overlay-dim` | The capture overlay's scrim | Drawn over the Reviewer's own screen content, not over a Snapdown surface |
-| `--overlay-region-ring` | The selected region's edge | Must stay visible over any content the Reviewer happens to be capturing |
+| `--color-overlay-scrim` | The capture overlay's scrim | Drawn over the Reviewer's own screen content, not over a Snapdown surface |
+| `--color-overlay-ring` | The selected region's edge | Must stay visible over any content the Reviewer happens to be capturing |
 | `--canvas-checker` | Transparency behind an image that does not fill its pane | Sits behind image content, not behind app chrome |
 
 They are the one place a literal value is correct, and `NFR-17`'s lint rule must be scoped to allow
