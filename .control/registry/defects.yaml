@@ -252,7 +252,14 @@ defects:
     fix: |
       Two parts, and only the first is the agent's.
       1. Remove them from the working tree, which this defect does, and let the new guard prevent
-         recurrence.
+         recurrence. DONE.
+         A related cleanup, done 2026-08-23 and worth recording because it is easy to miss: the
+         accessibility-tree dumps scrubbed from the wave branch earlier the same day were still
+         reachable AFTER the scrub, from `refs/original/refs/heads/wave/w6-gates-rerun` - the backup
+         ref `git filter-branch` writes and leaves behind. A scrub that stops at rewriting the branch
+         has not finished. The ref was deleted, the reflog expired and `git gc --prune=now` run, and
+         the leaked blobs are now unreachable from every ref. That cleanup does NOT apply to these
+         twelve screenshots: they are on `main` and published, which is a different problem.
       2. Whether to rewrite main's history - and whether anything visible in them warrants any other
          action - is the REPO OWNER'S CALL. Rewriting published history on a public repository
          affects every clone and fork, and an agent must not do it unilaterally. Recorded here so the

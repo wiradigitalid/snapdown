@@ -258,7 +258,14 @@ only the first will report the second's tables as missing — that is what
 `.constitution/project/inventory-readers.py` did for two waves.
 
 **Never commit a captured screenshot.** This repository is public and the product brief forbids it.
-`.gitignore` covers `.work/**/*.png`; CI still has no guard.
+`.gitignore` covers every image outside the app icon set, and `korpus.yml` now refuses tracked images,
+raw accessibility-tree dumps, and operator home-directory paths.
+
+**Scrubbing a leak from a branch is not finished when the branch is rewritten.** `git filter-branch`
+leaves its own backup at `refs/original/refs/heads/<branch>`, and the old objects stay reachable
+through it. Delete that ref, `git reflog expire --expire=now --all`, then `git gc --prune=now`. Verify
+with `git log --all --oneline -- <path>` returning nothing. This was missed once, on 2026-08-23, and
+found only because the tag cleanup prompted a second look.
 
 **Stale binaries mislead.** Renaming the product left `desktop.exe` beside `Snapdown.exe` in
 `target/release/`, the owner ran the old one, and reported four defects that did not exist. `FR-27`
