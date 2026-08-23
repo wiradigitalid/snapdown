@@ -12,6 +12,7 @@ use tauri_plugin_global_shortcut::{
 
 pub mod commands;
 pub mod hotkey;
+pub mod startup;
 pub mod state;
 pub mod vault_migration;
 
@@ -19,7 +20,9 @@ use commands::hotkey::{clear_hotkey, get_hotkeys, set_hotkey};
 use commands::settings::{
     get_latest_finding_size, get_settings, open_vault_folder, set_quality_budget, set_vault_path,
 };
+use commands::startup::{get_startup_status, set_startup_status};
 use hotkey::{DesktopHotkeyRegistrar, TauriGlobalShortcutBackend};
+use startup::{DesktopStartupRegistrar, TauriAutoStartBackend};
 use state::AppState;
 
 fn show_settings_window(app: &AppHandle) {
@@ -39,6 +42,10 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_settings_window(app);
         }))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--autostart"]),
+        ))
         .plugin(
             GlobalShortcutBuilder::new()
                 .with_handler(
@@ -90,9 +97,14 @@ pub fn run() {
 
             let arc_registrar = Arc::new(Mutex::new(registrar));
 
+            let autostart_backend = Arc::new(TauriAutoStartBackend::new(handle.clone()));
+            let startup_registrar = DesktopStartupRegistrar::new(autostart_backend);
+            let arc_startup_registrar = Arc::new(Mutex::new(startup_registrar));
+
             app.manage(AppState {
                 settings_store: arc_store,
                 hotkey_registrar: arc_registrar,
+                startup_registrar: arc_startup_registrar,
             });
 
             // Setup Tray Menu
@@ -125,8 +137,12 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            // Per FR-18: Starting Snapdown via Windows startup opens NO window (tray icon only).
+            // Check command-line arguments for "--autostart" flag.
+            let is_autostart_launch = std::env::args().any(|arg| arg == "--autostart");
+
             // Per MF-8: First run is defined as the setting table holding zero rows.
-            if is_first_run {
+            if is_first_run && !is_autostart_launch {
                 show_settings_window(&handle);
             }
 
@@ -140,7 +156,9 @@ pub fn run() {
             open_vault_folder,
             get_hotkeys,
             set_hotkey,
-            clear_hotkey
+            clear_hotkey,
+            get_startup_status,
+            set_startup_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

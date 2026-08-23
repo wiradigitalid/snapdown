@@ -26,3 +26,5 @@ tauri = { version = "2.0", features = ["tray-icon"] }
 tauri-build = { version = "2.0" }
 tauri-plugin-single-instance = { version = "2.0" }
 tauri-plugin-global-shortcut = { version = "2.0" }
+tauri-plugin-autostart = { version = "2.0" }
+winreg = "0.52"

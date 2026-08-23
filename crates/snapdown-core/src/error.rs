@@ -10,4 +10,7 @@ pub enum CoreError {
 
     #[error("Invalid path: {0}")]
     InvalidPath(String),
+
+    #[error("System error: {0}")]
+    System(String),
 }

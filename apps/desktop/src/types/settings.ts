@@ -22,3 +22,7 @@ export interface HotkeySettingsDto {
   hotkeys: HotkeyItem[];
   startup_warnings: string[];
 }
+
+export interface StartupSettingsDto {
+  enabled: boolean;
+}

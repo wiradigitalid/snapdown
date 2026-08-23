@@ -12,6 +12,8 @@ vi.mock('../services/settings', () => ({
   getHotkeys: vi.fn(),
   setHotkey: vi.fn(),
   clearHotkey: vi.fn(),
+  getStartupStatus: vi.fn(),
+  setStartupStatus: vi.fn(),
 }));
 
 const mockDefaultHotkeys = {
@@ -36,6 +38,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(settingsService.getHotkeys).mockResolvedValue(mockDefaultHotkeys);
+    vi.mocked(settingsService.getStartupStatus).mockResolvedValue({ enabled: false });
   });
 
   it('app_renders_shell and displays settings sections', async () => {
@@ -52,6 +55,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
 
     expect(screen.getByTestId('app-shell')).toBeInTheDocument();
     expect(screen.getByText('Snapdown Settings')).toBeInTheDocument();
+    expect(screen.getByText('General')).toBeInTheDocument();
     expect(screen.getByText('Vault Folder')).toBeInTheDocument();
     expect(screen.getByText('Quality Budget')).toBeInTheDocument();
     expect(screen.getByText('Hotkeys')).toBeInTheDocument();
@@ -62,6 +66,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
       expect(screen.getByDisplayValue('75')).toBeInTheDocument();
       expect(screen.getByDisplayValue('CommandOrControl+Shift+S')).toBeInTheDocument();
       expect(screen.getByDisplayValue('CommandOrControl+Shift+E')).toBeInTheDocument();
+      expect(screen.getByTestId('startup-toggle')).not.toBeChecked();
     });
   });
 
@@ -439,6 +444,67 @@ describe('Desktop Settings Screen (Screen 12)', () => {
         screen.getByText(/Failed to register shortcut for action 'capture' at startup/)
       ).toBeInTheDocument();
       expect(screen.getByText('Disabled / Inactive')).toBeInTheDocument();
+    });
+  });
+
+  it('reflects OS startup registration state on mount and toggles registration', async () => {
+    vi.mocked(settingsService.getSettings).mockResolvedValue({
+      vault_path: 'C:/Users/test/Vault',
+      quality_budget: {
+        max_long_edge: 1600,
+        encoder_quality: 75,
+      },
+      latest_finding_size: null,
+    });
+    vi.mocked(settingsService.getStartupStatus).mockResolvedValue({ enabled: true });
+    vi.mocked(settingsService.setStartupStatus).mockResolvedValue({ enabled: false });
+
+    render(<App />);
+
+    await waitFor(() => {
+      const toggle = screen.getByTestId('startup-toggle');
+      expect(toggle).toBeChecked();
+    });
+
+    const toggle = screen.getByTestId('startup-toggle');
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(settingsService.setStartupStatus).toHaveBeenCalledWith(false);
+      expect(screen.getByText('Snapdown startup registration removed')).toBeInTheDocument();
+    });
+  });
+
+  it('reverts checkbox state and displays error toast if OS startup change fails', async () => {
+    vi.mocked(settingsService.getSettings).mockResolvedValue({
+      vault_path: 'C:/Users/test/Vault',
+      quality_budget: {
+        max_long_edge: 1600,
+        encoder_quality: 75,
+      },
+      latest_finding_size: null,
+    });
+    vi.mocked(settingsService.getStartupStatus)
+      .mockResolvedValueOnce({ enabled: false })
+      .mockResolvedValueOnce({ enabled: false });
+    vi.mocked(settingsService.setStartupStatus).mockRejectedValue(
+      new Error('OS access denied')
+    );
+
+    render(<App />);
+
+    await waitFor(() => {
+      const toggle = screen.getByTestId('startup-toggle');
+      expect(toggle).not.toBeChecked();
+    });
+
+    const toggle = screen.getByTestId('startup-toggle');
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Failed to update startup registration: OS access denied')
+      ).toBeInTheDocument();
     });
   });
 });
