@@ -2,7 +2,7 @@
 id: W4-S1
 title: SQLite schema migration v4 (access_key) and AccessKeyStore
 wave: W4
-status: in_progress
+status: done
 created: 2026-08-23
 dependencies: []
 files:
