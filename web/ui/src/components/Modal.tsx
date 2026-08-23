@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -102,7 +102,7 @@ export const Modal: React.FC<ModalProps> = ({
         position: 'fixed',
         inset: 0,
         zIndex: 'var(--z-modal)',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'var(--color-overlay-scrim)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

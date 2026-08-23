@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Button } from '@snapdown/ui';
 import { cleanOrphans, OrphanScanReportDto, scanOrphans } from '../services/finding';
 
@@ -41,15 +41,15 @@ export const OrphanReportView: React.FC = () => {
   };
 
   return (
-    <div data-testid="orphan-report-view" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div data-testid="orphan-report-view" style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Orphan Files Report</h2>
-          <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+          <h2 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--color-text)' }}>Orphan Files Report</h2>
+          <p style={{ margin: 'var(--space-1) 0 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
             Detect files in vault that have no database reference, or missing files referenced by findings.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
           <Button variant="primary" onClick={handleScan} disabled={isScanning}>
             {isScanning ? 'Scanning...' : 'Scan Vault'}
           </Button>
@@ -65,11 +65,11 @@ export const OrphanReportView: React.FC = () => {
         <div
           data-testid="orphan-status-message"
           style={{
-            padding: '8px 12px',
-            backgroundColor: '#f1f5f9',
-            borderRadius: '6px',
-            fontSize: '13px',
-            color: '#334155',
+            padding: 'var(--space-2) var(--space-3)',
+            backgroundColor: 'var(--color-neutral-bg)',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: 'var(--text-sm)',
+            color: 'var(--color-neutral-text)',
           }}
         >
           {statusMsg}
@@ -77,17 +77,18 @@ export const OrphanReportView: React.FC = () => {
       )}
 
       {report && (
-        <div data-testid="orphan-summary-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div data-testid="orphan-summary-card" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: '12px',
-              padding: '12px',
-              backgroundColor: '#f8fafc',
-              border: '1px solid #e2e8f0',
-              borderRadius: '6px',
-              fontSize: '13px',
+              gap: 'var(--space-3)',
+              padding: 'var(--space-3)',
+              backgroundColor: 'var(--color-bg)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 'var(--text-sm)',
+              color: 'var(--color-text)',
             }}
           >
             <div><strong>Vault Files:</strong> {report.total_vault_files}</div>
@@ -98,8 +99,8 @@ export const OrphanReportView: React.FC = () => {
 
           {report.orphan_files.length > 0 && (
             <div>
-              <h4 style={{ margin: '0 0 8px 0', fontSize: '13px' }}>Unreferenced Disk Files (Orphans)</h4>
-              <ul data-testid="orphan-files-list" style={{ margin: 0, paddingLeft: '20px', fontSize: '12px', color: '#dc2626' }}>
+              <h4 style={{ margin: '0 0 var(--space-2) 0', fontSize: 'var(--text-sm)', color: 'var(--color-text)' }}>Unreferenced Disk Files (Orphans)</h4>
+              <ul data-testid="orphan-files-list" style={{ margin: 0, paddingLeft: 'var(--space-5)', fontSize: 'var(--text-xs)', color: 'var(--color-danger)' }}>
                 {report.orphan_files.map((file) => (
                   <li key={file}>{file}</li>
                 ))}
@@ -109,8 +110,8 @@ export const OrphanReportView: React.FC = () => {
 
           {report.missing_files.length > 0 && (
             <div>
-              <h4 style={{ margin: '0 0 8px 0', fontSize: '13px' }}>Missing Finding Files</h4>
-              <ul data-testid="missing-files-list" style={{ margin: 0, paddingLeft: '20px', fontSize: '12px', color: '#d97706' }}>
+              <h4 style={{ margin: '0 0 var(--space-2) 0', fontSize: 'var(--text-sm)', color: 'var(--color-text)' }}>Missing Finding Files</h4>
+              <ul data-testid="missing-files-list" style={{ margin: 0, paddingLeft: 'var(--space-5)', fontSize: 'var(--text-xs)', color: 'var(--color-warning-text)' }}>
                 {report.missing_files.map((file) => (
                   <li key={file}>{file}</li>
                 ))}

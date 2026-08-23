@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Toast } from '@snapdown/ui';
 import { VaultSection } from './components/VaultSection';
 import { QualityBudgetSection } from './components/QualityBudgetSection';
@@ -180,9 +180,9 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#ffffff',
+              color: 'var(--color-accent-text)',
               fontWeight: 700,
-              fontSize: '14px',
+              fontSize: 'var(--text-sm)',
             }}
           >
             S
@@ -210,7 +210,7 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
                   borderRadius: 'var(--radius-md)',
                   border: 'none',
                   backgroundColor: isActive ? 'var(--color-accent)' : 'transparent',
-                  color: isActive ? '#ffffff' : 'var(--color-text-muted)',
+                  color: isActive ? 'var(--color-accent-text)' : 'var(--color-text-muted)',
                   fontWeight: isActive ? 600 : 500,
                   fontSize: 'var(--text-sm)',
                   cursor: 'pointer',
@@ -290,4 +290,3 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
     </div>
   );
 };
-

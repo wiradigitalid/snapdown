@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+﻿import React, { useCallback, useEffect, useState } from 'react';
 import { BundleComposer, Button } from '@snapdown/ui';
 import {
   BundleDetailDto,
@@ -60,11 +60,11 @@ export const BundleView: React.FC = () => {
   const selectedBundle = bundles.find((b) => b.bundle.id === selectedBundleId);
 
   return (
-    <div data-testid="bundle-view" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div data-testid="bundle-view" style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Documentation Bundles</h1>
-          <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+          <h1 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600, color: 'var(--color-text)' }}>Documentation Bundles</h1>
+          <p style={{ margin: 'var(--space-1) 0 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
             Compose and export multi-finding markdown reviews.
           </p>
         </div>
@@ -81,25 +81,25 @@ export const BundleView: React.FC = () => {
         />
       )}
 
-      <div style={{ display: 'flex', gap: '16px', minHeight: '360px' }}>
+      <div style={{ display: 'flex', gap: 'var(--space-4)', minHeight: '360px' }}>
         {/* Bundle List */}
         <div
           data-testid="bundle-list-pane"
           style={{
             width: '260px',
-            border: '1px solid #e2e8f0',
-            borderRadius: '6px',
-            padding: '12px',
-            backgroundColor: '#f8fafc',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-sm)',
+            padding: 'var(--space-3)',
+            backgroundColor: 'var(--color-bg)',
           }}
         >
-          <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
+          <h3 style={{ margin: '0 0 var(--space-3) 0', fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text)' }}>
             Bundles ({bundles.length})
           </h3>
           {bundles.length === 0 ? (
-            <p style={{ fontSize: '13px', color: '#64748b' }}>No bundles created yet.</p>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>No bundles created yet.</p>
           ) : (
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
               {bundles.map((b) => {
                 const isSelected = b.bundle.id === selectedBundleId;
                 return (
@@ -108,15 +108,17 @@ export const BundleView: React.FC = () => {
                     data-testid={`bundle-item-${b.bundle.id}`}
                     onClick={() => setSelectedBundleId(b.bundle.id)}
                     style={{
-                      padding: '8px 12px',
-                      borderRadius: '6px',
+                      padding: 'var(--space-2) var(--space-3)',
+                      borderRadius: 'var(--radius-sm)',
                       cursor: 'pointer',
-                      backgroundColor: isSelected ? '#e0f2fe' : '#ffffff',
-                      border: isSelected ? '1px solid #3b82f6' : '1px solid #e2e8f0',
+                      backgroundColor: isSelected ? 'var(--color-info-bg)' : 'var(--color-surface)',
+                      border: isSelected ? '1px solid var(--color-accent)' : '1px solid var(--color-border)',
                     }}
                   >
-                    <div style={{ fontWeight: 500, fontSize: '13px' }}>{b.bundle.name}</div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>
+                    <div style={{ fontWeight: 500, fontSize: 'var(--text-sm)', color: isSelected ? 'var(--color-info-text)' : 'var(--color-text)' }}>
+                      {b.bundle.name}
+                    </div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
                       {b.items.length} items • {b.bundle.composed_at}
                     </div>
                   </li>
@@ -131,27 +133,27 @@ export const BundleView: React.FC = () => {
           data-testid="bundle-detail-pane"
           style={{
             flex: 1,
-            border: '1px solid #e2e8f0',
-            borderRadius: '6px',
-            padding: '16px',
-            backgroundColor: '#ffffff',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-sm)',
+            padding: 'var(--space-4)',
+            backgroundColor: 'var(--color-surface)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px',
+            gap: 'var(--space-3)',
           }}
         >
           {selectedBundle ? (
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>
+                <h2 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--color-text)' }}>
                   {selectedBundle.bundle.name}
                 </h2>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
                   <Button variant="primary" onClick={() => handleCopyMarkdown(selectedBundle.bundle.id)}>
                     Copy Markdown
                   </Button>
                   {copyFeedback && (
-                    <span data-testid="copy-feedback-msg" style={{ fontSize: '12px', color: '#16a34a' }}>
+                    <span data-testid="copy-feedback-msg" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-text)', fontWeight: 600 }}>
                       Copied!
                     </span>
                   )}
@@ -161,23 +163,25 @@ export const BundleView: React.FC = () => {
                 </div>
               </div>
 
-              <div style={{ fontSize: '12px', color: '#64748b' }}>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
                 Path: <code>{selectedBundle.bundle.markdown_path}</code>
               </div>
 
               <div>
-                <h4 style={{ margin: '0 0 6px 0', fontSize: '13px' }}>Markdown Preview</h4>
+                <h4 style={{ margin: '0 0 var(--space-2) 0', fontSize: 'var(--text-sm)', color: 'var(--color-text)' }}>Markdown Preview</h4>
                 <pre
                   data-testid="bundle-markdown-preview"
                   style={{
-                    backgroundColor: '#f1f5f9',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    fontFamily: 'var(--font-mono, monospace)',
+                    backgroundColor: 'var(--color-surface-sunken)',
+                    color: 'var(--color-text)',
+                    padding: 'var(--space-3)',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: 'var(--text-xs)',
+                    fontFamily: 'var(--font-mono)',
                     whiteSpace: 'pre-wrap',
                     maxHeight: '300px',
                     overflowY: 'auto',
+                    border: '1px solid var(--color-border)',
                   }}
                 >
                   {selectedBundle.bundle.markdown}
@@ -185,7 +189,7 @@ export const BundleView: React.FC = () => {
               </div>
             </>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-text-muted)' }}>
               Select a bundle to preview content.
             </div>
           )}

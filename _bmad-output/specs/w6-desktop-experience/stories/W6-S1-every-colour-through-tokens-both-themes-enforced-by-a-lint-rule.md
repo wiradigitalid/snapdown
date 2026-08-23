@@ -3,7 +3,7 @@ id: W6-S1
 title: 'W6-S1: Every colour through tokens, both themes, enforced by a lint rule'
 type: 'feature'
 wave: W6
-status: ready-for-dev
+status: done
 created: '2026-08-23'
 dependencies: []
 files:
@@ -191,3 +191,4 @@ The application currently violates the single colour authority principle (AD-10,
 - `npm --prefix apps/desktop run test` -- expected: Vitest tests pass in desktop app
 - `npm --prefix apps/desktop run build` -- expected: Production Vite build succeeds
 - `cargo test --workspace` -- expected: All Rust crate unit and integration tests remain green
+

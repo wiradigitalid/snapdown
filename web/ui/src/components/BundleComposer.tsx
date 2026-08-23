@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Button } from './Button';
 import { Checkbox } from './Checkbox';
 import { TextField } from './TextField';
@@ -60,17 +60,19 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
     <div
       data-testid="bundle-composer"
       style={{
-        padding: '16px',
-        backgroundColor: '#ffffff',
-        border: '1px solid #e2e8f0',
-        borderRadius: '8px',
+        padding: 'var(--space-4)',
+        backgroundColor: 'var(--color-surface)',
+        border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius-md)',
         display: 'flex',
         flexDirection: 'column',
-        gap: '16px',
+        gap: 'var(--space-4)',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Compose Bundle</h2>
+        <h2 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--color-text)' }}>
+          Compose Bundle
+        </h2>
         {onCancel && (
           <Button variant="secondary" onClick={onCancel}>
             Cancel
@@ -78,8 +80,8 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
         )}
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <label htmlFor="bundle-title-input" style={{ fontSize: '13px', fontWeight: 500 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+        <label htmlFor="bundle-title-input" style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text)' }}>
           Bundle Title
         </label>
         <TextField
@@ -90,12 +92,12 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
         />
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <label style={{ fontSize: '13px', fontWeight: 500 }}>
+          <label style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--color-text)' }}>
             Select Findings ({selectedIds.length} of {findings.length})
           </label>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
             <Button variant="secondary" onClick={handleSelectAll}>
               Select All
             </Button>
@@ -106,7 +108,7 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
         </div>
 
         {findings.length === 0 ? (
-          <p style={{ fontSize: '13px', color: '#64748b' }}>No findings available to bundle.</p>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>No findings available to bundle.</p>
         ) : (
           <div
             style={{
@@ -114,10 +116,10 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
               overflowY: 'auto',
               display: 'flex',
               flexDirection: 'column',
-              gap: '6px',
-              border: '1px solid #e2e8f0',
-              borderRadius: '6px',
-              padding: '8px',
+              gap: 'var(--space-1)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)',
+              padding: 'var(--space-2)',
             }}
           >
             {findings.map((f) => {
@@ -130,11 +132,11 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '10px',
-                    padding: '8px',
-                    backgroundColor: checked ? '#f0f9ff' : '#ffffff',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '4px',
+                    gap: 'var(--space-2)',
+                    padding: 'var(--space-2)',
+                    backgroundColor: checked ? 'var(--color-info-bg)' : 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-sm)',
                     cursor: 'pointer',
                   }}
                 >
@@ -144,10 +146,10 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
                     onChange={() => toggleFinding(f.finding.id)}
                   />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '13px', fontWeight: 500, color: '#1e293b' }}>
+                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 500, color: checked ? 'var(--color-info-text)' : 'var(--color-text)' }}>
                       {f.finding.image_path}
                     </div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
                       {f.note.body ? f.note.body.slice(0, 60) : 'No note text'}
                     </div>
                   </div>
@@ -159,12 +161,12 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
       </div>
 
       {errorMsg && (
-        <div data-testid="composer-error-msg" style={{ color: '#ef4444', fontSize: '13px' }}>
+        <div data-testid="composer-error-msg" style={{ color: 'var(--color-danger)', fontSize: 'var(--text-sm)' }}>
           {errorMsg}
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
         <Button variant="primary" onClick={handleCreate} disabled={isSubmitting}>
           {isSubmitting ? 'Composing...' : 'Create Bundle'}
         </Button>

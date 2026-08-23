@@ -1,28 +1,26 @@
 ﻿import React from 'react';
 import { Button } from './Button';
 
-export interface EmptyStateProps {
-  heading: string;
-  description: string;
-  illustration?: React.ReactNode;
+export interface ErrorStateProps {
+  title?: string;
+  message: string;
   actionLabel?: string;
   onAction?: () => void;
   className?: string;
   style?: React.CSSProperties;
 }
 
-export const EmptyState: React.FC<EmptyStateProps> = ({
-  heading,
-  description,
-  illustration,
-  actionLabel,
+export const ErrorState: React.FC<ErrorStateProps> = ({
+  title = 'Something went wrong',
+  message,
+  actionLabel = 'Try Again',
   onAction,
   className = '',
   style,
 }) => {
   return (
     <div
-      data-testid="empty-state"
+      data-testid="error-state"
       className={className}
       style={{
         display: 'flex',
@@ -32,24 +30,39 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
         padding: 'var(--space-6)',
         textAlign: 'center',
         gap: 'var(--space-2)',
+        backgroundColor: 'var(--color-danger-bg)',
+        borderRadius: 'var(--radius-md)',
+        border: '1px solid var(--color-border)',
         ...style,
       }}
     >
-      {illustration && (
-        <div style={{ marginBottom: 'var(--space-2)', color: 'var(--color-text-muted)' }}>
-          {illustration}
-        </div>
-      )}
+      <div
+        style={{
+          width: '2.5rem',
+          height: '2.5rem',
+          borderRadius: '50%',
+          backgroundColor: 'var(--color-danger)',
+          color: 'var(--color-danger-text)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontWeight: 700,
+          fontSize: 'var(--text-lg)',
+          marginBottom: 'var(--space-1)',
+        }}
+      >
+        !
+      </div>
       <h3
         style={{
           margin: 0,
           fontFamily: 'var(--font-ui)',
-          fontSize: 'var(--text-lg)',
+          fontSize: 'var(--text-base)',
           fontWeight: 600,
           color: 'var(--color-text)',
         }}
       >
-        {heading}
+        {title}
       </h3>
       <p
         style={{
@@ -60,10 +73,10 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
           maxWidth: '24rem',
         }}
       >
-        {description}
+        {message}
       </p>
       {actionLabel && onAction && (
-        <div style={{ marginTop: 'var(--space-4)' }}>
+        <div style={{ marginTop: 'var(--space-3)' }}>
           <Button variant="primary" onClick={onAction}>
             {actionLabel}
           </Button>
