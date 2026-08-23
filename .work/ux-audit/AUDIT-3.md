@@ -1,8 +1,37 @@
 # UX Audit Report — Verification of BUG-4 in Running Product
 
+> **CORRECTION BY THE COORDINATOR, 2026-08-23.** The headline below reads "No — BUG-4 is not fixed".
+> **That conclusion is wrong, and the fault is mine, not the auditor's.**
+>
+> The binary it tested was built with `cargo build --release -p snapdown`, which is **not** how a
+> Tauri application is built. Without the Tauri CLI the release binary keeps requesting the `devUrl`
+> from `tauri.conf.json` (`http://localhost:5173`) instead of the bundled `frontendDist` — which is
+> exactly what the screenshot shows: `localhost refused to connect · ERR_CONNECTION_REFUSED`.
+>
+> **The frontend never loaded, so nothing about the frontend was tested.** `BUG-4`'s status is
+> unchanged and still unverified in the product: `mount.test.tsx` proves the mount decision in jsdom
+> and nothing has yet proved it in a running application.
+>
+> The auditor did its job. It launched the binary it was given, photographed what it saw, and said
+> plainly that everything downstream could not be tested. Every "could not test" below is honest.
+>
+> **Two real findings came out of it:**
+>
+> 1. **`BUG-11`** — there is no reproducible way to build this application. The Tauri CLI is not a
+>    dependency, not a script, not documented, and CI never produces a desktop artifact. The shipped
+>    `Snapdown.exe` was built by means nobody wrote down.
+> 2. **The window title reads `Snapdown Editor`** — visible in the screenshot. `W6-S2`'s persona
+>    naming (`DEC-003`, `FR-27`) is correct in a real running window. That is the **first** thing
+>    about this product ever confirmed outside jsdom.
+
 ## 1. Headline Question: Does the capture hotkey now show an overlay?
 
-**No.** Pressing `Ctrl+Shift+S` in the running product (`target/release/Snapdown.exe`) does not show a capture overlay. When launched, the application's window (titled `Snapdown Editor`) displays a webview network error page (`localhost - Network error - Web content` / connection reset). No capture overlay appears on screen.
+**As reported by the auditor: No.** Pressing `Ctrl+Shift+S` in the running product
+(`target/release/Snapdown.exe`) does not show a capture overlay. When launched, the application's
+window (titled `Snapdown Editor`) displays a webview network error page (`localhost` refused to
+connect). No capture overlay appears on screen.
+
+**As corrected above: this tested a binary whose frontend never loaded.** The question remains open.
 
 ---
 

@@ -413,3 +413,49 @@ defects:
       would report it over - and it is recorded here so the next sweep does not re-raise it.
     blocked_by: DEC-005, which freezes `agent-access`.
     status: open
+  - id: BUG-11
+    title: "There is no reproducible way to build the desktop application"
+    found: "2026-08-23"
+    found_by: coordinator, after a hand-built binary launched into a webview network error
+    component: settings
+    severity: high
+    contradicts: [FR-27, BR-121, "codebase-stack-guide.md"]
+    evidence: |
+      The Tauri CLI is absent everywhere:
+        `cargo tauri --version`            -> error: no such command: `tauri`
+        `npx --no-install tauri --version` -> could not determine executable to run
+        apps/desktop/package.json devDependencies -> no tauri package at all
+        apps/desktop/package.json scripts -> dev, build, preview, typecheck, lint, test. No tauri.
+        Cargo.toml has tauri, tauri-build and three plugins - the LIBRARIES - and no tauri-cli.
+      Nothing documents a build command: codebase-stack-guide.md, README.md and the workflows contain
+      no `tauri build`, `tauri dev`, `cargo tauri` or `npm run tauri`.
+      desktop-ci.yml produces no artifact: no bundle step, no upload, no release.
+    impact: |
+      `cargo build --release -p snapdown` compiles and links, and the binary it produces is NOT the
+      application. Launched, its webview requests the `devUrl` from tauri.conf.json
+      (http://localhost:5173), nothing is serving it, and the window shows
+      "localhost refused to connect - ERR_CONNECTION_REFUSED". Verified by screenshot on 2026-08-23.
+      The bundled `frontendDist` is only wired in by the Tauri CLI, which is not here.
+      So: the shipped Snapdown.exe was built by some means nobody wrote down, nobody can reproduce
+      it, and CI has never built the product it is testing the parts of.
+      BR-121 says a build produces exactly one desktop executable. It is asserted by a unit test that
+      reads Cargo.toml and tauri.conf.json - which is the right proxy for the DECLARATION and proves
+      nothing about a build, because there is no build to run.
+    why_undetected: |
+      Everything around it is green and none of it builds the app. cargo test compiles the crates,
+      npm run build bundles the frontend, and the two are never joined. The gap is exactly the seam
+      between them - the same shape as BUG-4, which was the seam between the Rust window builder's
+      URL and the frontend's routing. Seams have no owner here.
+      It surfaced only because a UI verification was attempted, which is the first time in this
+      project that anyone tried to run a binary they had built themselves.
+    fix: |
+      Add the Tauri CLI as a devDependency of apps/desktop with a `tauri` script, or as a cargo
+      binary dependency. Document the build command in codebase-stack-guide.md next to the
+      verification commands. Then have desktop-ci.yml actually build the bundle, which is what makes
+      BR-121 checkable against a real build rather than a declaration.
+      Until then, treat any locally built Snapdown.exe as NOT the application.
+    note: |
+      One thing WAS verified from that broken build and it is worth keeping: the window title read
+      "Snapdown Editor". W6-S2's persona naming (DEC-003, FR-27) is correct in a real running window,
+      which is the first time anything about the product has been confirmed outside jsdom.
+    status: open
