@@ -302,3 +302,10 @@ found only because the tag cleanup prompted a second look.
 **Stale binaries mislead.** Renaming the product left `desktop.exe` beside `Snapdown.exe` in
 `target/release/`, the owner ran the old one, and reported four defects that did not exist. `FR-27`
 now makes a second desktop executable a build failure.
+
+**A dispatched worktree branches from `main`, not from the branch you are on.** `worker-start
+--worktree new-child` without `--base-branch` gave W6-S9's planner a checkout at `main`'s tip, so the
+whole wave — `SPEC.md`, `stories.yaml`, every dispatch brief — was absent, and the worker rebuilt them
+from scratch as new files. Pass `--base-branch` explicitly for any wave work, and take only the files
+the brief asked for out of a worktree that got this wrong: its reconstructed registries are guesses,
+and overwriting the real ones with them loses everything the wave has written.
