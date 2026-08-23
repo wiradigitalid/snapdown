@@ -19,6 +19,9 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Rust formatting check
         run: cargo fmt --all -- --check
 
