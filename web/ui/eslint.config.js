@@ -1,4 +1,4 @@
-﻿import js from '@eslint/js';
+import js from '@eslint/js';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
@@ -63,7 +63,7 @@ const customColorPlugin = {
 };
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'src/test/contrast.test.ts', 'src/test/tokens.test.ts'] },
+  { ignores: ['dist', 'node_modules', 'src/test/tokens.test.ts'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],
