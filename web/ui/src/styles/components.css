@@ -1,4 +1,4 @@
-﻿/* Base elements stylesheet for interactive states */
+/* Base elements stylesheet for interactive states */
 
 .btn {
   font-family: var(--font-ui);
@@ -326,4 +326,23 @@
 .modal-content[data-state="closing"] {
   opacity: 0;
   transition: opacity 0.15s ease-out;
+}
+
+/* Navigation Rail (LC-028) */
+.nav-rail-item {
+  outline: none;
+}
+
+.nav-rail-item:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.rail-capture-btn {
+  outline: none;
+}
+
+.rail-capture-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }

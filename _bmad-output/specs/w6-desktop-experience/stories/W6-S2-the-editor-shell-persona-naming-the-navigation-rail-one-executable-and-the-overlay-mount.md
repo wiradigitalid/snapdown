@@ -3,7 +3,7 @@ id: W6-S2
 title: 'W6-S2: The editor shell — persona naming, the navigation rail, one executable, and the overlay mount'
 type: 'feature'
 wave: W6
-status: ready-for-dev
+status: done
 created: '2026-08-23'
 dependencies:
   - W6-S1

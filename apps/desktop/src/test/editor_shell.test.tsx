@@ -95,4 +95,25 @@ describe('EditorShell Component (LC-028)', () => {
 
     expect(screen.getByTestId('custom-child-view')).toHaveTextContent('Surface Child');
   });
+  it('provides visible focus-visible treatment without suppressing focus outline (NFR-16, EXPERIENCE)', () => {
+    render(
+      <EditorShell activeTab="findings" onTabChange={vi.fn()} onCaptureClick={vi.fn()}>
+        <div>Content</div>
+      </EditorShell>
+    );
+
+    const findingsTab = screen.getByRole('tab', { name: /findings/i });
+    const settingsTab = screen.getByRole('tab', { name: /settings/i });
+    const captureBtn = screen.getByTestId('rail-capture-btn');
+
+    // Navigation rail items must carry the nav-rail-item class
+    expect(findingsTab).toHaveClass('nav-rail-item');
+    expect(settingsTab).toHaveClass('nav-rail-item');
+    expect(captureBtn).toHaveClass('rail-capture-btn');
+
+    // Focus must NOT be suppressed by inline outline: 'none'
+    expect(findingsTab.style.outline).not.toBe('none');
+    expect(settingsTab.style.outline).not.toBe('none');
+    expect(captureBtn.style.outline).not.toBe('none');
+  });
 });

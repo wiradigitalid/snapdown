@@ -1,4 +1,6 @@
-﻿import React from 'react';
+import fs from 'node:fs';
+import path from 'node:path';
+import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import {
@@ -441,6 +443,15 @@ describe('web/ui components suite', () => {
 
       rerender(<MarkerBadge number={0} />);
       expect(screen.getByText('1')).toBeInTheDocument();
+    });
+  });
+  describe('Navigation Rail and Interactive Focus States (LC-028, NFR-16)', () => {
+    it('defines focus-visible styling for navigation rail items and buttons in components.css', () => {
+      const cssPath = path.resolve(process.cwd(), 'src/styles/components.css');
+      const css = fs.readFileSync(cssPath, 'utf-8');
+      expect(css).toContain('.nav-rail-item:focus-visible');
+      expect(css).toContain('.rail-capture-btn:focus-visible');
+      expect(css).toContain('outline: 2px solid var(--color-accent)');
     });
   });
 });
