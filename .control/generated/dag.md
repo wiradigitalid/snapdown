@@ -23,17 +23,21 @@ dag:
   - parallel:
     - W6-S2
   - parallel:
+    - W6-S7
+  - parallel:
+    - W6-S11
+  - parallel:
+    - W6-S9
+  - parallel:
+    - W6-S10
+  - parallel:
     - W6-S3
   - parallel:
     - W6-S4
   - parallel:
     - W6-S5
-    - W6-S9
   - parallel:
     - W6-S6
-  - parallel:
-    - W6-S10
-    - W6-S7
   - parallel:
     - W6-S8
 ```

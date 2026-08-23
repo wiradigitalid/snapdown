@@ -1,6 +1,6 @@
-promise_progress: 13%
+promise_progress: 32%
 rtm_rows:
-  green: 4
+  green: 10
   counted: 31
   excluded_no_uc: 1
 work_progress:
@@ -31,9 +31,9 @@ work_progress:
   work_progress: n/a
 - wave: W6
   status: open
-  stories_done: 1
-  stories_total: 10
-  work_progress: 10%
+  stories_done: 3
+  stories_total: 11
+  work_progress: 27%
 gate_readiness: 88%
 validators_red:
 - V18
@@ -47,7 +47,7 @@ validators_skipped:
     be moved here just to give the room content
 open_questions:
   blocking: 0
-  assumptions: 20
+  assumptions: 21
   external: 3
   answered: 0
   blocking_budget: 15

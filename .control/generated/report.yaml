@@ -1,0 +1,327 @@
+asof: '2026-08-23'
+since: ''
+since_report: ''
+sha: 24c3c34a7419310cd3d0a98a56b8e7f590a2f0ea
+registry_dirty: false
+uncommitted_stories: []
+promise_progress: 32%
+rtm_rows:
+  green: 10
+  counted: 31
+  excluded_no_uc: 1
+work_progress:
+- wave: W1
+  status: closed
+  stories_done: 5
+  stories_total: 5
+  work_progress: 100%
+- wave: W2
+  status: closed
+  stories_done: 0
+  stories_total: 0
+  work_progress: n/a
+- wave: W3
+  status: closed
+  stories_done: 0
+  stories_total: 0
+  work_progress: n/a
+- wave: W4
+  status: closed
+  stories_done: 0
+  stories_total: 0
+  work_progress: n/a
+- wave: W5
+  status: closed
+  stories_done: 0
+  stories_total: 0
+  work_progress: n/a
+- wave: W6
+  status: open
+  stories_done: 3
+  stories_total: 11
+  work_progress: 27%
+gate_readiness: 88%
+proven:
+- FR: FR-16
+  UC: UC-14
+  story: W1-S3
+  test:
+  - cargo::unwritable_vault_folder_is_refused_at_choosing
+  - cargo::changing_the_vault_moves_every_file_or_none
+  - cargo::quality_budget_outside_range_is_refused_on_entry
+  - vitest::settings_shows_the_stored_size_of_the_latest_finding
+  closed: '2026-08-23'
+- FR: FR-5
+  UC: UC-13
+  story: W1-S3
+  test:
+  - cargo::unwritable_vault_folder_is_refused_at_choosing
+  - cargo::changing_the_vault_moves_every_file_or_none
+  - cargo::quality_budget_outside_range_is_refused_on_entry
+  - vitest::settings_shows_the_stored_size_of_the_latest_finding
+  closed: '2026-08-23'
+- FR: FR-17
+  UC: UC-15
+  story: W1-S4
+  test:
+  - cargo::a_combination_held_elsewhere_is_refused_at_binding
+  - cargo::two_actions_cannot_share_one_combination
+  - cargo::a_cleared_hotkey_disables_its_action
+  - cargo::rebinding_takes_effect_without_a_restart
+  - cargo::a_failed_startup_registration_is_reported_not_swallowed
+  closed: '2026-08-23'
+- FR: FR-18
+  UC: UC-16
+  story: W1-S5
+  test:
+  - cargo::startup_registration_needs_no_administrator_rights
+  - cargo::the_setting_is_read_back_from_the_os_not_remembered
+  - cargo::disabling_removes_the_registration
+  closed: '2026-08-23'
+- FR: FR-27
+  UC: UC-24
+  story: W6-S2
+  test:
+  - vitest::mounts_captureoverlay_when_url_query_has_overlay_true
+  - vitest::mounts_app_editor_shell_when_url_query_is_empty
+  - vitest::mounts_app_editor_shell_when_url_query_has_other_parameters
+  - cargo::desktop_crate_declares_exactly_one_binary_named_snapdown
+  - cargo::tauri_configuration_has_snapdown_product_and_snapdown_editor_window_title
+  - vitest::lists_all_four_primary_surfaces
+  - vitest::highlights_the_active_tab_with_multiple_visual_cues
+  - vitest::provides_visible_focus_visible_treatment_without_suppressing_focus_outline
+  - vitest::renders_200px_wide_navigation_rail_with_branding
+  - vitest::triggers_ontabchange_when_navigation_tab_is_clicked
+  - vitest::renders_pinned_capture_button_and_triggers_oncaptureclick
+  - vitest::renders_children_within_the_main_content_area_without_crashing
+  closed: '2026-08-23'
+- FR: FR-28
+  UC: UC-25
+  story: W6-S2
+  test:
+  - vitest::mounts_captureoverlay_when_url_query_has_overlay_true
+  - vitest::mounts_app_editor_shell_when_url_query_is_empty
+  - vitest::mounts_app_editor_shell_when_url_query_has_other_parameters
+  - cargo::desktop_crate_declares_exactly_one_binary_named_snapdown
+  - cargo::tauri_configuration_has_snapdown_product_and_snapdown_editor_window_title
+  - vitest::lists_all_four_primary_surfaces
+  - vitest::highlights_the_active_tab_with_multiple_visual_cues
+  - vitest::provides_visible_focus_visible_treatment_without_suppressing_focus_outline
+  - vitest::renders_200px_wide_navigation_rail_with_branding
+  - vitest::triggers_ontabchange_when_navigation_tab_is_clicked
+  - vitest::renders_pinned_capture_button_and_triggers_oncaptureclick
+  - vitest::renders_children_within_the_main_content_area_without_crashing
+  closed: '2026-08-23'
+- FR: FR-6
+  UC: UC-3
+  story: W6-S7
+  test:
+  - vitest::the_findings_detail_pane_renders_the_findings_image
+  - vitest::the_marker_canvas_is_mounted_over_that_image
+  - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
+  - vitest::the_orphan_report_is_reachable_from_the_findings_surface
+  - vitest::findings_renders_correctly_in_both_windows_themes
+  - vitest::the_empty_state_teaches_the_bound_capture_combination
+  - vitest::nothing_selected_is_visually_distinct_from_empty
+  - vitest::every_marker_is_reachable_and_movable_from_the_keyboard
+  - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
+  - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
+  - vitest::panels_take_the_height_available_rather_than_a_fixed_height
+  closed: '2026-08-23'
+- FR: FR-7
+  UC: UC-4
+  story: W6-S7
+  test:
+  - vitest::the_findings_detail_pane_renders_the_findings_image
+  - vitest::the_marker_canvas_is_mounted_over_that_image
+  - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
+  - vitest::the_orphan_report_is_reachable_from_the_findings_surface
+  - vitest::findings_renders_correctly_in_both_windows_themes
+  - vitest::the_empty_state_teaches_the_bound_capture_combination
+  - vitest::nothing_selected_is_visually_distinct_from_empty
+  - vitest::every_marker_is_reachable_and_movable_from_the_keyboard
+  - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
+  - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
+  - vitest::panels_take_the_height_available_rather_than_a_fixed_height
+  closed: '2026-08-23'
+- FR: FR-8
+  UC: UC-5
+  story: W6-S7
+  test:
+  - vitest::the_findings_detail_pane_renders_the_findings_image
+  - vitest::the_marker_canvas_is_mounted_over_that_image
+  - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
+  - vitest::the_orphan_report_is_reachable_from_the_findings_surface
+  - vitest::findings_renders_correctly_in_both_windows_themes
+  - vitest::the_empty_state_teaches_the_bound_capture_combination
+  - vitest::nothing_selected_is_visually_distinct_from_empty
+  - vitest::every_marker_is_reachable_and_movable_from_the_keyboard
+  - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
+  - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
+  - vitest::panels_take_the_height_available_rather_than_a_fixed_height
+  closed: '2026-08-23'
+- FR: FR-9
+  UC: UC-6
+  story: W6-S7
+  test:
+  - vitest::the_findings_detail_pane_renders_the_findings_image
+  - vitest::the_marker_canvas_is_mounted_over_that_image
+  - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
+  - vitest::the_orphan_report_is_reachable_from_the_findings_surface
+  - vitest::findings_renders_correctly_in_both_windows_themes
+  - vitest::the_empty_state_teaches_the_bound_capture_combination
+  - vitest::nothing_selected_is_visually_distinct_from_empty
+  - vitest::every_marker_is_reachable_and_movable_from_the_keyboard
+  - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
+  - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
+  - vitest::panels_take_the_height_available_rather_than_a_fixed_height
+  closed: '2026-08-23'
+moved:
+- id: CAP-2
+  kind: CAP
+  event: started
+  date: '2026-08-23'
+- id: CAP-3
+  kind: CAP
+  event: closed
+  date: '2026-08-23'
+- id: CAP-3
+  kind: CAP
+  event: started
+  date: '2026-08-23'
+- id: CAP-6
+  kind: CAP
+  event: started
+  date: '2026-08-23'
+- id: CAP-9
+  kind: CAP
+  event: started
+  date: '2026-08-23'
+- id: FR-16
+  kind: FR
+  event: closed
+  date: '2026-08-23'
+- id: FR-16
+  kind: FR
+  event: started
+  date: '2026-08-23'
+- id: FR-17
+  kind: FR
+  event: started
+  date: '2026-08-23'
+- id: FR-18
+  kind: FR
+  event: started
+  date: '2026-08-23'
+- id: FR-27
+  kind: FR
+  event: closed
+  date: '2026-08-23'
+- id: FR-27
+  kind: FR
+  event: started
+  date: '2026-08-23'
+- id: FR-28
+  kind: FR
+  event: closed
+  date: '2026-08-23'
+- id: FR-28
+  kind: FR
+  event: started
+  date: '2026-08-23'
+- id: FR-5
+  kind: FR
+  event: started
+  date: '2026-08-23'
+- id: FR-6
+  kind: FR
+  event: closed
+  date: '2026-08-23'
+- id: FR-6
+  kind: FR
+  event: started
+  date: '2026-08-23'
+- id: FR-7
+  kind: FR
+  event: closed
+  date: '2026-08-23'
+- id: FR-7
+  kind: FR
+  event: started
+  date: '2026-08-23'
+- id: FR-8
+  kind: FR
+  event: closed
+  date: '2026-08-23'
+- id: FR-8
+  kind: FR
+  event: started
+  date: '2026-08-23'
+- id: FR-9
+  kind: FR
+  event: closed
+  date: '2026-08-23'
+- id: FR-9
+  kind: FR
+  event: started
+  date: '2026-08-23'
+late: []
+defects:
+  opened: []
+  closed: []
+  closed_by_root_cause: {}
+  undiagnosed:
+  - id: BUG-1
+    title: Deleting a Finding silently deletes its rows from every Bundle that holds it
+    reported: ''
+    age_days: null
+  - id: BUG-10
+    title: The MCP bridge can hand an agent an error with an empty message
+    reported: ''
+    age_days: null
+  - id: BUG-11
+    title: There is no reproducible way to build the desktop application
+    reported: ''
+    age_days: null
+  - id: BUG-2
+    title: Three `sharing` screens are recorded as delivered and do not exist in the repository
+    reported: ''
+    age_days: null
+  - id: BUG-3
+    title: The web service interpolates published Markdown into HTML without escaping it
+    reported: ''
+    age_days: null
+  - id: BUG-4
+    title: The capture overlay is never mounted; pressing the capture hotkey shows the Settings shell
+    reported: ''
+    age_days: null
+  - id: BUG-5
+    title: The Editor never renders a Finding's image, and Markers cannot be placed at all
+    reported: ''
+    age_days: null
+  - id: BUG-6
+    title: The orphan report is built, tested, and unreachable — no screen ever mounts it
+    reported: ''
+    age_days: null
+  - id: BUG-7
+    title: Twelve screenshots of the running product have been committed to this public repository since
+      W1
+    reported: ''
+    age_days: null
+  - id: BUG-8
+    title: The web-ui container is registered built:true and does not exist; a library shares its name
+    reported: ''
+    age_days: null
+  - id: BUG-9
+    title: Bundle composition and deletion swallow every filesystem and unpublish Result
+    reported: ''
+    age_days: null
+gates:
+- gate: G1
+  date: '2026-08-22'
+- gate: G2
+  date: '2026-08-22'
+- gate: G3
+  date: '2026-08-22'
+- gate: G4
+  date: '2026-08-22'

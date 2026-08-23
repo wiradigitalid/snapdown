@@ -318,21 +318,22 @@ rtm:
   wave: W6
   release: r3
   test:
-  - vitest::the_overlay_window_url_mounts_the_capture_overlay_and_not_the_editor
-  - vitest::the_default_window_url_mounts_the_editor_and_not_the_overlay
-  - cargo::the_capture_hotkey_produces_a_finding_end_to_end
-  - cargo::the_build_produces_exactly_one_desktop_executable
-  - cargo::the_executable_name_the_tray_tooltip_and_the_window_title_share_one_source
-  - vitest::the_workspace_window_titles_itself_snapdown_editor
-  - vitest::the_window_title_does_not_change_between_surfaces
-  - vitest::every_primary_surface_is_reachable_from_every_other
-  - vitest::a_frozen_components_surface_is_still_listed
-  - vitest::the_active_surface_is_distinguished_by_more_than_colour
-  - vitest::the_rail_still_renders_when_a_surface_fails_to_load
-  status: ready-for-dev
+  - vitest::mounts_captureoverlay_when_url_query_has_overlay_true
+  - vitest::mounts_app_editor_shell_when_url_query_is_empty
+  - vitest::mounts_app_editor_shell_when_url_query_has_other_parameters
+  - cargo::desktop_crate_declares_exactly_one_binary_named_snapdown
+  - cargo::tauri_configuration_has_snapdown_product_and_snapdown_editor_window_title
+  - vitest::lists_all_four_primary_surfaces
+  - vitest::highlights_the_active_tab_with_multiple_visual_cues
+  - vitest::provides_visible_focus_visible_treatment_without_suppressing_focus_outline
+  - vitest::renders_200px_wide_navigation_rail_with_branding
+  - vitest::triggers_ontabchange_when_navigation_tab_is_clicked
+  - vitest::renders_pinned_capture_button_and_triggers_oncaptureclick
+  - vitest::renders_children_within_the_main_content_area_without_crashing
+  status: done
   exempt: false
-  green: false
-  broken_at: status
+  green: true
+  broken_at: ''
 - BG: BG-7
   CAP: CAP-9
   FR: FR-28
@@ -342,21 +343,22 @@ rtm:
   wave: W6
   release: r3
   test:
-  - vitest::the_overlay_window_url_mounts_the_capture_overlay_and_not_the_editor
-  - vitest::the_default_window_url_mounts_the_editor_and_not_the_overlay
-  - cargo::the_capture_hotkey_produces_a_finding_end_to_end
-  - cargo::the_build_produces_exactly_one_desktop_executable
-  - cargo::the_executable_name_the_tray_tooltip_and_the_window_title_share_one_source
-  - vitest::the_workspace_window_titles_itself_snapdown_editor
-  - vitest::the_window_title_does_not_change_between_surfaces
-  - vitest::every_primary_surface_is_reachable_from_every_other
-  - vitest::a_frozen_components_surface_is_still_listed
-  - vitest::the_active_surface_is_distinguished_by_more_than_colour
-  - vitest::the_rail_still_renders_when_a_surface_fails_to_load
-  status: ready-for-dev
+  - vitest::mounts_captureoverlay_when_url_query_has_overlay_true
+  - vitest::mounts_app_editor_shell_when_url_query_is_empty
+  - vitest::mounts_app_editor_shell_when_url_query_has_other_parameters
+  - cargo::desktop_crate_declares_exactly_one_binary_named_snapdown
+  - cargo::tauri_configuration_has_snapdown_product_and_snapdown_editor_window_title
+  - vitest::lists_all_four_primary_surfaces
+  - vitest::highlights_the_active_tab_with_multiple_visual_cues
+  - vitest::provides_visible_focus_visible_treatment_without_suppressing_focus_outline
+  - vitest::renders_200px_wide_navigation_rail_with_branding
+  - vitest::triggers_ontabchange_when_navigation_tab_is_clicked
+  - vitest::renders_pinned_capture_button_and_triggers_oncaptureclick
+  - vitest::renders_children_within_the_main_content_area_without_crashing
+  status: done
   exempt: false
-  green: false
-  broken_at: status
+  green: true
+  broken_at: ''
 - BG: BG-7
   CAP: CAP-9
   FR: FR-29
@@ -457,10 +459,10 @@ rtm:
   - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
   - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
   - vitest::panels_take_the_height_available_rather_than_a_fixed_height
-  status: unknown
+  status: done
   exempt: false
-  green: false
-  broken_at: status
+  green: true
+  broken_at: ''
 - BG: BG-1
   CAP: CAP-3
   FR: FR-7
@@ -481,10 +483,10 @@ rtm:
   - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
   - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
   - vitest::panels_take_the_height_available_rather_than_a_fixed_height
-  status: unknown
+  status: done
   exempt: false
-  green: false
-  broken_at: status
+  green: true
+  broken_at: ''
 - BG: BG-1
   CAP: CAP-3
   FR: FR-8
@@ -505,10 +507,10 @@ rtm:
   - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
   - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
   - vitest::panels_take_the_height_available_rather_than_a_fixed_height
-  status: unknown
+  status: done
   exempt: false
-  green: false
-  broken_at: status
+  green: true
+  broken_at: ''
 - BG: BG-1
   CAP: CAP-3
   FR: FR-9
@@ -529,8 +531,8 @@ rtm:
   - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
   - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
   - vitest::panels_take_the_height_available_rather_than_a_fixed_height
-  status: unknown
+  status: done
   exempt: false
-  green: false
-  broken_at: status
+  green: true
+  broken_at: ''
 ```
