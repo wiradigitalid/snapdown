@@ -2,7 +2,7 @@
 id: W5-S1
 title: SQLite schema migration v5 (publication) and PublicationStore
 wave: W5
-status: planned
+status: done
 created: 2026-08-23
 dependencies: []
 files:

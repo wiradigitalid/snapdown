@@ -9,7 +9,7 @@ fn migrations_v3_apply_cleanly_and_create_bundle_tables() {
     let temp = NamedTempFile::new().unwrap();
     let bundle_store = SqliteBundleStore::open(temp.path()).expect("open bundle store");
 
-    assert_eq!(bundle_store.get_schema_version().unwrap(), 4);
+    assert_eq!(bundle_store.get_schema_version().unwrap(), 5);
 }
 
 #[test]
