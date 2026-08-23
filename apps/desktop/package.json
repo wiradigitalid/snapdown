@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "test": "vitest run"
+    "test": "vitest run",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@snapdown/ui": "file:../../web/ui",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
+    "@tauri-apps/cli": "^2.0.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/react": "^19.0.0",
