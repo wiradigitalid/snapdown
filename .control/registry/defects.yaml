@@ -36,3 +36,62 @@ defects:
       key exists to forbid. Requires a migration; existing rows already lost are not recoverable.
     scenario: .what/bundle/05-scenarios/SCN-05-a-finding-deleted-out-from-under-a-bundle.md
     status: open
+  - id: BUG-2
+    title: Three `sharing` screens are recorded as delivered and do not exist in the repository
+    found: "2026-08-23"
+    found_by: wdi-init intent readers, after derive_screen was rewritten to read real components
+    component: sharing
+    severity: medium
+    contradicts: [FR-24, UC-21, UC-22]
+    evidence: |
+      HANDOVER.md, W5 section, claims:
+        "Web reader SPA (PublishedBundleReader.tsx / Screen 14; PublicationNotFound.tsx / Screen 15)"
+        "Publish dialog (Screen 11) with BR-86 confirmation + publication badges + copy URL"
+      No such files exist anywhere in the repository. Every .tsx in the tree was enumerated:
+        web/ui/src/screens/ holds AgentAccessView.tsx and nothing else.
+      inventory-screen.md rows 11, 14 and 15 have no component behind them, and LC-027
+      `bundle-reader` is registered in components.yaml with nothing implementing it.
+    impact: |
+      What the web service actually returns for GET /b/{slug} is the stored Markdown inside a bare
+      <pre> block with no stylesheet and no rendered images (server.go:145). For the PRIMARY
+      audience — a coding agent fetching the URL — that is arguably sufficient: the text is the
+      payload and /b/{slug}/images/{filename} serves the images separately. What is missing is the
+      HUMAN reader those three rows promise. Publishing works; reading it as a person does not.
+    why_undetected: |
+      All three inventories sat at `derived_from: plan` because derive_screen read exactly one
+      component. Nothing ever compared the plan to the tree. The rows were written at G3 and
+      believed ever since.
+    fix: |
+      Two honest options, and this is a decision rather than a task. Either build the reader SPA and
+      the publish dialog, or withdraw rows 11, 14, 15 and LC-027 and state that the published
+      surface is machine-facing only. The second is cheaper and may be correct: Snapdown's reader is
+      a machine. It changes a promise, so it goes through wdi-product, not a patch.
+    blocked_by: DEC-005, which freezes `sharing`. Registered now, decided when that lifts.
+    status: open
+  - id: BUG-3
+    title: The web service interpolates published Markdown into HTML without escaping it
+    found: "2026-08-23"
+    found_by: wdi-init intent readers, while reading the routes for derive_api
+    component: sharing
+    severity: medium
+    contradicts: [NFR-15]
+    evidence: |
+      apps/web-service/internal/server/server.go:145
+        html := fmt.Sprintf(`<!DOCTYPE html>...<body><pre>%s</pre></body>...`, slug, b.Markdown)
+      b.Markdown is the Reviewer's own Note text, published verbatim. `%s` performs no escaping, so
+      a Note containing `</pre><script>` breaks out of the block and executes in the browser of
+      whoever opens the URL.
+    impact: |
+      The author and the publisher are the same person, so this is not an injection by a third
+      party. The exposure is to whoever the Reviewer hands the URL to, and a Note is free text that
+      may be pasted from a page being reviewed - which is exactly where a hostile string would come
+      from. It is a public, unauthenticated HTML endpoint.
+    why_undetected: |
+      The route tests assert the NFR-15 identical-404 and the response codes. Nothing asserts what
+      the HTML body does with hostile content, and the endpoint predates any document describing
+      what it renders - inventory-screen row 14 describes an SPA that does not exist.
+    fix: |
+      html/template, or html.EscapeString on b.Markdown before interpolation. Escaping the slug too:
+      it is a 160-bit CSPRNG value today and that is a property of the generator, not of this render.
+    blocked_by: DEC-005, which freezes `sharing`. Registered now, fixed when that lifts.
+    status: open

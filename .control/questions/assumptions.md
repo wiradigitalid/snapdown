@@ -29,8 +29,14 @@ states.
 | OQ-18 | Four named Quality Budget presets are distinguishable enough that a Reviewer picks between them rather than defaulting to Auto forever | Advanced and Custom are cost with no buyer, and DEC-004's own reversal trigger fires: Auto-only wins | 2026-08-23 | agent, G2 |
 | OQ-19 | Hiding rather than destroying the Editor window keeps webview memory at a level the Reviewer never notices on a normal Windows 11 machine | DEC-003's first reversal trigger fires and the window is destroyed on close, giving back the warm start. One behaviour changes; the process count does not | 2026-08-23 | agent, G3 |
 | OQ-20 | Snagit and Cobalt Capture are the right experience benchmark for a product whose reader is a machine, not a person | The bar is set by tools built for a human audience, and effort goes into affordances an agent cannot use. Reopens the G2 experience bar | 2026-08-23 | agent, G2 |
-| OQ-21 | The story lists for W2, W3, W4 and W5 were never written into `waves.yaml` — those four closed waves hold zero stories there — and reconstructing them from `.work/` briefs and the RTR reports would be accurate enough to be worth doing | The traceability record for r1 and r2 has a hole: six use cases (UC-1, UC-2, UC-7, UC-8, UC-9, UC-12) are implemented and shipped and are scheduled to no story anywhere, which V3 correctly reports as red. If reconstruction is NOT accurate enough, the honest fix is to record the gap permanently rather than fill it with plausible rows | 2026-08-23 | agent, G5 |
+| OQ-22 | Serving a published Bundle as raw Markdown in a bare `<pre>` is sufficient, because Snapdown's reader is a machine and the human reader those inventory rows promise is not actually wanted | If wrong, three screens have to be built rather than three rows withdrawn, and BUG-2 becomes a wave rather than a decision. If right, the corpus has been promising a surface nobody needs since G3 | 2026-08-23 | agent, G5 |
 
 ## Answered
 
-None yet. A row leaves this table by moving to `answered.md`, never by being deleted.
+| id | Question | Answer | Answered | By |
+|---|---|---|---|---|
+| OQ-21 | Could the W2–W5 story lists be reconstructed into `waves.yaml` accurately enough to be worth doing? | **No, and the gap is recorded permanently instead.** Fourteen story files survive on disk and not one contains a single `UC-` reference — the traceability was never written, not lost. Ids, titles, components and status are recoverable; `satisfies:` is not. The recovery note at the head of `waves.yaml` states what the evidence supports and what it does not. V3 will keep reporting six shipped use cases as unscheduled, and that is the correct state: a green validator there would mean somebody guessed. Two further findings came out of the same read — W2-S6 is still `ready-for-dev` in a closed wave (its code shipped; bookkeeping only), and six story files are absent while their code is in the tree | 2026-08-23 | agent, G5 |
+
+A row leaves this table by moving to `answered.md`, never by being deleted. This one is kept here
+because its answer is a decision not to act, and the reasoning belongs beside the open assumptions it
+was weighed against.

@@ -79,16 +79,44 @@ No row is owned by `_platform`.
 
 ## Findings
 
-`derived_from: plan` still holds — `.constitution/project/inventory-readers.py` has not been written,
-so nothing here is derived from the code and the difference between plan and code has never been
-computed. That is itself the finding, and it is recorded rather than papered over.
+**Corrected 2026-08-23.** An earlier version of this section stated that
+`.constitution/project/inventory-readers.py` "has not been written". **That was wrong** — the file
+exists and has since W1. What was true is that its readers barely read: `derive_api` returned nothing
+behind a comment reading *"web-api will be built in W5"*, four waves stale, and `derive_screen`
+emitted exactly one row. The engine then reported 34 rows as *planned but not read in code*, which
+looks like drift and was a reader that never looked.
 
-What is known without a reader, from the UX pass of 2026-08-23:
+The readers were rewritten on 2026-08-23. The result:
 
-- **Rows 2, 7, and 9 had no build unit behind them.** The capture note field, the orphan report, and
-  the Compose Bundle dialog were named here at G3 and were never registered as `LC`. They now are —
-  `LC-029`, `LC-030`, `LC-031` — born by `wdi-ux` in the act of landing `DESIGN`.
-- **Row 0 had neither a row nor a build unit.** The window frame is inline JSX at the top of
-  `App.tsx`, owned by nothing. `LC-028` `editor-shell` now carries it.
-- A row with no `LC` is a promise nobody checks, and three of them sat here for five waves. Writing a
-  reader (`wdi-init` intent `readers`) is what would have caught this without a human noticing.
+| Inventory | Planned | Read from code | Gaps |
+|---|---|---|---|
+| db | 12 | 13 | 0 |
+| api | 14 | 14 | 0 |
+| screen | 16 | 11 | **5** |
+
+The five screen gaps are real, and each names the file that is absent:
+
+| Row | Screen | Missing |
+|---|---|---|
+| 0 | Editor shell | `apps/desktop/src/components/EditorShell.tsx` — inline in `App.tsx`, owned by nothing. **W6-S2** |
+| 2 | Capture note field | `apps/desktop/src/components/CaptureNoteField.tsx` — inside `CaptureOverlay.tsx`. `LC-029` |
+| 11 | Publish and unpublish a Bundle | `PublishDialog.tsx` — **does not exist.** `BUG-2` |
+| 14 | Published Bundle reader | `PublishedBundleReader.tsx` — **does not exist.** `BUG-2` |
+| 15 | Publication not available | `PublicationNotFound.tsx` — **does not exist.** `BUG-2` |
+
+Rows 11, 14 and 15 are the serious ones. `HANDOVER.md` recorded all three as delivered in W5 and no
+file behind any of them was ever written. What `GET /b/{slug}` actually returns is the stored Markdown
+inside a bare `<pre>` with no stylesheet and no rendered images. For a coding agent that is arguably
+enough; for the human reader those rows promise, it is not. `DEC-005` freezes `sharing`, so `BUG-2` is
+registered and decided when that lifts — and it is a **promise** decision, not a task: withdrawing the
+three rows may be the correct answer for a product whose reader is a machine.
+
+Rows 7 and 9 — the orphan report and the Compose Bundle dialog — **do** have components
+(`OrphanReportView.tsx`, `BundleComposer.tsx`) and now read cleanly. An earlier note here said they
+had no build unit; what they lacked was an `LC` registration, which `wdi-ux` supplied as `LC-030` and
+`LC-031`. The distinction matters: a screen with code and no `LC` is a bookkeeping gap, and a screen
+with an `LC` and no code is `BUG-2`.
+
+**This is what a working reader buys.** Three screens have been recorded as shipped since W5 and are
+absent; nothing noticed for two waves, because `derived_from: plan` means nobody ever compared the
+plan to the tree.

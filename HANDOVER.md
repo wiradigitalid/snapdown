@@ -71,8 +71,14 @@ defects found by reading the code against the newly-deepened documents — see b
 - SQLite migration v5 (`publication`) + `Publication` model with 160-bit CSPRNG slug (AD-8)
 - Go web service (`apps/web-service`): staged all-or-nothing publish, unpublish, reconcile, public read routes with NFR-15 identical 404
 - Desktop publish client (`LC-020`) with sticky `last_error` + unpublish cascade on bundle delete (BR-23)
-- Web reader SPA (`PublishedBundleReader.tsx` / Screen 14; `PublicationNotFound.tsx` / Screen 15)
-- Publish dialog (Screen 11) with BR-86 confirmation + publication badges + copy URL
+- ~~Web reader SPA (`PublishedBundleReader.tsx` / Screen 14; `PublicationNotFound.tsx` / Screen 15)~~
+- ~~Publish dialog (Screen 11) with BR-86 confirmation + publication badges + copy URL~~
+
+  **Corrected 2026-08-23 — these three were never written.** No such files exist anywhere in the
+  repository. `GET /b/{slug}` returns the stored Markdown inside a bare `<pre>` with no stylesheet
+  and no rendered images. The machine-facing path works; the human reader does not exist.
+  Registered as `BUG-2`. It went unnoticed for two waves because all three inventories sat at
+  `derived_from: plan` and the screen reader read exactly one component.
 
 ---
 

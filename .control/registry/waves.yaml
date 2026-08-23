@@ -6,6 +6,41 @@
 # components — it is this product's plan, chosen so that V3 is green after every wave rather than
 # only at the end. The cost is that W2 is a wave `L`.
 
+# ---------------------------------------------------------------------------------------------
+# RECOVERY NOTE — W2, W3, W4, W5 · written 2026-08-23, answering OQ-21
+#
+# Those four waves are `closed` and hold NO `epics`/`stories` here. W1 and W6 do. The gap was found
+# when W6 put `finding` and `bundle` into the touched set and V3 began reporting six shipped use
+# cases — UC-1, UC-2, UC-7, UC-8, UC-9, UC-12 — as scheduled to no story.
+#
+# WHAT THE EVIDENCE SUPPORTS. Story FILES exist on disk and were read:
+#   _bmad-output/specs/w2-finding/stories/   W2-S1 .. W2-S6   (6 files)
+#   _bmad-output/specs/w3-bundle/stories/    W3-S1 .. W3-S6   (6 files)
+#   _bmad-output/specs/w4-agent-access/stories/  W4-S5 only   (1 file)
+#   _bmad-output/specs/w5-sharing/stories/       W5-S3 only   (1 file)
+# `.work/` additionally holds build briefs for w4-s1..s4 and w5-s1..s2, so those stories were
+# dispatched and their code shipped — but their story files are gone.
+#
+# WHY THE ROWS ARE NOT RECONSTRUCTED HERE, and this is the answer to OQ-21:
+# not one of the fourteen surviving story files contains a single `UC-` reference. The traceability
+# was never written, not lost. Ids, titles, components and status are recoverable; `satisfies:` is
+# not, and inventing it would produce a registry that reads complete and is fiction. OQ-21 said in
+# advance that this was the branch to take.
+#
+# V3 WILL KEEP REPORTING THOSE SIX USE CASES, and that is the correct state. The link genuinely does
+# not exist. A green validator here would mean somebody had guessed.
+#
+# TWO FURTHER FINDINGS FROM THE SAME READ:
+#  - W2-S6 (finding deletion + orphan sweeper) still carries `status: ready-for-dev` in its story
+#    file, and W2 is `closed`. Its CODE SHIPPED — OrphanReportView.tsx exists, scan_orphans and
+#    clean_orphans are registered commands — so this is a bookkeeping failure, not missing work.
+#    A wave was closed over a story that never reached `done`.
+#  - Six story files (W4-S1..S4, W5-S1..S2) are absent while their code is in the tree.
+#
+# NOT FIXED BY HAND. Reopening a closed wave to add scope is forbidden; this is a record gap, and
+# the record now states it.
+# ---------------------------------------------------------------------------------------------
+
 waves:
   - id: W1
     title: Workspace, the two stores, and Settings complete

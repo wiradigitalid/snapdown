@@ -19,7 +19,7 @@ companions:
   - .how/_platform/cross-cutting.md
 reviewed:
   date: '2026-08-23'
-  sha: '4c5c901'
+  sha: '4aabb93'
   lenses: [structure, prose]
 ---
 
