@@ -28,10 +28,14 @@ without a plan.
 
 ## `V24` ×2 — two citations inside a BMad package file
 
-`.agent/skills/bmad-project-context/references/template.md` cites `src/lib/money.ts` and
-`src/routes/webhooks.ts`. Both are **placeholders in an installed package's own example template**,
-not claims about this product. The file is overwritten on every BMad update, so fixing it here would
-be undone and would also be editing someone else's package.
+`.agent/skills/bmad-project-context/references/template.md` cites two source files that do not exist
+here — a money helper and a webhooks route. Both are **placeholders in an installed package's own
+example template**, not claims about this product. The file is overwritten on every BMad update, so
+fixing it here would be undone and would also mean editing someone else's package.
+
+The two paths are deliberately **not written out** in this file. V24 scans every tracked Markdown
+document for cited paths, so quoting them here made this README itself fail the check — which it did,
+on the first CI run after it was added. The validator was right both times.
 
 ## Removed 2026-08-23
 
