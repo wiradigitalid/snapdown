@@ -107,7 +107,7 @@ waves:
 
   - id: W3
     title: Bundle complete — compose, list, copy, delete
-    status: open
+    status: closed
     release: r1
     prd: [capture-to-markdown]
     fr: [FR-10, FR-11, FR-12, FR-14]
@@ -122,7 +122,7 @@ waves:
 
   - id: W4
     title: Agent access complete — the key, the Local API, the MCP bridge
-    status: planned
+    status: open
     release: r2
     prd: [agent-handoff]
     fr: [FR-19, FR-20, FR-21, FR-22]
@@ -130,6 +130,7 @@ waves:
     size: M
     depends_on: [W3]
     spec_folder: _bmad-output/specs/w4-agent-access/
+    opened: "2026-08-23"
     scope: >-
       Access Key issue, re-copy, state, and revoke; the loopback-only read-only API; the stateless
       stdio MCP bridge. The refusal-versus-empty-result behaviour is tested from an agent's position,
