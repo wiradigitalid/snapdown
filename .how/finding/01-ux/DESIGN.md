@@ -12,17 +12,21 @@ Tokens, elements, and both themes are in `.how/_platform/design-system.md`.
 
 ## Tokens
 
+Component-specific only.
+
 | Token | For |
 |---|---|
-| `--overlay-dim` | `rgba(0,0,0,0.45)` — the scrim over everything outside the selected region |
-| `--overlay-region-ring` | `1px solid #ffffff` plus a `1px` black outer line, so the edge is visible over any content |
 | `--rail-thumb-width` | `176px` — a capture thumbnail in the rail |
-| `--canvas-checker` | The transparency checkerboard behind an image that does not fill the pane |
 
-`--overlay-*` and `--canvas-checker` are **theme-invariant on purpose** and stay here rather than being
-promoted. They are drawn over the Reviewer's screen content or over an image, not over Snapdown's own
-surfaces, so the app's theme is the wrong reference for them. This is the same reasoning that keeps
-`--color-marker*` theme-invariant in the design system.
+**`--overlay-dim`, `--overlay-region-ring` and `--canvas-checker` are NOT here.** An earlier draft of
+this document defined them locally and argued they should "stay here rather than being promoted",
+because they are drawn over the Reviewer's screen content rather than over a Snapdown surface.
+
+That reasoning is right about *why they do not follow the theme* and wrong about *where they live*.
+`AD-10` requires every colour to be defined once in the token file, and says explicitly that a
+deliberately theme-invariant token must still be defined there and must say why. All three are in
+`.how/_platform/design-system.md` § Colour — theme-invariant, alongside `--color-marker*`, which was
+already handled that way. Corrected 2026-08-23; the spine wins over a component document.
 
 ## Screens
 

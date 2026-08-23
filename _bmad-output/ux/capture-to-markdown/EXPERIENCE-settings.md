@@ -21,17 +21,19 @@ The Editor's four primary surfaces are **Findings**, **Bundles**, **Settings**, 
 `FR-28` requires each to be reachable from each, so navigation to all four is present on all four —
 there is no surface the Reviewer can arrive at and be stuck on.
 
-Settings itself holds five groups and **is not a fifth level of navigation**. All five are on one
-surface, and all five are visible at the window's minimum supported size without scrolling (`FR-29`):
+Settings itself holds four groups and **is not a second level of navigation**. All four are on one
+surface, and all four are visible at the window's minimum supported size without scrolling (`FR-29`):
 
 1. **Startup** — whether Snapdown runs at sign-in (`FR-18`)
 2. **Vault folder** — where files go (`FR-16`)
 3. **Quality Budget** — how much image quality is bought (`FR-5`)
 4. **Hotkeys** — which keys do what (`FR-17`)
-5. **Agent access** — the key that lets an agent read the Library
 
-Group 5 is present but **inert in this release** — `DEC-005` freezes `agent-access`, so Settings shows
-the group and its current state and does not gain new behaviour. Hiding it would break `FR-28`.
+**Agent access is not a fifth group.** It is a primary surface of its own, listed in the rail beside
+Findings, Bundles and Settings, and it has its own row in `inventory-screen.md` (row 13). An earlier
+draft of this document had it both ways — a primary surface *and* a group inside Settings — which
+would put one thing in two places in one product. `DEC-005` freezes it, so it shows its current state
+and gains no behaviour; it stays listed because `FR-28` and `BR-120` require it.
 
 ## Voice and tone
 
@@ -70,7 +72,7 @@ its mind about its own state.
 |---|---|
 | **Loading** | Every group visible with its title; each control indeterminate and inert. The layout does not move when values arrive |
 | **Populated** | Normal |
-| **Partial failure** | One group failed to load; that group alone shows its error and a Retry. The other four work |
+| **Partial failure** | One group failed to load; that group alone shows its error and a Retry. The other three work |
 | **Error** | The settings store could not be opened. One message naming the file and one action: open the folder. Snapdown does not silently recreate the store |
 
 There is no **empty** state for Settings — every setting always has a value, shipped or chosen. Saying
@@ -110,7 +112,7 @@ He never opens Settings. **This is the flow Settings is designed to make unneces
 beat is that nothing happens.
 
 **Wira changes where files go, mid-project.** He opens the Editor from the tray, clicks Settings, and
-sees all five groups at once. Vault folder is second. He clicks Browse, picks the new project folder in
+sees all four groups at once. Vault folder is second. He clicks Browse, picks the new project folder in
 the native picker, and clicks Apply. Snapdown asks once whether to move the 31 existing files. He says
 yes. They all move, or none do. The path field now shows the new folder, and Open in Explorer proves it.
 

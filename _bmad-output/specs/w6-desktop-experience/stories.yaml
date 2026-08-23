@@ -36,17 +36,17 @@
     surfaces MUST still be listed (BR-120).
 
 - id: "W6-S3"
-  title: Two columns packed by content height, five groups visible at 1024x720
+  title: Two columns packed by content height, four groups visible at 1024x720
   description: >-
     Rebuild the Settings surface as two independent column stacks rather than an equal-height grid.
-    Group order — Startup, Vault folder | Quality Budget, Hotkeys | Agent access. Every group takes
-    the height its content needs. See .how/settings/01-ux/DESIGN.md.
+    Group order — Startup, Vault folder | Quality Budget, Hotkeys. Every group takes the height its
+    content needs. Agent access is NOT a group here; it is a primary surface of its own. See .how/settings/01-ux/DESIGN.md.
   invoke_dev_with: >-
     The shipped screen pairs a one-checkbox group with a four-control group in equal grid columns, so
     the checkbox group inherits the tall one's height and roughly a third of the window is empty
     while the Hotkeys group is pushed below the fold. Independent stacks, never stretched. Do NOT add
-    a sub-navigation of the five groups: that satisfies FR-29's letter by hiding four of them behind
-    a click, and it is an explicit Non-goal. Below --settings-column-min the two columns may become
+    a sub-navigation of the four groups: that satisfies FR-29's letter by hiding three of them behind
+    a click, and it is an explicit Non-goal. Agent access is NOT one of the four. Below --settings-column-min the two columns may become
     one and the surface may scroll — FR-29 binds at the MINIMUM supported size, and 1024x720 holds
     both columns.
 

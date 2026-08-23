@@ -331,9 +331,9 @@ Two conditions that look like states and are not:
 6. A Quality Budget change applies only to Captures taken after it. No stored image is re-encoded.
    → BR-9
 9. The Quality Budget always holds exactly one of five named states, and `Custom` holds if and only if
-   the Reviewer has set a resolved value directly. There is no unnamed state. → BR-31, DEC-004
+   the Reviewer has set a resolved value directly. There is no unnamed state. → BR-103, BR-116, DEC-004
 10. Under `Auto`, the resolved long edge and encoder quality are a function of the captured region and
-    are never read back from a Setting. → BR-32, DEC-004, NFR-18
+    are never read back from a Setting. → BR-104, DEC-004, NFR-18
 7. Run at Windows startup reflects the actual operating-system registration, not a remembered
    intention. → FR-18
 8. No Setting holds a secret. → cross-cutting.md § Secrets
@@ -549,7 +549,15 @@ belongs to a different component and a different release.
 Row 0 carries `UC-24` and `UC-25` — knowing what you have opened, and reaching every surface from
 every surface. It is owned by `settings`, and § 4.7 of the PRD carries the argument: `settings`
 already owns the container-level Logical Components, and the frame is machinery of the same kind.
-`UC-26` (seeing everything a screen offers) is not listed against one row because it binds every row.
+`UC-26` (seeing everything a screen offers) is listed against **no** row, and that is a real
+irregularity rather than a tidy exception. Every other use case in this product is served by a screen;
+this one is a property that every screen must have. Listing it on all sixteen rows would make the
+column unreadable and would still not be a claim any one row could be checked against.
+
+It is recorded here rather than resolved: `FR-29` is checkable — at the minimum window size, nothing
+is discovered only by scrolling — and the check belongs to a test over every screen, not to a row in
+this table. If a later pass finds this unsatisfying, the question is whether the inventory needs a
+notion of a row-crossing use case, and that is a method question rather than a product one.
 
 The system tray menu is still not a screen, and row 0 does not change that. The tray belongs to the
 **Snapdown** persona and the shell to **Snapdown Editor** (`DEC-003`); the tray holds no state and
@@ -563,16 +571,44 @@ No row is owned by `_platform`.
 
 #### Findings
 
-`derived_from: plan` still holds — `.constitution/project/inventory-readers.py` has not been written,
-so nothing here is derived from the code and the difference between plan and code has never been
-computed. That is itself the finding, and it is recorded rather than papered over.
+**Corrected 2026-08-23.** An earlier version of this section stated that
+`.constitution/project/inventory-readers.py` "has not been written". **That was wrong** — the file
+exists and has since W1. What was true is that its readers barely read: `derive_api` returned nothing
+behind a comment reading *"web-api will be built in W5"*, four waves stale, and `derive_screen`
+emitted exactly one row. The engine then reported 34 rows as *planned but not read in code*, which
+looks like drift and was a reader that never looked.
 
-What is known without a reader, from the UX pass of 2026-08-23:
+The readers were rewritten on 2026-08-23. The result:
 
-- **Rows 2, 7, and 9 had no build unit behind them.** The capture note field, the orphan report, and
-  the Compose Bundle dialog were named here at G3 and were never registered as `LC`. They now are —
-  `LC-029`, `LC-030`, `LC-031` — born by `wdi-ux` in the act of landing `DESIGN`.
-- **Row 0 had neither a row nor a build unit.** The window frame is inline JSX at the top of
-  `App.tsx`, owned by nothing. `LC-028` `editor-shell` now carries it.
-- A row with no `LC` is a promise nobody checks, and three of them sat here for five waves. Writing a
-  reader (`wdi-init` intent `readers`) is what would have caught this without a human noticing.
+| Inventory | Planned | Read from code | Gaps |
+|---|---|---|---|
+| db | 12 | 13 | 0 |
+| api | 14 | 14 | 0 |
+| screen | 16 | 11 | **5** |
+
+The five screen gaps are real, and each names the file that is absent:
+
+| Row | Screen | Missing |
+|---|---|---|
+| 0 | Editor shell | `apps/desktop/src/components/EditorShell.tsx` — inline in `App.tsx`, owned by nothing. **W6-S2** |
+| 2 | Capture note field | `apps/desktop/src/components/CaptureNoteField.tsx` — inside `CaptureOverlay.tsx`. `LC-029` |
+| 11 | Publish and unpublish a Bundle | `PublishDialog.tsx` — **does not exist.** `BUG-2` |
+| 14 | Published Bundle reader | `PublishedBundleReader.tsx` — **does not exist.** `BUG-2` |
+| 15 | Publication not available | `PublicationNotFound.tsx` — **does not exist.** `BUG-2` |
+
+Rows 11, 14 and 15 are the serious ones. `HANDOVER.md` recorded all three as delivered in W5 and no
+file behind any of them was ever written. What `GET /b/{slug}` actually returns is the stored Markdown
+inside a bare `<pre>` with no stylesheet and no rendered images. For a coding agent that is arguably
+enough; for the human reader those rows promise, it is not. `DEC-005` freezes `sharing`, so `BUG-2` is
+registered and decided when that lifts — and it is a **promise** decision, not a task: withdrawing the
+three rows may be the correct answer for a product whose reader is a machine.
+
+Rows 7 and 9 — the orphan report and the Compose Bundle dialog — **do** have components
+(`OrphanReportView.tsx`, `BundleComposer.tsx`) and now read cleanly. An earlier note here said they
+had no build unit; what they lacked was an `LC` registration, which `wdi-ux` supplied as `LC-030` and
+`LC-031`. The distinction matters: a screen with code and no `LC` is a bookkeeping gap, and a screen
+with an `LC` and no code is `BUG-2`.
+
+**This is what a working reader buys.** Three screens have been recorded as shipped since W5 and are
+absent; nothing noticed for two waves, because `derived_from: plan` means nobody ever compared the
+plan to the tree.

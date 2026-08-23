@@ -548,8 +548,10 @@ UJ-4.
 either visible or visibly indicated; nothing is discovered only by scrolling.
 
 **Consequences (testable):**
-- Settings presents its five groups — startup, Vault folder, Quality Budget, hotkeys, agent access —
-  within the window at its minimum supported size.
+- Settings presents its four groups — startup, Vault folder, Quality Budget, hotkeys — within the
+  window at its minimum supported size. Agent access is **not** one of them: it is a primary surface
+  of its own (`FR-28`, `inventory-screen.md` row 13), and counting it here would have it appear twice
+  in one product.
 - Scrolling to read *more* of a list is allowed and expected. Scrolling to discover that a control
   *exists* is not, and the distinction is what this requirement turns on.
 - No layout gives a group vertical space it does not use in order to match a neighbour's height. The

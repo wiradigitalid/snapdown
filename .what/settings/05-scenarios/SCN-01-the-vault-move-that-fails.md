@@ -21,7 +21,7 @@ the thing it named.
 
 ## Setup
 
-The Reviewer has 31 Findings and 4 Bundles in `C:\Users\kodes\SnapdownVault`. They choose
+The Reviewer has 31 Findings and 4 Bundles in `C:\Users\<user>\SnapdownVault`. They choose
 `D:\projects\acme\vault` and confirm. Partway through, the 19th file fails: it is open in an image
 viewer, `D:` runs out of space, or the network drive drops.
 

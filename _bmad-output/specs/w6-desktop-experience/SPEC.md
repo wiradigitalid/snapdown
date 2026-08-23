@@ -91,7 +91,7 @@ Who is affected: the Reviewer, on every screen. Nothing here is visible to an ag
     screen offers without hunting for it — in either Windows theme.
   - **success:** On a clean Windows 11 machine in the dark theme, at the window's minimum size of
     1024×720: the title bar reads `Snapdown Editor`; all four primary surfaces are listed and
-    reachable from each of them; all five Settings groups are visible without scrolling; and an
+    reachable from each of them; all four Settings groups are visible without scrolling; and an
     automated contrast assertion over every screen in both themes passes with no failures.
 
 - **CAP-2** — Automatic image reduction (amended by `DEC-004`)
@@ -143,8 +143,10 @@ Who is affected: the Reviewer, on every screen. Nothing here is visible to an ag
   independently the conclusion Cobalt Capture reached for the same machine audience. Numbered Markers
   are the whole annotation vocabulary.
 - **No editable Bundle Markdown.** A Bundle is recomposed, never patched. The preview gets no cursor.
-- **No sub-navigation inside Settings.** All five groups on one surface. A sub-nav would satisfy
-  `FR-29`'s letter by hiding four groups behind a click.
+- **No sub-navigation inside Settings.** All four groups on one surface. A sub-nav would satisfy
+  `FR-29`'s letter by hiding three groups behind a click.
+- **Agent access is not a Settings group.** It is a primary surface of its own (`FR-28`,
+  `inventory-screen.md` row 13). Drawing it inside Settings puts one thing in two places.
 - **No background task.** The hotkey health check was rejected, not deferred: it would be the only
   one in the product, and `NFR-6`'s idle budget is written for a product that has none.
 - **No re-encoding of existing Findings**, and no migration that rewrites stored images.
@@ -162,7 +164,7 @@ At the end of this wave, on a clean Windows 11 machine, in **both** themes, at 1
 3. `target/release/` holds exactly one desktop executable, named `Snapdown.exe`.
 4. A Reviewer who has never seen Snapdown reaches Findings, Bundles, Agent access and Settings from
    any one of them, without being told how.
-5. All five Settings groups are visible without scrolling, and no group holds space it does not use.
+5. All four Settings groups are visible without scrolling, and no group holds space it does not use.
 6. Capturing a tooltip and a full screen on `Auto` produces two different resolved pairs, both stored
    with their Findings, and Settings names the budget for each.
 7. Deleting a Finding that belongs to a Bundle leaves that Bundle's item list and Markdown intact.

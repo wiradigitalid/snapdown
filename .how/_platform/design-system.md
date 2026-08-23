@@ -64,10 +64,26 @@ satisfiable: a background is never used without the foreground proven against it
 | `--color-neutral-bg` / `--color-neutral-text` | **New.** A disabled or inert badge | to add — replaces literal `#f1f5f9`/`#64748b` |
 | `--color-marker` / `--color-marker-text` / `--color-marker-ring` | A numbered Marker badge burned onto an image | `tokens.css` |
 
-`--color-marker*` is the one group that is **theme-invariant on purpose**. A Marker is burned into an
-exported image that will be read on someone else's machine under someone else's theme, so it cannot
-follow this machine's. It is amber with black text and a white ring in both themes, and that is a
-decision rather than an oversight.
+### Colour — theme-invariant, and defined here anyway
+
+`AD-10` is explicit that a deliberately theme-invariant token **MUST still be defined in the token
+file**, and must say where it is defined why it does not follow the theme. Three groups qualify, and
+all three live here rather than in a component's own `DESIGN.md`:
+
+| Token | For | Why it does not follow the theme |
+|---|---|---|
+| `--color-marker` / `-text` / `-ring` | A numbered Marker badge | Burned into an exported image read on another machine under another theme |
+| `--overlay-dim` | The capture overlay's scrim | Drawn over the Reviewer's own screen content, not over a Snapdown surface |
+| `--overlay-region-ring` | The selected region's edge | Must stay visible over any content the Reviewer happens to be capturing |
+| `--canvas-checker` | Transparency behind an image that does not fill its pane | Sits behind image content, not behind app chrome |
+
+They are the one place a literal value is correct, and `NFR-17`'s lint rule must be scoped to allow
+them **in this file only**.
+
+An earlier draft of `.how/finding/01-ux/DESIGN.md` declared `--overlay-*` and `--canvas-checker` as
+component-local tokens that "stay here rather than being promoted". That contradicted `AD-10`, which
+was written later and is a spine invariant; where a component document and the spine disagree, the
+spine wins. Corrected 2026-08-23.
 
 ### Space, radius, type, elevation
 

@@ -30,7 +30,7 @@ badges that need them appear on more than this surface.
 | Screen | LC | Purpose |
 |---|---|---|
 | Editor shell | `LC-028` `editor-shell` | The window persona, the primary navigation, and the surface frame. Serves `FR-27`, `FR-28` |
-| Settings | `LC-015` `settings-screen` | The five groups. Serves `FR-5`, `FR-16`, `FR-17`, `FR-18`, `FR-29` |
+| Settings | `LC-015` `settings-screen` | The four groups. Serves `FR-5`, `FR-16`, `FR-17`, `FR-18`, `FR-29` |
 
 `LC-028` is new and is registered as part of landing this document. It exists because `FR-27` and
 `FR-28` are promises about the *frame*, and a promise with no build unit behind it is a promise nobody
@@ -88,23 +88,26 @@ Bundles were already spending on a list column anyway.
 │      you sign in.             │ │  what it is. Most captures    │
 ├───────────────────────────────┤ │  land near 120 KB.            │
 │ Vault folder                  │ │                               │
-│  C:\Users\kodes\SnapdownVault │ │  Latest: 184 KB · 1408 px     │
+│  C:\Users\<user>\SnapdownVault│ │  Latest: 184 KB · 1408 px     │
 │  [Browse…] [Apply] [Explorer] │ │  ▸ Advanced                   │
 └───────────────────────────────┘ ├───────────────────────────────┤
-┌───────────────────────────────┐ │ Hotkeys                       │
-│ Agent access                  │ │  Capture Region   [Ctrl+⇧+S] ●│
-│  Key issued · 2026-08-14      │ │  Open Editor      [Ctrl+⇧+E] ●│
-│  [Copy] [Revoke]              │ └───────────────────────────────┘
-└───────────────────────────────┘
+                                  │ Hotkeys                       │
+                                  │  Capture Region   [Ctrl+⇧+S] ●│
+                                  │  Open Editor      [Ctrl+⇧+E] ●│
+                                  └───────────────────────────────┘
 ```
 
 The rule the shipped build broke: **a group takes the height its content needs.** The shipped screen
 pairs a one-checkbox group with a four-control group in equal-height grid columns and leaves roughly a
 third of the window empty. Here the columns are independent stacks; a short group is short.
 
-Group order is by how often it is touched — startup and the Vault folder are first-run concerns and sit
-where the eye lands, hotkeys and Quality Budget are the ones changed later. Agent access is last and
-inert (`DEC-005`).
+Group order is by how often it is touched — startup and the Vault folder are first-run concerns and
+sit where the eye lands, hotkeys and Quality Budget are the ones changed later.
+
+**Agent access is not on this surface.** An earlier draft of this document drew it as a fifth group
+here while `EXPERIENCE-settings.md` and `inventory-screen.md` row 13 both had it as a primary surface
+of its own. One thing cannot live in two places; the rail wins, because `FR-28` lists four primary
+surfaces and the inventory has always had row 13.
 
 Below `--settings-column-min` the two columns become one and the surface may scroll. That is allowed:
 `FR-29` binds at the **minimum supported** window size, and 1024×720 holds both columns.
@@ -134,7 +137,7 @@ visible after. The Reviewer never leaves Auto without seeing that they left it.
 | Loading | Segments visible and inert; readout reads "—". No segment is pre-selected |
 | Populated | Normal |
 | Empty | No capture taken yet: readout reads "No captures yet". The control still works |
-| Error | Budget could not be read: the group shows its own message and a Retry. The other four groups are unaffected |
+| Error | Budget could not be read: the group shows its own message and a Retry. The other three groups are unaffected |
 
 #### Hotkeys group
 
@@ -166,4 +169,5 @@ read (`FR-18`). It MUST NOT render on or off first.
 **Don't** stretch a group to match a neighbour.
 **Don't** show a raw pixel or quality number outside Advanced.
 **Don't** render the startup toggle in a definite state before Windows has answered.
-**Don't** hide the Agent access group while it is frozen — `FR-28` requires it to stay reachable.
+**Don't** move Agent access into this surface. It is a primary surface of its own, and `FR-28`
+requires it to stay listed in the rail while `DEC-005` freezes it.

@@ -199,6 +199,18 @@ waves:
     depends_on: []
     spec_folder: _bmad-output/specs/w6-desktop-experience/
     opened: "2026-08-23"
+    spec_reviewed:
+      date: "2026-08-23"
+      sha: 24452d6
+      lenses: [structure, prose, edge-case-hunter]
+    known_gaps:
+      # Named here rather than discovered at wave close. Neither blocks W6; both would otherwise
+      # look like the wave forgot them.
+      - "LC-029 capture-note-field is registered and has no component. No W6 story creates it: the
+         capture path is not in this wave's scope. inventory-screen row 2 will keep reading UNREAD
+         until a wave touches capture."
+      - "LC-027 bundle-reader, and rows 11, 14, 15, are BUG-2 — recorded as delivered in W5 and
+         absent from the tree. Frozen by DEC-005; whether to build or withdraw is OQ-22."
     why: |
       r1 and r2 shipped every promised capability. The owner's first sustained use produced a list of
       EXPERIENCE defects, not missing features: they could not name the application they had opened,
@@ -254,16 +266,16 @@ waves:
         title: A Settings screen that fits, and controls that can be answered
         stories:
           - id: W6-S3
-            title: Two columns packed by content height, five groups visible at 1024x720
+            title: Two columns packed by content height, four groups visible at 1024x720
             component: settings
             satisfies: [UC-26]
             depends_on: [W6-S2]
             touches: [editor-ui, settings-store]
             spec_folder: _bmad-output/specs/w6-desktop-experience/
             tests:
-              - vitest::all_five_settings_groups_are_visible_at_the_minimum_window_size
+              - vitest::all_four_settings_groups_are_visible_at_the_minimum_window_size
               - vitest::no_group_is_stretched_to_match_a_neighbours_height
-              - vitest::the_agent_access_group_is_present_and_inert
+              - vitest::agent_access_is_a_primary_surface_and_not_a_settings_group
           - id: W6-S4
             title: The Quality Budget as a named intent, with Auto deriving per capture
             component: settings
