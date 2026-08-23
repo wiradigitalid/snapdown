@@ -1,6 +1,7 @@
 use snapdown_core::domain::setting::HotkeyAction;
 use snapdown_store::sqlite::{
-    SqliteAccessKeyStore, SqliteBundleStore, SqliteFindingStore, SqliteSettingsStore,
+    SqliteAccessKeyStore, SqliteBundleStore, SqliteFindingStore, SqlitePublicationStore,
+    SqliteSettingsStore,
 };
 use std::sync::{Arc, Mutex};
 use tauri::{
@@ -15,6 +16,7 @@ use tauri_plugin_global_shortcut::{
 pub mod commands;
 pub mod hotkey;
 pub mod overlay;
+pub mod publish;
 pub mod server;
 pub mod startup;
 pub mod state;
@@ -32,6 +34,9 @@ use commands::finding::{
 use commands::hotkey::{clear_hotkey, get_hotkeys, set_hotkey};
 use commands::settings::{
     get_latest_finding_size, get_settings, open_vault_folder, set_quality_budget, set_vault_path,
+};
+use commands::sharing::{
+    get_publication_status, publish_bundle, reconcile_publication, unpublish_bundle,
 };
 use commands::startup::{get_startup_status, set_startup_status};
 use hotkey::{DesktopHotkeyRegistrar, TauriGlobalShortcutBackend};
@@ -108,12 +113,15 @@ pub fn run() {
                 SqliteBundleStore::open(&db_path).expect("Failed to initialize SqliteBundleStore");
             let access_key_store = SqliteAccessKeyStore::open(&db_path)
                 .expect("Failed to initialize SqliteAccessKeyStore");
+            let publication_store = SqlitePublicationStore::open(&db_path)
+                .expect("Failed to initialize SqlitePublicationStore");
 
             let is_first_run = check_is_first_run(&store);
             let arc_store = Arc::new(store);
             let arc_finding_store = Arc::new(finding_store);
             let arc_bundle_store = Arc::new(bundle_store);
             let arc_access_key_store = Arc::new(access_key_store);
+            let arc_publication_store = Arc::new(publication_store);
 
             let backend = Arc::new(TauriGlobalShortcutBackend::new(handle.clone()));
             let mut registrar = DesktopHotkeyRegistrar::new(arc_store.clone(), Some(backend));
@@ -130,6 +138,7 @@ pub fn run() {
                 finding_store: arc_finding_store,
                 bundle_store: arc_bundle_store,
                 access_key_store: arc_access_key_store,
+                publication_store: arc_publication_store,
                 hotkey_registrar: arc_registrar,
                 startup_registrar: arc_startup_registrar,
             });
@@ -205,7 +214,11 @@ pub fn run() {
             copy_bundle_to_clipboard,
             get_access_key_status,
             generate_access_key,
-            revoke_access_key
+            revoke_access_key,
+            get_publication_status,
+            publish_bundle,
+            unpublish_bundle,
+            reconcile_publication
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

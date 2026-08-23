@@ -1,11 +1,12 @@
 use serde::{Deserialize, Serialize};
 use snapdown_core::domain::bundle::{Bundle, BundleDetail, BundleItem};
 use snapdown_core::domain::markdown::MarkdownSerializer;
-use snapdown_core::ports::{BlobStore, BundleStore, FindingStore, SettingsStore};
+use snapdown_core::ports::{BlobStore, BundleStore, FindingStore, PublicationStore, SettingsStore};
 use snapdown_store::vault::VaultBlobStore;
 use std::path::PathBuf;
 use tauri::State;
 
+use crate::commands::sharing::unpublish_bundle;
 use crate::state::AppState;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -109,7 +110,14 @@ pub fn get_bundle_detail(
 
 #[tauri::command]
 pub fn delete_bundle(id: String, state: State<AppState>) -> Result<(), String> {
-    // 1. Delete associated vault markdown file and burned images if present (AD-2, INV-BUNDLE-001)
+    // 1. If bundle is currently published, unpublish automatically (BR-23)
+    if let Ok(Some(pub_record)) = state.publication_store.get_by_bundle_id(&id) {
+        if pub_record.is_live() {
+            let _ = unpublish_bundle(id.clone(), state.clone());
+        }
+    }
+
+    // 2. Delete associated vault markdown file and burned images if present (AD-2, INV-BUNDLE-001)
     if let Ok(Some(detail)) = state.bundle_store.get_bundle(&id) {
         let vault_path = match state
             .settings_store
@@ -131,7 +139,7 @@ pub fn delete_bundle(id: String, state: State<AppState>) -> Result<(), String> {
         }
     }
 
-    // 2. Cascade delete bundle and bundle_item records from database
+    // 3. Cascade delete bundle and bundle_item records from database
     state
         .bundle_store
         .delete_bundle(&id)
@@ -163,13 +171,16 @@ fn dirs_or_default_vault() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use snapdown_store::sqlite::{SqliteBundleStore, SqliteFindingStore};
+    use snapdown_store::sqlite::{
+        SqliteAccessKeyStore, SqliteBundleStore, SqliteFindingStore, SqlitePublicationStore,
+    };
     use std::sync::Arc;
 
     #[test]
     fn bundle_commands_execution() {
         let b_store = Arc::new(SqliteBundleStore::open_in_memory().unwrap());
         let f_store = Arc::new(SqliteFindingStore::open_in_memory().unwrap());
+        let p_store = Arc::new(SqlitePublicationStore::open_in_memory().unwrap());
 
         let state_data = AppState {
             settings_store: Arc::new(
@@ -177,9 +188,8 @@ mod tests {
             ),
             finding_store: f_store,
             bundle_store: b_store.clone(),
-            access_key_store: Arc::new(
-                snapdown_store::sqlite::SqliteAccessKeyStore::open_in_memory().unwrap(),
-            ),
+            access_key_store: Arc::new(SqliteAccessKeyStore::open_in_memory().unwrap()),
+            publication_store: p_store,
             hotkey_registrar: Arc::new(std::sync::Mutex::new(
                 crate::hotkey::DesktopHotkeyRegistrar::new(
                     Arc::new(

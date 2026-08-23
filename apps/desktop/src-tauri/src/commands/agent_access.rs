@@ -95,6 +95,9 @@ mod tests {
                 snapdown_store::sqlite::SqliteBundleStore::open_in_memory().unwrap(),
             ),
             access_key_store: store.clone(),
+            publication_store: Arc::new(
+                snapdown_store::sqlite::SqlitePublicationStore::open_in_memory().unwrap(),
+            ),
             hotkey_registrar: Arc::new(std::sync::Mutex::new(
                 crate::hotkey::DesktopHotkeyRegistrar::new(
                     Arc::new(
