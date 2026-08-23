@@ -1,0 +1,198 @@
+- id: "W6-S1"
+  title: Every colour through tokens, both themes, enforced by a lint rule
+  description: >-
+    Add the missing tokens to web/ui/src/styles/tokens.css in BOTH themes — the four meaning pairs
+    (success, warning, info, neutral), --color-surface-sunken, --space-0, --radius-full — replace all
+    23 hex literals under apps/desktop/src with token references, add the base elements the design
+    system names (SegmentedControl, HotkeyChip, EmptyState, ErrorState, and Toggle's indeterminate
+    state), and add the lint rule plus the contrast assertion. See SPEC.md and
+    .how/_platform/design-system.md.
+  invoke_dev_with: >-
+    This runs ALONE and first. Every later story in this wave writes UI and would otherwise each
+    invent its own colours again. Three token groups are theme-invariant ON PURPOSE and must stay
+    literal-valued while still living in the token file, each with a comment saying why:
+    --color-marker*, the capture overlay scrim and region ring, --canvas-checker. They are drawn over
+    the Reviewer's screen or over an exported image read on another machine, so this machine's theme
+    is the wrong reference. The contrast assertion must render every screen under BOTH
+    prefers-color-scheme values and check every text element against ITS OWN background — not against
+    the page background. Toggle's indeterminate state is load-bearing for W6-S5, not decoration.
+
+- id: "W6-S2"
+  title: The editor shell — persona naming, the navigation rail, one executable, and the overlay mount
+  description: >-
+    Extract the window frame out of App.tsx into LC-028 editor-shell with its own tests. Left
+    navigation rail at 200px replacing the top tab row, all four primary surfaces listed on every
+    surface, the Capture action pinned to the rail's foot, window title "Snapdown Editor" distinct
+    from the tray's "Snapdown", and a build assertion that exactly one desktop executable is produced.
+    ALSO carries BUG-4, which is critical: route on the overlay query parameter so the capture
+    overlay window mounts CaptureOverlay instead of the Editor. See
+    .how/settings/04-components/LC-028-editor-shell.md, .how/settings/01-ux/DESIGN.md, and
+    .control/registry/defects.yaml BUG-4.
+  invoke_dev_with: >-
+    READ BUG-4 FIRST, it outranks everything else in this story. capture.rs:106 opens
+    `index.html?overlay=true` and NOTHING in main.tsx or App.tsx reads window.location.search. There
+    is one html entry point and vite.config.ts declares no second input. So the overlay window mounts
+    <App /> - the Editor shell, opening on Settings - instead of <CaptureOverlay />. THE CAPTURE PATH
+    DOES NOT WORK: no dim, no crosshair, no region drag, no note field, no Finding. FR-1, FR-2, UC-1
+    and UC-2 are all unmet in the shipped build. It went unnoticed because CaptureOverlay.tsx's own
+    unit tests pass - the component is correct and simply never mounted, and nothing tests the seam
+    between the Rust window builder's URL and the frontend's routing. Fix it in main.tsx, and write
+    a test that asserts the MOUNT DECISION from the URL, not one that asserts CaptureOverlay renders.
+    Then the shell work. The rail replaces the tab row for a reason that is not taste: FR-29 needs
+    Settings to fit 1024x720 without scrolling, and a top tab row costs ~64px of height on every
+    surface. LC-028 depends on NOTHING - a frame that reads state is a frame that can fail to draw,
+    and FR-28 requires navigation to survive any surface's failure. The active item must be
+    distinguished by MORE than colour (fill plus a left edge bar). The build assertion matters:
+    renaming the product left a stale desktop.exe beside Snapdown.exe and the owner ran the wrong one,
+    which is what made them believe the product had no navigation at all. sharing and agent-access are
+    frozen by DEC-005 and their surfaces MUST still be listed (BR-120).
+
+- id: "W6-S3"
+  title: Two columns packed by content height, four groups visible at 1024x720
+  description: >-
+    Rebuild the Settings surface as two independent column stacks rather than an equal-height grid.
+    Group order — Startup, Vault folder | Quality Budget, Hotkeys. Every group takes the height its
+    content needs. Agent access is NOT a group here; it is a primary surface of its own. See .how/settings/01-ux/DESIGN.md.
+  invoke_dev_with: >-
+    The shipped screen pairs a one-checkbox group with a four-control group in equal grid columns, so
+    the checkbox group inherits the tall one's height and roughly a third of the window is empty
+    while the Hotkeys group is pushed below the fold. Independent stacks, never stretched. Do NOT add
+    a sub-navigation of the four groups: that satisfies FR-29's letter by hiding three of them behind
+    a click, and it is an explicit Non-goal. Agent access is NOT one of the four. Below --settings-column-min the two columns may become
+    one and the surface may scroll — FR-29 binds at the MINIMUM supported size, and 1024x720 holds
+    both columns.
+
+- id: "W6-S4"
+  title: The Quality Budget as a named intent, with Auto deriving per capture
+  description: >-
+    DEC-004. Migration adding quality_budget.named plus three columns on `finding`
+    (resolved_long_edge, resolved_encoder_quality, budget_name). LC-003 image-reducer resolves a pair
+    from the captured region. New command CS-12 get_quality_budget_presets; CS-3 set_quality_budget
+    changes shape. SegmentedControl with Auto/Sharp/Balanced/Small, one line of prose each, the
+    attributed readout, and Advanced behind a disclosure. See
+    .how/finding/04-components/LC-003-image-reducer.md and
+    .what/finding/05-scenarios/SCN-03-the-quality-budget-that-resolves-differently.md.
+  invoke_dev_with: >-
+    The exact Auto curve is NOT specified upstream and you choose it. Three requirements bind it and
+    a curve failing any one is wrong - it varies with the region; where no downscale applies quality
+    is HIGH (the encoder is the only lever and small text is where artefacts show); where a hard
+    downscale applies quality is LOWER (the downscale already removed the detail). Record the curve
+    you chose and why, in the code, pointing at OQ-3. The assertion that matters is SCN-03's - a
+    312x118 tooltip and a 3840x2160 screen must NOT resolve the same pair. A test finding them
+    identical is a FAILING test, and it is the only assertion a constant cannot pass. The named state
+    and its resolved pair are ONE write (BR-116). Custom has exactly one way in - the Reviewer editing
+    an Advanced value, visibly (BR-117); Auto resolving an unusual pair does NOT become Custom. Do not
+    re-encode any existing Finding (BR-9). Do not move reduction before the overlay dismissal - NFR-2's
+    budget ends at dismiss.
+
+- id: "W6-S5"
+  title: Run at Windows startup — on by first-run default, and never assumed
+  description: >-
+    Add the startup.registered key, the first-run branch that applies the default once, and the
+    Unknown state on the control. See .how/settings/06-flows/flow-startup-reconciliation.md and
+    .what/settings/05-scenarios/SCN-02-the-first-run-and-the-startup-default.md.
+  invoke_dev_with: >-
+    Read SCN-02's five runs before writing anything. The naive implementation — if not registered,
+    register — passes runs 1 and 2 and FAILS run 3 silently by doing exactly what the Reviewer asked
+    it not to. The store read answers "has the Reviewer ever expressed a preference"; the registrar
+    read answers "is it registered right now", and that one is ALWAYS taken from Windows, never from
+    the store (BR-114). The store write happens AFTER the registration attempt and records `expressed`
+    whether it succeeded or was refused — retrying forever would make a machine that forbids autostart
+    fight the product at every sign-in. Unknown is a RENDERED VALUE, not a spinner: the control shows
+    it and is inert until Windows answers, and never renders On or Off first. StartupStatusDto's
+    `enabled: bool` cannot carry three states and must change shape.
+
+- id: "W6-S6"
+  title: Hotkey rows — chip states, honest conflicts, and readable badges
+  description: >-
+    HotkeyChip with its four states (bound, listening, unbound, conflicted), the Active/Disabled badge
+    through the success and neutral token pairs, and the three distinguishable failure modes. See
+    .how/settings/01-ux/DESIGN.md and .what/settings/04-usecases/UC-15-change-the-keys-that-set-snapdown-off.md.
+  invoke_dev_with: >-
+    Three different things all look like "the hotkey doesn't work" and the product treats them as
+    three - REFUSED AT BINDING (Snapdown knows now, the old combination still works), DISABLED (the
+    Reviewer chose this, nothing is wrong), FAILED AT STARTUP (the Setting is right and the world
+    changed underneath it). Collapsing them into one message is how a Reviewer rebinds a hotkey that
+    was never the problem. A Snapdown-internal conflict is worded differently from an OS conflict
+    because the Reviewer can resolve the first. A listening chip stops listening when focus leaves it
+    — a chip that keeps listening swallows the Reviewer's keystrokes everywhere. Register the new
+    binding BEFORE unregistering the old; the reverse leaves a window with no hotkey at all if the new
+    one fails. Do NOT add a periodic registration health check — it is an explicit Non-goal.
+
+- id: "W6-S7"
+  title: Findings — capture rail, canvas, note pane, and every state
+  description: >-
+    Rebuild FindingsView as three regions: the capture rail at 200px, the canvas, and the note pane at
+    320px with the Marker list beneath the Note. Every state from
+    .how/finding/01-ux/DESIGN.md — empty, loading, nothing-selected, populated, image-missing, error.
+  invoke_dev_with: >-
+    READ BUG-5 FIRST, it outranks the rest of this story. The Editor NEVER RENDERS A FINDING'S IMAGE.
+    FindingsEditor.tsx shows metadata, a Note TextArea, and `{f.markers.length} markers` as TEXT at
+    line 137. MarkerLayer is exported from web/ui/src/index.ts and mounted nowhere. So the screenshot
+    the Note describes is not on screen, Markers cannot be placed or moved or deleted, and AD-1 - the
+    product's core invariant - has no user interface at all. Render the image (Tauri convertFileSrc
+    over the Vault path) and mount MarkerLayer over it per .how/finding/01-ux/DESIGN.md. The tests
+    that matter are COMPOSITION tests - that the image element and the marker canvas are PRESENT in
+    the mounted surface - because MarkerLayer's own unit tests are already green and that is exactly
+    why nobody noticed. BUG-6 rides along: OrphanReportView.tsx is also mounted nowhere and has no
+    route, tab, or entry point, so FR-15 and UC-8 are unreachable too. Give it one from this surface -
+    DESIGN.md offers it from the image-missing state. Then the rest.
+    This is also the surface the owner saw as white-on-white: it paints #ffffff and #f8fafc panels
+    unconditionally inside a shell whose tokens follow prefers-color-scheme. Every panel comes from
+    tokens after W6-S1; no literal survives. The Marker list in the note pane is NOT decoration — it is
+    the keyboard path to every Marker, and without it the accessibility floor is unreachable because
+    an image-only interaction cannot be operated from a keyboard. A Marker with no Note line is
+    REPORTED in the note pane and NEVER annotated on the image: the image is exported and read on
+    another machine, so an app-only state must not be burned into an artifact (SCN-04). Panels take
+    the height available; the shipped build uses fixed heights and leaves a third of the window dark.
+    The empty state teaches the BOUND capture combination rendered as a HotkeyChip, not a button —
+    the action that ends the emptiness is a keypress.
+
+- id: "W6-S8"
+  title: Bundles — preview as the centre, and a read-only region not a disabled input
+  description: >-
+    Rebuild BundleView as list, preview, item list, with the preview as the growing centre and the
+    actions at the item list's foot. Extract the Compose dialog as LC-031. Every state from
+    .how/bundle/01-ux/DESIGN.md.
+  invoke_dev_with: >-
+    The preview is a read-only REGION with an accessible name, not a disabled text field: a disabled
+    control is announced as unavailable, and the content IS available — it is the editing that does
+    not exist. Give it no cursor; a Bundle is recomposed, never patched, and an editable preview would
+    silently break that. Copy Markdown must ANNOUNCE its result — a silent clipboard write is
+    indistinguishable from a failure, and this is the primary handoff path in the whole product. The
+    empty state offers NO button, because the action lives on the Findings surface and a button that
+    only navigates away pretends otherwise. Publish stays visible and frozen (DEC-005, BR-120). Four
+    hex literals live in BundleView.tsx today at lines 93, 114, 137, 173.
+
+- id: "W6-S9"
+  title: A Bundle survives the deletion of a Finding it holds
+  description: >-
+    BUG-1. Migration dropping ON DELETE CASCADE — and probably the whole foreign key — from
+    bundle_item.finding_id, plus the five tests that prove a Bundle outlives its source Findings. See
+    .control/registry/defects.yaml and
+    .what/bundle/05-scenarios/SCN-05-a-finding-deleted-out-from-under-a-bundle.md.
+  invoke_dev_with: >-
+    This is a DEFECT, not new work - FR-13's third consequence has been active since G2 and says a
+    Finding in a Bundle can be deleted while the Bundle stays readable. The schema says the opposite
+    and foreign_keys is ON in finding_store.rs:29. Prefer dropping the FOREIGN KEY entirely rather
+    than only its cascade - a BundleItem legitimately refers to a Finding THAT MAY NO LONGER EXIST,
+    which is the precise condition a foreign key exists to forbid. KEEP the bundle_id cascade: deleting
+    a Bundle does delete its items (FR-14), and bundle_store.rs:277 asserts it. Rows already lost are
+    not recoverable and the migration must not pretend otherwise. The test shape that was missing is a
+    test that a cascade does NOT fire - write it explicitly.
+
+- id: "W6-S10"
+  title: The Vault move reports a file it could not remove
+  description: >-
+    Stop swallowing both fs::remove_file results in vault_migration.rs and report what could not be
+    removed. See .what/settings/05-scenarios/SCN-01-the-vault-move-that-fails.md.
+  invoke_dev_with: >-
+    Read SCN-01 first - the existing implementation is STRONGER than it looks and must not be
+    rewritten. It copies every file, verifies every copy, and only then deletes the sources
+    (vault_migration.rs:138), so no file ever exists in neither place and AD-2 is satisfied by ORDERING
+    rather than by compensation. Keep that. The gap is only the two `let _ = fs::remove_file(...)`
+    calls at :141 and :180. The one at :141 matters most - a source file that will not delete leaves an
+    UNREPORTED DUPLICATE of an image that may hold personal data, and the move still reports success.
+    On a Vault holding personal data an unreported leftover copy is the failure mode that counts. The
+    move should still SUCCEED in that case - the files are all at the destination - but it must tell
+    the Reviewer what stayed behind.

@@ -169,11 +169,10 @@ pub fn publish_bundle(
     }
 }
 
-#[tauri::command]
-pub fn unpublish_bundle(bundle_id: String, state: State<AppState>) -> Result<(), String> {
+pub fn unpublish_bundle_impl(bundle_id: &str, state: &AppState) -> Result<(), String> {
     let pub_opt = state
         .publication_store
-        .get_by_bundle_id(&bundle_id)
+        .get_by_bundle_id(bundle_id)
         .map_err(|e| e.to_string())?;
 
     let publication = match pub_opt {
@@ -188,9 +187,7 @@ pub fn unpublish_bundle(bundle_id: String, state: State<AppState>) -> Result<(),
 
     if let Err(ref err) = unpub_res {
         // Sticky error tracking: unpublish failure keeps bundle marked as published (BR-20, BR-96, BR-97)
-        let _ = state
-            .publication_store
-            .set_last_error(&bundle_id, Some(err));
+        let _ = state.publication_store.set_last_error(bundle_id, Some(err));
         return Err(format!("Unpublish failed: {err}"));
     }
 
@@ -198,7 +195,7 @@ pub fn unpublish_bundle(bundle_id: String, state: State<AppState>) -> Result<(),
     if let Ok(is_still_served) = client.reconcile(&publication.slug) {
         if is_still_served {
             let _ = state.publication_store.set_last_error(
-                &bundle_id,
+                bundle_id,
                 Some("Remote service still serving slug after delete"),
             );
             return Err("Remote service did not remove slug".into());
@@ -208,12 +205,17 @@ pub fn unpublish_bundle(bundle_id: String, state: State<AppState>) -> Result<(),
     let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
     state
         .publication_store
-        .mark_unpublished(&bundle_id, &now)
+        .mark_unpublished(bundle_id, &now)
         .map_err(|e| e.to_string())?;
 
-    let _ = state.publication_store.set_last_error(&bundle_id, None);
+    let _ = state.publication_store.set_last_error(bundle_id, None);
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn unpublish_bundle(bundle_id: String, state: State<AppState>) -> Result<(), String> {
+    unpublish_bundle_impl(&bundle_id, &state)
 }
 
 #[tauri::command]

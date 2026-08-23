@@ -18,9 +18,9 @@ companions:
   - .how/_platform/c4-l2-containers.md
   - .how/_platform/cross-cutting.md
 reviewed:
-  date: "2026-08-22"
-  sha: 1a67115
-  lenses: [structure, prose, edge-case-hunter]
+  date: '2026-08-23'
+  sha: '783a561'
+  lenses: [structure, prose]
 ---
 
 # Architecture Spine — Snapdown
@@ -44,7 +44,7 @@ translation of it.** Three handoff paths existing is a fact about adapters, not 
 
 ## Invariants & Rules
 
-Nine. Each one is here because breaking it in one component breaks another.
+Eleven. Each one is here because breaking it in one component breaks another.
 
 ```mermaid
 graph TD
@@ -156,6 +156,37 @@ depend on nothing in the Rust tree except the Markdown and image bytes a publish
   MUST serve those exact bytes. No surface may re-render, re-order, decorate, or summarise a Bundle
   on the way out; a surface that needs a different shape is asking for a change to the composer.
 
+### AD-10 — Colour has exactly one authority, and every colour exists in both themes
+
+- **Binds:** `finding`, `bundle`, `settings`, `sharing`, `agent-access` — every component that draws.
+- **Prevents:** the failure this product already shipped. `finding` and `bundle` paint panels from
+  literal light-theme values while the shell paints text from tokens that follow
+  `prefers-color-scheme`. Under the Windows dark theme the shell's white text lands on those white
+  panels and the Reviewer sees nothing. Neither component is wrong on its own; the defect exists only
+  where they meet, which is what makes it an invariant rather than a styling preference. 23 distinct
+  hex literals live outside the token file today, so this is not a hypothetical.
+- **Rule:** Every colour MUST be defined once, in the token stylesheet, and MUST be defined for both
+  the light and the dark theme. A component MUST NOT contain a colour literal. A meaning background
+  MUST be used only through its paired foreground token, so the pair is proven once rather than at
+  each use. A token that is deliberately theme-invariant — the Marker badge, the capture overlay's
+  scrim — MUST say so where it is defined and MUST still be defined in the token file.
+
+### AD-11 — One process owns the Library, and the Editor is a persona of it
+
+- **Binds:** `finding`, `bundle`, `settings` — the three that write.
+- **Prevents:** two writers to one SQLite file and one Vault directory. `finding-store`,
+  `bundle-store`, and `settings-store` have no lock discipline between processes and no test that
+  covers one, because the shape has always been single-writer. Splitting the Editor into its own
+  executable would introduce a second writer silently: nothing would fail at build time, and the
+  first corruption would appear under concurrency nobody reproduced. It also prevents the product
+  and its window disagreeing about their own name, which has already happened once — a stale
+  `desktop.exe` beside `Snapdown.exe` led the Reviewer to conclude the product had no navigation.
+- **Rule:** Exactly one desktop process MUST own the Library. The tray, the global hotkeys, the
+  capture overlay, and the Editor window MUST all live in it. A second desktop executable MUST NOT be
+  produced by a build. The `mcp-bridge` is not an exception: it holds no Library state, writes
+  nothing, and reaches the Library only through the Local API, which AD-5 already makes read-only.
+  Recorded as `DEC-003`.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -250,3 +281,10 @@ snapdown/
   belongs to the store adapter rather than the core.
 - **Deployment topology for `web-api`.** Not this corpus. It lives in the devops repository and is
   referenced from C4 L2.
+- **Destroying the Editor window on close.** AD-11 keeps one process; whether that process keeps the
+  webview resident is a separate question. Hiding buys the warm start on the most frequent action;
+  destroying gives back the memory. Hiding is the current shape and `OQ-19` records the assumption
+  behind it. Reversing it does not touch AD-11.
+- **Voice dictation of the Note.** Cobalt Capture's differentiator, and the first idea to reach for if
+  the note field proves to be where the capture loop slows. Nothing measured says it does. It would
+  touch the capture path, which NFR-1 and NFR-2 already constrain tightly.

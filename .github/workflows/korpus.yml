@@ -14,6 +14,49 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Refuse forbidden content
+        shell: bash
+        run: |
+          set -e
+          # The product brief has forbidden this since G1: "This repository is public. Forbids
+          # committing a captured screenshot, a token, a client's name, or any test fixture derived
+          # from real capture output." NOTHING ENFORCED IT until 2026-08-23, when a UX audit staged
+          # five screenshots of the operator's machine and, later, four accessibility-tree dumps
+          # embedding their home-directory paths. Both were caught by reading `git status` and
+          # `git diff` by hand. That is not a control; this is.
+          fail=0
+
+          echo "--- captured images anywhere in the tree ---"
+          if git ls-files -- '*.png' '*.jpg' '*.jpeg' '*.webp'                | grep -vE '^apps/desktop/src-tauri/icons/' | grep -q .; then
+            echo "::error::A captured image is tracked outside the app icon set."
+            git ls-files -- '*.png' '*.jpg' '*.jpeg' '*.webp'               | grep -vE '^apps/desktop/src-tauri/icons/'
+            fail=1
+          fi
+
+          echo "--- raw accessibility-tree dumps ---"
+          if git ls-files -- '.work/**/tree-*.txt' | grep -q .; then
+            echo "::error::A raw accessibility-tree dump is tracked. These embed absolute paths."
+            git ls-files -- '.work/**/tree-*.txt'
+            fail=1
+          fi
+
+          echo "--- operator home-directory paths in tracked text ---"
+          # <user> is the placeholder a document uses when it must show the SHAPE of a path, and
+          # test / user / example / runner / actions are obviously synthetic names that appear in
+          # fixtures. Everything else is treated as a real operator's home directory.
+          if git grep -nIE 'C:\+Users\+[A-Za-z0-9_]+|/(home|Users)/[a-z][a-z0-9_-]+' --                ':!.github/workflows/korpus.yml' ':!*.lock' ':!*package-lock.json'              | grep -vE '<user>|[Uu]sers[\/]+(test|user|example|runner|actions)[\/]' | grep -q .; then
+            echo "::error::A tracked file contains an operator home-directory path."
+            git grep -nIE 'C:\+Users\+[A-Za-z0-9_]+|/(home|Users)/[a-z][a-z0-9_-]+' --                ':!.github/workflows/korpus.yml' ':!*.lock' ':!*package-lock.json'               | grep -vE '<user>|[Uu]sers[\/]+(test|user|example|runner|actions)[\/]' | head -20
+            fail=1
+          fi
+
+          if [ "$fail" -ne 0 ]; then
+            echo "Fix the CONTENT. Do not weaken this guard - a failure here is a finding about what"
+            echo "is being committed to a public repository, not about the check."
+            exit 1
+          fi
+          echo "No forbidden content tracked."
+
       - name: Install uv
         # No cache: there is no uv.lock in this repository and there will not be. validate.py is a
         # PEP-723 script with inline dependencies, not a uv project, and `enable-cache: true` fails

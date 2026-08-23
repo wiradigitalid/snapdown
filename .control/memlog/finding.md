@@ -1,0 +1,20 @@
+---
+topic: Snapdown — finding component depth
+artifact: .how/finding/SDD-finding.md
+updated: 2026-08-23T22:00
+---
+
+- (event) 2026-08-23 G4 re-run at `deep`, raised from `guarded`. g4_passed was reset to false: it passed at the old depth, and leaving it true would claim a gate that never ran at this one
+- (change) behaviour: 03-domain/state-machines.md (three machines), SCN-03 and SCN-04. The existing local rules and the three full flows were already there at `guarded` and are untouched
+- (decision) state-machines section 3 is a machine over the Marker SEQUENCE, not over a Marker. A Marker has no states — it has a position and a number. AD-1 is a rule about the collection, and drawing it per-member would have hidden that
+- (decision) `Mismatched` is REACHABLE and is not an error. The Reviewer edits the Note as free text and can delete a numbered line. The product does not prevent it, does not delete the Marker to restore symmetry, and does not renumber to hide it — it SHOWS the mismatch. A product that quietly deleted a Marker to keep the numbers tidy would be destroying the Reviewer's evidence to satisfy a diagram
+- (decision) the mismatch is shown in the NOTE PANE and never on the image. The image is what gets exported and read on another machine, under another theme, by someone with no access to Snapdown's opinion. An app-only state must not be burned into an artifact
+- (event) SCN-04 records the asymmetry deliberately: deleting a Note LINE leaves its Marker in place; deleting a MARKER removes its line and renumbers. The image is edited through operations the product owns, so the product keeps the collection consistent; the Note is free text, so it does not. Making the Note a structured editor would restore symmetry and would take the Reviewer's prose away from them
+- (change) SCN-03 exists to make DEC-004 testable. Its one assertion — that a small region and a full screen resolve different pairs — is the ONLY one a constant cannot pass. Every other consequence of FR-5 is satisfied perfectly well by 1600 and 75, which is what shipped
+- (change) design: SDD taken to deep — ABCE, plus contracts, data-model, flow-capture, and LC-003
+- (event) data-model finding: `region` plus the stored dimensions record the EFFECT of reduction and not the BUDGET. From 3840x2160 selected and 1600x900 stored you can infer the cap; you cannot recover the encoder quality and you cannot tell which named budget was in force. That is why NFR-18 needs three new columns rather than being already satisfied by what is there
+- (event) flow-capture makes NFR-2's boundary structural: the 500 ms budget ends at DISMISS, not at STORED. Reduction runs with no overlay on screen, which is why a failure there needs a toast — there is no surface left to report into
+- (event) marker's UNIQUE(finding_id, ordinal) helps AD-1 but does NOT enforce contiguity: 1, 2, 4 satisfies it. Worth writing down, because the presence of a constraint invites the assumption that the rule is covered
+- (note) [NEEDS CONFIRMATION] filed: whether a Marker with no Note line is currently surfaced anywhere, or silently tolerated
+- (note) [NEEDS CONFIRMATION] filed: marker.comment suggests per-Marker text the domain model does not describe. Whether it is used, and whether it duplicates the Note line, was not established
+- (note) NOT done: wdi-review has not run

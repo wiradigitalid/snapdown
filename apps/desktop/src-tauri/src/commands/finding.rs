@@ -35,10 +35,9 @@ pub fn save_note(finding_id: String, body: String, state: State<AppState>) -> Re
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub fn delete_finding(id: String, state: State<AppState>) -> Result<(), String> {
+pub fn delete_finding_impl(id: &str, state: &AppState) -> Result<(), String> {
     // 1. Get finding image path to delete file first (AD-2, INV-DELETE-001)
-    if let Ok(Some(detail)) = state.finding_store.get_finding(&id) {
+    if let Ok(Some(detail)) = state.finding_store.get_finding(id) {
         let vault_path = match state
             .settings_store
             .get(&SettingKey::VaultPath)
@@ -59,8 +58,13 @@ pub fn delete_finding(id: String, state: State<AppState>) -> Result<(), String> 
     // 2. Delete database row
     state
         .finding_store
-        .delete_finding(&id)
+        .delete_finding(id)
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_finding(id: String, state: State<AppState>) -> Result<(), String> {
+    delete_finding_impl(&id, &state)
 }
 
 #[tauri::command]
@@ -171,6 +175,9 @@ mod tests {
             captured_at: "2026-08-23T10:00:00Z".to_string(),
             source_monitor: "DISPLAY1".to_string(),
             region: "0,0,800,600".to_string(),
+            resolved_long_edge: Some(1280),
+            resolved_encoder_quality: Some(92),
+            budget_name: Some("Auto".to_string()),
         };
         let note = Note {
             id: "note-1".to_string(),

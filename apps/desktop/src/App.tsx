@@ -1,9 +1,7 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Toast } from '@snapdown/ui';
-import { VaultSection } from './components/VaultSection';
-import { QualityBudgetSection } from './components/QualityBudgetSection';
-import { HotkeySection } from './components/HotkeySection';
-import { GeneralSection } from './components/GeneralSection';
+import { EditorShell, NavigationTab } from './components/EditorShell';
+import { SettingsView } from './components/SettingsView';
 import { FindingsView } from './components/FindingsView';
 import { BundleView } from './components/BundleView';
 import { AgentAccessView } from './components/AgentAccessView';
@@ -18,17 +16,25 @@ import {
   setStartupStatus as apiSetStartupStatus,
   setVaultPath as apiSetVaultPath,
 } from './services/settings';
-import { HotkeyAction, HotkeySettingsDto, Settings } from './types/settings';
-
-type NavigationTab = 'findings' | 'bundles' | 'agent-access' | 'settings';
+import { triggerOverlay } from './services/capture';
+import {
+  HotkeyAction,
+  HotkeySettingsDto,
+  NamedBudget,
+  ResolvedPair,
+  Settings,
+  StartupState,
+} from './types/settings';
 
 export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'settings' }) => {
   const [activeTab, setActiveTab] = useState<NavigationTab>(initialTab);
   const [settings, setSettings] = useState<Settings>({
     vault_path: '',
     quality_budget: {
+      named: 'auto',
+      prose: 'Sizes each capture to what it is. Most captures land near 120 KB.',
       max_long_edge: 1600,
-      encoder_quality: 75,
+      encoder_quality: 82,
     },
     latest_finding_size: null,
   });
@@ -51,7 +57,7 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
     startup_warnings: [],
   });
 
-  const [runAtStartup, setRunAtStartup] = useState<boolean>(true);
+  const [startupStatus, setStartupStatus] = useState<StartupState>('unknown');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -75,9 +81,11 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
         }
 
         if (startupRes.status === 'fulfilled') {
-          setRunAtStartup(startupRes.value.enabled);
+          const val = startupRes.value;
+          setStartupStatus(val.state ?? (val.enabled ? 'on' : 'off'));
         } else {
           console.error('Failed to load startup status:', startupRes.reason);
+          setStartupStatus('unreadable');
         }
 
         setIsLoading(false);
@@ -94,8 +102,8 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
     setToastMessage('Vault folder location updated successfully');
   };
 
-  const handleSaveQualityBudget = async (maxLongEdge: number, encoderQuality: number) => {
-    const updatedBudget = await apiSetQualityBudget(maxLongEdge, encoderQuality);
+  const handleSaveQualityBudget = async (budget: NamedBudget, advanced?: ResolvedPair | null) => {
+    const updatedBudget = await apiSetQualityBudget(budget, advanced);
     setSettings((prev) => ({ ...prev, quality_budget: updatedBudget }));
     setToastMessage('Quality Budget saved successfully');
   };
@@ -117,7 +125,8 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
   const handleToggleStartup = async (enabled: boolean) => {
     try {
       const res = await apiSetStartupStatus(enabled);
-      setRunAtStartup(res.enabled);
+      const nextState = res.state ?? (res.enabled ? 'on' : 'off');
+      setStartupStatus(nextState);
       setToastMessage(
         res.enabled
           ? 'Snapdown will run at Windows startup'
@@ -128,10 +137,21 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
       setToastMessage(`Failed to update startup registration: ${msg}`);
       try {
         const current = await getStartupStatus();
-        setRunAtStartup(current.enabled);
+        setStartupStatus(current.state ?? (current.enabled ? 'on' : 'off'));
       } catch {
-        setRunAtStartup(!enabled);
+        setStartupStatus('unreadable');
       }
+    }
+  };
+
+  const handleRetryStartup = async () => {
+    setStartupStatus('unknown');
+    try {
+      const res = await getStartupStatus();
+      setStartupStatus(res.state ?? (res.enabled ? 'on' : 'off'));
+    } catch (err: unknown) {
+      console.error('Failed to retry startup status read:', err);
+      setStartupStatus('unreadable');
     }
   };
 
@@ -144,93 +164,21 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
     }
   };
 
+  const handleCaptureClick = async () => {
+    try {
+      await triggerOverlay();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('Failed to trigger capture overlay:', msg);
+    }
+  };
+
   return (
-    <div
-      data-testid="app-shell"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        width: '100vw',
-        backgroundColor: 'var(--color-bg)',
-        color: 'var(--color-text)',
-        fontFamily: 'var(--font-ui)',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Top App Header & Navigation */}
-      <header
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: 'var(--space-3) var(--space-5)',
-          backgroundColor: 'var(--color-surface)',
-          borderBottom: '1px solid var(--color-border)',
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <div
-            style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: 'var(--radius-sm)',
-              backgroundColor: 'var(--color-accent)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              fontWeight: 700,
-              fontSize: '14px',
-            }}
-          >
-            S
-          </div>
-          <span style={{ fontSize: 'var(--text-lg)', fontWeight: 700, letterSpacing: '-0.02em' }}>
-            Snapdown
-          </span>
-        </div>
-
-        {/* Tab Navigation */}
-        <nav style={{ display: 'flex', gap: 'var(--space-1)' }}>
-          {[
-            { id: 'findings' as NavigationTab, label: 'Findings' },
-            { id: 'bundles' as NavigationTab, label: 'Bundles' },
-            { id: 'agent-access' as NavigationTab, label: 'Agent Access' },
-            { id: 'settings' as NavigationTab, label: 'Settings' },
-          ].map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  padding: 'var(--space-2) var(--space-4)',
-                  borderRadius: 'var(--radius-md)',
-                  border: 'none',
-                  backgroundColor: isActive ? 'var(--color-accent)' : 'transparent',
-                  color: isActive ? '#ffffff' : 'var(--color-text-muted)',
-                  fontWeight: isActive ? 600 : 500,
-                  fontSize: 'var(--text-sm)',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-      </header>
-
-      {/* Main Content Area */}
-      <main
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: activeTab === 'settings' ? 'var(--space-5)' : 0,
-        }}
+    <div data-testid="app-shell" style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      <EditorShell
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onCaptureClick={handleCaptureClick}
       >
         {activeTab === 'findings' && <FindingsView />}
         {activeTab === 'bundles' && <BundleView />}
@@ -240,45 +188,21 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
           </div>
         )}
         {activeTab === 'settings' && (
-          <div
-            style={{
-              maxWidth: '56rem',
-              margin: '0 auto',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 'var(--space-4)',
-            }}
-          >
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
-              <GeneralSection
-                runAtStartup={runAtStartup}
-                onToggleStartup={handleToggleStartup}
-                disabled={isLoading}
-              />
-              <QualityBudgetSection
-                qualityBudget={settings.quality_budget}
-                latestFindingSize={settings.latest_finding_size}
-                onSaveQualityBudget={handleSaveQualityBudget}
-                disabled={isLoading}
-              />
-            </div>
-
-            <VaultSection
-              vaultPath={settings.vault_path}
-              onSaveVaultPath={handleSaveVaultPath}
-              onOpenExplorer={handleOpenExplorer}
-              disabled={isLoading}
-            />
-
-            <HotkeySection
-              hotkeySettings={hotkeySettings}
-              onSaveHotkey={handleSaveHotkey}
-              onClearHotkey={handleClearHotkey}
-              disabled={isLoading}
-            />
-          </div>
+          <SettingsView
+            settings={settings}
+            hotkeySettings={hotkeySettings}
+            startupStatus={startupStatus}
+            onSaveVaultPath={handleSaveVaultPath}
+            onOpenExplorer={handleOpenExplorer}
+            onSaveQualityBudget={handleSaveQualityBudget}
+            onSaveHotkey={handleSaveHotkey}
+            onClearHotkey={handleClearHotkey}
+            onToggleStartup={handleToggleStartup}
+            onRetryStartup={handleRetryStartup}
+            disabled={isLoading}
+          />
         )}
-      </main>
+      </EditorShell>
 
       {toastMessage && (
         <Toast
@@ -290,4 +214,3 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
     </div>
   );
 };
-

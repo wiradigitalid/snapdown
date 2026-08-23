@@ -6,6 +6,41 @@
 # components — it is this product's plan, chosen so that V3 is green after every wave rather than
 # only at the end. The cost is that W2 is a wave `L`.
 
+# ---------------------------------------------------------------------------------------------
+# RECOVERY NOTE — W2, W3, W4, W5 · written 2026-08-23, answering OQ-21
+#
+# Those four waves are `closed` and hold NO `epics`/`stories` here. W1 and W6 do. The gap was found
+# when W6 put `finding` and `bundle` into the touched set and V3 began reporting six shipped use
+# cases — UC-1, UC-2, UC-7, UC-8, UC-9, UC-12 — as scheduled to no story.
+#
+# WHAT THE EVIDENCE SUPPORTS. Story FILES exist on disk and were read:
+#   _bmad-output/specs/w2-finding/stories/   W2-S1 .. W2-S6   (6 files)
+#   _bmad-output/specs/w3-bundle/stories/    W3-S1 .. W3-S6   (6 files)
+#   _bmad-output/specs/w4-agent-access/stories/  W4-S5 only   (1 file)
+#   _bmad-output/specs/w5-sharing/stories/       W5-S3 only   (1 file)
+# `.work/` additionally holds build briefs for w4-s1..s4 and w5-s1..s2, so those stories were
+# dispatched and their code shipped — but their story files are gone.
+#
+# WHY THE ROWS ARE NOT RECONSTRUCTED HERE, and this is the answer to OQ-21:
+# not one of the fourteen surviving story files contains a single `UC-` reference. The traceability
+# was never written, not lost. Ids, titles, components and status are recoverable; `satisfies:` is
+# not, and inventing it would produce a registry that reads complete and is fiction. OQ-21 said in
+# advance that this was the branch to take.
+#
+# V3 WILL KEEP REPORTING THOSE SIX USE CASES, and that is the correct state. The link genuinely does
+# not exist. A green validator here would mean somebody had guessed.
+#
+# TWO FURTHER FINDINGS FROM THE SAME READ:
+#  - W2-S6 (finding deletion + orphan sweeper) still carries `status: ready-for-dev` in its story
+#    file, and W2 is `closed`. Its CODE SHIPPED — OrphanReportView.tsx exists, scan_orphans and
+#    clean_orphans are registered commands — so this is a bookkeeping failure, not missing work.
+#    A wave was closed over a story that never reached `done`.
+#  - Six story files (W4-S1..S4, W5-S1..S2) are absent while their code is in the tree.
+#
+# NOT FIXED BY HAND. Reopening a closed wave to add scope is forbidden; this is a record gap, and
+# the record now states it.
+# ---------------------------------------------------------------------------------------------
+
 waves:
   - id: W1
     title: Workspace, the two stores, and Settings complete
@@ -152,3 +187,463 @@ waves:
       its embedded store and identical refusals, and the React reader. Three containers and two
       languages, carrying RISK-8, RISK-9, and RISK-10. Depends on W3 rather than W4 — the two r2
       waves are independent and MAY run in parallel.
+
+  - id: W6
+    title: The desktop experience rework
+    status: closed
+    release: r3
+    prd: [capture-to-markdown]
+    fr: [FR-5, FR-18, FR-27, FR-28, FR-29]
+    components: [settings, finding, bundle]
+    size: L
+    depends_on: []
+    spec_folder: _bmad-output/specs/w6-desktop-experience/
+    opened: "2026-08-23"
+    # RESEQUENCED 2026-08-23, after W6-S1 landed and before W6-S2 finished.
+    #
+    # The original chain was S1->S2->S3->S4->S5->S6->S7->S8 with S9 and S10 hanging off it, and it
+    # put the four DEFECT-BEARING stories at positions 7, 9 and 10 - behind six stories of UI work.
+    # Nobody chose that. It fell out of linearising the DAG over shared `touches` to satisfy V11,
+    # and a sequencing artifact is a bad reason to leave BUG-1 corrupting the record of what was
+    # handed over for six more stories.
+    #
+    # The chain is now RISK FIRST: S1 -> S2 -> S7 -> S9 -> S10 -> S3 -> S4 -> S5 -> S6 -> S8.
+    #   S2  BUG-4 critical  the capture path does not work
+    #   S7  BUG-5 critical  the Editor never renders a Finding's image
+    #       BUG-6 high      the orphan report is unreachable
+    #   S9  BUG-1 high      deleting a Finding guts every Bundle holding it
+    #   S10                 the Vault move reports success while leaving a duplicate
+    # All four defects now land in the first five positions. Everything after them is UI work that
+    # is unpleasant rather than wrong.
+    #
+    # It stays a pure chain. Every pair still shares at least one `touches` value or sits on a
+    # depends_on path, so V11 holds. The parallelism given up is theoretical - stories are being run
+    # one at a time.
+    spec_reviewed:
+      date: "2026-08-23"
+      sha: 8bf08b4
+      lenses: [structure, prose, edge-case-hunter]
+    known_gaps:
+      # Named here rather than discovered at wave close. Neither blocks W6; both would otherwise
+      # look like the wave forgot them.
+      - "LC-029 capture-note-field is registered and has no component. No W6 story creates it: the
+         capture path is not in this wave's scope. inventory-screen row 2 will keep reading UNREAD
+         until a wave touches capture."
+      - "LC-027 bundle-reader, and rows 11, 14, 15, are BUG-2 — recorded as delivered in W5 and
+         absent from the tree. Frozen by DEC-005; whether to build or withdraw is OQ-22."
+    why: |
+      r1 and r2 shipped every promised capability. The owner's first sustained use produced a list of
+      EXPERIENCE defects, not missing features: they could not name the application they had opened,
+      could not find the Editor, could not read a label against its background, and were asked for two
+      numbers nobody can judge. BG-7 and CAP-9 now carry that, and this wave is where it is paid for.
+      DEC-005 freezes `sharing` and `agent-access` for the duration; their surfaces stay reachable
+      (BR-120) and gain no behaviour.
+    epics:
+      - id: EP-foundation
+        component: settings
+        title: One colour authority, and a frame that owns itself
+        stories:
+          - id: W6-S1
+            title: Every colour through tokens, both themes, enforced by a lint rule
+            component: settings
+            satisfies: []
+            depends_on: []
+            touches: [editor-ui, settings-store]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              The biggest blocker, run alone first so its shape decisions land before anything fans
+              out. 23 hex literals live outside the token file; the meaning pairs, the sunken surface,
+              --space-0 and --radius-full do not exist yet. Every later story in this wave writes UI
+              and would otherwise each invent its own colours again.
+            # As-built after round 2. The names below are what the suites actually declare; the
+            # intent names written when this wave opened are kept beside them so the trace survives.
+            tests:
+              # intent: no_component_contains_a_colour_literal
+              - vitest::ensures_zero_color_literals_exist_in_source_trees_outside_tokens_css
+              # intent: every_token_is_defined_in_both_themes
+              - vitest::defines_all_required_design_tokens_in_root_light_theme
+              - vitest::defines_dark_theme_overrides_under_media_prefers_color_scheme_dark
+              # intent: every_text_element_meets_wcag_aa_in_the_light_theme / _dark_theme
+              - vitest::light_theme_satisfies_wcag_aa_for_body_muted_actions_and_meaning_pairs
+              - vitest::dark_theme_satisfies_wcag_aa_for_body_muted_actions_and_meaning_pairs
+              # intent: a_theme_invariant_token_is_declared_as_one_in_the_token_file
+              - vitest::ensures_theme_invariant_tokens_retain_identical_values_in_both_themes
+              # Added in round 2 as the must-fix's proof: the contrast suite parses tokens.css and
+              # fails when a token is changed to a low-contrast value. Verified by mutation.
+              - vitest::proves_the_contrast_parse_is_live_from_tokens_css_file
+            tests_deliberately_not_written:
+              # intent: a_theme_change_while_running_repaints_every_surface
+              - name: a_theme_change_while_running_repaints_every_surface
+                why: |
+                  NFR-17 requires a theme change while running to be honoured. After this story there
+                  is no application code in that path to break: every colour is a CSS custom property
+                  inside a prefers-color-scheme media query, and a grep for getComputedStyle and
+                  getPropertyValue across apps/desktop/src and web/ui/src returns nothing, so no
+                  JavaScript ever reads a token value. The browser does the repaint.
+                  A test here would assert that the CSS engine works. It is not written, and this row
+                  exists so that the absence is a decision rather than an omission — if any component
+                  later reads a token in JS, this becomes a real gap and the row is the reminder.
+          - id: W6-S2
+            title: The editor shell — persona naming, the navigation rail, one executable, and the overlay mount
+            component: settings
+            satisfies: [UC-24, UC-25]
+            depends_on: [W6-S1]
+            touches: [editor-ui, capture-pipeline]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              LC-028. The frame is inline JSX in App.tsx today, owned by no component and tested by
+              nothing, which is how FR-27 and FR-28 came to be unmet with no document being wrong.
+
+              **This story also carries BUG-4, which is critical and outranks everything else in the
+              wave.** capture.rs opens `index.html?overlay=true` and NOTHING in the frontend reads
+              window.location.search. There is one html entry point and no second bundle. So the
+              overlay window mounts <App /> — the Editor shell, opening on Settings — instead of
+              <CaptureOverlay />. The capture path, the most-executed action in the product and the
+              reason it exists, does not work in the shipped build.
+
+              It belongs here rather than in a story of its own because the decision *which root
+              component this window renders* is a frame concern, and this story is where the frame
+              gains an owner. Doing it anywhere else would leave the seam ownerless again.
+            # As-built. Intent names kept beside each so the trace survives.
+            tests:
+              # intent: the_overlay_window_url_mounts_the_capture_overlay_and_not_the_editor
+              - vitest::mounts_captureoverlay_when_url_query_has_overlay_true
+              # intent: the_default_window_url_mounts_the_editor_and_not_the_overlay
+              - vitest::mounts_app_editor_shell_when_url_query_is_empty
+              - vitest::mounts_app_editor_shell_when_url_query_has_other_parameters
+              # intent: the_build_produces_exactly_one_desktop_executable
+              - cargo::desktop_crate_declares_exactly_one_binary_named_snapdown
+              # intent: the_executable_name..._share_one_source / the_workspace_window_titles_itself
+              - cargo::tauri_configuration_has_snapdown_product_and_snapdown_editor_window_title
+              # intent: every_primary_surface_is_reachable / a_frozen_components_surface_is_still_listed
+              - vitest::lists_all_four_primary_surfaces
+              # intent: the_active_surface_is_distinguished_by_more_than_colour
+              - vitest::highlights_the_active_tab_with_multiple_visual_cues
+              # added in the fix round, from the coordinator's must-fix
+              - vitest::provides_visible_focus_visible_treatment_without_suppressing_focus_outline
+              - vitest::renders_200px_wide_navigation_rail_with_branding
+              - vitest::triggers_ontabchange_when_navigation_tab_is_clicked
+              - vitest::renders_pinned_capture_button_and_triggers_oncaptureclick
+              - vitest::renders_children_within_the_main_content_area_without_crashing
+            tests_deliberately_not_written:
+              - name: the_capture_hotkey_produces_a_finding_end_to_end
+                why: |
+                  MY ERROR, not the builder's. I named this as a `cargo` test and it cannot be one.
+                  It needs a registered global Windows hotkey, a transparent overlay across real
+                  monitors, a simulated drag, typed text, and a Finding landing in a store. That is a
+                  UI-DRIVING test, CI is headless, and this repo's own Agent Rules require such a
+                  test to be dispatched to a UI worker rather than run headlessly.
+                  The coverage it wanted is real and still missing: nothing proves the hotkey now
+                  produces a Finding end to end. What DOES exist is mount.test.tsx, which proves the
+                  seam BUG-4 broke - the overlay URL mounts CaptureOverlay - and that is the part
+                  that was actually wrong. The rest of the chain was never in doubt.
+                  Recorded as a wave follow-up: a UI-driving verification pass, like W1 had.
+            tests_thinner_than_declared:
+              - name: the_window_title_does_not_change_between_surfaces
+                state: |
+                  Not written. FR-27 promises it and it is cheap to test. Follow-up, not a return
+                  trip: the behaviour is correct - the title is set once in tauri.conf.json and
+                  nothing in EditorShell touches it - and this is missing coverage, not a defect.
+              - name: the_rail_still_renders_when_a_surface_fails_to_load
+                state: |
+                  Approximated by `renders_children_within_the_main_content_area_without_crashing`,
+                  which is weaker: it renders a child, it does not render a FAILING child. FR-28
+                  requires navigation to survive any surface's failure. Follow-up.
+          - id: W6-S11
+            title: Make the desktop application buildable, and have CI build it
+            component: settings
+            satisfies: []
+            depends_on: [W6-S7]
+            touches: [build-tooling]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              BUG-11, added to the wave on 2026-08-23 after a UI verification launched a
+              locally built binary and got a webview showing ERR_CONNECTION_REFUSED.
+
+              That was not a product defect. It is what a Tauri release binary does without the
+              Tauri CLI: it keeps requesting `devUrl` from tauri.conf.json instead of the bundled
+              `frontendDist`. And the CLI is absent from this repository entirely - not a cargo
+              subcommand, not an npm devDependency, no `tauri` script, no build command documented
+              anywhere, and desktop-ci.yml produces no desktop artifact at all.
+
+              So the Snapdown.exe the owner ran was built by means nobody wrote down, nobody can
+              reproduce it, and CI has never built the product whose parts it tests.
+
+              **This is placed fourth, immediately after W6-S7, for a reason that outranks its own
+              severity: until it lands, NOTHING in this wave can be verified in the product.** Every
+              story after it writes UI, and the only instrument for checking UI is a binary that
+              does not currently exist in reproducible form. W6-S2's fix for BUG-4 is still
+              unverified outside jsdom for exactly this reason.
+
+              Same shape as BUG-4 and BUG-11's own cause: a seam between the Rust side and the
+              frontend that no component owns. `build-tooling` was added to the touches vocabulary
+              for this story, because the vocabulary had no word for it - which is a fair reflection
+              of the fact that nobody owned it.
+
+              **W1 already knew, and that is the part worth carrying into this story.** A W1 reviewer
+              diagnosed this exact failure - "vite build fails, therefore cargo tauri build fails,
+              therefore frontendDist is never produced; cargo tauri dev serves localhost with no
+              document" - and raised it as a must-fix. The command is therefore not unknown: it is
+              `cargo tauri build`. What never happened is making the CLI installable from the
+              repository and carrying the command anywhere a reader would look. The knowledge sat in
+              a closed wave's scratch output, which `_bmad-output/` is allowed to hold and which
+              nothing carries forward.
+
+              **And every UI claim this project has ever made was made against a DEV SERVER.** W1's
+              UI verification brief told its worker: "cargo tauri dev from apps/desktop, or build and
+              run target/debug/desktop.exe WITH THE VITE DEV SERVER UP." A bundled binary has never
+              been verified to work by anyone. That is why this story's third check is `manual::` and
+              why it is placed before the remaining UI stories rather than after them.
+            tests:
+              - ci::desktop_ci_builds_a_bundled_desktop_artifact
+              - ci::the_build_produces_exactly_one_desktop_executable_from_a_real_build
+              - manual::a_freshly_built_binary_loads_its_bundled_frontend_not_devurl
+            notes: |
+              The third check is `manual::` on purpose and it is the honest label. Proving that a
+              built binary loads its own frontend means launching it and looking, and this project
+              has no reliable way to do that from CI - see OQ-24, where three dispatched UI
+              verifications produced three different failures. Writing it as an automated test name
+              would claim an instrument that does not exist.
+      - id: EP-settings-surface
+        component: settings
+        title: A Settings screen that fits, and controls that can be answered
+        stories:
+          - id: W6-S3
+            title: Two columns packed by content height, four groups visible at 1024x720
+            component: settings
+            satisfies: [UC-26]
+            depends_on: [W6-S10]
+            touches: [editor-ui, settings-store]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              The owner asked for Settings to be dense - "padat-padat" - and specifically to avoid
+              a panel that has to be scrolled. On 2026-08-23 that was a report; on 2026-08-24 it is
+              a photograph. AUDIT-4's shot-4-settings.png, taken from the first properly built
+              binary, shows a vertical scrollbar down the right edge with the Hotkeys group cut off
+              at the window's bottom, while the General group above it is more than half empty.
+
+              That pairing is the whole story: the layout stretches groups to match their
+              neighbours instead of packing them by content height, so space is spent where there
+              is nothing to show and withheld where there is.
+
+              The third test is not layout. Agent access is a PRIMARY SURFACE reachable from the
+              rail (FR-28), not a group inside Settings, and a rebuild of this panel is exactly
+              when that boundary gets blurred by accident.
+            tests:
+              - vitest::all_four_settings_groups_are_visible_at_the_minimum_window_size
+              - vitest::no_group_is_stretched_to_match_a_neighbours_height
+              - vitest::agent_access_is_a_primary_surface_and_not_a_settings_group
+          - id: W6-S4
+            title: The Quality Budget as a named intent, with Auto deriving per capture
+            component: settings
+            satisfies: [UC-13]
+            depends_on: [W6-S3]
+            touches: [settings-store, image-encoding, local-db]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              DEC-004. Carries the migration adding quality_budget.named, and the three columns
+              NFR-18 needs on `finding`. SCN-03's one assertion is the only one a constant cannot pass.
+
+              **Four existing tests encode the OLD constant behaviour and will break here.** Found by
+              sweep on 2026-08-23:
+                crates/snapdown-core/src/domain/image.rs:92-93     assert 4K reduces to 1600x900
+                crates/snapdown-core/src/domain/setting.rs:171     assert the default is 1600
+                crates/snapdown-store/src/image/pipeline.rs:92     assert width == 1600
+                crates/snapdown-store/tests/test_image_reduction.rs:16  assert width == 1600
+
+              They are NOT broken tests today - each fails if the constant changes, which is what a
+              test should do. The trap is what happens when `Auto` removes the constant.
+
+              **Do not re-point them at whatever number Auto happens to produce.** That turns each one
+              into a tautology: assert-what-the-code-does, which passes forever and proves nothing.
+              Replace them with SCN-03's shape - that a small region and a full screen resolve
+              DIFFERENT pairs - and keep an assertion on the FIXED budgets (Sharp, Balanced, Small),
+              where a stated number is still a promise worth pinning.
+              This is the same failure this wave already caught once: W6-S1's contrast test asserted a
+              hardcoded copy of the token values and passed whatever tokens.css said.
+            tests:
+              - cargo::auto_resolves_a_different_pair_for_a_small_region_than_for_a_full_screen
+              - cargo::auto_resolves_a_higher_encoder_quality_when_no_downscale_applies
+              - cargo::every_stored_finding_carries_the_pair_that_was_applied_to_it
+              - cargo::the_named_state_and_its_resolved_pair_are_written_together
+              - cargo::an_advanced_value_outside_its_range_is_refused_and_does_not_enter_custom
+              - vitest::editing_an_advanced_value_moves_the_control_to_custom_visibly
+              - vitest::the_readout_names_the_budget_that_produced_the_latest_finding
+              - vitest::a_reviewer_who_never_opens_advanced_never_sees_a_raw_number
+          - id: W6-S5
+            title: Run at Windows startup — on by first-run default, and never assumed
+            component: settings
+            satisfies: [UC-16]
+            depends_on: [W6-S4]
+            touches: [settings-store]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              SCN-02's five runs. Needs the startup.registered key so that "nothing was ever
+              configured" and "the Reviewer turned it off" stop being indistinguishable.
+
+              **This story also carries BUG-12.** lib.rs:109-119 opens all five stores with
+              .expect(), so an unreadable or corrupt library.db panics inside the Tauri setup hook.
+              A Tauri release binary on Windows has no console: the Reviewer double-clicks
+              Snapdown.exe and NOTHING HAPPENS - no window, no tray, no message, no file named. The
+              product does not look broken, it looks absent.
+
+              SDD-settings.md's Failure Behaviour already specifies the right answer - "reported with
+              the file's path, and nothing is created over it" - and half of it is kept: the panic
+              does guarantee nothing is created over the corrupt store. The reporting half is simply
+              not implemented.
+
+              It belongs here rather than in a story of its own because this story already owns the
+              startup path and the honest-state question - SCN-02 is about a control that must not
+              claim a state it has not read, and BUG-12 is about a startup that must not fail
+              silently. Same surface, same principle.
+
+              DEC-003's Cost section predicted this class in writing and nobody went and looked. That
+              is the useful part: the prediction was recorded and never turned into a check.
+            tests:
+              - cargo::an_unreadable_library_db_is_reported_with_its_path_and_not_recreated
+              - cargo::a_corrupt_library_db_does_not_panic_the_setup_hook
+              - cargo::a_first_run_with_nothing_configured_registers_at_startup
+              - cargo::a_run_after_the_reviewer_disabled_it_does_not_re_register
+              - cargo::a_registration_removed_outside_snapdown_shows_off_and_is_not_restored
+              - vitest::the_startup_toggle_renders_unknown_until_the_os_has_answered
+              - vitest::the_startup_toggle_never_renders_a_definite_state_before_the_read_resolves
+          - id: W6-S6
+            title: Hotkey rows — chip states, honest conflicts, and readable badges
+            component: settings
+            satisfies: [UC-15]
+            depends_on: [W6-S5]
+            touches: [settings-store, capture-pipeline, editor-ui]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              Two things this story fixes are now photographed rather than argued, both in AUDIT-4's
+              shot-4-settings.png from the first properly built binary.
+
+              The Capture Region row reads `Disabled` and its box says `Click to record`. Nothing is
+              bound. **On a fresh profile the capture hotkey does nothing at all**, so the capture
+              path - the reason the product exists - is unreachable by keyboard until the Reviewer
+              discovers the Settings panel and records a combination. FR-1 and UC-15 assume a hotkey
+              is there to press.
+
+              The keystroke recorder the owner asked for does exist and does say what to do, so the
+              interaction is right and the default is missing.
+
+              The last test is not decoration. `Active` and `Disabled` are rendered as badges, and a
+              badge that carries only a colour is unreadable to anyone who cannot separate those two
+              colours - the same accessibility floor EXPERIENCE.md sets for Markers.
+            tests:
+              - vitest::a_listening_chip_stops_listening_when_focus_leaves_it
+              - vitest::a_snapdown_internal_conflict_is_worded_differently_from_an_os_conflict
+              - vitest::a_cleared_hotkey_reads_disabled_rather_than_empty
+              - vitest::a_startup_registration_failure_carries_a_badge_before_the_reviewer_acts
+              - vitest::the_active_and_disabled_badges_carry_a_word_not_only_a_colour
+      - id: EP-library-surfaces
+        component: finding
+        title: Findings and Bundles as real workspaces
+        stories:
+          - id: W6-S7
+            title: Findings — capture rail, canvas, note pane, and every state
+            component: finding
+            satisfies: [UC-3, UC-4, UC-5, UC-6]
+            depends_on: [W6-S2]
+            touches: [editor-ui, marker-canvas]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              The surface the owner saw as white-on-white. Also lands the keyboard path to every
+              Marker through the note pane, which is what makes the accessibility floor real.
+
+              **This story also carries BUG-5, which is critical.** The Editor never renders a
+              Finding's image at all: FindingsEditor.tsx shows metadata, a Note TextArea, and the
+              marker COUNT as text. MarkerLayer is exported and never mounted. So the screenshot the
+              Note describes is not on screen, Markers cannot be placed, and AD-1 — the product's
+              core invariant — has no user interface. BG-1 says a note is unambiguously attached to
+              the image it describes; the attachment lives in the database and is invisible.
+
+              W2-S5 is recorded `done` and built the components without wiring them in. This story
+              is where the composition finally happens, which is also why its test list gains the
+              first composition tests this product has.
+            tests:
+              - vitest::the_findings_detail_pane_renders_the_findings_image
+              - vitest::the_marker_canvas_is_mounted_over_that_image
+              - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
+              - vitest::the_orphan_report_is_reachable_from_the_findings_surface
+              - vitest::findings_renders_correctly_in_both_windows_themes
+              - vitest::the_empty_state_teaches_the_bound_capture_combination
+              - vitest::nothing_selected_is_visually_distinct_from_empty
+              - vitest::every_marker_is_reachable_and_movable_from_the_keyboard
+              - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
+              - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
+              - vitest::panels_take_the_height_available_rather_than_a_fixed_height
+          - id: W6-S8
+            title: Bundles — preview as the centre, and a read-only region not a disabled input
+            component: bundle
+            satisfies: [UC-10, UC-11]
+            depends_on: [W6-S6]
+            touches: [editor-ui, bundle-render]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            tests:
+              - vitest::bundles_renders_correctly_in_both_windows_themes
+              - vitest::the_preview_is_a_read_only_region_and_not_a_disabled_input
+              - vitest::the_empty_state_offers_no_button_that_only_navigates_away
+              - vitest::copy_markdown_announces_its_result
+              - vitest::an_item_whose_image_copy_is_missing_is_flagged_and_the_bundle_still_opens
+      - id: EP-defects
+        component: bundle
+        title: BUG-1 and the swallowed file errors
+        stories:
+          - id: W6-S9
+            title: A Bundle survives the deletion of a Finding it holds, and stops swallowing its failures
+            component: bundle
+            satisfies: []
+            depends_on: [W6-S11]
+            touches: [local-db, vault-fs, bundle-render]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              BUG-1. bundle_item.finding_id carries ON DELETE CASCADE and foreign_keys is ON, so
+              deleting a Finding silently removes the Bundle's record of that item while its Markdown
+              and image copy survive. FR-13's third consequence has been active since G2 and says the
+              opposite. Migration; rows already lost are not recoverable.
+
+              **This story also carries BUG-9**, found on 2026-08-23 by sweeping for `let _ =` after
+              the same habit produced W6-S10. bundle.rs swallows every filesystem and unpublish
+              Result on three paths, and one of them has a consequence the others do not:
+
+                :72-74  composition swallows the Markdown write AND the VaultBlobStore open, then
+                        commits the Bundle row anyway. FR-10 is all-or-nothing; AD-2 forbids
+                        committing a record before its files exist.
+                :116    delete_bundle swallows unpublish_bundle. The unpublish fails, the deletion
+                        proceeds, the local record is gone, and THE PUBLISHED COPY STAYS LIVE ON THE
+                        PUBLIC INTERNET with nothing pointing at it. The Reviewer believes they
+                        deleted it. BR-20 exists to say the opposite: an unpublish that fails leaves
+                        the Bundle marked published, so nobody is told something is private when it
+                        may not be.
+                :135,137 file deletion swallowed - orphaned image copies, unreported (FR-14, NFR-5).
+
+              Both defects are `bundle`, both are error-handling honesty, and a reviewer wants them
+              in one diff. Part 2 reaches `sharing` behaviour from a `bundle` command and is NOT
+              frozen work: the swallow is in bundle.rs, the fix is in bundle.rs, and DEC-005 says in
+              its own text that it does not forbid fixing what already shipped.
+            tests:
+              - cargo::composition_that_cannot_write_its_markdown_writes_no_bundle_row
+              - cargo::composition_that_cannot_open_the_vault_is_refused_not_silently_skipped
+              - cargo::deleting_a_published_bundle_whose_unpublish_fails_aborts_and_reports
+              - cargo::deleting_a_bundle_reports_an_image_copy_it_could_not_remove
+              - cargo::deleting_a_finding_leaves_its_bundle_item_in_place
+              - cargo::deleting_a_finding_leaves_the_bundle_markdown_byte_identical
+              - cargo::deleting_a_finding_leaves_the_bundles_own_image_copy_in_the_vault
+              - cargo::a_bundle_whose_source_finding_is_gone_still_copies_the_same_bytes
+              - cargo::deleting_a_bundle_still_cascades_to_its_items
+          - id: W6-S10
+            title: The Vault move reports a file it could not remove
+            component: settings
+            satisfies: []
+            depends_on: [W6-S9]
+            touches: [vault-fs, settings-store]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              vault_migration.rs swallows both fs::remove_file results (:141 success path, :180
+              rollback). A source file that will not delete leaves an unreported duplicate of an image
+              that may hold personal data, and the move still reports success.
+            tests:
+              - cargo::vault_move_reports_a_source_file_it_could_not_remove
+              - cargo::vault_move_reports_a_destination_copy_it_could_not_clean_up
+              - cargo::vault_move_failing_at_file_n_leaves_every_source_file_in_place

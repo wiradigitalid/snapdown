@@ -1,3 +1,744 @@
 # defects.yaml — SSOT for defects: ordinary bugs and hotfixes.
+#
+# A defect is code disagreeing with a requirement that was already `active`. Work that exists because
+# a requirement is NEW is planned work, not a defect, and it belongs in a wave — the distinction is
+# what keeps this file from becoming a second backlog.
 
-defects: []
+defects:
+  - id: BUG-1
+    title: Deleting a Finding silently deletes its rows from every Bundle that holds it
+    found: "2026-08-23"
+    found_by: wdi-component, G4 as-built pass over `bundle` at mode deep
+    component: bundle
+    severity: high
+    contradicts: [FR-13, AD-9]
+    evidence: |
+      crates/snapdown-store/src/sqlite/migrations.rs, migration v3:
+        FOREIGN KEY(finding_id) REFERENCES finding(id) ON DELETE CASCADE
+      crates/snapdown-store/src/sqlite/finding_store.rs:29:
+        conn.pragma_update(None, "foreign_keys", "ON")
+      FR-13, third consequence, has been `active` since G2:
+        "A Finding that belongs to a Bundle can still be deleted; the Bundle keeps its own
+         copy of the image and stays readable."
+    impact: |
+      The Bundle's stored Markdown survives, because `bundle.markdown` is a column and AD-9 holds.
+      Its item list loses a row. The delivered document and the record of the delivered document
+      disagree, and nothing reports it. A Reviewer who deletes tidy-up Findings after a handoff
+      corrupts the record of what they handed over.
+    why_undetected: |
+      finding_store.rs:362 asserts the cascade to `note` and `marker`, which is correct. Nothing
+      asserts the ABSENCE of a cascade to `bundle_item`. A test that a cascade does NOT fire is the
+      kind nobody writes unless a document says the cascade must not exist — which is what G4 at
+      `deep` produced.
+    fix: |
+      Drop ON DELETE CASCADE from bundle_item.finding_id. Probably drop the foreign key entirely:
+      a BundleItem refers to a Finding that MAY no longer exist, which is exactly what a foreign
+      key exists to forbid. Requires a migration; existing rows already lost are not recoverable.
+    scenario: .what/bundle/05-scenarios/SCN-05-a-finding-deleted-out-from-under-a-bundle.md
+    resolved: |
+      W6-S9, 2026-08-24. Migration v6 recreates bundle_item without the finding_id foreign key at
+      all - not merely without its cascade - and keeps the bundle_id cascade, because deleting a
+      Bundle does still delete its items (FR-14). A BundleItem legitimately refers to a Finding that
+      may no longer exist, which is the precise condition a foreign key exists to forbid.
+
+      Rows already lost are not reconstructed and the migration does not pretend otherwise.
+
+      Verified by the coordinator: cargo test --workspace exits 0, and both directions are covered by
+      tests that did not exist in this repository before -
+      deleting_a_finding_leaves_its_bundle_item_in_place is the first test here that asserts a cascade
+      does NOT fire, and deleting_a_bundle_still_cascades_to_its_items holds the other side.
+    status: resolved
+  - id: BUG-2
+    title: Three `sharing` screens are recorded as delivered and do not exist in the repository
+    found: "2026-08-23"
+    found_by: wdi-init intent readers, after derive_screen was rewritten to read real components
+    component: sharing
+    severity: medium
+    contradicts: [FR-24, UC-21, UC-22]
+    evidence: |
+      HANDOVER.md, W5 section, claims:
+        "Web reader SPA (PublishedBundleReader.tsx / Screen 14; PublicationNotFound.tsx / Screen 15)"
+        "Publish dialog (Screen 11) with BR-86 confirmation + publication badges + copy URL"
+      No such files exist anywhere in the repository. Every .tsx in the tree was enumerated:
+        web/ui/src/screens/ holds AgentAccessView.tsx and nothing else.
+      inventory-screen.md rows 11, 14 and 15 have no component behind them, and LC-027
+      `bundle-reader` is registered in components.yaml with nothing implementing it.
+    impact: |
+      What the web service actually returns for GET /b/{slug} is the stored Markdown inside a bare
+      <pre> block with no stylesheet and no rendered images (server.go:145). For the PRIMARY
+      audience — a coding agent fetching the URL — that is arguably sufficient: the text is the
+      payload and /b/{slug}/images/{filename} serves the images separately. What is missing is the
+      HUMAN reader those three rows promise. Publishing works; reading it as a person does not.
+    why_undetected: |
+      All three inventories sat at `derived_from: plan` because derive_screen read exactly one
+      component. Nothing ever compared the plan to the tree. The rows were written at G3 and
+      believed ever since.
+    fix: |
+      Two honest options, and this is a decision rather than a task. Either build the reader SPA and
+      the publish dialog, or withdraw rows 11, 14, 15 and LC-027 and state that the published
+      surface is machine-facing only. The second is cheaper and may be correct: Snapdown's reader is
+      a machine. It changes a promise, so it goes through wdi-product, not a patch.
+    blocked_by: DEC-005, which freezes `sharing`. Registered now, decided when that lifts.
+    status: open
+  - id: BUG-3
+    title: The web service interpolates published Markdown into HTML without escaping it
+    found: "2026-08-23"
+    found_by: wdi-init intent readers, while reading the routes for derive_api
+    component: sharing
+    severity: medium
+    contradicts: [NFR-15]
+    evidence: |
+      apps/web-service/internal/server/server.go:145
+        html := fmt.Sprintf(`<!DOCTYPE html>...<body><pre>%s</pre></body>...`, slug, b.Markdown)
+      b.Markdown is the Reviewer's own Note text, published verbatim. `%s` performs no escaping, so
+      a Note containing `</pre><script>` breaks out of the block and executes in the browser of
+      whoever opens the URL.
+    impact: |
+      The author and the publisher are the same person, so this is not an injection by a third
+      party. The exposure is to whoever the Reviewer hands the URL to, and a Note is free text that
+      may be pasted from a page being reviewed - which is exactly where a hostile string would come
+      from. It is a public, unauthenticated HTML endpoint.
+    why_undetected: |
+      The route tests assert the NFR-15 identical-404 and the response codes. Nothing asserts what
+      the HTML body does with hostile content, and the endpoint predates any document describing
+      what it renders - inventory-screen row 14 describes an SPA that does not exist.
+    fix: |
+      html/template, or html.EscapeString on b.Markdown before interpolation. Escaping the slug too:
+      it is a 160-bit CSPRNG value today and that is a property of the generator, not of this render.
+    blocked_by: DEC-005, which freezes `sharing`. Registered now, fixed when that lifts.
+    note: |
+      Found 2026-08-23 while checking CI coverage, and it makes this defect worse than first written:
+      NO WORKFLOW TOUCHED GO AT ALL. apps/web-service was never built, vetted, or tested by CI, so
+      this shipped into a container with nothing behind it and a regression would have been equally
+      invisible. A `web-service` job was added to desktop-ci.yml the same day - go build, go vet,
+      go test. That is regression protection, not a fix; the escaping is still open.
+      A frozen component is one nobody is watching, which makes CI on it MORE important, not less.
+    status: open
+  - id: BUG-4
+    title: The capture overlay is never mounted; pressing the capture hotkey shows the Settings shell
+    found: "2026-08-23"
+    found_by: narrow UI audit (static verification), confirmed by the coordinator against the source
+    component: finding
+    severity: critical
+    contradicts: [FR-1, FR-2, UC-1, UC-2, NFR-1, NFR-2]
+    evidence: |
+      apps/desktop/src-tauri/src/commands/capture.rs:103-106
+        WebviewWindowBuilder::new(..., WebviewUrl::App("index.html?overlay=true".into()), ...)
+      apps/desktop/src/main.tsx and apps/desktop/src/App.tsx
+        grep for window.location.search, URLSearchParams, or "overlay": NO MATCH.
+      apps/desktop has exactly ONE html entry point, index.html. vite.config.ts declares no
+      rollupOptions.input, so there is no second bundle to route to.
+      Therefore the overlay window mounts <App /> - the full Editor shell, opening on Settings -
+      instead of <CaptureOverlay />.
+    impact: |
+      THE CAPTURE PATH DOES NOT WORK. Pressing the capture hotkey opens an undecorated fullscreen
+      window showing Settings. There is no dim, no crosshair, no region drag, no note field, and no
+      Finding is ever created from the hotkey. FR-1 and FR-2 are unmet, UC-1 and UC-2 cannot be
+      performed, and NFR-1/NFR-2's timing budgets measure a path nobody can reach.
+      This is the single most-executed action in the product and the reason the product exists.
+    why_undetected: |
+      CaptureOverlay.tsx has passing unit tests - capture_overlay_draws_selection_and_dimensions and
+      friends. The COMPONENT is correct and tested in isolation; it is simply never mounted. Nothing
+      tests the wiring between the Rust window builder's URL and the frontend's routing, because
+      that seam has no owner in any document: inventory-screen row 1 names the screen, and no
+      contract describes how the overlay window selects what to render.
+      The W2 UI verification that would have caught it is recorded in
+      _bmad-output/specs/w1-settings/ui-verify-W1-S1/ for W1 only. No wave ever drove the capture
+      hotkey end to end.
+    fix: |
+      Route on the query parameter in main.tsx: read window.location.search and mount
+      <CaptureOverlay /> when overlay=true, <App /> otherwise. Then add a test that asserts the
+      mount decision from the URL, and an end-to-end check that the hotkey produces a Finding.
+      The deeper fix is the missing seam contract - .how/finding/02-contracts/ describes the Tauri
+      command surface and says nothing about how a window chooses its root component.
+    resolved: |
+      W6-S2, 2026-08-23. main.tsx now routes on the query parameter:
+
+        const isOverlay = new URLSearchParams(window.location.search).get('overlay') === 'true';
+        return isOverlay ? <CaptureOverlay /> : <App />;
+
+      mount.test.tsx proves the mount decision, and the never-mounted sweep is clean - CaptureOverlay
+      is reachable from main.tsx, which it was not for four waves.
+
+      NOT PROVEN IN A RUNNING PRODUCT, and the attempt to prove it failed. AUDIT-4 ran the first
+      properly built binary on 2026-08-24 and reported this fixed. Its evidence does not support
+      that: shot-4-overlay.png is a blank white 3840x2160 image with nothing drawn in it, and
+      shot-4-note.png is a byte-identical copy of it. No region was ever dragged and no Finding was
+      created. Whether the overlay fails to paint its scrim or the capture tool cannot photograph a
+      transparent fullscreen window is still unknown.
+
+      The deeper fix named below is still outstanding: .how/finding/02-contracts/ still says nothing
+      about how a window chooses its root component, so the seam that produced this defect still has
+      no owner.
+    status: resolved-pending-product-verification
+  - id: BUG-5
+    title: The Editor never renders a Finding's image, and Markers cannot be placed at all
+    found: "2026-08-23"
+    found_by: narrow UI audit (static verification), confirmed by the coordinator against the source
+    component: finding
+    severity: critical
+    contradicts: [FR-6, FR-8, UC-4, UC-5, AD-1, BG-1]
+    evidence: |
+      grep for MarkerLayer across apps/desktop/src and web/ui/src, excluding its own file and tests:
+        web/ui/src/index.ts:9  export * from './components/MarkerLayer';
+      That is the ONLY hit. It is exported and never mounted.
+      apps/desktop/src/components/FindingsView.tsx renders <FindingsEditor /> from @snapdown/ui and
+      contains no img, no convertFileSrc, no marker anything.
+      web/ui/src/components/FindingsEditor.tsx renders metadata and a Note TextArea. Its only
+      reference to markers is line 137, which prints `{f.markers.length} markers` as TEXT.
+    impact: |
+      THE EDITOR NEVER SHOWS THE SCREENSHOT. A Finding's detail pane is metadata and a text box; the
+      image the Note describes is not on screen. Markers cannot be placed, moved, or deleted, because
+      there is no canvas to place them on.
+      FR-6 (see every Finding with its Note) is met only in the degenerate sense that the Note is
+      visible. FR-8 and UC-5 are entirely unmet. AD-1 - Markers and Note lines are one sequence - is
+      the product's core invariant and has NO user interface.
+      BG-1 is "a note is unambiguously attached to the image it describes". The attachment exists in
+      the database and is invisible to the Reviewer.
+    why_undetected: |
+      Identical in shape to BUG-4, and found in the same pass. MarkerLayer.tsx and MarkerBadge.tsx
+      have their own passing unit tests - marker_layer.test.tsx is green. The COMPONENTS are correct
+      and neither is mounted. W2-S5 "Numbered Marker placement, drag reposition, comment annotation
+      and delete" is recorded `status: done`, and it built the components without wiring them in.
+      Nothing tested the composition, only the parts.
+    fix: |
+      Render the Finding's image in the detail pane (Tauri convertFileSrc over the Vault path) and
+      mount MarkerLayer over it, per .how/finding/01-ux/DESIGN.md. Then a test that asserts the image
+      element and the marker canvas are PRESENT in the mounted Findings surface - a composition test,
+      which is the class of test this product has none of.
+    related: BUG-4
+    resolved: |
+      W6-S7, 2026-08-23. FindingsView converts the Vault path with convertFileSrc and passes it as
+      imageSrc; FindingsEditor renders the screenshot and mounts MarkerLayer over it. Verified by the
+      coordinator: the never-mounted sweep is now clean for all six components, and four composition
+      tests assert presence in the MOUNTED surface rather than in isolation.
+      Still unproven in a RUNNING application - see BUG-11. jsdom does not fetch images, so the test
+      passes on a mocked convertFileSrc either way.
+    status: resolved-pending-product-verification
+  - id: BUG-6
+    title: The orphan report is built, tested, and unreachable — no screen ever mounts it
+    found: "2026-08-23"
+    found_by: systematic never-mounted sweep after BUG-4 and BUG-5
+    component: finding
+    severity: high
+    contradicts: [FR-15, UC-8]
+    evidence: |
+      apps/desktop/src/components/OrphanReportView.tsx exists and orphan_report.test.tsx is green.
+      grep for `<OrphanReportView` across apps/desktop/src and web/ui/src, excluding its own file
+      and tests: NO MATCH.
+      App.tsx line 23: type NavigationTab = 'findings' | 'bundles' | 'agent-access' | 'settings'.
+      There is no orphans route, tab, or entry point of any kind. grep for "orphan" in App.tsx
+      returns nothing.
+    impact: |
+      FR-15 promises the Reviewer can find out what has gone missing or been left behind, and UC-8 is
+      how they do it. The Tauri commands scan_orphans and clean_orphans are registered and work; the
+      screen that calls them cannot be opened. NFR-5's invariant - the Vault holds no file the Library
+      does not point at - names the orphan report of FR-15 as one of its two enforcement mechanisms,
+      so half of that enforcement is unreachable.
+      Lower severity than BUG-4 and BUG-5 because this is a maintenance tool rather than the core
+      loop. A Reviewer who never opens it loses nothing until something has already gone wrong.
+    why_undetected: |
+      The third instance of one pattern in one sweep. See the SYSTEMIC note below.
+      RESOLVED by W6-S7 on 2026-08-23 - see the resolved: field above.
+    fix: |
+      Give it an entry point. .how/finding/01-ux/DESIGN.md places it as LC-030 with a route of
+      /findings/orphans, and .how/finding/01-ux/DESIGN.md's Findings surface offers it from the
+      image-missing state. Both are in W6-S7's scope.
+    related: [BUG-4, BUG-5]
+    resolved: |
+      W6-S7, 2026-08-23. OrphanReportView is mounted behind a viewMode on FindingsView and reachable
+      from the image-missing state. FR-15 and UC-8 are reachable again.
+    status: resolved
+
+# SYSTEMIC — the shape shared by BUG-4, BUG-5 and BUG-6, written 2026-08-23
+#
+# A sweep for `<Component` across the whole tree, excluding each component's own file and its tests,
+# found FOUR components that are never mounted anywhere:
+#
+#   CaptureOverlay     BUG-4, critical  — the capture path
+#   MarkerLayer        BUG-5, critical  — marker annotation
+#   OrphanReportView   BUG-6, high      — the orphan report
+#   EmptyState                          — a base element; W6-S1 and W6-S7/S8 mount it
+#
+# Every one of them has passing unit tests. Every one of them is CORRECT in isolation. None is
+# assembled into anything a Reviewer can reach.
+#
+# THE FINDING IS NOT THE THREE BUGS. It is that this repository has no composition test of any kind.
+# Every suite proves a part; nothing asks whether the parts were wired together. Five waves closed
+# green on that basis, and three requirements - FR-1/FR-2, FR-8, FR-15 - are unmet in a build whose
+# tests all pass.
+#
+# The wave-close checklist cannot catch it either: V12 checks that an LC is REGISTERED, not that it
+# is REACHED. A screen with an LC, a component, a passing test and no mount point satisfies every
+# mechanical check this method has.
+#
+# W6-S2 and W6-S7 carry the three fixes. The missing test CLASS is the thing to fix beyond them, and
+# it is filed as OQ-23 rather than bolted onto a story that has enough to do.
+  - id: BUG-7
+    title: Twelve screenshots of the running product have been committed to this public repository since W1
+    found: "2026-08-23"
+    found_by: the new korpus.yml forbidden-content guard, on its first local run
+    component: _repo
+    severity: high
+    contradicts: ["product brief § Constraints"]
+    evidence: |
+      git ls-files -- '*.png' '*.jpg' '*.jpeg' '*.webp', excluding apps/desktop/src-tauri/icons/,
+      returns 12 files. Eleven are in _bmad-output/specs/w1-settings/ui-verify-W1-S1/ and were
+      committed in 7abde7b, "docs(w1-s1): UI verification finished". That commit is ON origin/main.
+      The brief has said since G1: "This repository is public. Forbids committing a captured
+      screenshot, a token, a client's name, or any test fixture derived from real capture output."
+    impact: |
+      They are screenshots of the product running on the operator's machine. claim6_vault_path_typed
+      and claim4_window_rendered_live show the Settings surface, which displays the Vault path - an
+      absolute path under a real home directory. Whatever else was on screen is in them too.
+      ALREADY PUBLIC. Unlike the accessibility-tree dumps caught earlier the same day, these are not
+      on an unpushed branch: they are on main and have been fetchable for as long as main has been.
+      Removing them now stops it getting worse and does NOT un-publish them.
+    why_undetected: |
+      Nothing enforced the constraint. korpus.yml validated the corpus and desktop-ci.yml built the
+      code; no workflow ever refused a path. The constraint was written at G1 and read by nobody
+      since. The guard that finds it was added on 2026-08-23 and found it on its first run.
+    fix: |
+      Two parts, and only the first is the agent's.
+      1. Remove them from the working tree, which this defect does, and let the new guard prevent
+         recurrence. DONE.
+         A related cleanup, done 2026-08-23 and worth recording because it is easy to miss: the
+         accessibility-tree dumps scrubbed from the wave branch earlier the same day were still
+         reachable AFTER the scrub, from `refs/original/refs/heads/wave/w6-gates-rerun` - the backup
+         ref `git filter-branch` writes and leaves behind. A scrub that stops at rewriting the branch
+         has not finished. The ref was deleted, the reflog expired and `git gc --prune=now` run, and
+         the leaked blobs are now unreachable from every ref. That cleanup does NOT apply to these
+         twelve screenshots: they are on `main` and published, which is a different problem.
+      2. Whether to rewrite main's history - and whether anything visible in them warrants any other
+         action - is the REPO OWNER'S CALL. Rewriting published history on a public repository
+         affects every clone and fork, and an agent must not do it unilaterally. Recorded here so the
+         decision is made rather than inherited.
+    status: open
+  - id: BUG-8
+    title: "The web-ui container is registered built:true and does not exist; a library shares its name"
+    found: "2026-08-23"
+    found_by: coordinator, checking the container registry against the tree after BUG-2
+    component: sharing
+    severity: medium
+    contradicts: ["C4 L2", "components.yaml containers", "structure-codebase.md"]
+    evidence: |
+      components.yaml registers:
+        - id: web-ui
+          title: Published Bundle Reader
+          technology: React + Vite single-page application, served as static assets by web-api
+          built: true
+          runs: The browser of whoever opens a Publication URL
+      c4-l2-containers.md:33 draws it, :53 argues explicitly that it IS a container rather than
+      "static assets" because it runs in the reader's browser as its own process, and :69 gives it an
+      HTTPS arrow to web-api.
+      NONE OF IT EXISTS.
+        web/ui/ has no index.html and no src/main.tsx. It is @snapdown/ui - a component LIBRARY
+        consumed by the desktop webview, with no entry point and nothing to deploy.
+        apps/web-service serves no static assets: grep for FileServer, StaticFS, embed, http.Dir and
+        ServeFile in server.go and main.go returns nothing. It builds an HTML <pre> block inline.
+    impact: |
+      Three artifacts describe a deployable container that was never built, while pointing at a
+      directory that is a different kind of thing entirely:
+        - components.yaml claims a fourth built container
+        - the C4 L2 draws it, and argues at length for why it is a container
+        - structure-codebase.md has a `### web-ui` heading, which V25 REQUIRES of a built: true
+          container - and the heading describes web/ui/ the library, satisfying the validator with
+          the wrong artifact
+      V25 therefore passes on a container that does not exist. That is the part worth noticing: the
+      validator is not wrong, it is answering "does this heading exist" and cannot ask "does this
+      heading describe the thing it is named after".
+    why_undetected: |
+      Same family as BUG-2 and found by pulling on it. The name collision is what hid it: `web-ui`
+      the container and `web/ui` the package read as the same thing in every document, and one of
+      them is real.
+    fix: |
+      A DECISION, not a task, and the same decision as OQ-22. If the reader SPA is built, the
+      registration becomes true and web/ui needs a name that is not web-ui. If the promise is
+      withdrawn, then `web-ui` leaves `containers`, leaves the C4 L2, loses its structure-map heading,
+      and LC-027 is retired - and `web/ui` keeps its name because nothing else wants it.
+      Withdrawing is the cheaper answer and may be the correct one: Snapdown's reader is a machine.
+      Either way it goes through wdi-blueprint intent `platform`, which owns `containers` and the C4.
+    related: [BUG-2, OQ-22]
+    blocked_by: DEC-005, which freezes `sharing`.
+    status: open
+  - id: BUG-9
+    title: "Bundle composition and deletion swallow every filesystem and unpublish Result"
+    found: "2026-08-23"
+    found_by: coordinator, sweeping for `let _ =` after the same pattern produced W6-S10
+    component: bundle
+    severity: high
+    contradicts: [AD-2, FR-10, FR-14, BR-20, BR-23, NFR-5]
+    evidence: |
+      apps/desktop/src-tauri/src/commands/bundle.rs
+        :72-74  if let Ok(vault_store) = VaultBlobStore::new(&vault_path) {
+                    let _ = vault_store.write_blob(&md_filename, markdown_content.as_bytes());
+                }
+                ... then the Bundle row is built and stored unconditionally.
+        :116        let _ = unpublish_bundle(id.clone(), state.clone());
+        :135        let _ = vault_store.delete_blob(&detail.bundle.markdown_path);
+        :137            let _ = vault_store.delete_blob(&item.image_path);
+      Note :72 also swallows the VaultBlobStore::new failure: if the store cannot be opened the `if
+      let Ok` simply does not run, and composition continues as though the file had been written.
+    impact: |
+      THREE DISTINCT FAILURES, and they are not equally bad.
+
+      1. COMPOSITION (:72-74). FR-10 is all-or-nothing and AD-2 says a record MUST NOT be committed
+         before its files exist. If the Markdown write fails - or the Vault cannot be opened at all -
+         the Bundle row is created anyway with markdown_path naming a file that does not exist. The
+         Reviewer is told the Bundle was composed. bundle.markdown still holds the bytes, so Copy
+         Markdown works and only the file on disk is missing, which is precisely the kind of partial
+         state AD-2 exists to forbid.
+
+      2. UNPUBLISH ON DELETE (:116). THIS IS THE SERIOUS ONE. BR-23 makes the unpublish part of the
+         same action; BR-20 says an unpublish that fails leaves the Bundle marked published, so the
+         Reviewer is NEVER told something is private when it may not be. Swallowing the Result does
+         the opposite: the unpublish fails, the deletion proceeds, the local record is gone, and the
+         published copy STAYS LIVE ON THE PUBLIC INTERNET with nothing left pointing at it. The
+         Reviewer believes they deleted it. AD-6 and the brief's personal-data constraint are what
+         this reaches.
+
+      3. FILE DELETION (:135, :137). FR-14 promises the image copies go with the Bundle and NFR-5
+         says the Vault holds no file the Library does not point at. A swallowed delete leaves
+         orphaned files, unreported. Same shape as W6-S10's vault-move swallow, and milder: the
+         orphan report (FR-15) can find these - once BUG-6 makes it reachable.
+    why_undetected: |
+      `let _ =` is invisible to clippy at default levels and reads as deliberate. No test exercises a
+      failing filesystem or a failing unpublish, because every store test uses a writable temp dir
+      and a live path. This is the third instance today of one habit - vault_migration.rs:141 and
+      :180 were the first two - which is why it is registered as its own defect rather than folded
+      into W6-S10.
+    fix: |
+      Composition: propagate the write failure and roll back, so FR-10's all-or-nothing is real.
+      Do not swallow VaultBlobStore::new either.
+      Unpublish: on failure, ABORT THE DELETE and report it. BR-20 already dictates the behaviour -
+      leave it marked published. Never delete a local record whose remote copy may still be live.
+      File deletion: report what could not be removed, as W6-S10 does for the Vault move.
+    note: |
+      Part 2 is `sharing` behaviour reached from a `bundle` command, and DEC-005 freezes `sharing`.
+      It is NOT frozen work: the swallow is in bundle.rs, the fix is in bundle.rs, and DEC-005 says
+      in its own text that it does not forbid fixing a defect in what already shipped.
+    resolved: |
+      W6-S9, 2026-08-24. delete_bundle now aborts and reports when unpublish fails, instead of
+      deleting the local record while the published copy stays live on the public internet with
+      nothing pointing at it. BR-20 was written to forbid exactly that, and the fix follows from the
+      rule rather than from taste. The swallows on the composition path and the file-deletion path
+      are gone too, including the second one hiding inside the first - the if let Ok(...) on
+      VaultBlobStore::new that simply did not run.
+
+      Proving it took three attempts, and the obstacle is worth keeping: the first two produced a
+      test binary that could not start at all - STATUS_ENTRYPOINT_NOT_FOUND - because it built a
+      tauri::test::mock_app. The resolution was to extract the logic of create_bundle, delete_bundle,
+      copy_bundle_to_clipboard, unpublish_bundle and delete_finding into plain _impl functions taking
+      &AppState, leaving each #[tauri::command] as a one-line shim. AppState is a plain struct, so
+      the tests build it directly and Tauri is not involved.
+
+      One attempt had put tauri's `test` feature on the PRODUCTION dependency in the workspace
+      Cargo.toml, which would have shipped the test harness inside the release binary. It is out.
+
+      Verified by the coordinator, exit codes read directly: cargo test --workspace 0, cargo fmt 0,
+      cargo clippy --all-targets -D warnings 0. The test that matters now runs and passes:
+      deleting_a_published_bundle_whose_unpublish_fails_aborts_and_reports.
+    status: resolved
+  - id: BUG-10
+    title: "The MCP bridge can hand an agent an error with an empty message"
+    found: "2026-08-23"
+    found_by: coordinator, extending the `let _ =` sweep into snapdown-bridge
+    component: agent-access
+    severity: low
+    contradicts: [AD-7, BR-17]
+    evidence: |
+      crates/snapdown-bridge/src/client.rs:155-163
+        fn parse_error_response(_code: u16, resp: ureq::Response) -> String {
+            let mut body = String::new();
+            let _ = resp.into_reader().read_to_string(&mut body);
+            if let Ok(env) = serde_json::from_str::<ApiErrorEnvelope>(&body) { ... } else { body }
+        }
+      If the body read fails, `body` stays "", the envelope parse fails, and the function returns the
+      empty string as the error message. The caller wraps it in Err() and the MCP tool surfaces an
+      error with nothing in it.
+    impact: |
+      AD-7 exists so one error envelope crosses every process boundary, and BR-17 says a refusal is
+      always distinguishable from an empty result. An error whose message is the empty string is a
+      refusal that says nothing - the agent learns only that something failed.
+      LOW, and honestly so: this is the error path of a call that has ALREADY failed, so it needs a
+      second failure to reach. The likely readings are a dropped connection mid-error-body or a
+      non-UTF-8 body. Neither is common and neither loses data.
+    why_undetected: |
+      Same habit as BUG-9 and W6-S10 - `let _ =` on a Result an invariant depends on - which is now a
+      pitfall in AGENTS.md. Found by extending that sweep into a component nobody was looking at.
+      No test exercises a failing body read; every bridge test uses a live loopback response.
+    fix: |
+      On a failed read, return a message that says so - the status code plus "the error body could not
+      be read" - rather than "". Never return an empty error string.
+    note: |
+      Also swept and NOT registered: main.rs:21-22 swallows the stdout write and flush in the stdio
+      loop. That is defensible - there is nothing useful to do about a failure on the very channel you
+      would report it over - and it is recorded here so the next sweep does not re-raise it.
+    blocked_by: DEC-005, which freezes `agent-access`.
+    status: open
+  - id: BUG-11
+    title: "There is no reproducible way to build the desktop application"
+    found: "2026-08-23"
+    found_by: coordinator, after a hand-built binary launched into a webview network error
+    component: settings
+    severity: high
+    contradicts: [FR-27, BR-121, "codebase-stack-guide.md"]
+    evidence: |
+      The Tauri CLI is absent everywhere:
+        `cargo tauri --version`            -> error: no such command: `tauri`
+        `npx --no-install tauri --version` -> could not determine executable to run
+        apps/desktop/package.json devDependencies -> no tauri package at all
+        apps/desktop/package.json scripts -> dev, build, preview, typecheck, lint, test. No tauri.
+        Cargo.toml has tauri, tauri-build and three plugins - the LIBRARIES - and no tauri-cli.
+      The CORPUS documents no build command: codebase-stack-guide.md, README.md and the workflows
+      contain no `tauri build`, `tauri dev`, `cargo tauri` or `npm run tauri`.
+      desktop-ci.yml produces no artifact: no bundle step, no upload, no release.
+
+      CORRECTED 2026-08-23, after this entry was first written. The command is NOT unknown - it is
+      `cargo tauri build`, and W1 knew it. It is written down in W1's WORKING OUTPUT and nowhere a
+      reader would look:
+        _bmad-output/specs/w1-settings/review-W1-S1-reviewer-a.md:46
+          "vite build fails, therefore cargo tauri build fails, therefore frontendDist is never
+           produced. cargo tauri dev serves http://localhost:5173 with no document."
+        _bmad-output/specs/w1-settings/dispatch-briefs/W1-S1-ui-verification-finish.md:65
+          "HOW TO RUN IT: cargo tauri dev from apps/desktop, or build and run target/debug/
+           desktop.exe WITH THE VITE DEV SERVER UP."
+      So the defect is sharper than "nobody documented it". A W1 reviewer diagnosed this exact
+      failure mode - frontendDist never produced, the webview falling back to localhost - raised it
+      as a must-fix, and the CLI it depends on was still never made a dependency of the repository.
+      The knowledge lived in a wave's scratch output, which `_bmad-output/` is explicitly allowed to
+      hold and which nothing carries forward.
+    impact: |
+      `cargo build --release -p snapdown` compiles and links, and the binary it produces is NOT the
+      application. Launched, its webview requests the `devUrl` from tauri.conf.json
+      (http://localhost:5173), nothing is serving it, and the window shows
+      "localhost refused to connect - ERR_CONNECTION_REFUSED". Verified by screenshot on 2026-08-23.
+      The bundled `frontendDist` is only wired in by the Tauri CLI, which is not here.
+      So: the shipped Snapdown.exe was built by some means nobody wrote down, nobody can reproduce
+      it, and CI has never built the product it is testing the parts of.
+      BR-121 says a build produces exactly one desktop executable. It is asserted by a unit test that
+      reads Cargo.toml and tauri.conf.json - which is the right proxy for the DECLARATION and proves
+      nothing about a build, because there is no build to run.
+    why_undetected: |
+      Everything around it is green and none of it builds the app. cargo test compiles the crates,
+      npm run build bundles the frontend, and the two are never joined. The gap is exactly the seam
+      between them - the same shape as BUG-4, which was the seam between the Rust window builder's
+      URL and the frontend's routing. Seams have no owner here.
+      It surfaced only because a UI verification was attempted against a SELF-BUILT BINARY. That
+      appears to be the first time in this project: W1's UI verification brief told its worker to run
+      `cargo tauri dev` with the Vite dev server up, so every UI claim this project has ever made was
+      made against a DEV SERVER, never against a bundled application. A bundled binary has never been
+      verified to work by anyone.
+    fix: |
+      Add the Tauri CLI so the repository can install it - `@tauri-apps/cli` as a devDependency of
+      apps/desktop with a `tauri` script, or `cargo install tauri-cli` pinned and documented. Carry
+      `cargo tauri build` into codebase-stack-guide.md next to the verification commands, where a
+      reader will actually find it rather than in a closed wave's scratch folder. Then have desktop-ci.yml actually build the bundle, which is what makes
+      BR-121 checkable against a real build rather than a declaration.
+      Until then, treat any locally built Snapdown.exe as NOT the application.
+    note: |
+      One thing WAS verified from that broken build and it is worth keeping: the window title read
+      "Snapdown Editor". W6-S2's persona naming (DEC-003, FR-27) is correct in a real running window,
+      which is the first time anything about the product has been confirmed outside jsdom.
+    resolved: |
+      W6-S11, 2026-08-23. @tauri-apps/cli@^2.0.0 is a devDependency of apps/desktop with a `tauri`
+      script, pinned to the same major as the tauri = "2.0" crates. The build command now sits in
+      codebase-stack-guide.md beside the verification commands - the place it was missing from, not
+      a wave folder that later closes. desktop-ci.yml builds the bundle on windows-latest and asserts
+      exactly one .exe in target/release, so BR-121 is finally checked against a real build.
+
+      Verified by the coordinator on the worktree, exit codes read directly rather than through a
+      pipe: `tauri build --no-bundle` exits 0, produces exactly one executable (Snapdown.exe,
+      13.3 MB), and the freshly built frontend bundle name (index-BBTULvhi.js) is present INSIDE the
+      binary. The assets are embedded, which is precisely what was not happening before. CI is green
+      on the head SHA.
+
+      What that does NOT prove: that the window renders. The embedded-asset check is a headless proxy
+      for the cause; it is not the manual check. `manual::a_freshly_built_binary_loads_its_bundled_frontend_not_devurl`
+      remains unrun, and BUG-4, BUG-5 and BUG-12 stay unproven in a running product until it is.
+      What changed is that running it is now possible for the first time.
+    status: resolved-pending-product-verification
+  - id: BUG-12
+    title: "A corrupt or unreadable library.db makes the application vanish on launch"
+    found: "2026-08-23"
+    found_by: coordinator, sweeping the panic surface that DEC-003's Cost section predicted
+    component: settings
+    severity: high
+    contradicts: [BR-118, AD-11, "SDD-settings.md Failure Behaviour"]
+    evidence: |
+      apps/desktop/src-tauri/src/lib.rs:109-119 - five store opens, every one .expect():
+        SqliteSettingsStore::open(&db_path).expect("Failed to initialize SqliteSettingsStore")
+        SqliteFindingStore::open(&db_path).expect("Failed to initialize SqliteFindingStore")
+        SqliteBundleStore::open(&db_path).expect("Failed to initialize SqliteBundleStore")
+        SqliteAccessKeyStore::open(&db_path).expect("Failed to initialize SqliteAccessKeyStore")
+        SqlitePublicationStore::open(&db_path).expect("Failed to initialize SqlitePublicationStore")
+      SDD-settings.md Failure Behaviour, the LC-025 -> library.db row, promises the opposite:
+        "Reported with the file's path, and NOTHING IS CREATED OVER IT (BR-118). A store recreated
+         beside a corrupt one is silent data loss."
+    impact: |
+      Half the promise is kept and half is not. Nothing IS created over the corrupt store - the panic
+      guarantees that much. But nothing is REPORTED either.
+      A Tauri release binary on Windows has no console. A panic inside the setup hook unwinds and the
+      process exits, so the Reviewer double-clicks Snapdown.exe and NOTHING HAPPENS - no window, no
+      tray icon, no message, no file named. The product does not appear to be broken; it appears not
+      to be there.
+      AD-11 sharpens it: one process owns the tray, the hotkeys, the overlay and the Editor. There is
+      no surviving surface to report into, which is exactly the cost DEC-003 accepted and wrote down.
+    why_undetected: |
+      DEC-003's Cost section PREDICTED this class in writing - "a panic in the editor's Tauri commands
+      kills the tray, the hotkeys, and the overlay with it ... this raises the bar on every unwrap in
+      the command layer" - and nobody then went and looked at the unwraps. The prediction was recorded
+      and never turned into a check.
+      No test opens a corrupt database. Every store test uses open_in_memory().
+    fix: |
+      Do not panic. Open the stores fallibly, and on failure show a window - or a native dialog -
+      naming the file that could not be opened and offering to open its folder. That is what the SDD
+      already specifies; the code simply does not do it.
+      The store must still never be recreated beside a corrupt one. BR-118 is not in question.
+    note: |
+      Also swept and deliberately NOT registered, so the next sweep does not re-raise them:
+        server/handlers.rs - 26 unwraps, ALL Header::from_bytes over compile-time byte constants
+          such as b"Content-Type" / b"application/json". These cannot fail.
+        lib.rs:226 - .expect("error while running tauri application") on the Tauri run call. If that
+          fails there is nothing left to report with.
+        bridge mcp.rs:55,81 - serde_json::to_string on a well-formed response struct. Effectively
+          infallible, and the bridge has no channel to report a serialisation failure over anyway.
+    status: open
+
+  - id: BUG-13
+    title: "The new CI guard counts every .exe, but FR-27 promises one DESKTOP executable"
+    found: "2026-08-23"
+    found_by: coordinator, rebuilding the app in the main checkout the same day W6-S11 landed
+    component: settings
+    severity: medium
+    contradicts: [FR-27, BR-121]
+    evidence: |
+      .github/workflows/desktop-ci.yml, the "Verify desktop executable" step added by W6-S11:
+
+        $exeCount = (Get-ChildItem -Path "target/release/*.exe").Count
+        if ($exeCount -ne 1) { Write-Error "...found $exeCount"; exit 1 }
+
+      It counts EVERY executable in target/release. This workspace legitimately produces a second
+      one: `snapdown-bridge.exe`, from crates/snapdown-bridge, the MCP executable named in AGENTS.md
+      and in the C4 set. It is not a desktop executable and FR-27 does not forbid it.
+
+      FR-27's consequence, verbatim:
+        "The build produces exactly one desktop executable. A second one left in the output directory
+         is a build failure, not clutter - a stale `desktop.exe` beside the correct `Snapdown.exe` is
+         precisely what caused the Reviewer to run the wrong binary."
+
+      The promise is about a second DESKTOP executable - the stale-rename case. The guard as written
+      also fails on a legitimate workspace binary.
+
+      Reproduced locally: target/release held snapdown-bridge.exe from an earlier `cargo build
+      --workspace`, so the guard would have counted 2 and failed a correct build.
+    impact: |
+      Not a false green - a false RED, which is the kind that gets a guard deleted rather than fixed.
+      The first person to run `cargo build --workspace` and `tauri build` against one target
+      directory gets a build failure with a message that names no real problem.
+    why_undetected: |
+      It passes in CI by accident of job layout, not by being right. `web-check` runs `tauri build`
+      and never builds the bridge; `rust-check` builds the workspace in a separate job with its own
+      target directory. Nothing shares a target directory today, so the two never meet. A cache
+      change or a job merge would surface it, and the guard would look wrong rather than the layout.
+    fix: |
+      Count only the desktop executable's own name against the product name, or exclude the known
+      workspace binaries by name rather than counting the directory. The check should answer "is
+      there a second executable claiming to BE the desktop app" - which is the stale-rename case
+      FR-27 describes - not "how many executables exist".
+    note: |
+      Found by rebuilding rather than by reading. The first build of W6-S11 ran in a fresh worktree
+      where the bridge had never been built, so the guard's blind spot could not show itself there.
+    related: BUG-11
+    resolved: |
+      2026-08-24, by the coordinator. The guard no longer counts the directory. It names the two
+      binaries this workspace legitimately produces - Snapdown.exe and snapdown-bridge.exe - and
+      fails on anything else, which is the question FR-27 actually asks: is there a second
+      executable claiming to BE the desktop app.
+
+      Verified by mutation, both directions, on a real build:
+        Snapdown.exe + snapdown-bridge.exe present  -> PASS (the old guard counted 2 and failed)
+        a stale desktop.exe planted beside them     -> FAIL, naming desktop.exe
+
+      The second case is the exact scenario FR-27 was written for - a stale desktop.exe beside the
+      correct Snapdown.exe is what made the Reviewer run the wrong binary and report four defects
+      that did not exist.
+
+      A new workspace binary now requires adding its name to the list in that step, which is the
+      right friction: a second executable appearing unannounced is what the guard is for.
+    status: resolved
+
+  - id: BUG-14
+    title: "Snapdown does not take screenshots. The capture path writes a 17-byte placeholder."
+    found: "2026-08-24"
+    found_by: coordinator, closing wave W6 — inventory.py flagged a missing Capture note field, and reading the capture path to check it exposed this
+    component: finding
+    severity: critical
+    contradicts: [BG-1, FR-1, FR-2, FR-5, FR-6, FR-8, UC-1, UC-2, AD-2, NFR-18]
+    evidence: |
+      apps/desktop/src-tauri/src/commands/capture.rs:197 — the whole of what is written to the Vault:
+
+        fn generate_placeholder_image(width: u32, height: u32, encoder_quality: u8) -> Vec<u8> {
+            let mut bytes = Vec::new();
+            bytes.extend_from_slice(b"\x89PNG\r\n\x1a\n");   // 8-byte signature
+            bytes.extend_from_slice(&width.to_be_bytes());   // 4
+            bytes.extend_from_slice(&height.to_be_bytes());  // 4
+            bytes.push(encoder_quality);                     // 1
+            bytes
+        }
+
+      Seventeen bytes. No IHDR, no IDAT, no IEND. It is not a PNG and no viewer will open it.
+
+      capture.rs:93-100 calls it and writes the result as the Finding's image. Nothing in the file
+      reads the screen.
+
+      NO SCREEN-CAPTURE DEPENDENCY EXISTS IN THE WORKSPACE. Every dependency in Cargo.toml:
+        serde serde_json thiserror uuid chrono rusqlite rand tempfile tiny_http ureq base64
+        tauri tauri-build tauri-plugin-single-instance tauri-plugin-global-shortcut
+        tauri-plugin-autostart winreg
+      A case-insensitive search of every .rs and .toml for xcap, screenshots, scrap, captrs,
+      win_screenshot, BitBlt and GetDC returns nothing. There is also no `image` crate, so nothing
+      can decode or encode a real image either.
+
+      crates/snapdown-store/src/image/pipeline.rs:26-37 says so in its own comment — "downscaled
+      payload simulation". reduce_image writes the same fake header and then copies input_bytes[16..]
+      through. No decode, no scale, no encode.
+    impact: |
+      The product does not do the thing it is named for. Everything downstream is built on bytes that
+      are not an image: a Finding's screenshot cannot render, Markers annotate nothing, a Bundle
+      copies those bytes into its own folder, and the Markdown it hands over references a file no
+      reader can open. BG-1 - a note unambiguously attached to the image it describes - has no image.
+
+      NFR-18 and the whole Quality Budget that W6-S4 just built resolve parameters for an encoder
+      that does not run. The numbers are correct and they are applied to nothing.
+
+      This is why AUDIT-4 could not create a Finding to test BUG-5 with, and it is the most likely
+      reason its overlay screenshot came back blank.
+    why_undetected: |
+      Every test in this repository asserts DIMENSIONS, never pixels. compute_reduced_dimensions is
+      pure arithmetic and is correct; test_image_reduction.rs checks widths and heights; the store
+      tests write and read byte arrays without asking what the bytes are. A fake PNG passes all of it
+      because none of it ever decodes one.
+
+      The same blind spot that let four components ship mounted nowhere: the unit is right, and
+      nothing checks that the unit is connected to reality. Here the unit is right and there is no
+      reality behind it at all.
+
+      Six waves, twelve use cases and four UI audits went past it. AUDIT-2 came closest by concluding
+      there was nothing to photograph.
+    fix: |
+      Add a real screen-capture dependency and a real image codec, then replace
+      generate_placeholder_image with an actual grab of the requested region, and
+      ImageReducer::reduce_image with a real decode-scale-encode. The dimension arithmetic already
+      written is correct and should be kept - it is the only part of this that works.
+
+      This is a wave of its own, not a story. It reaches capture, the image pipeline, the Vault, the
+      Markdown serializer's byte-identity guarantee, and every test that currently asserts a
+      dimension where it should assert an image.
+    note: |
+      W6 is not thereby wasted. It fixed the experience around this core - the build, the shell, the
+      Settings surface, the swallowed failures, the Bundle cascade - and every one of those was a
+      real defect that would still be there. What W6 could not do is notice that the core was hollow,
+      because nothing in its scope decoded an image either.
+    related: BUG-4
+    status: open

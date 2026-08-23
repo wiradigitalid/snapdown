@@ -47,7 +47,7 @@ graph TB
 
 | Element | What it is | Notes |
 | --- | --- | --- |
-| `desktop-app` | Tauri v2 application: a Rust process owning the domain core, the SQLite and Vault adapters, the capture adapter, the Local API, and the publish client, with a React + Vite + TypeScript webview for the Editor and Settings | `built: true`. The only writer in the whole system. Holds five of the five Product Components, so it is the one container with an L3 |
+| `desktop-app` | Tauri v2 application: a Rust process owning the domain core, the SQLite and Vault adapters, the capture adapter, the Local API, and the publish client, with a React + Vite + TypeScript webview for the Editor and Settings | `built: true`. The only writer in the whole system. Holds five of the five Product Components, so it is the one container with an L3. **One process, two personas** — the tray (**Snapdown**) and the workspace window (**Snapdown Editor**) — and exactly one executable, `Snapdown.exe`, per AD-11 and `DEC-003` |
 | `mcp-bridge` | Rust command-line executable speaking the Model Context Protocol over stdio to an agent, and HTTP to the Local API | `built: true`. Stateless by design — it holds no Library data and no Access Key between runs, which is what makes revocation immediate (AD-5) |
 | `web-api` | Go service, `net/http` with `chi`, embedded SQLite and a blob directory, deployed as one binary with one configuration file | `built: true`. Serves Publications and nothing else. Never reads the Library |
 | `web-ui` | React + Vite single-page application, built to static assets and served by `web-api` | `built: true`. Runs in the reader's browser, which is its own process — that is why it is a container and not "static assets". It renders one Publication and calls nothing but `web-api` |
@@ -92,3 +92,10 @@ three hold one each, and the matrix already places them.
 - **The Windows credential store.** It holds the Access Key and the publish credential and is named
   in the spine's Consistency Conventions; drawing it as a box would suggest it is a container.
 - **Inside any container.** Product Components inside `desktop-app` are L3.
+
+**Amended 2026-08-23.** `DEC-003` was weighed and rejected the alternative that would have changed
+this diagram: a second executable for the Editor, Snagit's shape. It would have made `desktop-app`
+two containers with a second writer to one SQLite file and one Vault directory — which AD-11 now
+forbids. The container count is unchanged and that is the outcome of a decision, not the absence of
+one. What did change is that this container now has two named personas, and the L3 carries the
+`editor-shell` that draws one of them.

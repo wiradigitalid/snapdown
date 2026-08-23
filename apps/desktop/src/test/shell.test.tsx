@@ -45,8 +45,10 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     vi.mocked(settingsService.getSettings).mockResolvedValue({
       vault_path: 'C:/Users/test/Vault',
       quality_budget: {
+        named: 'auto',
+        prose: 'Sizes each capture to what it is. Most captures land near 120 KB.',
         max_long_edge: 1600,
-        encoder_quality: 75,
+        encoder_quality: 82,
       },
       latest_finding_size: null,
     });
@@ -55,15 +57,20 @@ describe('Desktop Settings Screen (Screen 12)', () => {
 
     expect(screen.getByTestId('app-shell')).toBeInTheDocument();
     expect(screen.getByText('Snapdown')).toBeInTheDocument();
-    expect(screen.getByText('General')).toBeInTheDocument();
+    expect(screen.getByText('Startup')).toBeInTheDocument();
     expect(screen.getByText('Vault Folder')).toBeInTheDocument();
     expect(screen.getByText('Quality Budget')).toBeInTheDocument();
     expect(screen.getByText('Hotkeys')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('C:/Users/test/Vault')).toBeInTheDocument();
-      expect(screen.getByDisplayValue('1600')).toBeInTheDocument();
-      expect(screen.getByDisplayValue('75')).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Auto' })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Sharp' })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Balanced' })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Small' })).toBeInTheDocument();
+      expect(
+        screen.getByText('Sizes each capture to what it is. Most captures land near 120 KB.')
+      ).toBeInTheDocument();
       expect(screen.getByText('CommandOrControl+Shift+S')).toBeInTheDocument();
       expect(screen.getByText('CommandOrControl+Shift+E')).toBeInTheDocument();
       expect(screen.getByTestId('startup-toggle')).not.toBeChecked();
@@ -74,8 +81,9 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     vi.mocked(settingsService.getSettings).mockResolvedValue({
       vault_path: 'C:/Users/test/Vault',
       quality_budget: {
+        named: 'auto',
         max_long_edge: 1600,
-        encoder_quality: 75,
+        encoder_quality: 82,
       },
       latest_finding_size: null,
     });
@@ -92,17 +100,24 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     vi.mocked(settingsService.getSettings).mockResolvedValue({
       vault_path: 'C:/Users/test/Vault',
       quality_budget: {
+        named: 'auto',
         max_long_edge: 1600,
-        encoder_quality: 75,
+        encoder_quality: 82,
       },
       latest_finding_size: 245760, // 240 KB
+      latest_finding: {
+        size_bytes: 245760,
+        width: 1600,
+        height: 900,
+        budget_name: 'Auto',
+      },
     });
 
     render(<App />);
 
     await waitFor(() => {
       const sizeIndicator = screen.getByTestId('latest-finding-size');
-      expect(sizeIndicator).toHaveTextContent('240.0 KB');
+      expect(sizeIndicator).toHaveTextContent('Latest: 240.0 KB · 1600 px · Auto');
     });
   });
 
@@ -110,8 +125,9 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     vi.mocked(settingsService.getSettings).mockResolvedValue({
       vault_path: 'C:/Users/test/Vault',
       quality_budget: {
+        named: 'auto',
         max_long_edge: 1600,
-        encoder_quality: 75,
+        encoder_quality: 82,
       },
       latest_finding_size: null,
     });
@@ -122,37 +138,46 @@ describe('Desktop Settings Screen (Screen 12)', () => {
       expect(screen.getByDisplayValue('C:/Users/test/Vault')).toBeInTheDocument();
     });
 
+    // Open Advanced disclosure
+    fireEvent.click(screen.getByTestId('advanced-disclosure-button'));
+
     const edgeInput = screen.getByLabelText('Max Long Edge (px)');
-    const saveBtn = screen.getByRole('button', { name: 'Save Quality Budget' });
+    const qualityInput = screen.getByLabelText('Encoder Quality (10-100)');
 
     // Enter out of range edge (100 px < 320 px)
     fireEvent.change(edgeInput, { target: { value: '100' } });
-    expect(saveBtn).not.toBeDisabled();
-    fireEvent.click(saveBtn);
 
-    expect(screen.getByText('Max long edge must be between 320 and 7680 px')).toBeInTheDocument();
-    expect(settingsService.setQualityBudget).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByText('Max long edge must be between 320 and 7680 px')).toBeInTheDocument();
+      expect(settingsService.setQualityBudget).not.toHaveBeenCalled();
+    });
 
     // Enter out of range quality (105 > 100)
-    fireEvent.change(edgeInput, { target: { value: '1920' } });
-    const qualityInput = screen.getByLabelText('Encoder Quality (10-100)');
     fireEvent.change(qualityInput, { target: { value: '105' } });
-    fireEvent.click(saveBtn);
 
-    expect(screen.getByText('Quality must be between 10% and 100%')).toBeInTheDocument();
-    expect(settingsService.setQualityBudget).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByText('Quality must be between 10% and 100%')).toBeInTheDocument();
+      expect(settingsService.setQualityBudget).not.toHaveBeenCalled();
+    });
 
     // Enter valid values
-    fireEvent.change(qualityInput, { target: { value: '85' } });
     vi.mocked(settingsService.setQualityBudget).mockResolvedValue({
+      named: 'custom',
+      custom_pair: { max_long_edge: 1920, encoder_quality: 85 },
       max_long_edge: 1920,
       encoder_quality: 85,
     });
 
-    fireEvent.click(saveBtn);
+    fireEvent.change(edgeInput, { target: { value: '1920' } });
+    fireEvent.change(qualityInput, { target: { value: '85' } });
+
     await waitFor(() => {
-      expect(settingsService.setQualityBudget).toHaveBeenCalledWith(1920, 85);
-      expect(screen.getByText('Quality Budget saved successfully')).toBeInTheDocument();
+      expect(settingsService.setQualityBudget).toHaveBeenCalledWith('custom', {
+        max_long_edge: 1920,
+        encoder_quality: 85,
+      });
+      expect(screen.getByRole('radio', { name: 'Custom' })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Custom' })).toHaveAttribute('aria-checked', 'true');
     });
   });
 
@@ -160,6 +185,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     vi.mocked(settingsService.getSettings).mockResolvedValue({
       vault_path: 'C:/Users/test/Vault',
       quality_budget: {
+        named: 'auto',
         max_long_edge: 1600,
         encoder_quality: 75,
       },
@@ -183,6 +209,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     vi.mocked(settingsService.getSettings).mockResolvedValue({
       vault_path: 'C:/Users/test/Vault',
       quality_budget: {
+        named: 'auto',
         max_long_edge: 1600,
         encoder_quality: 75,
       },
@@ -218,6 +245,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     vi.mocked(settingsService.getSettings).mockResolvedValue({
       vault_path: 'C:/Users/test/Vault',
       quality_budget: {
+        named: 'auto',
         max_long_edge: 1600,
         encoder_quality: 75,
       },
@@ -250,6 +278,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     vi.mocked(settingsService.getSettings).mockResolvedValue({
       vault_path: 'C:/Users/test/Vault',
       quality_budget: {
+        named: 'auto',
         max_long_edge: 1600,
         encoder_quality: 75,
       },
@@ -286,6 +315,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     vi.mocked(settingsService.getSettings).mockResolvedValue({
       vault_path: 'C:/Users/test/Vault',
       quality_budget: {
+        named: 'auto',
         max_long_edge: 1600,
         encoder_quality: 75,
       },
@@ -335,6 +365,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     vi.mocked(settingsService.getSettings).mockResolvedValue({
       vault_path: 'C:/Users/test/Vault',
       quality_budget: {
+        named: 'auto',
         max_long_edge: 1600,
         encoder_quality: 75,
       },
@@ -380,13 +411,14 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     vi.mocked(settingsService.getSettings).mockResolvedValue({
       vault_path: 'C:/Users/test/Vault',
       quality_budget: {
+        named: 'auto',
         max_long_edge: 1600,
         encoder_quality: 75,
       },
       latest_finding_size: null,
     });
     vi.mocked(settingsService.setHotkey).mockRejectedValue(
-      new Error('Two actions cannot share the same hotkey combination')
+      new Error('Another Snapdown action already uses this combination')
     );
 
     render(<App />);
@@ -404,7 +436,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText('Two actions cannot share the same hotkey combination')
+        screen.getByText('Another Snapdown action already uses this combination')
       ).toBeInTheDocument();
     });
   });
@@ -413,6 +445,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     vi.mocked(settingsService.getSettings).mockResolvedValue({
       vault_path: 'C:/Users/test/Vault',
       quality_budget: {
+        named: 'auto',
         max_long_edge: 1600,
         encoder_quality: 75,
       },
@@ -441,7 +474,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('startup-warning-banner')).toBeInTheDocument();
+      expect(screen.getByTestId('startup-error-capture')).toBeInTheDocument();
       expect(
         screen.getByText(/Failed to register shortcut for action 'capture' at startup/)
       ).toBeInTheDocument();
@@ -453,6 +486,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     vi.mocked(settingsService.getSettings).mockResolvedValue({
       vault_path: 'C:/Users/test/Vault',
       quality_budget: {
+        named: 'auto',
         max_long_edge: 1600,
         encoder_quality: 75,
       },
@@ -481,6 +515,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     vi.mocked(settingsService.getSettings).mockResolvedValue({
       vault_path: 'C:/Users/test/Vault',
       quality_budget: {
+        named: 'auto',
         max_long_edge: 1600,
         encoder_quality: 75,
       },

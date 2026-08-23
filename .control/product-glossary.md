@@ -24,6 +24,14 @@ here. The split test: does this term still hold if used in another product? Yes 
   conversation to grant that agent read access to the Library over the Local API. Exactly one Access
   Key is valid at a time; issuing a new one revokes the previous one. It is not a password and there
   is no account behind it.
+- **Advanced** — the disclosure in Settings holding the Quality Budget's resolved numbers, the maximum
+  long edge and the encoder quality, for direct entry. Editing either moves the Quality Budget to
+  `Custom`. Source: `DEC-004`.
+- **Auto** — the shipped Quality Budget. It derives a maximum long edge and an encoder quality from
+  each captured region, so a small region and a full screen are not reduced by the same rule. Source:
+  `DEC-004`.
+- **Balanced** — the fixed Quality Budget that does not vary with the capture. One of three named
+  alongside **Sharp** and **Small**. Source: `DEC-004`.
 - **Bundle** — a named group of Findings, composed once into one Markdown document with its own copy
   of the images it references. A Bundle has zero or one Publication. A Finding may belong to zero,
   one, or several Bundles. A Bundle is recomposed rather than edited.
@@ -35,8 +43,12 @@ here. The split test: does this term still hold if used in another product? Yes 
 - **Capture Overlay** — the full-screen, semi-transparent surface, one per monitor, on which the
   Reviewer drags out the region to capture. It exists only between the hotkey press and the moment
   the Finding is saved or the Capture is cancelled.
+- **Custom** — the Quality Budget state a Reviewer reaches by editing an **Advanced** value. It is a
+  named state rather than a silent condition so that Settings can always answer *which budget am I on*
+  in one word. Source: `DEC-004`.
 - **Editor** — the Snapdown Editor: the desktop window that lists the Library, shows each Finding
-  with its Note and Markers, and is where Bundles are composed. There is exactly one Editor window.
+  with its Note and Markers, and is where Bundles are composed. There is exactly one Editor window,
+  and it is one of Snapdown's two **personas** rather than a second application. Source: `DEC-003`.
 - **Finding** — one observation: a captured image, the Note that describes it, and the Markers drawn
   on it. The atomic unit of the product; nothing smaller is handed to an agent. A Finding has exactly
   one image file in the Vault.
@@ -54,16 +66,32 @@ here. The split test: does this term still hold if used in another product? Yes 
   Local API to Snapdown. It holds no data of its own.
 - **Note** — the Reviewer's prose about one Finding: a free-text body, plus one numbered line per
   Marker. Exactly one Note per Finding; it may be empty.
+- **Orphan report** — the Editor surface listing image files present in the Vault that no Finding or
+  Bundle points at, with the option to delete them. Source:
+  `.what/_prd/capture-to-markdown/prd.md` § FR-15; `.how/_platform/inventory-screen.md` row 7.
+- **Persona** — one of the two faces of the single `Snapdown.exe` process. **Snapdown** is the tray
+  icon that owns the global hotkeys and the Capture Overlay and has no window; **Snapdown Editor** is
+  the workspace window. They are personas and not processes: there is one executable, one Library
+  writer, and one lifecycle. Source: `DEC-003`. Two personas, one process, always.
 - **Publication** — the record of a Bundle having been published: the unlisted URL it was served at,
   when it happened, and whether it is still live. Unpublishing ends a Publication without deleting
   the Bundle.
-- **Quality Budget** — the Reviewer's setting pair that governs image reduction: a maximum long edge
-  in pixels, and an encoder quality. Applied to every Capture on the way into the Vault, never
-  afterwards.
+- **Quality Budget** — the named intent that governs image reduction, chosen by the Reviewer from
+  five states: `Auto` (the shipped default), `Sharp`, `Balanced`, `Small`, and `Custom`. It resolves
+  to a maximum long edge in pixels and an encoder quality, which `Auto` derives from each captured
+  region rather than holding as constants. Applied to every Capture on the way into the Vault, never
+  afterwards; the resolved values are stored with the Finding they produced. One Quality Budget per
+  Library. Source: `DEC-004`; `.what/_prd/capture-to-markdown/prd.md` § FR-5.
+  This entry previously named the setting *pair* — a long edge and an encoder quality — which was the
+  shape before `DEC-004`. The pair still exists, one level down, and is reachable through **Advanced**.
 - **Reviewer** — the person operating Snapdown: the one who captures, writes Notes, composes Bundles,
   and decides what is handed off. The only human actor.
 - **Setting** — one persisted preference of the installation: the Vault location, a hotkey binding,
   the Quality Budget pair, whether Snapdown starts with Windows, whether the Editor opens after a
   Capture, and where the web service lives. One value per key, one set per Library.
+- **Sharp** — the fixed Quality Budget that keeps small text crisp, at a larger file size. Source:
+  `DEC-004`.
+- **Small** — the fixed Quality Budget producing the smallest file that stays readable. Source:
+  `DEC-004`.
 - **Vault** — the folder on disk holding Finding and Bundle image files. Its location is a setting.
   One Vault per Library.

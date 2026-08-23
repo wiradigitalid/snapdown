@@ -5,10 +5,10 @@ status: draft
 created: "2026-08-22"
 updated: "2026-08-23"
 realizes: [UC-1, UC-2, UC-3, UC-4, UC-5, UC-6, UC-7, UC-8]
-binds: [AD-1, AD-2, AD-3, AD-4, AD-6]
+binds: [AD-1, AD-2, AD-3, AD-4, AD-6, AD-10]
 reviewed:
-  date: "2026-08-22"
-  sha: 6a470fd
+  date: '2026-08-23'
+  sha: '7c9a6b1'
   lenses: [structure, prose, edge-case-hunter]
 ---
 
@@ -116,6 +116,73 @@ Two entries are the ones worth arguing about, and both are deliberate:
   failure would make FR-15's orphan report unable to fix what it finds.
 - **A missing file on write is failure, and the row is never committed.** The asymmetry is AD-2's
   ordering, and it is why a crash can leave a record without a file but never a file without a record.
+
+## ABCE · [deep]
+
+New at this gate: `finding` was raised from `guarded` to `deep` on 2026-08-23. Boundary → Control →
+Entity → Behaviour, and none of it appears in the SRS.
+
+### Boundary
+
+| Object | What crosses it |
+|---|---|
+| `CaptureOverlay` | A region and a Note, in. Nothing out but a dismissal |
+| `FindingsScreen` | The Reviewer's edits to a Note and to the Marker sequence |
+| `MarkerCanvas` | A click position, in. A Marker number, out |
+| `ScreenCapturePort` | Pixels, from Windows |
+| `FindingStore` | Every Finding, Note, and Marker read and write |
+| `VaultBlobStore` | Every image byte |
+
+### Control
+
+| Object | Decides |
+|---|---|
+| `RegionSelector` | Which monitor, which rectangle, at which DPI. Rejects zero area |
+| `ImageReducer` | The resolved pair for this region, and the encode. Under `Auto`, a function of the region (`BR-104`, `SCN-03`) |
+| `MarkerSequencer` | Add, move, remove, renumber — as one operation over one ordered collection (`AD-1`) |
+| `FindingRemover` | Record and file together, prior state intact on any failure (`AD-2`) |
+| `OrphanSweeper` | Which files nothing points at, and which records point at nothing |
+
+`MarkerSequencer` is the object `AD-1` is really about. If Markers and lines are ever written by two
+callers, this object has been bypassed and the invariant is gone with no diff showing it.
+
+`ImageReducer` currently holds no derivation. `[MISSING]` — `Auto` does not exist; the reducer reads
+two constants from `crates/snapdown-core/src/domain/setting.rs`.
+
+### Entity
+
+`Finding`, `Note`, `Marker` — this component `owns` all three. `Note` is one-to-one with `Finding`
+and is a separate entity rather than a column because it carries the numbered lines that `AD-1` binds.
+
+### Behaviour
+
+Two clocks and nothing else. **Capture** is time-bound: `NFR-1` gives the overlay 200 ms to appear
+across three monitors, `NFR-2` gives 500 ms to dismiss and return focus, and reduction is explicitly
+outside that budget because it runs after dismissal. **Everything else** is Reviewer-paced and has no
+timing requirement at all.
+
+The orphan sweep is the only operation whose cost grows with the Library, and it is Reviewer-initiated
+(`FR-15`) rather than scheduled — this product runs no background task, which is also why the hotkey
+health check in `settings` was rejected rather than deferred.
+
+## Slots written at `deep`
+
+| Slot | Holds |
+|---|---|
+| `02-contracts/contract-inventory.md` | The Tauri command surface |
+| `04-components/` | `LC-003 image-reducer`, the one carrying the `DEC-004` delta |
+| `05-model/data-model.md` | `finding`, `note`, `marker`, with the dictionary |
+| `06-flows/flow-capture.md` | Hotkey to stored Finding, across the `NFR-1`/`NFR-2` boundary |
+
+## Evidence labels outstanding · [deep]
+
+| Label | Claim | Disposition |
+|---|---|---|
+| `[MISSING]` | `Auto` does not exist. `ImageReducer` reads `DEFAULT_MAX_LONG_EDGE_PX = 1600` and `DEFAULT_ENCODER_QUALITY = 75` | Planned work — `FR-5`, `DEC-004`, `SCN-03` |
+| `[MISSING]` | No Finding stores the resolved pair applied to it | Planned work — `NFR-18`, `BR-105` |
+| ~~`[MISSING]`~~ **resolved** | `FindingsView.tsx` and its panels carried light-theme literals on a surface rendered under either theme | **Done — `W6-S1` at `420ecce`.** Every panel draws from tokens; a grep for a literal under `apps/desktop/src` returns nothing |
+| `[NEEDS CONFIRMATION]` | Whether a Marker with no Note line is currently surfaced anywhere, or silently tolerated | `wdi-question`, before G4 opens |
+| `[PARTIAL]` | Multi-monitor DPI handling is implemented; whether a region spanning two monitors at different scales is correct at each was not exercised by the UI audit | `wdi-question` |
 
 ## Design Notes
 

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Button } from '@snapdown/ui';
+import { Badge, Button, HotkeyChip } from '@snapdown/ui';
 import { HotkeyAction, HotkeySettingsDto } from '../types/settings';
 
-interface HotkeySectionProps {
+export interface HotkeySectionProps {
   hotkeySettings: HotkeySettingsDto;
   onSaveHotkey: (action: HotkeyAction, shortcut: string) => Promise<void>;
   onClearHotkey: (action: HotkeyAction) => Promise<void>;
@@ -14,30 +14,6 @@ const ACTION_LABELS: Record<HotkeyAction, string> = {
   open_editor: 'Open Workspace / Editor',
 };
 
-const formatKeyCombination = (e: React.KeyboardEvent): string | null => {
-  if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
-    return null; // Ignore pure modifier press
-  }
-
-  const parts: string[] = [];
-  if (e.ctrlKey || e.metaKey) {
-    parts.push('CommandOrControl');
-  }
-  if (e.altKey) {
-    parts.push('Alt');
-  }
-  if (e.shiftKey) {
-    parts.push('Shift');
-  }
-
-  let key = e.key.toUpperCase();
-  if (key === ' ') key = 'SPACE';
-  if (key === 'ESCAPE') return null;
-
-  parts.push(key);
-  return parts.join('+');
-};
-
 export const HotkeySection: React.FC<HotkeySectionProps> = ({
   hotkeySettings,
   onSaveHotkey,
@@ -47,29 +23,22 @@ export const HotkeySection: React.FC<HotkeySectionProps> = ({
   const [localInputs, setLocalInputs] = useState<Record<string, string>>({});
   const [errorMessages, setErrorMessages] = useState<Record<string, string>>({});
   const [savingAction, setSavingAction] = useState<string | null>(null);
-  const [recordingAction, setRecordingAction] = useState<string | null>(null);
 
   const getInputValue = (action: HotkeyAction, defaultVal: string) => {
     return localInputs[action] !== undefined ? localInputs[action] : defaultVal;
   };
 
-  const handleKeyDown = (action: HotkeyAction, e: React.KeyboardEvent) => {
-    if (recordingAction !== action) return;
+  const handleRecord = (action: HotkeyAction, combo: string) => {
+    setLocalInputs((prev) => ({ ...prev, [action]: combo }));
+    setErrorMessages((prev) => ({ ...prev, [action]: '' }));
+  };
 
-    if (e.key === 'Escape') {
-      setRecordingAction(null);
-      return;
-    }
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    const combination = formatKeyCombination(e);
-    if (combination) {
-      setLocalInputs((prev) => ({ ...prev, [action]: combination }));
-      setErrorMessages((prev) => ({ ...prev, [action]: '' }));
-      setRecordingAction(null);
-    }
+  const handleCancel = (action: HotkeyAction) => {
+    setLocalInputs((prev) => {
+      const next = { ...prev };
+      delete next[action];
+      return next;
+    });
   };
 
   const handleSave = async (action: HotkeyAction) => {
@@ -88,6 +57,11 @@ export const HotkeySection: React.FC<HotkeySectionProps> = ({
       setSavingAction(action);
       await onSaveHotkey(action, shortcutToSave);
       setErrorMessages((prev) => ({ ...prev, [action]: '' }));
+      setLocalInputs((prev) => {
+        const next = { ...prev };
+        delete next[action];
+        return next;
+      });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessages((prev) => ({ ...prev, [action]: msg }));
@@ -113,6 +87,7 @@ export const HotkeySection: React.FC<HotkeySectionProps> = ({
   return (
     <section
       data-testid="hotkey-section"
+      aria-label="Hotkeys"
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -143,32 +118,9 @@ export const HotkeySection: React.FC<HotkeySectionProps> = ({
             color: 'var(--color-text-muted)',
           }}
         >
-          Click a shortcut box and press your preferred key combination on the keyboard.
+          Click a shortcut box and press your preferred key combination.
         </p>
       </div>
-
-      {hotkeySettings.startup_warnings && hotkeySettings.startup_warnings.length > 0 && (
-        <div
-          data-testid="startup-warning-banner"
-          style={{
-            padding: 'var(--space-2) var(--space-3)',
-            borderRadius: 'var(--radius-sm)',
-            backgroundColor: '#fef3c7',
-            border: '1px solid #fde047',
-            color: '#854d0e',
-            fontSize: 'var(--text-xs)',
-            fontFamily: 'var(--font-ui)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 'var(--space-1)',
-          }}
-        >
-          <div style={{ fontWeight: 600 }}>Hotkey Registration Warning:</div>
-          {hotkeySettings.startup_warnings.map((warning, index) => (
-            <div key={index}>{warning}</div>
-          ))}
-        </div>
-      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
         {hotkeySettings.hotkeys.map((item) => {
@@ -177,8 +129,25 @@ export const HotkeySection: React.FC<HotkeySectionProps> = ({
           const currentVal = getInputValue(action, item.shortcut);
           const isDirty = currentVal !== item.shortcut;
           const isBusy = savingAction === action || disabled;
-          const isRecording = recordingAction === action;
           const error = errorMessages[action];
+
+          const startupWarning =
+            item.startup_error ||
+            hotkeySettings.startup_warnings?.find(
+              (w) =>
+                w.toLowerCase().includes(`'${action}'`) ||
+                w.toLowerCase().includes(`action '${action}'`) ||
+                w.toLowerCase().includes(action)
+            );
+          const hasStartupFailure = (!item.is_registered && !!item.shortcut) || !!startupWarning;
+
+          const chipState = error
+            ? 'conflicted'
+            : hasStartupFailure && !isDirty
+            ? 'conflicted'
+            : !currentVal
+            ? 'unbound'
+            : 'bound';
 
           return (
             <div
@@ -211,20 +180,19 @@ export const HotkeySection: React.FC<HotkeySectionProps> = ({
                 >
                   {label}
                 </span>
-                <span
+                <div
                   data-testid={`status-badge-${action}`}
-                  style={{
-                    fontSize: 'var(--text-xs)',
-                    fontFamily: 'var(--font-mono)',
-                    padding: '2px 8px',
-                    borderRadius: 'var(--radius-sm)',
-                    backgroundColor: item.is_active ? '#dcfce7' : '#f1f5f9',
-                    color: item.is_active ? '#166534' : '#64748b',
-                    fontWeight: 500,
-                  }}
+                  style={{ display: 'flex', gap: 'var(--space-1)', alignItems: 'center' }}
                 >
-                  {item.is_active ? 'Active' : 'Disabled'}
-                </span>
+                  {hasStartupFailure && (
+                    <Badge variant="warning" data-testid={`startup-warning-badge-${action}`}>
+                      Conflict
+                    </Badge>
+                  )}
+                  <Badge variant={item.is_active ? 'success' : 'neutral'}>
+                    {item.is_active ? 'Active' : 'Disabled'}
+                  </Badge>
+                </div>
               </div>
 
               <div
@@ -234,31 +202,16 @@ export const HotkeySection: React.FC<HotkeySectionProps> = ({
                   alignItems: 'center',
                 }}
               >
-                <div
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`Record shortcut for ${label}`}
-                  onClick={() => setRecordingAction(action)}
-                  onKeyDown={(e) => handleKeyDown(action, e)}
-                  onBlur={() => {
-                    if (recordingAction === action) setRecordingAction(null);
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-sm)',
-                    border: isRecording ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
-                    backgroundColor: isRecording ? '#eff6ff' : 'var(--color-surface)',
-                    color: isRecording ? 'var(--color-accent)' : 'var(--color-text)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 'var(--text-xs)',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    outline: 'none',
-                    textAlign: 'center',
-                  }}
-                >
-                  {isRecording ? 'Press shortcut keys on keyboard (ESC to cancel)...' : currentVal || 'Click to record shortcut'}
+                <div style={{ flex: 1 }}>
+                  <HotkeyChip
+                    shortcut={currentVal}
+                    state={chipState}
+                    onRecord={(combo) => handleRecord(action, combo)}
+                    onCancel={() => handleCancel(action)}
+                    disabled={isBusy}
+                    aria-label={`Record shortcut for ${label}`}
+                    style={{ width: '100%' }}
+                  />
                 </div>
 
                 <Button
@@ -279,8 +232,23 @@ export const HotkeySection: React.FC<HotkeySectionProps> = ({
                 </Button>
               </div>
 
+              {hasStartupFailure && !isDirty && (
+                <span
+                  data-testid={`startup-error-${action}`}
+                  style={{
+                    fontSize: 'var(--text-xs)',
+                    color: 'var(--color-warning-text)',
+                    fontFamily: 'var(--font-ui)',
+                  }}
+                >
+                  {startupWarning ||
+                    `Failed to register shortcut for action '${action}' at startup: combination is already held by Windows or another application`}
+                </span>
+              )}
+
               {error && (
                 <span
+                  data-testid={`error-message-${action}`}
                   style={{
                     fontSize: 'var(--text-xs)',
                     color: 'var(--color-danger)',

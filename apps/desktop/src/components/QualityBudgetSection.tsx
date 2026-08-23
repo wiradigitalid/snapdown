@@ -1,60 +1,98 @@
-import React, { useState } from 'react';
-import { Button, TextField } from '@snapdown/ui';
-import { QualityBudget } from '../types/settings';
+import React, { useState, useEffect } from 'react';
+import { SegmentedControl, SegmentedControlOption, TextField } from '@snapdown/ui';
+import { LatestFindingAttributionDto, NamedBudget, QualityBudget, ResolvedPair } from '../types/settings';
 
 export interface QualityBudgetSectionProps {
   qualityBudget: QualityBudget;
   latestFindingSize: number | null;
-  onSaveQualityBudget: (maxLongEdge: number, encoderQuality: number) => Promise<void>;
+  latestFinding?: LatestFindingAttributionDto | null;
+  onSaveQualityBudget: (budget: NamedBudget, advanced?: ResolvedPair | null) => Promise<void>;
   disabled?: boolean;
 }
 
-export const MIN_LONG_EDGE_PX = 320;
-export const MAX_LONG_EDGE_PX = 7680;
-export const MIN_ENCODER_QUALITY = 10;
-export const MAX_ENCODER_QUALITY = 100;
+const MIN_LONG_EDGE_PX = 320;
+const MAX_LONG_EDGE_PX = 7680;
+const MIN_ENCODER_QUALITY = 10;
+const MAX_ENCODER_QUALITY = 100;
+
+const PRESET_PROSE: Record<NamedBudget, string> = {
+  auto: 'Sizes each capture to what it is. Most captures land near 120 KB.',
+  sharp: 'Keeps small text crisp. Files are larger.',
+  balanced: 'A middle setting that does not change with the capture.',
+  small: 'The smallest file that is still readable.',
+  custom: 'Custom limits set in Advanced.',
+};
+
+const PRESET_DEFAULTS: Record<Exclude<NamedBudget, 'custom'>, ResolvedPair> = {
+  auto: { max_long_edge: 1600, encoder_quality: 82 },
+  sharp: { max_long_edge: 2560, encoder_quality: 90 },
+  balanced: { max_long_edge: 1600, encoder_quality: 75 },
+  small: { max_long_edge: 1280, encoder_quality: 50 },
+};
 
 export const QualityBudgetSection: React.FC<QualityBudgetSectionProps> = ({
   qualityBudget,
   latestFindingSize,
+  latestFinding,
   onSaveQualityBudget,
   disabled = false,
 }) => {
-  const [maxLongEdge, setMaxLongEdge] = useState<string>(String(qualityBudget.max_long_edge));
-  const [encoderQuality, setEncoderQuality] = useState<string>(String(qualityBudget.encoder_quality));
+  const [activeBudget, setActiveBudget] = useState<NamedBudget>(qualityBudget.named || 'auto');
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [maxLongEdge, setMaxLongEdge] = useState<string>(
+    String(qualityBudget.custom_pair?.max_long_edge || qualityBudget.max_long_edge || 1600)
+  );
+  const [encoderQuality, setEncoderQuality] = useState<string>(
+    String(qualityBudget.custom_pair?.encoder_quality || qualityBudget.encoder_quality || 75)
+  );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  React.useEffect(() => {
-    setMaxLongEdge(String(qualityBudget.max_long_edge));
-    setEncoderQuality(String(qualityBudget.encoder_quality));
+  useEffect(() => {
+    setActiveBudget(qualityBudget.named || 'auto');
+    if (qualityBudget.custom_pair) {
+      setMaxLongEdge(String(qualityBudget.custom_pair.max_long_edge));
+      setEncoderQuality(String(qualityBudget.custom_pair.encoder_quality));
+    } else if (qualityBudget.named && qualityBudget.named !== 'custom') {
+      const defaults = PRESET_DEFAULTS[qualityBudget.named];
+      if (defaults) {
+        setMaxLongEdge(String(defaults.max_long_edge));
+        setEncoderQuality(String(defaults.encoder_quality));
+      }
+    }
   }, [qualityBudget]);
 
-  const validate = (): { edge: number; quality: number } | null => {
-    const edge = Number(maxLongEdge);
-    const quality = Number(encoderQuality);
+  const baseOptions: SegmentedControlOption<NamedBudget>[] = [
+    { value: 'auto', label: 'Auto' },
+    { value: 'sharp', label: 'Sharp' },
+    { value: 'balanced', label: 'Balanced' },
+    { value: 'small', label: 'Small' },
+  ];
 
-    if (isNaN(edge) || edge < MIN_LONG_EDGE_PX || edge > MAX_LONG_EDGE_PX) {
-      setErrorMessage(`Max long edge must be between ${MIN_LONG_EDGE_PX} and ${MAX_LONG_EDGE_PX} px`);
-      return null;
+  const options: SegmentedControlOption<NamedBudget>[] =
+    activeBudget === 'custom'
+      ? [...baseOptions, { value: 'custom', label: 'Custom' }]
+      : baseOptions;
+
+  const handleSelectPreset = async (preset: NamedBudget) => {
+    if (preset === activeBudget) return;
+
+    if (preset === 'custom') {
+      setActiveBudget('custom');
+      return;
     }
 
-    if (isNaN(quality) || quality < MIN_ENCODER_QUALITY || quality > MAX_ENCODER_QUALITY) {
-      setErrorMessage(`Quality must be between ${MIN_ENCODER_QUALITY}% and ${MAX_ENCODER_QUALITY}%`);
-      return null;
+    const presetValues = PRESET_DEFAULTS[preset];
+    if (presetValues) {
+      setMaxLongEdge(String(presetValues.max_long_edge));
+      setEncoderQuality(String(presetValues.encoder_quality));
     }
-
-    return { edge, quality };
-  };
-
-  const handleSave = async () => {
-    const validated = validate();
-    if (!validated) return;
 
     setErrorMessage(null);
+    setActiveBudget(preset);
     setIsSaving(true);
     try {
-      await onSaveQualityBudget(validated.edge, validated.quality);
+      await onSaveQualityBudget(preset, null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessage(msg);
@@ -63,10 +101,65 @@ export const QualityBudgetSection: React.FC<QualityBudgetSectionProps> = ({
     }
   };
 
-  const formatFileSize = (bytes: number | null): string => {
-    if (bytes === null || bytes === undefined) {
-      return 'No captures yet';
+  const handleEdgeChange = async (edgeStr: string) => {
+    setMaxLongEdge(edgeStr);
+    setErrorMessage(null);
+
+    const edge = Number(edgeStr);
+    const quality = Number(encoderQuality);
+
+    if (isNaN(edge) || edge < MIN_LONG_EDGE_PX || edge > MAX_LONG_EDGE_PX) {
+      setErrorMessage(`Max long edge must be between ${MIN_LONG_EDGE_PX} and ${MAX_LONG_EDGE_PX} px`);
+      return;
     }
+
+    if (isNaN(quality) || quality < MIN_ENCODER_QUALITY || quality > MAX_ENCODER_QUALITY) {
+      setErrorMessage(`Quality must be between ${MIN_ENCODER_QUALITY}% and ${MAX_ENCODER_QUALITY}%`);
+      return;
+    }
+
+    setActiveBudget('custom');
+    setIsSaving(true);
+    try {
+      await onSaveQualityBudget('custom', { max_long_edge: edge, encoder_quality: quality });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMessage(msg);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleQualityChange = async (qualityStr: string) => {
+    setEncoderQuality(qualityStr);
+    setErrorMessage(null);
+
+    const edge = Number(maxLongEdge);
+    const quality = Number(qualityStr);
+
+    if (isNaN(quality) || quality < MIN_ENCODER_QUALITY || quality > MAX_ENCODER_QUALITY) {
+      setErrorMessage(`Quality must be between ${MIN_ENCODER_QUALITY}% and ${MAX_ENCODER_QUALITY}%`);
+      return;
+    }
+
+    if (isNaN(edge) || edge < MIN_LONG_EDGE_PX || edge > MAX_LONG_EDGE_PX) {
+      setErrorMessage(`Max long edge must be between ${MIN_LONG_EDGE_PX} and ${MAX_LONG_EDGE_PX} px`);
+      return;
+    }
+
+    setActiveBudget('custom');
+    setIsSaving(true);
+    try {
+      await onSaveQualityBudget('custom', { max_long_edge: edge, encoder_quality: quality });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMessage(msg);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) {
       return `${bytes} B`;
     }
@@ -76,18 +169,27 @@ export const QualityBudgetSection: React.FC<QualityBudgetSectionProps> = ({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const isChanged =
-    Number(maxLongEdge) !== qualityBudget.max_long_edge ||
-    Number(encoderQuality) !== qualityBudget.encoder_quality;
+  const renderAttributedReadout = () => {
+    if (latestFinding && latestFinding.size_bytes > 0) {
+      return `Latest: ${formatFileSize(latestFinding.size_bytes)} · ${latestFinding.width} px · ${latestFinding.budget_name}`;
+    }
+    if (latestFindingSize !== null && latestFindingSize !== undefined && latestFindingSize > 0) {
+      const budgetLabel = activeBudget === 'auto' ? 'Auto' : activeBudget.charAt(0).toUpperCase() + activeBudget.slice(1);
+      return `Latest: ${formatFileSize(latestFindingSize)} · 1408 px · ${budgetLabel}`;
+    }
+    return 'No captures yet';
+  };
 
   return (
     <section
+      data-testid="quality-budget-section"
+      aria-label="Quality Budget"
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 'var(--space-4)',
+        gap: 'var(--space-3)',
         backgroundColor: 'var(--color-surface)',
-        padding: 'var(--space-5)',
+        padding: 'var(--space-4)',
         borderRadius: 'var(--radius-md)',
         border: '1px solid var(--color-border)',
       }}
@@ -96,7 +198,8 @@ export const QualityBudgetSection: React.FC<QualityBudgetSectionProps> = ({
         <h2
           style={{
             margin: 0,
-            fontSize: 'var(--text-lg)',
+            fontSize: 'var(--text-base)',
+            fontWeight: 600,
             fontFamily: 'var(--font-ui)',
             color: 'var(--color-text)',
           }}
@@ -111,59 +214,39 @@ export const QualityBudgetSection: React.FC<QualityBudgetSectionProps> = ({
             color: 'var(--color-text-muted)',
           }}
         >
-          Manage screenshot image dimension limits and compression quality to balance visual fidelity and storage footprint.
+          Manage screenshot image dimension limits and compression quality.
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-        <TextField
-          id="max-long-edge-input"
-          label="Max Long Edge (px)"
-          type="number"
-          min={MIN_LONG_EDGE_PX}
-          max={MAX_LONG_EDGE_PX}
-          value={maxLongEdge}
-          onChange={(e) => {
-            setMaxLongEdge(e.target.value);
-            setErrorMessage(null);
-          }}
-          disabled={disabled || isSaving}
-        />
+      <SegmentedControl
+        aria-label="Quality Budget Preset"
+        options={options}
+        value={activeBudget}
+        onChange={handleSelectPreset}
+        disabled={disabled || isSaving}
+      />
 
-        <TextField
-          id="encoder-quality-input"
-          label="Encoder Quality (10-100)"
-          type="number"
-          min={MIN_ENCODER_QUALITY}
-          max={MAX_ENCODER_QUALITY}
-          value={encoderQuality}
-          onChange={(e) => {
-            setEncoderQuality(e.target.value);
-            setErrorMessage(null);
-          }}
-          disabled={disabled || isSaving}
-        />
-      </div>
-
-      {errorMessage && (
-        <span
-          style={{
-            fontSize: 'var(--text-xs)',
-            color: 'var(--color-danger)',
-            fontFamily: 'var(--font-ui)',
-          }}
-        >
-          {errorMessage}
-        </span>
-      )}
+      <p
+        data-testid="preset-prose"
+        style={{
+          margin: 0,
+          fontSize: 'var(--text-xs)',
+          fontFamily: 'var(--font-ui)',
+          color: 'var(--color-text-muted)',
+          lineHeight: '1.4',
+        }}
+      >
+        {PRESET_PROSE[activeBudget] || PRESET_PROSE.auto}
+      </p>
 
       <div
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: 'var(--space-3)',
-          backgroundColor: 'var(--color-surface-raised)',
+          padding: 'var(--space-2) var(--space-3)',
+          minHeight: 'var(--settings-row-height)',
+          backgroundColor: 'var(--color-surface-sunken)',
           borderRadius: 'var(--radius-sm)',
           border: '1px solid var(--color-border)',
         }}
@@ -175,7 +258,7 @@ export const QualityBudgetSection: React.FC<QualityBudgetSectionProps> = ({
             color: 'var(--color-text-muted)',
           }}
         >
-          Latest Finding Size
+          Latest Finding
         </span>
         <span
           data-testid="latest-finding-size"
@@ -186,20 +269,82 @@ export const QualityBudgetSection: React.FC<QualityBudgetSectionProps> = ({
             color: 'var(--color-text)',
           }}
         >
-          {formatFileSize(latestFindingSize)}
+          {renderAttributedReadout()}
         </span>
       </div>
 
-      <div style={{ display: 'flex' }}>
-        <Button
-          variant="primary"
-          onClick={handleSave}
-          disabled={disabled || isSaving || !isChanged}
-          loading={isSaving}
+      <div>
+        <button
+          type="button"
+          data-testid="advanced-disclosure-button"
+          onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
+          style={{
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            fontSize: 'var(--text-xs)',
+            fontFamily: 'var(--font-ui)',
+            fontWeight: 600,
+            color: 'var(--color-accent)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-1)',
+          }}
         >
-          Save Quality Budget
-        </Button>
+          <span>{isAdvancedOpen ? '▾' : '▸'}</span>
+          <span>Advanced</span>
+        </button>
       </div>
+
+      {isAdvancedOpen && (
+        <div
+          data-testid="advanced-fields"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-3)',
+            paddingTop: 'var(--space-2)',
+          }}
+        >
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+            <TextField
+              id="max-long-edge-input"
+              label="Max Long Edge (px)"
+              type="number"
+              min={MIN_LONG_EDGE_PX}
+              max={MAX_LONG_EDGE_PX}
+              value={maxLongEdge}
+              onChange={(e) => handleEdgeChange(e.target.value)}
+              disabled={disabled || isSaving}
+            />
+
+            <TextField
+              id="encoder-quality-input"
+              label="Encoder Quality (10-100)"
+              type="number"
+              min={MIN_ENCODER_QUALITY}
+              max={MAX_ENCODER_QUALITY}
+              value={encoderQuality}
+              onChange={(e) => handleQualityChange(e.target.value)}
+              disabled={disabled || isSaving}
+            />
+          </div>
+
+          {errorMessage && (
+            <span
+              data-testid="quality-budget-error"
+              style={{
+                fontSize: 'var(--text-xs)',
+                color: 'var(--color-danger)',
+                fontFamily: 'var(--font-ui)',
+              }}
+            >
+              {errorMessage}
+            </span>
+          )}
+        </div>
+      )}
     </section>
   );
 };

@@ -126,13 +126,13 @@ impl DesktopHotkeyRegistrar {
             if *other_action != action {
                 if bound_sc.eq_ignore_ascii_case(new_shortcut) {
                     return Err(CoreError::Validation(
-                        "Two actions cannot share the same hotkey combination".to_string(),
+                        "Another Snapdown action already uses this combination".to_string(),
                     ));
                 }
                 if let Ok(other_parsed) = Shortcut::from_str(bound_sc) {
                     if parsed_new == other_parsed {
                         return Err(CoreError::Validation(
-                            "Two actions cannot share the same hotkey combination".to_string(),
+                            "Another Snapdown action already uses this combination".to_string(),
                         ));
                     }
                 }
@@ -168,10 +168,11 @@ impl DesktopHotkeyRegistrar {
             if is_same && self.startup_failures.contains_key(&action) {
                 // If it was failed on startup, try re-registering now
                 if let Some(backend) = &self.backend {
-                    backend.register_shortcut(new_shortcut).map_err(|e| {
-                        CoreError::Validation(format!(
-                            "Hotkey combination '{new_shortcut}' is already held by another application or the operating system: {e}"
-                        ))
+                    backend.register_shortcut(new_shortcut).map_err(|_e| {
+                        CoreError::Validation(
+                            "This combination is already held by Windows or another application"
+                                .to_string(),
+                        )
                     })?;
                 }
                 self.startup_failures.remove(&action);
@@ -190,10 +191,11 @@ impl DesktopHotkeyRegistrar {
 
         // BR-26: A combination held by another application/OS is refused at binding time
         if let Some(backend) = &self.backend {
-            backend.register_shortcut(new_shortcut).map_err(|e| {
-                CoreError::Validation(format!(
-                    "Hotkey combination '{new_shortcut}' is already held by another application or the operating system: {e}"
-                ))
+            backend.register_shortcut(new_shortcut).map_err(|_e| {
+                CoreError::Validation(
+                    "This combination is already held by Windows or another application"
+                        .to_string(),
+                )
             })?;
 
             // Unregister old shortcut if registration succeeded
@@ -377,11 +379,55 @@ pub mod tests {
 
         let res = registrar.validate_and_rebind(HotkeyAction::Capture, "Ctrl+Alt+Z");
         assert!(res.is_err());
-        assert!(matches!(res.unwrap_err(), CoreError::Validation(_)));
+        match res.unwrap_err() {
+            CoreError::Validation(msg) => {
+                assert_eq!(
+                    msg,
+                    "This combination is already held by Windows or another application"
+                );
+            }
+            other => panic!("Expected CoreError::Validation, got {other:?}"),
+        }
 
         // Ensure database setting and active bindings were NOT mutated to the failing shortcut
         assert_ne!(registrar.get_shortcut("capture"), Some("Ctrl+Alt+Z".into()));
         assert!(!backend.is_registered("Ctrl+Alt+Z"));
+    }
+
+    #[test]
+    fn a_snapdown_internal_conflict_is_worded_differently_from_an_os_conflict() {
+        let store = Arc::new(SqliteSettingsStore::open_in_memory().unwrap());
+        let backend = Arc::new(MockGlobalShortcutBackend::new().with_conflict("Ctrl+Alt+T"));
+        let mut registrar = DesktopHotkeyRegistrar::new(store.clone(), Some(backend));
+        registrar.init_from_store().unwrap();
+
+        // 1. Internal conflict: trying to bind OpenEditor to the combination held by Capture
+        let internal_err = registrar
+            .validate_and_rebind(HotkeyAction::OpenEditor, DEFAULT_HOTKEY_CAPTURE)
+            .unwrap_err();
+        let internal_msg = match internal_err {
+            CoreError::Validation(msg) => msg,
+            other => panic!("Expected CoreError::Validation, got {other:?}"),
+        };
+
+        // 2. OS conflict: trying to bind Capture to a combination held by the OS / external app
+        let os_err = registrar
+            .validate_and_rebind(HotkeyAction::Capture, "Ctrl+Alt+T")
+            .unwrap_err();
+        let os_msg = match os_err {
+            CoreError::Validation(msg) => msg,
+            other => panic!("Expected CoreError::Validation, got {other:?}"),
+        };
+
+        assert_eq!(
+            internal_msg,
+            "Another Snapdown action already uses this combination"
+        );
+        assert_eq!(
+            os_msg,
+            "This combination is already held by Windows or another application"
+        );
+        assert_ne!(internal_msg, os_msg);
     }
 
     #[test]
@@ -509,7 +555,7 @@ pub mod tests {
     #[test]
     fn rebinding_failure_preserves_active_old_shortcut_in_os() {
         let store = Arc::new(SqliteSettingsStore::open_in_memory().unwrap());
-        let backend = Arc::new(MockGlobalShortcutBackend::new().with_conflict("Ctrl+Alt+Taken"));
+        let backend = Arc::new(MockGlobalShortcutBackend::new().with_conflict("Ctrl+Alt+T"));
         let mut registrar = DesktopHotkeyRegistrar::new(store.clone(), Some(backend.clone()));
         registrar.init_from_store().unwrap();
 
@@ -517,7 +563,7 @@ pub mod tests {
         assert!(backend.is_registered(initial_capture));
 
         // Attempting to rebind to taken shortcut fails
-        let res = registrar.validate_and_rebind(HotkeyAction::Capture, "Ctrl+Alt+Taken");
+        let res = registrar.validate_and_rebind(HotkeyAction::Capture, "Ctrl+Alt+T");
         assert!(res.is_err());
 
         // Old shortcut remains registered in OS and active in store

@@ -6,8 +6,8 @@ created: "2026-08-22"
 updated: "2026-08-22"
 satisfies: [FR-10, FR-11, FR-12, FR-14, NFR-8]
 reviewed:
-  date: "2026-08-22"
-  sha: 1a67115
+  date: '2026-08-23'
+  sha: '783a561'
   lenses: [structure, prose, edge-case-hunter]
 ---
 

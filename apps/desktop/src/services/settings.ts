@@ -2,13 +2,20 @@ import { invoke } from '@tauri-apps/api/core';
 import {
   HotkeyAction,
   HotkeySettingsDto,
+  NamedBudget,
   QualityBudget,
+  QualityBudgetPresetDto,
+  ResolvedPair,
   Settings,
   StartupSettingsDto,
 } from '../types/settings';
 
 export const getSettings = async (): Promise<Settings> => {
   return await invoke<Settings>('get_settings');
+};
+
+export const getQualityBudgetPresets = async (): Promise<QualityBudgetPresetDto[]> => {
+  return await invoke<QualityBudgetPresetDto[]>('get_quality_budget_presets');
 };
 
 export const setVaultPath = async (
@@ -22,12 +29,12 @@ export const setVaultPath = async (
 };
 
 export const setQualityBudget = async (
-  maxLongEdge: number,
-  encoderQuality: number
+  budget: NamedBudget,
+  advanced?: ResolvedPair | null
 ): Promise<QualityBudget> => {
   return await invoke<QualityBudget>('set_quality_budget', {
-    maxLongEdge,
-    encoderQuality,
+    budget,
+    advanced: advanced || null,
   });
 };
 

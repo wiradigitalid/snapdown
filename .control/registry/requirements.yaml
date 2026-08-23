@@ -26,6 +26,11 @@ goals:
     title: The tool never becomes the thing being managed
     measure: Cold start to a usable tray icon under 3 seconds, and no setting touched after the
       first run
+  - id: BG-7
+    title: Snapdown's own surface costs the Reviewer no attention
+    measure: A Reviewer who has never seen Snapdown reaches their first handed-over Bundle without
+      being told how; every text element meets WCAG AA contrast in both Windows themes; no primary
+      surface requires scrolling to discover that a control exists
 
 capabilities:
   - id: CAP-1
@@ -79,6 +84,12 @@ capabilities:
     target_release: r2
     prd: agent-handoff
     depends_on: [CAP-4]
+  - id: CAP-9
+    title: The surface itself — name it, reach it, fit it, read it
+    goal: BG-7
+    component: settings
+    target_release: r3
+    prd: capture-to-markdown
 
 functional:
   # --- CAP-1 Capture -----------------------------------------------------------------
@@ -115,12 +126,13 @@ functional:
       maximum and whose size is a small fraction of the unreduced capture, and it is still legible
       enough to read the UI text in it.
   - id: FR-5
-    title: Control the Quality Budget
+    title: Choose a Quality Budget by naming the intent
     capability: CAP-2
     component: settings
     writes: [Setting]
-    proof: Changing the long edge in Settings and taking a new Capture produces a stored image at the
-      new size, while Findings captured earlier are untouched.
+    proof: A Reviewer who has never opened Advanced gets a legible, small stored image from both a
+      300x120 tooltip capture and a full 4K screen capture, and Settings can state in one word which
+      budget produced each.
   # --- CAP-3 Library and Editor ------------------------------------------------------
   - id: FR-6
     title: See every Finding with its Note
@@ -204,12 +216,35 @@ functional:
     proof: Changing the Capture hotkey makes the new combination work and the old one stop working,
       without restarting Snapdown.
   - id: FR-18
-    title: Run at Windows startup
+    title: Run at Windows startup, on by default after first run
     capability: CAP-6
     component: settings
     writes: [Setting]
     proof: With the setting on, signing in to Windows leaves Snapdown running in the tray with its
-      hotkeys registered; with it off, it does not start.
+      hotkeys registered; with it off, it does not start. After a first run nobody configured, it
+      is on.
+  # --- CAP-9 The surface itself -------------------------------------------------------
+  - id: FR-27
+    title: Name the surface the Reviewer is looking at
+    capability: CAP-9
+    component: settings
+    writes: []
+    proof: A Reviewer with the workspace window open and no prior knowledge can say what the
+      application is called and which part of it they are in, from the window alone.
+  - id: FR-28
+    title: Reach every surface from every surface
+    capability: CAP-9
+    component: settings
+    writes: []
+    proof: From a cold open on any one surface, a Reviewer who has never used Snapdown reaches each
+      of the other three without being told how.
+  - id: FR-29
+    title: A primary surface fits the window it opens in
+    capability: CAP-9
+    component: settings
+    writes: []
+    proof: At the window's minimum supported size, every control on every primary surface is either
+      visible or visibly indicated; nothing is discovered only by scrolling.
   # --- CAP-7 Local agent access ------------------------------------------------------
   - id: FR-19
     title: Issue and copy an Access Key
@@ -359,6 +394,24 @@ nonfunctional:
     goal: BG-4
     component: sharing
     enforced_by: A route-inventory test and a response-equality test
+  - id: NFR-16
+    title: Every text element meets WCAG AA contrast against its own background, in both the Windows
+      light and the Windows dark theme
+    goal: BG-7
+    component: settings
+    enforced_by: An automated contrast assertion run over every screen in both themes
+  - id: NFR-17
+    title: No colour is defined for only one theme; every surface renders correctly under either
+      Windows theme and under a change of it while running
+    goal: BG-7
+    component: settings
+    enforced_by: A both-themes render test over every screen, plus a lint rule refusing a literal
+      colour outside the token file
+  - id: NFR-18
+    title: The parameters Auto resolved for a Capture are stored with that Finding
+    goal: BG-3
+    component: finding
+    enforced_by: An assertion that every stored Finding carries its resolved budget
 
 journeys:
   - id: UJ-1

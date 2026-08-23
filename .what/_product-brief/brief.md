@@ -2,7 +2,7 @@
 title: "Product Brief: Snapdown"
 status: draft
 created: "2026-08-22"
-updated: "2026-08-22"
+updated: "2026-08-23"
 ---
 
 # Product Brief: Snapdown
@@ -85,6 +85,22 @@ The honest differentiator is not technical. It is that the output format is the 
 export option, and that the three handoff paths — clipboard, MCP, URL — are the same bundle rather
 than three features. There is no moat here beyond building the loop properly and keeping it fast.
 
+One tool is aimed at the same problem rather than a neighbouring one: Cobalt Capture
+(`https://cobaltcapture.com/`), a browser-based visual feedback tool that publishes a review as a
+public URL plus Markdown for a named list of coding agents. Two things about it are worth carrying.
+It **deliberately avoids annotation-heavy markup** — a crop taken at capture time and an editable
+paragraph beside each screenshot, and nothing else. That corroborates rather than threatens the
+numbered-markers-only choice: a second team reached the same conclusion from the same audience.
+And its own differentiator is **voice dictation of the note**, on the argument that speaking
+captures the aside a reviewer would not have bothered to type. Snapdown has no answer to that and
+does not currently need one, but it is the first idea to reach for if the note field proves to be
+where the loop slows down.
+
+Where Snapdown differs from it is the axis Cobalt gave up: Snapdown is local-first and installable,
+the capture is a global hotkey rather than a browser tab, and nothing leaves the machine unless the
+Reviewer publishes a named bundle. Cobalt's "no install, no signup" is a real advantage for a
+first try and the opposite of what a constraint on personal data allows.
+
 ## Who This Serves
 
 | Role | Need | Tier |
@@ -109,6 +125,14 @@ them that way.
   its image files and leaves nothing orphaned.
 - **BG-6** — the tool never becomes the thing being managed: hotkeys, target folder, compression, and
   startup behaviour are set once and stay out of the way.
+- **BG-7** — Snapdown's own surface costs the Reviewer no attention. Every screen is legible at a
+  glance, every control is answerable without a manual, and no screen asks the Reviewer for a number
+  they have no way to judge. The bar is the experience of Snagit and of Cobalt Capture, on a product
+  that does less than either.
+
+BG-6 and BG-7 look adjacent and are not the same goal. BG-6 is about **frequency** — a setting the
+Reviewer touches once. BG-7 is about **cost per encounter** — what that one touch, and every capture
+after it, actually demands of them. A product can fully satisfy BG-6 with a screen nobody can read.
 
 ## Success Criteria
 
@@ -122,6 +146,22 @@ Supporting signals, none of which replaces the measure above:
   the reviewer still accepts without going back to the original.
 - Reviews are handed over in batches rather than one finding at a time.
 - Deleting a finding or a bundle leaves no image file behind in the target folder.
+
+For BG-7, and stated separately because it is measured differently — not by timing the loop but by
+watching a first encounter with it:
+
+- **A Reviewer who has never seen Snapdown reaches their first handed-over bundle without being
+  told how.** No screen is explained to them, and no control is defended.
+- **Every setting can be answered from its own screen.** A control that requires the Reviewer to
+  guess a number, or to leave and measure something, has failed regardless of its default.
+- **Every text element meets WCAG AA contrast in both the Windows light and dark themes.** This is
+  the one criterion here with a number, and it is checkable by a test rather than by opinion.
+- **Nothing on a primary screen requires scrolling to be discovered.** Scrolling to read more is
+  fine; scrolling to find out that something exists is not.
+
+These four are how the condition in DEC-005 — "until the experience bar set at G2 is met" — is
+actually checked. G2 sharpens them into `FR` and `NFR`; until it does, DEC-005 names a bar that
+nobody can measure, and its own Cost section admits as much.
 
 ## Scope
 
@@ -168,6 +208,15 @@ Supporting signals, none of which replaces the measure above:
   of the capture loop behind connectivity.
 - **Deleting a finding deletes its image file.** Forbids a soft-delete that leaves the file on disk,
   and forbids a bundle that outlives the images it points at.
+- **The desktop experience is finished before publishing and agent access are advanced.** Forbids a
+  new capability wave on either while BG-7 is unmet, and forbids widening a surface that has already
+  failed a first encounter. It does not forbid fixing a defect in what already shipped. Recorded as
+  `DEC-005`; it lifts by its own terms when the BG-7 criteria above are verified, and needs no
+  superseding decision to do so.
+- **One installed executable carries the whole desktop product.** Forbids a second binary for the
+  editor, and forbids the product and its window disagreeing about their own name. Recorded as
+  `DEC-003`. The `mcp-bridge` is not an exception to this: an MCP client launches it, the Reviewer
+  never does, and it owns no window.
 
 ## Assumptions
 
@@ -183,6 +232,14 @@ Supporting signals, none of which replaces the measure above:
 - The reviewer is willing to paste a key into an agent chat to grant access, and prefers that to the
   agent having standing access.
 - An agent on a remote host can fetch an HTTPS URL and the images it references.
+- Snagit and Cobalt Capture are the right experience benchmark for BG-7. Both are built for a human
+  reader; Snapdown's reader is a machine. If the benchmark is wrong, effort goes into affordances no
+  agent can use, and BG-7 is met against the wrong standard. Filed as `OQ-20`.
+- Four named Quality Budget presets are distinguishable enough that a Reviewer picks between them
+  rather than leaving Auto forever. If not, Advanced and Custom are cost with no buyer. Filed as
+  `OQ-18` and recorded as the reversal trigger in `DEC-004`.
+- The Reviewer's want from MCP is unformed rather than unstated, so holding agent access still costs
+  delay and not rework. Filed as `OQ-17`.
 
 ## Prerequisites
 

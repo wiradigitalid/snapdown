@@ -111,6 +111,38 @@ pub const MIGRATIONS: &[Migration] = &[
         );
     "#,
     },
+    Migration {
+        version: 6,
+        description: "drop finding_id foreign key constraint from bundle_item table",
+        sql: r#"
+        CREATE TABLE IF NOT EXISTS bundle_item_v6 (
+            id TEXT PRIMARY KEY,
+            bundle_id TEXT NOT NULL,
+            finding_id TEXT NOT NULL,
+            position INTEGER NOT NULL,
+            image_path TEXT NOT NULL,
+            FOREIGN KEY(bundle_id) REFERENCES bundle(id) ON DELETE CASCADE,
+            UNIQUE(bundle_id, finding_id)
+        );
+
+        INSERT INTO bundle_item_v6 (id, bundle_id, finding_id, position, image_path)
+        SELECT id, bundle_id, finding_id, position, image_path FROM bundle_item;
+
+        DROP TABLE bundle_item;
+
+        ALTER TABLE bundle_item_v6 RENAME TO bundle_item;
+    "#,
+    },
+    Migration {
+        version: 7,
+        description:
+            "add quality budget derivation and resolution tracking columns to finding table",
+        sql: r#"
+        ALTER TABLE finding ADD COLUMN resolved_long_edge INTEGER;
+        ALTER TABLE finding ADD COLUMN resolved_encoder_quality INTEGER;
+        ALTER TABLE finding ADD COLUMN budget_name TEXT;
+    "#,
+    },
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> Result<(), StoreError> {

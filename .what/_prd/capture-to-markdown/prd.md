@@ -12,6 +12,7 @@ updated: "2026-08-22"
 | Date | What changed | Why | Releases affected |
 |---|---|---|---|
 | 2026-08-22 | Initial version | The desktop review loop is the product's core; nothing else can be handed off until findings exist | r1 |
+| 2026-08-23 | Added § 4.7 (`CAP-9`, `FR-27`–`FR-29`) and `NFR-16`–`NFR-18`; rewrote `FR-5`; amended `FR-18` | r1 and r2 shipped every promised capability, and the first sustained use produced a list of experience defects rather than missing features. `BG-7` now carries that, and this initiative gains the requirements that make it checkable | r3 |
 
 ## 0. Document Purpose
 
@@ -223,19 +224,36 @@ legible enough to read the UI text in it.
 - Reduction never blocks the overlay from closing.
 - Exactly one image file per Finding exists in the Vault after reduction.
 
-#### FR-5: Control the Quality Budget
+#### FR-5: Choose a Quality Budget by naming the intent
 
-The Reviewer can set the maximum long edge in pixels and the encoder quality, and see the effect of
-the current setting on a representative capture.
+The Reviewer chooses a Quality Budget by naming what they want of it — **Auto**, **Sharp**,
+**Balanced**, or **Small** — and Auto, the shipped default, derives the long edge and the encoder
+quality from each captured region rather than from a stored constant. The underlying numbers remain
+settable behind an **Advanced** disclosure, and setting either moves the budget to a fifth named
+state, **Custom**. Realizes UJ-4. Recorded as `DEC-004`.
 
-**Proof of done:** Changing the long edge in Settings and taking a new Capture produces a stored image
-at the new size, while Findings captured earlier are untouched.
+**Proof of done:** A Reviewer who has never opened Advanced gets a legible, small stored image from
+both a 300×120 tooltip capture and a full 4K screen capture, and Settings can state in one word which
+budget produced each.
 
 **Consequences (testable):**
-- Both values have defaults the Reviewer never has to change to get a usable result.
-- Settings show the stored size of the most recent Finding, so the effect of a change is visible.
+- The shipped default is `Auto`, and a Reviewer who never opens Settings never sees a raw number.
+- Auto resolves a *different* long edge and encoder quality for a small region than for a full-screen
+  capture. A test that captures both and finds identical parameters is a failing test.
+- Settings show the stored size of the most recent Finding **and the budget that produced it**, so the
+  effect of a change is visible and attributable.
+- Editing an Advanced value moves the named state to `Custom` visibly, in the same interaction. The
+  Reviewer never leaves Auto without seeing that they left it.
 - A change applies only to Captures taken after it; existing Findings are never re-encoded.
 - Values outside a sane range are refused at the point of entry, not on next capture.
+- Each of the four named budgets has a stated intent, and no two resolve to the same parameters for
+  the same input.
+
+This replaces the promise of two raw numbered fields. That promise was not wrong — it already said
+"defaults the Reviewer never has to change" — but it was unkeepable as presented: `1600` and `75` are
+values a Reviewer can accept and cannot judge, and § 8 records that the team cannot defend `1600`
+either. `OQ-3` is not closed by this. It is restated: the question stops being *what is the right
+constant* and becomes *is the derivation legible at its smallest output*.
 
 ### 4.3 The Library and the Editor
 
@@ -460,10 +478,86 @@ UJ-4.
 with its hotkeys registered; with it off, it does not start.
 
 **Consequences (testable):**
+- **It is on after first run, without the Reviewer enabling it.** A capture tool the Reviewer has to
+  remember to launch is a capture tool that is not there when the observation happens, which is the
+  one moment it exists for.
 - Enabling it requires no administrator rights.
 - Starting this way opens no window — the tray icon only.
-- The setting reflects the actual registration state, not a remembered intention.
-- Disabling it removes the registration rather than leaving it and ignoring it.
+- The setting reflects the actual registration state, not a remembered intention. In particular, the
+  control never shows an intended state before the real one has been read.
+- Disabling it removes the registration rather than leaving it and ignoring it, and a later run does
+  not re-enable it. The default applies to a first run, never to a Reviewer's decision.
+
+### 4.7 The surface itself
+
+**Capability:** CAP-9 — serves BG-7.
+
+**Description:** The three requirements here are not features. They are the conditions under which
+every other feature in this document is actually reachable, and they are written down because r1 and
+r2 shipped every capability in § 4.1–§ 4.6 and the Reviewer still could not name the application they
+had opened, find the Editor, or read a label. A promise the Reviewer cannot reach is not kept.
+
+`CAP-9` is administered by `settings`, and that placement needs a word of defence because the
+requirements below govern surfaces `finding` and `bundle` own. `settings` already holds the
+container-level Logical Components — the startup registrar, the hotkey registrar, the settings store
+— which are the app's own machinery rather than any one screen's. The window shell is machinery of
+the same kind. The alternative, giving each surface its own copy of these requirements, produces three
+statements that must be kept identical by hand, which is how a shell drifts.
+
+**Functional Requirements:**
+
+#### FR-27: Name the surface the Reviewer is looking at
+
+Snapdown always identifies itself, and identifies which of its two personas is on screen: the tray and
+the installed executable are **Snapdown**, and the workspace window titles itself **Snapdown Editor**.
+Realizes UJ-4. Recorded as `DEC-003`.
+
+**Proof of done:** A Reviewer with the workspace window open and no prior knowledge can say what the
+application is called and which part of it they are in, from the window alone.
+
+**Consequences (testable):**
+- The installed executable, the tray tooltip, and the window title never disagree about the product's
+  name. A test asserts the three against one source.
+- The build produces exactly one desktop executable. A second one left in the output directory is a
+  build failure, not clutter — a stale `desktop.exe` beside the correct `Snapdown.exe` is precisely
+  what caused the Reviewer to run the wrong binary and conclude the product had no navigation.
+- The workspace window is titled for its persona, not for the section currently open. Its title does
+  not change as the Reviewer moves between sections.
+
+#### FR-28: Reach every surface from every surface
+
+Every primary surface of the Editor — Findings, Bundles, Settings, and Agent access — is reachable
+from every other one, without the Reviewer knowing it exists beforehand. Realizes UJ-4.
+
+**Proof of done:** From a cold open on any one surface, a Reviewer who has never used Snapdown reaches
+each of the other three without being told how.
+
+**Consequences (testable):**
+- Navigation to every primary surface is present and visible on every primary surface.
+- The surface the Reviewer is on is distinguishable from the ones they are not, by more than colour
+  alone.
+- Opening the Editor from the tray, from a hotkey, and after a Capture all arrive somewhere the
+  Reviewer can navigate out of. None of them is a dead end.
+
+#### FR-29: A primary surface fits the window it opens in
+
+Nothing on a primary surface has to be scrolled to before the Reviewer knows it is there. Realizes
+UJ-4.
+
+**Proof of done:** At the window's minimum supported size, every control on every primary surface is
+either visible or visibly indicated; nothing is discovered only by scrolling.
+
+**Consequences (testable):**
+- Settings presents its four groups — startup, Vault folder, Quality Budget, hotkeys — within the
+  window at its minimum supported size. Agent access is **not** one of them: it is a primary surface
+  of its own (`FR-28`, `inventory-screen.md` row 13), and counting it here would have it appear twice
+  in one product.
+- Scrolling to read *more* of a list is allowed and expected. Scrolling to discover that a control
+  *exists* is not, and the distinction is what this requirement turns on.
+- No layout gives a group vertical space it does not use in order to match a neighbour's height. The
+  shipped Settings screen paired a one-checkbox group with a four-control group in equal columns and
+  left roughly a third of the screen empty to do it.
+
 
 ## 5. Non-Goals (Explicit)
 
@@ -532,8 +626,15 @@ with its hotkeys registered; with it off, it does not start.
 
 1. Should a Finding be removable from the Library while staying inside a Bundle that already holds
    its own copy of the image? FR-13 currently says yes; the alternative is refusing the deletion.
-2. What is the right default long edge? 1600 px is the working answer and it has not been measured
-   against a real agent's reading cost. Filed as OQ-3.
+2. ~~What is the right default long edge?~~ **Restated by `DEC-004`.** There is no longer a default
+   long edge to be right or wrong; Auto derives one per capture. The open question becomes: is Auto's
+   output legible at its smallest? Still unmeasured, still filed as OQ-3.
+5. Are four named Quality Budgets distinguishable enough that a Reviewer picks between them rather
+   than leaving Auto forever? If not, Advanced and Custom are cost with no buyer, and `DEC-004`'s own
+   reversal trigger fires. Filed as OQ-18.
+6. Are Snagit and Cobalt Capture the right experience benchmark for `BG-7`, given that both are built
+   for a human reader and Snapdown's reader is a machine? This sits underneath `CAP-9` itself. Filed
+   as OQ-20.
 3. Does the Reviewer want the Editor to open after the first Capture of a session, as a middle
    position between always and never? Deferred until the default has been lived with. Filed as OQ-9.
 4. Should composing a Bundle offer to delete the Findings it consumed, the way deleting a Bundle
@@ -572,6 +673,20 @@ with its hotkeys registered; with it off, it does not start.
 - **NFR-8** — serves BG-1. A Bundle's Markdown renders in a plain CommonMark reader, with every image
   reference resolving relative to the Markdown file's own folder. Enforced by a rendering test over
   a composed Bundle.
+- **NFR-16** — serves BG-7. Every text element on every surface meets WCAG AA contrast against its
+  own background, in both the Windows light and the Windows dark theme. Enforced by an automated
+  contrast assertion run over both themes, not by inspection. This is the requirement the shipped
+  build fails: colour values were hard-coded for a light theme inside components whose tokens follow
+  `prefers-color-scheme`, so the two disagree wherever they meet.
+- **NFR-17** — serves BG-7. No colour is defined only for one theme. Every surface renders correctly
+  under either Windows theme setting and under a change of that setting while running. Enforced by
+  a test that renders every screen in both themes and by a lint rule that refuses a literal colour
+  outside the token file.
+- **NFR-18** — serves BG-3 and BG-7. The parameters Auto resolved for a Capture are stored with that
+  Finding, so a Finding can always say what produced it and a change to the derivation cannot
+  silently rewrite the past. Enforced by an assertion that every stored Finding carries its resolved
+  budget. This exists because `FR-5` forbids re-encoding an existing Finding: without the record,
+  two Findings taken a month apart on "the same" setting differ with nothing to explain why.
 
 ## Constraints and Guardrails
 

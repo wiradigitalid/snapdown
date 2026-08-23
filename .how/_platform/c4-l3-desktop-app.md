@@ -55,9 +55,9 @@ without touching either.
 
 | Element | What it is | Notes |
 | --- | --- | --- |
-| `finding` | Everything about one observation: the hotkey and overlay, region selection, the note field at capture time, image reduction, the Finding list in the Editor, Note editing, Markers, deletion, orphan reporting | Owns `Finding`, `Note`, `Marker`. `mode: guarded`, `risk_accepted: low`. Carries AD-1, AD-2, AD-3, AD-4 |
-| `bundle` | Composition of selected Findings into one stored Markdown document with its own images, the Bundle list, copying the Markdown, and hard deletion | Owns `Bundle`, `BundleItem`. `mode: outline` (global), `risk_accepted: low`. Carries AD-9 and, with `finding`, AD-2 |
-| `settings` | The persisted choices: Vault location, hotkey bindings, Quality Budget, run at Windows startup, whether the Editor opens after a Capture, and where the web service is | Owns `Setting`. `mode: catalog` — G4 is skipped for it by design — `risk_accepted: medium` |
+| `finding` | Everything about one observation: the hotkey and overlay, region selection, the note field at capture time, image reduction, the Finding list in the Editor, Note editing, Markers, deletion, orphan reporting | Owns `Finding`, `Note`, `Marker`. `mode: deep` (raised from `guarded` 2026-08-23), `risk_accepted: low`. Carries AD-1, AD-2, AD-3, AD-4 |
+| `bundle` | Composition of selected Findings into one stored Markdown document with its own images, the Bundle list, copying the Markdown, and hard deletion | Owns `Bundle`, `BundleItem`. `mode: deep` (raised from inherited `outline` 2026-08-23), `risk_accepted: low`. Carries AD-9 and, with `finding`, AD-2 |
+| `settings` | The persisted choices — Vault location, hotkey bindings, Quality Budget, run at Windows startup, whether the Editor opens after a Capture, where the web service is — **and the Editor's window frame**: the two personas of AD-11, the primary navigation, and the surface fit `FR-29` requires | Owns `Setting`. `mode: deep` (raised from `catalog` 2026-08-23, where it had been skipping G4 by design), `risk_accepted: medium`. Carries `CAP-9` and, with every drawing component, AD-10 |
 | `agent-access` | Issuing, showing, copying, and revoking the one Access Key, and serving the loopback Local API that the bridge calls | Owns `AccessKey`. `mode: guarded`, `risk_accepted: low`. Carries AD-5 and AD-7 |
 | `sharing` | The publish client and the Publication record: publishing a named Bundle, unpublishing it, and showing where it is | Owns `Publication`. `mode: guarded`, `risk_accepted: low`. Carries AD-6, AD-8, and with `web-api` AD-5 and AD-7 |
 
@@ -67,7 +67,8 @@ without touching either.
 | --- | --- | --- | --- |
 | Reviewer | `finding` | Capture, note, mark, edit, delete | Global hotkey, Capture Overlay, Editor window |
 | Reviewer | `bundle` | Select, compose, name, list, copy, delete | Editor window |
-| Reviewer | `settings` | Set the Vault, the hotkeys, startup, the Quality Budget, the service address | Settings window |
+| Reviewer | `settings` | Set the Vault, the hotkeys, startup, the Quality Budget, the service address | Settings surface |
+| Reviewer | `settings` | Tell which persona is on screen, and reach any surface from any other | The Editor shell — `UC-24`, `UC-25`, `LC-028` |
 | Reviewer | `agent-access` | Issue, copy, and revoke the Access Key | Editor window |
 | Reviewer | `sharing` | Publish, unpublish, copy a Publication URL | Editor window |
 | `bundle` | `finding` | Read the Findings, Notes, and Markers a composition needs | In-process call into the domain core |
@@ -91,3 +92,13 @@ without touching either.
   contents are `inventory-db.md`.
 - **The Tauri command layer.** It is the adapter that carries every arrow labelled "in-process call"
   from the webview into the core, and naming it as a box would make it look like a component.
+- **The two personas as two boxes.** **Snapdown** (tray, hotkeys, overlay) and **Snapdown Editor**
+  (the workspace window) are personas of one process, per AD-11 and `DEC-003`. Drawing them as two
+  boxes at L3 would say what L2 explicitly decided against: they are not containers, they do not
+  deploy separately, and there is exactly one `Snapdown.exe`. The frame that draws one of them is
+  `LC-028` `editor-shell`, inside `settings`.
+
+**Amended 2026-08-23.** Three `mode` values changed in the Elements table above, and `settings` gained
+the window frame. The frame was previously drawn by nothing: it is inline JSX at the top of `App.tsx`,
+owned by no component, which is how `FR-27` and `FR-28` came to be unmet without any document being
+wrong.

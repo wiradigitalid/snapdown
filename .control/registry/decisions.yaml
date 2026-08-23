@@ -26,3 +26,62 @@ decisions:
       - .what/agent-access/SRS-agent-access.md
       - .what/agent-access/03-domain/domain-model.md
     created: "2026-08-22"
+  - id: DEC-003
+    title: Snapdown is one process wearing two window personas, not two executables
+    status: applied
+    file: .control/decisions/DEC-003-one-process-two-windows.md
+    serves: [CAP-1, CAP-6]
+    touches:
+      - .control/product-glossary.md
+      - .how/_platform/ARCHITECTURE-SPINE.md
+      - .how/_platform/c4-l2-containers.md
+      - .how/_platform/c4-l3-desktop-app.md
+      - .how/_platform/inventory-screen.md
+      - .how/settings/04-components/LC-028-editor-shell.md
+      - .what/_prd/capture-to-markdown/prd.md
+      - .what/_product-brief/brief.md
+      - .what/business-rules.md
+      - .what/settings/04-usecases/EXPERIENCE.md
+    created: "2026-08-23"
+  - id: DEC-004
+    title: The Quality Budget is chosen as a named intent, and Auto derives the numbers per capture
+    status: applied
+    file: .control/decisions/DEC-004-quality-budget-presets.md
+    serves: [CAP-2, CAP-6]
+    touches:
+      - .control/product-glossary.md
+      - .control/registry/waves.yaml
+      - .how/finding/02-contracts/contract-inventory.md
+      - .how/finding/04-components/LC-003-image-reducer.md
+      - .how/finding/SDD-finding.md
+      - .how/settings/01-ux/DESIGN.md
+      - .how/settings/02-contracts/contract-inventory.md
+      - .how/settings/05-model/data-model.md
+      - .how/settings/SDD-settings.md
+      - .what/_prd/capture-to-markdown/prd.md
+      - .what/_product-brief/brief.md
+      - .what/business-rules.md
+      - .what/finding/05-scenarios/SCN-03-the-quality-budget-that-resolves-differently.md
+      - .what/settings/02-rules/rules-settings.md
+      - .what/settings/03-domain/domain-model.md
+      - .what/settings/04-usecases/UC-13-decide-how-much-picture-quality-a-screenshot-is-worth.md
+      - .what/settings/SRS-settings.md
+    created: "2026-08-23"
+  - id: DEC-005
+    title: The desktop experience is finished before `sharing` and `agent-access` are touched again
+    status: applied
+    file: .control/decisions/DEC-005-desktop-first-ordering.md
+    serves: [CAP-7, CAP-8]
+    touches:
+      - .control/registry/defects.yaml
+      - .control/registry/waves.yaml
+      - .how/_platform/inventory-screen.md
+      - .how/bundle/01-ux/DESIGN.md
+      - .how/bundle/SDD-bundle.md
+      - .how/settings/01-ux/DESIGN.md
+      - .how/settings/04-components/LC-028-editor-shell.md
+      - .what/_product-brief/brief.md
+      - .what/bundle/04-usecases/EXPERIENCE.md
+      - .what/business-rules.md
+      - .what/settings/04-usecases/EXPERIENCE.md
+    created: "2026-08-23"

@@ -1,4 +1,7 @@
-use snapdown_core::domain::setting::{QualityBudget, Setting, SettingKey, SettingValue};
+use snapdown_core::domain::setting::{
+    NamedBudget, QualityBudget, ResolvedPair, Setting, SettingKey, SettingValue,
+    MAX_ENCODER_QUALITY, MAX_LONG_EDGE_PX, MIN_ENCODER_QUALITY, MIN_LONG_EDGE_PX,
+};
 use snapdown_core::ports::{Clock, SettingsStore};
 use snapdown_store::sqlite::SqliteSettingsStore;
 use snapdown_store::system::SystemClock;
@@ -10,7 +13,7 @@ fn migrations_apply_to_an_empty_database() {
     let db_path = tmp.path().to_path_buf();
 
     let store = SqliteSettingsStore::open(&db_path).unwrap();
-    assert_eq!(store.get_schema_version().unwrap(), 5);
+    assert_eq!(store.get_schema_version().unwrap(), 7);
     assert!(store.is_empty().unwrap());
 }
 
@@ -21,7 +24,7 @@ fn migrations_are_idempotent() {
 
     {
         let store = SqliteSettingsStore::open(&db_path).unwrap();
-        assert_eq!(store.get_schema_version().unwrap(), 5);
+        assert_eq!(store.get_schema_version().unwrap(), 7);
 
         let clock = SystemClock::new();
         let setting = Setting::new(
@@ -35,7 +38,7 @@ fn migrations_are_idempotent() {
     // Reopen existing database
     {
         let store2 = SqliteSettingsStore::open(&db_path).unwrap();
-        assert_eq!(store2.get_schema_version().unwrap(), 5);
+        assert_eq!(store2.get_schema_version().unwrap(), 7);
 
         let s = store2.get(&SettingKey::VaultPath).unwrap();
         assert!(s.is_some());
@@ -63,6 +66,7 @@ fn setting_read_falls_back_to_its_shipped_default() {
         _ => default_qb.clone(),
     };
     assert_eq!(effective_qb, default_qb);
+    assert_eq!(effective_qb.named, NamedBudget::Auto);
 }
 
 #[test]
@@ -92,34 +96,48 @@ fn corrupt_library_refuses_to_open_and_does_not_recreate() {
 }
 
 #[test]
-fn setting_crud_and_invalid_deserialization_handling() {
+fn the_named_state_and_its_resolved_pair_are_written_together() {
     let store = SqliteSettingsStore::open_in_memory().unwrap();
     let clock = SystemClock::new();
 
-    // Verify empty state initially
-    assert!(store.is_empty().unwrap());
-
-    // Set QualityBudget
-    let qb = QualityBudget::new(1920, 85).unwrap();
-    let setting_qb = Setting::new(
+    // 1. Store named budget: Sharp
+    let sharp_qb = QualityBudget::new(NamedBudget::Sharp, None);
+    let sharp_setting = Setting::new(
         SettingKey::QualityBudget,
-        SettingValue::QualityBudget(qb.clone()),
+        SettingValue::QualityBudget(sharp_qb.clone()),
         clock.now_rfc3339(),
     );
-    store.set(&setting_qb).unwrap();
+    store.set(&sharp_setting).unwrap();
 
-    // Verify non-empty state after inserting setting
-    assert!(!store.is_empty().unwrap());
+    let loaded_sharp = store.get(&SettingKey::QualityBudget).unwrap().unwrap();
+    assert_eq!(loaded_sharp.value, SettingValue::QualityBudget(sharp_qb));
 
-    let loaded = store.get(&SettingKey::QualityBudget).unwrap().unwrap();
-    assert_eq!(loaded.value, SettingValue::QualityBudget(qb));
+    // 2. Store custom budget atomically (BR-116)
+    let custom_pair = ResolvedPair::new(2048, 88).unwrap();
+    let custom_qb = QualityBudget::new(NamedBudget::Custom, Some(custom_pair));
+    let custom_setting = Setting::new(
+        SettingKey::QualityBudget,
+        SettingValue::QualityBudget(custom_qb.clone()),
+        clock.now_rfc3339(),
+    );
+    store.set(&custom_setting).unwrap();
 
-    // List all
-    let all = store.list_all().unwrap();
-    assert_eq!(all.len(), 1);
+    let loaded_custom = store.get(&SettingKey::QualityBudget).unwrap().unwrap();
+    assert_eq!(loaded_custom.value, SettingValue::QualityBudget(custom_qb));
+}
 
-    // Delete
-    store.delete(&SettingKey::QualityBudget).unwrap();
-    assert!(store.get(&SettingKey::QualityBudget).unwrap().is_none());
-    assert!(store.is_empty().unwrap());
+#[test]
+fn an_advanced_value_outside_its_range_is_refused_and_does_not_enter_custom() {
+    // Attempting to construct out-of-bounds ResolvedPair fails (BR-117)
+    let below_min_edge = ResolvedPair::new(MIN_LONG_EDGE_PX - 1, 80);
+    assert!(below_min_edge.is_err());
+
+    let above_max_edge = ResolvedPair::new(MAX_LONG_EDGE_PX + 1, 80);
+    assert!(above_max_edge.is_err());
+
+    let below_min_quality = ResolvedPair::new(1920, MIN_ENCODER_QUALITY - 1);
+    assert!(below_min_quality.is_err());
+
+    let above_max_quality = ResolvedPair::new(1920, MAX_ENCODER_QUALITY + 1);
+    assert!(above_max_quality.is_err());
 }

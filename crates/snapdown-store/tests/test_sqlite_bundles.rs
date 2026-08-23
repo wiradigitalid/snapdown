@@ -1,15 +1,16 @@
 use snapdown_core::domain::bundle::{Bundle, BundleItem};
 use snapdown_core::domain::finding::{Finding, Note};
-use snapdown_core::ports::{BundleStore, FindingStore};
+use snapdown_core::ports::{BlobStore, BundleStore, FindingStore};
 use snapdown_store::sqlite::{SqliteBundleStore, SqliteFindingStore};
-use tempfile::NamedTempFile;
+use snapdown_store::vault::VaultBlobStore;
+use tempfile::{NamedTempFile, TempDir};
 
 #[test]
-fn migrations_v3_apply_cleanly_and_create_bundle_tables() {
+fn migrations_apply_cleanly_and_create_bundle_tables() {
     let temp = NamedTempFile::new().unwrap();
     let bundle_store = SqliteBundleStore::open(temp.path()).expect("open bundle store");
 
-    assert_eq!(bundle_store.get_schema_version().unwrap(), 5);
+    assert_eq!(bundle_store.get_schema_version().unwrap(), 7);
 }
 
 #[test]
@@ -18,7 +19,7 @@ fn bundle_store_crud_and_cascade_operations() {
     let bundle_store = SqliteBundleStore::open(temp.path()).expect("open bundle store");
     let finding_store = SqliteFindingStore::open(temp.path()).expect("open finding store");
 
-    // 1. Create a Finding first to satisfy foreign key in bundle_item
+    // 1. Create a Finding first
     let fid = "018f2345-6789-7abc-8def-0123456789aa";
     let finding = Finding {
         id: fid.to_string(),
@@ -28,6 +29,9 @@ fn bundle_store_crud_and_cascade_operations() {
         captured_at: "2026-08-23T10:00:00Z".to_string(),
         source_monitor: "DISPLAY1".to_string(),
         region: "0,0,1920,1080".to_string(),
+        resolved_long_edge: None,
+        resolved_encoder_quality: None,
+        budget_name: None,
     };
     let note = Note {
         id: "note-1".to_string(),
@@ -90,4 +94,325 @@ fn bundle_store_crud_and_cascade_operations() {
         .delete_bundle(bundle_id)
         .expect("delete bundle");
     assert!(bundle_store.get_bundle(bundle_id).unwrap().is_none());
+}
+
+#[test]
+fn deleting_a_finding_leaves_its_bundle_item_in_place() {
+    // BUG-1 / FR-13: Deleting a Finding must NOT cascade-delete bundle_item rows
+    let temp = NamedTempFile::new().unwrap();
+    let bundle_store = SqliteBundleStore::open(temp.path()).expect("open bundle store");
+    let finding_store = SqliteFindingStore::open(temp.path()).expect("open finding store");
+
+    let fid1 = "018f2345-6789-7abc-8def-0123456789a1";
+    let fid2 = "018f2345-6789-7abc-8def-0123456789a2";
+
+    let finding1 = Finding {
+        id: fid1.to_string(),
+        image_path: "findings/finding-1.webp".to_string(),
+        image_width: 1920,
+        image_height: 1080,
+        captured_at: "2026-08-23T10:00:00Z".to_string(),
+        source_monitor: "DISPLAY1".to_string(),
+        region: "0,0,1920,1080".to_string(),
+        resolved_long_edge: None,
+        resolved_encoder_quality: None,
+        budget_name: None,
+    };
+    let note1 = Note {
+        id: "note-1".to_string(),
+        finding_id: fid1.to_string(),
+        body: "Finding 1 note".to_string(),
+        updated_at: "2026-08-23T10:00:00Z".to_string(),
+    };
+    finding_store
+        .create_finding(&finding1, &note1, &[])
+        .expect("create finding 1");
+
+    let finding2 = Finding {
+        id: fid2.to_string(),
+        image_path: "findings/finding-2.webp".to_string(),
+        image_width: 1280,
+        image_height: 720,
+        captured_at: "2026-08-23T10:05:00Z".to_string(),
+        source_monitor: "DISPLAY1".to_string(),
+        region: "0,0,1280,720".to_string(),
+        resolved_long_edge: None,
+        resolved_encoder_quality: None,
+        budget_name: None,
+    };
+    let note2 = Note {
+        id: "note-2".to_string(),
+        finding_id: fid2.to_string(),
+        body: "Finding 2 note".to_string(),
+        updated_at: "2026-08-23T10:05:00Z".to_string(),
+    };
+    finding_store
+        .create_finding(&finding2, &note2, &[])
+        .expect("create finding 2");
+
+    let bundle_id = "018f2345-6789-7abc-8def-0123456789b1";
+    let bundle = Bundle::new(
+        bundle_id.to_string(),
+        "Multi-Item Review Bundle".to_string(),
+        "# Summary\n\n- Finding 1\n- Finding 2".to_string(),
+        "bundles/review_b1.md".to_string(),
+        "2026-08-23T12:00:00Z".to_string(),
+    )
+    .unwrap();
+
+    let item1 = BundleItem::new(
+        "bi-1".to_string(),
+        bundle_id.to_string(),
+        fid1.to_string(),
+        1,
+        "bundles/review_b1/finding_1_burned.webp".to_string(),
+    )
+    .unwrap();
+
+    let item2 = BundleItem::new(
+        "bi-2".to_string(),
+        bundle_id.to_string(),
+        fid2.to_string(),
+        2,
+        "bundles/review_b1/finding_2_burned.webp".to_string(),
+    )
+    .unwrap();
+
+    bundle_store
+        .create_bundle(&bundle, &[item1, item2])
+        .expect("create bundle with 2 items");
+
+    // Verify bundle has 2 items initially
+    let detail_before = bundle_store.get_bundle(bundle_id).unwrap().unwrap();
+    assert_eq!(detail_before.items.len(), 2);
+
+    // Delete finding 1 from finding_store
+    finding_store
+        .delete_finding(fid1)
+        .expect("delete finding 1");
+
+    // Finding 1 is gone from finding store
+    assert!(finding_store.get_finding(fid1).unwrap().is_none());
+
+    // Bundle MUST still retain BOTH bundle_item records (FR-13)
+    let detail_after = bundle_store.get_bundle(bundle_id).unwrap().unwrap();
+    assert_eq!(
+        detail_after.items.len(),
+        2,
+        "Bundle items must not be deleted when a source finding is deleted"
+    );
+    assert_eq!(detail_after.items[0].finding_id, fid1);
+    assert_eq!(detail_after.items[0].position, 1);
+    assert_eq!(detail_after.items[1].finding_id, fid2);
+    assert_eq!(detail_after.items[1].position, 2);
+}
+
+#[test]
+fn deleting_a_finding_leaves_the_bundle_markdown_byte_identical() {
+    // AD-9 & FR-13: Markdown content in bundle must remain byte-identical after finding deletion
+    let temp = NamedTempFile::new().unwrap();
+    let bundle_store = SqliteBundleStore::open(temp.path()).expect("open bundle store");
+    let finding_store = SqliteFindingStore::open(temp.path()).expect("open finding store");
+
+    let fid = "018f2345-6789-7abc-8def-0123456789ac";
+    let finding = Finding {
+        id: fid.to_string(),
+        image_path: "findings/finding-golden.webp".to_string(),
+        image_width: 1920,
+        image_height: 1080,
+        captured_at: "2026-08-23T10:00:00Z".to_string(),
+        source_monitor: "DISPLAY1".to_string(),
+        region: "0,0,1920,1080".to_string(),
+        resolved_long_edge: None,
+        resolved_encoder_quality: None,
+        budget_name: None,
+    };
+    let note = Note {
+        id: "note-golden".to_string(),
+        finding_id: fid.to_string(),
+        body: "Golden Note Body".to_string(),
+        updated_at: "2026-08-23T10:00:00Z".to_string(),
+    };
+    finding_store
+        .create_finding(&finding, &note, &[])
+        .expect("create finding");
+
+    let bundle_id = "018f2345-6789-7abc-8def-0123456789bc";
+    let original_markdown = "# Executive Report\n\n## Finding 1\nGolden Note Body\n\n![Finding 1](bundles/018f2345-6789-7abc-8def-0123456789bc/finding_1_burned.webp)\n";
+
+    let bundle = Bundle::new(
+        bundle_id.to_string(),
+        "Executive Report".to_string(),
+        original_markdown.to_string(),
+        "bundles/executive_report.md".to_string(),
+        "2026-08-23T12:00:00Z".to_string(),
+    )
+    .unwrap();
+
+    let item = BundleItem::new(
+        "bi-golden".to_string(),
+        bundle_id.to_string(),
+        fid.to_string(),
+        1,
+        "bundles/018f2345-6789-7abc-8def-0123456789bc/finding_1_burned.webp".to_string(),
+    )
+    .unwrap();
+
+    bundle_store
+        .create_bundle(&bundle, &[item])
+        .expect("create bundle");
+
+    // Delete finding
+    finding_store.delete_finding(fid).expect("delete finding");
+
+    // Retrieve bundle
+    let loaded = bundle_store.get_bundle(bundle_id).unwrap().unwrap();
+    assert_eq!(
+        loaded.bundle.markdown, original_markdown,
+        "Bundle markdown column must remain byte-identical"
+    );
+    assert_eq!(
+        loaded.bundle.markdown.as_bytes(),
+        original_markdown.as_bytes()
+    );
+}
+
+#[test]
+fn deleting_a_finding_leaves_the_bundles_own_image_copy_in_the_vault() {
+    // SCN-05 / FR-13: The Bundle keeps its own burned copy of the image in the Vault
+    let tmp_vault = TempDir::new().unwrap();
+    let vault_store = VaultBlobStore::new(tmp_vault.path()).unwrap();
+
+    let db_file = NamedTempFile::new().unwrap();
+    let bundle_store = SqliteBundleStore::open(db_file.path()).unwrap();
+    let finding_store = SqliteFindingStore::open(db_file.path()).unwrap();
+
+    let fid = "018f2345-6789-7abc-8def-0123456789ad";
+    let bid = "018f2345-6789-7abc-8def-0123456789bd";
+
+    let finding_img = "findings/f_original.webp";
+    let bundle_burned_img = "bundles/018f2345-6789-7abc-8def-0123456789bd/finding_1_burned.webp";
+
+    // Write original finding image and burned bundle copy
+    vault_store
+        .write_blob(finding_img, b"ORIGINAL_FINDING_PIXELS")
+        .unwrap();
+    vault_store
+        .write_blob(bundle_burned_img, b"BURNED_BUNDLE_COPY_PIXELS")
+        .unwrap();
+
+    let finding = Finding {
+        id: fid.into(),
+        image_path: finding_img.into(),
+        image_width: 800,
+        image_height: 600,
+        captured_at: "2026-08-23T10:00:00Z".into(),
+        source_monitor: "DISPLAY1".into(),
+        region: "0,0,800,600".into(),
+        resolved_long_edge: None,
+        resolved_encoder_quality: None,
+        budget_name: None,
+    };
+    let note = Note {
+        id: "n-ad".into(),
+        finding_id: fid.into(),
+        body: "Note AD".into(),
+        updated_at: "2026-08-23T10:00:00Z".into(),
+    };
+    finding_store.create_finding(&finding, &note, &[]).unwrap();
+
+    let bundle = Bundle::new(
+        bid.into(),
+        "Burned Copy Test".into(),
+        "# Burned Copy".into(),
+        "bundles/burned.md".into(),
+        "2026-08-23T10:00:00Z".into(),
+    )
+    .unwrap();
+    let item = BundleItem::new(
+        "bi-ad".into(),
+        bid.into(),
+        fid.into(),
+        1,
+        bundle_burned_img.into(),
+    )
+    .unwrap();
+    bundle_store.create_bundle(&bundle, &[item]).unwrap();
+
+    // Finding deletion removes finding DB row and finding image blob
+    vault_store.delete_blob(finding_img).unwrap();
+    finding_store.delete_finding(fid).unwrap();
+
+    // Original finding image is deleted
+    assert!(!vault_store.blob_exists(finding_img).unwrap());
+
+    // Bundle's burned copy in vault MUST remain present and intact (FR-13, SCN-05)
+    assert!(
+        vault_store.blob_exists(bundle_burned_img).unwrap(),
+        "Bundle burned image copy must stay intact in the vault"
+    );
+    let burned_bytes = vault_store.read_blob(bundle_burned_img).unwrap();
+    assert_eq!(burned_bytes, b"BURNED_BUNDLE_COPY_PIXELS");
+}
+
+#[test]
+fn deleting_a_bundle_still_cascades_to_its_items() {
+    // FR-14: Deleting a Bundle still cascade-deletes all of its bundle_item rows
+    let temp = NamedTempFile::new().unwrap();
+    let bundle_store = SqliteBundleStore::open(temp.path()).expect("open bundle store");
+
+    let bundle_id = "018f2345-6789-7abc-8def-0123456789be";
+    let bundle = Bundle::new(
+        bundle_id.to_string(),
+        "Cascade Test Bundle".to_string(),
+        "# Cascade Test".to_string(),
+        "bundles/cascade.md".to_string(),
+        "2026-08-23T12:00:00Z".to_string(),
+    )
+    .unwrap();
+
+    let item1 = BundleItem::new(
+        "bi-c1".to_string(),
+        bundle_id.to_string(),
+        "fid-1".to_string(),
+        1,
+        "bundles/cascade/img1.webp".to_string(),
+    )
+    .unwrap();
+
+    let item2 = BundleItem::new(
+        "bi-c2".to_string(),
+        bundle_id.to_string(),
+        "fid-2".to_string(),
+        2,
+        "bundles/cascade/img2.webp".to_string(),
+    )
+    .unwrap();
+
+    bundle_store
+        .create_bundle(&bundle, &[item1, item2])
+        .expect("create bundle");
+
+    // Verify items exist
+    let detail = bundle_store.get_bundle(bundle_id).unwrap().unwrap();
+    assert_eq!(detail.items.len(), 2);
+
+    // Delete bundle
+    bundle_store
+        .delete_bundle(bundle_id)
+        .expect("delete bundle");
+
+    // Verify bundle is None
+    assert!(bundle_store.get_bundle(bundle_id).unwrap().is_none());
+
+    // Direct SQLite check to verify bundle_item table has 0 rows for this bundle_id
+    let conn = rusqlite::Connection::open(temp.path()).unwrap();
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM bundle_item WHERE bundle_id = ?1;",
+            rusqlite::params![bundle_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 0, "All bundle_item records must be cascade-deleted");
 }

@@ -49,6 +49,13 @@ behaviour a reviewer checks.
 | BR-28 | Capture works before anything is configured. A default Vault location is used until the Reviewer chooses one. | `settings`, `finding` | FR-16 · UC-14 | active |
 | BR-29 | Changing the Vault location either moves every existing file or moves none. | `settings`, `finding`, `bundle` | AD-2 · FR-16 | active |
 | BR-30 | Timestamps are UTC everywhere they are stored or transmitted. Local time exists only in what a person is shown. | all | cross-cutting.md § Timestamps | active |
+| BR-103 | The Quality Budget always holds exactly one of five named states — `Auto`, `Sharp`, `Balanced`, `Small`, `Custom` — and `Custom` holds if and only if the Reviewer set a resolved value directly. There is no unnamed state, and the transition into `Custom` is visible in the interaction that causes it. | `settings`, `finding` | DEC-004 · FR-5 | active |
+| BR-104 | Under `Auto`, the long edge and encoder quality applied to a Capture are a function of that Capture's region. They are never read back from a Setting, and two Captures of different sizes are never reduced by the same resolved pair. | `finding`, `settings` | DEC-004 · FR-5 · NFR-18 | active |
+| BR-105 | Every stored Finding carries the long edge and encoder quality that were actually applied to it. A change to how a budget resolves never rewrites what an existing Finding says about itself. | `finding` | NFR-18 · BR-9 | active |
+| BR-106 | Snapdown is one installed executable with two personas. The tray, the executable, and the window title never disagree about the product's name, and no second desktop executable is produced by a build. | `settings`, all | DEC-003 · FR-27 | active |
+| BR-107 | No colour is defined for only one Windows theme, and no literal colour exists outside the token stylesheet. Every text element meets WCAG AA contrast against its own background in both themes. | all | NFR-16 · NFR-17 | active |
+| BR-108 | A control that reports state owned by the operating system shows that it does not yet know, rather than showing an assumed value, until that state has been read. | `settings` | FR-18 · NFR-16 | active |
+| BR-109 | Every primary surface of the Editor is reachable from every other primary surface, including a surface whose component is frozen and gaining no new behaviour. | `settings`, `finding`, `bundle`, `sharing`, `agent-access` | FR-28 · DEC-005 | active |
 
 ## Retired
 

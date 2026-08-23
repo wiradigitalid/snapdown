@@ -35,27 +35,37 @@ rtm:
   FR: FR-11
   DEC: []
   UC: UC-10
-  story: ''
-  wave: ''
-  release: ''
-  test: []
-  status: ''
-  green: false
+  story: W6-S8
+  wave: W6
+  release: r3
+  test:
+  - vitest::bundles_renders_correctly_in_both_windows_themes
+  - vitest::the_preview_is_a_read_only_region_and_not_a_disabled_input
+  - vitest::the_empty_state_offers_no_button_that_only_navigates_away
+  - vitest::copy_markdown_announces_its_result
+  - vitest::an_item_whose_image_copy_is_missing_is_flagged_and_the_bundle_still_opens
+  status: done
   exempt: false
-  broken_at: story
+  green: true
+  broken_at: ''
 - BG: BG-1
   CAP: CAP-4
   FR: FR-12
   DEC: []
   UC: UC-11
-  story: ''
-  wave: ''
-  release: ''
-  test: []
-  status: ''
-  green: false
+  story: W6-S8
+  wave: W6
+  release: r3
+  test:
+  - vitest::bundles_renders_correctly_in_both_windows_themes
+  - vitest::the_preview_is_a_read_only_region_and_not_a_disabled_input
+  - vitest::the_empty_state_offers_no_button_that_only_navigates_away
+  - vitest::copy_markdown_announces_its_result
+  - vitest::an_item_whose_image_copy_is_missing_is_flagged_and_the_bundle_still_opens
+  status: done
   exempt: false
-  broken_at: story
+  green: true
+  broken_at: ''
 - BG: BG-5
   CAP: CAP-5
   FR: FR-13
@@ -132,6 +142,24 @@ rtm:
   broken_at: ''
 - BG: BG-6
   CAP: CAP-6
+  FR: FR-17
+  DEC: []
+  UC: UC-15
+  story: W6-S6
+  wave: W6
+  release: r3
+  test:
+  - vitest::a_listening_chip_stops_listening_when_focus_leaves_it
+  - vitest::a_snapdown_internal_conflict_is_worded_differently_from_an_os_conflict
+  - vitest::a_cleared_hotkey_reads_disabled_rather_than_empty
+  - vitest::a_startup_registration_failure_carries_a_badge_before_the_reviewer_acts
+  - vitest::the_active_and_disabled_badges_carry_a_word_not_only_a_colour
+  status: done
+  exempt: false
+  green: true
+  broken_at: ''
+- BG: BG-6
+  CAP: CAP-6
   FR: FR-18
   DEC: []
   UC: UC-16
@@ -142,6 +170,26 @@ rtm:
   - cargo::startup_registration_needs_no_administrator_rights
   - cargo::the_setting_is_read_back_from_the_os_not_remembered
   - cargo::disabling_removes_the_registration
+  status: done
+  exempt: false
+  green: true
+  broken_at: ''
+- BG: BG-6
+  CAP: CAP-6
+  FR: FR-18
+  DEC: []
+  UC: UC-16
+  story: W6-S5
+  wave: W6
+  release: r3
+  test:
+  - cargo::an_unreadable_library_db_is_reported_with_its_path_and_not_recreated
+  - cargo::a_corrupt_library_db_does_not_panic_the_setup_hook
+  - cargo::a_first_run_with_nothing_configured_registers_at_startup
+  - cargo::a_run_after_the_reviewer_disabled_it_does_not_re_register
+  - cargo::a_registration_removed_outside_snapdown_shows_off_and_is_not_restored
+  - vitest::the_startup_toggle_renders_unknown_until_the_os_has_answered
+  - vitest::the_startup_toggle_never_renders_a_definite_state_before_the_read_resolves
   status: done
   exempt: false
   green: true
@@ -263,6 +311,72 @@ rtm:
   green: false
   exempt: false
   broken_at: story
+- BG: BG-7
+  CAP: CAP-9
+  FR: FR-27
+  DEC: []
+  UC: UC-24
+  story: W6-S2
+  wave: W6
+  release: r3
+  test:
+  - vitest::mounts_captureoverlay_when_url_query_has_overlay_true
+  - vitest::mounts_app_editor_shell_when_url_query_is_empty
+  - vitest::mounts_app_editor_shell_when_url_query_has_other_parameters
+  - cargo::desktop_crate_declares_exactly_one_binary_named_snapdown
+  - cargo::tauri_configuration_has_snapdown_product_and_snapdown_editor_window_title
+  - vitest::lists_all_four_primary_surfaces
+  - vitest::highlights_the_active_tab_with_multiple_visual_cues
+  - vitest::provides_visible_focus_visible_treatment_without_suppressing_focus_outline
+  - vitest::renders_200px_wide_navigation_rail_with_branding
+  - vitest::triggers_ontabchange_when_navigation_tab_is_clicked
+  - vitest::renders_pinned_capture_button_and_triggers_oncaptureclick
+  - vitest::renders_children_within_the_main_content_area_without_crashing
+  status: done
+  exempt: false
+  green: true
+  broken_at: ''
+- BG: BG-7
+  CAP: CAP-9
+  FR: FR-28
+  DEC: []
+  UC: UC-25
+  story: W6-S2
+  wave: W6
+  release: r3
+  test:
+  - vitest::mounts_captureoverlay_when_url_query_has_overlay_true
+  - vitest::mounts_app_editor_shell_when_url_query_is_empty
+  - vitest::mounts_app_editor_shell_when_url_query_has_other_parameters
+  - cargo::desktop_crate_declares_exactly_one_binary_named_snapdown
+  - cargo::tauri_configuration_has_snapdown_product_and_snapdown_editor_window_title
+  - vitest::lists_all_four_primary_surfaces
+  - vitest::highlights_the_active_tab_with_multiple_visual_cues
+  - vitest::provides_visible_focus_visible_treatment_without_suppressing_focus_outline
+  - vitest::renders_200px_wide_navigation_rail_with_branding
+  - vitest::triggers_ontabchange_when_navigation_tab_is_clicked
+  - vitest::renders_pinned_capture_button_and_triggers_oncaptureclick
+  - vitest::renders_children_within_the_main_content_area_without_crashing
+  status: done
+  exempt: false
+  green: true
+  broken_at: ''
+- BG: BG-7
+  CAP: CAP-9
+  FR: FR-29
+  DEC: []
+  UC: UC-26
+  story: W6-S3
+  wave: W6
+  release: r3
+  test:
+  - vitest::all_four_settings_groups_are_visible_at_the_minimum_window_size
+  - vitest::no_group_is_stretched_to_match_a_neighbours_height
+  - vitest::agent_access_is_a_primary_surface_and_not_a_settings_group
+  status: done
+  exempt: false
+  green: true
+  broken_at: ''
 - BG: BG-2
   CAP: CAP-1
   FR: FR-3
@@ -306,56 +420,121 @@ rtm:
   exempt: false
   green: true
   broken_at: ''
+- BG: BG-3
+  CAP: CAP-2
+  FR: FR-5
+  DEC: []
+  UC: UC-13
+  story: W6-S4
+  wave: W6
+  release: r3
+  test:
+  - cargo::auto_resolves_a_different_pair_for_a_small_region_than_for_a_full_screen
+  - cargo::auto_resolves_a_higher_encoder_quality_when_no_downscale_applies
+  - cargo::every_stored_finding_carries_the_pair_that_was_applied_to_it
+  - cargo::the_named_state_and_its_resolved_pair_are_written_together
+  - cargo::an_advanced_value_outside_its_range_is_refused_and_does_not_enter_custom
+  - vitest::editing_an_advanced_value_moves_the_control_to_custom_visibly
+  - vitest::the_readout_names_the_budget_that_produced_the_latest_finding
+  - vitest::a_reviewer_who_never_opens_advanced_never_sees_a_raw_number
+  status: done
+  exempt: false
+  green: true
+  broken_at: ''
 - BG: BG-1
   CAP: CAP-3
   FR: FR-6
   DEC: []
   UC: UC-3
-  story: ''
-  wave: ''
-  release: ''
-  test: []
-  status: ''
-  green: false
+  story: W6-S7
+  wave: W6
+  release: r3
+  test:
+  - vitest::the_findings_detail_pane_renders_the_findings_image
+  - vitest::the_marker_canvas_is_mounted_over_that_image
+  - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
+  - vitest::the_orphan_report_is_reachable_from_the_findings_surface
+  - vitest::findings_renders_correctly_in_both_windows_themes
+  - vitest::the_empty_state_teaches_the_bound_capture_combination
+  - vitest::nothing_selected_is_visually_distinct_from_empty
+  - vitest::every_marker_is_reachable_and_movable_from_the_keyboard
+  - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
+  - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
+  - vitest::panels_take_the_height_available_rather_than_a_fixed_height
+  status: done
   exempt: false
-  broken_at: story
+  green: true
+  broken_at: ''
 - BG: BG-1
   CAP: CAP-3
   FR: FR-7
   DEC: []
   UC: UC-4
-  story: ''
-  wave: ''
-  release: ''
-  test: []
-  status: ''
-  green: false
+  story: W6-S7
+  wave: W6
+  release: r3
+  test:
+  - vitest::the_findings_detail_pane_renders_the_findings_image
+  - vitest::the_marker_canvas_is_mounted_over_that_image
+  - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
+  - vitest::the_orphan_report_is_reachable_from_the_findings_surface
+  - vitest::findings_renders_correctly_in_both_windows_themes
+  - vitest::the_empty_state_teaches_the_bound_capture_combination
+  - vitest::nothing_selected_is_visually_distinct_from_empty
+  - vitest::every_marker_is_reachable_and_movable_from_the_keyboard
+  - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
+  - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
+  - vitest::panels_take_the_height_available_rather_than_a_fixed_height
+  status: done
   exempt: false
-  broken_at: story
+  green: true
+  broken_at: ''
 - BG: BG-1
   CAP: CAP-3
   FR: FR-8
   DEC: []
   UC: UC-5
-  story: ''
-  wave: ''
-  release: ''
-  test: []
-  status: ''
-  green: false
+  story: W6-S7
+  wave: W6
+  release: r3
+  test:
+  - vitest::the_findings_detail_pane_renders_the_findings_image
+  - vitest::the_marker_canvas_is_mounted_over_that_image
+  - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
+  - vitest::the_orphan_report_is_reachable_from_the_findings_surface
+  - vitest::findings_renders_correctly_in_both_windows_themes
+  - vitest::the_empty_state_teaches_the_bound_capture_combination
+  - vitest::nothing_selected_is_visually_distinct_from_empty
+  - vitest::every_marker_is_reachable_and_movable_from_the_keyboard
+  - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
+  - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
+  - vitest::panels_take_the_height_available_rather_than_a_fixed_height
+  status: done
   exempt: false
-  broken_at: story
+  green: true
+  broken_at: ''
 - BG: BG-1
   CAP: CAP-3
   FR: FR-9
   DEC: []
   UC: UC-6
-  story: ''
-  wave: ''
-  release: ''
-  test: []
-  status: ''
-  green: false
+  story: W6-S7
+  wave: W6
+  release: r3
+  test:
+  - vitest::the_findings_detail_pane_renders_the_findings_image
+  - vitest::the_marker_canvas_is_mounted_over_that_image
+  - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
+  - vitest::the_orphan_report_is_reachable_from_the_findings_surface
+  - vitest::findings_renders_correctly_in_both_windows_themes
+  - vitest::the_empty_state_teaches_the_bound_capture_combination
+  - vitest::nothing_selected_is_visually_distinct_from_empty
+  - vitest::every_marker_is_reachable_and_movable_from_the_keyboard
+  - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
+  - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
+  - vitest::panels_take_the_height_available_rather_than_a_fixed_height
+  status: done
   exempt: false
-  broken_at: story
+  green: true
+  broken_at: ''
 ```

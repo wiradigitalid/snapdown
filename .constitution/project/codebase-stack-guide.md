@@ -46,6 +46,10 @@ npm --prefix apps/desktop run lint
 npm --prefix apps/desktop run test
 npm --prefix apps/desktop run build
 
+# Desktop Application Build & Dev
+npm --prefix apps/desktop run tauri build
+npm --prefix apps/desktop run tauri dev
+
 # Method Corpus Validation
 uv run .constitution/method/scripts/validate.py --check
 ```

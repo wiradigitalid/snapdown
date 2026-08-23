@@ -3,12 +3,12 @@ type: sdd
 component: bundle
 status: draft
 created: "2026-08-22"
-updated: "2026-08-22"
+updated: "2026-08-23"
 realizes: [UC-9, UC-10, UC-11, UC-12]
-binds: [AD-2, AD-3, AD-4, AD-9]
+binds: [AD-1, AD-2, AD-9, AD-10]
 reviewed:
-  date: "2026-08-22"
-  sha: 9bdda00
+  date: '2026-08-23'
+  sha: '7c9a6b1'
   lenses: [structure, prose, edge-case-hunter]
 ---
 
@@ -76,6 +76,96 @@ defending.
 Crossings out of this component: reads of `LC-004 finding-store` and `LC-005 vault-blobs`, both
 read-only, and one call into `LC-020 publish-client` when a published Bundle is deleted. Nothing in
 `finding` depends on anything here.
+
+## Inherited Constraints · [guarded]
+
+New at this gate: `bundle` was raised from an inherited `outline` to `deep` on 2026-08-23, so this
+section had never been written. Quoted verbatim from `.how/_platform/ARCHITECTURE-SPINE.md`.
+
+**AD-2 — A record and its files live or die together**
+> Any operation that creates or removes a Finding, a Bundle, or a BundleItem MUST create or remove
+> that record's files in the same unit of work, and MUST leave the prior state intact if any part of
+> it fails. A record MUST NOT be committed before its files exist, and files MUST NOT be removed
+> before the record is.
+
+Reaches this component twice: composition writes image copies and the Markdown before the Bundle row
+(`FR-10`, all-or-nothing), and deletion removes them with it (`FR-14`).
+
+**AD-9 — One Bundle, one Markdown, byte-identical on every path**
+
+The Markdown is composed once and **stored**, not regenerated. `bundle.markdown` is a column. That is
+what makes clipboard, Local API, and published bytes identical without three code paths agreeing, and
+it is why `BUG-1` damages the item list without damaging the document.
+
+**AD-1 — Markers and Note lines are one sequence, not two**
+
+Reaches this component as a **reader**. Composition renders the pairing into Markdown and burns the
+badges into the image copies. A Finding whose sequence is ragged (`SCN-04`) composes as it is; this
+component does not tidy another component's collection.
+
+**AD-10 — Colour has exactly one authority, and every colour exists in both themes**
+
+**Was `[MISSING]`; resolved by `W6-S1` at `420ecce`.** `BundleView.tsx` carried `#f8fafc` (line 93),
+`#e0f2fe` / `#ffffff` (114), `#ffffff` (137), `#f1f5f9` (173) — all light-theme values on a surface
+rendered under either theme, and this was the panel the Reviewer saw as white-on-white. Line 93 now
+reads `backgroundColor: 'var(--color-bg)'`.
+
+## Failure Behaviour · [guarded]
+
+Never written before. The boundary list is this component's rows in `inventory-screen.md` — 8, 9, 10 —
+plus the two stores. `bundle` owns no endpoint in `inventory-api.md`; `agent-access` serves Bundles
+over the Local API and owns those rows.
+
+| Boundary | Other side is slow | Other side is absent | Other side is lying |
+|---|---|---|---|
+| **`LC-013` → `library.db`** | The surface renders its three regions and holds their shape. No assumed values | Reported with the file path; nothing is created over it | A row whose `markdown_path` names a file that is gone: the item is flagged, the Bundle still opens, Delete still works |
+| **`LC-010` → `LC-005 vault-blobs`** | Composition shows progress and cannot be dismissed | Composition **refuses**, naming the Finding whose image is missing (`BR-13`). It never writes a Bundle with a broken reference | A write that reports success and produced no file is caught by the same all-or-nothing check that rolls composition back |
+| **`LC-014` → the clipboard** | Not applicable; the write is synchronous | The failure is **reported**. A silent clipboard failure loses the primary handoff and the Reviewer would not know (`FR-12`) | A clipboard that accepts the write and holds something else is undetectable, and the product does not claim to detect it |
+| **`LC-010` → `finding`** | Not applicable; in-process | A Finding deleted mid-composition fails the composition, all-or-nothing | **`BUG-1`.** A Finding deleted *after* composition cascades away the `bundle_item` row. The Bundle reports nothing and its item list is silently short |
+| **`LC-022` → `sharing`** | The publish dialog shows its own progress | Frozen by `DEC-005`; the surface shows current state and gains no behaviour | Out of scope this release |
+
+## ABCE · [deep]
+
+### Boundary
+
+| Object | What crosses it |
+|---|---|
+| `BundlesScreen` | Selection and the three actions |
+| `ComposeDialog` | A name and a confirmed selection |
+| `BundleStore` | Every Bundle and BundleItem read and write |
+| `Clipboard` | The Markdown, out. The primary handoff (`FR-12`) |
+
+### Control
+
+| Object | Decides |
+|---|---|
+| `BundleComposer` | Order, naming, all-or-nothing across images, Markdown, and rows |
+| `MarkdownWriter` | The exact bytes. Pure — no I/O, which is what makes `AD-9` testable by golden file |
+| `MarkerBurner` | Badges onto the image copies |
+| `BundleRemover` | Rows, image copies, and the Markdown file together (`AD-2`), plus the unpublish cascade (`BR-23`) |
+
+`MarkdownWriter` being pure is the load-bearing choice: `AD-9` says the bytes are identical on every
+path, and a pure function called once, whose output is stored, makes that true by construction rather
+than by three code paths being kept in step.
+
+### Entity
+
+`Bundle` and `BundleItem`. A `BundleItem` is a **membership** — a position and the image copy written
+for it — not a pointer. That distinction is exactly what `BUG-1` violates.
+
+### Behaviour
+
+Composition is the only operation whose cost scales with the selection, and it is the only one with a
+progress state. Everything else is a read or a delete. Nothing here is scheduled or background.
+
+## Evidence labels outstanding · [deep]
+
+| Label | Claim | Disposition |
+|---|---|---|
+| `[MISSING]` | `bundle_item.finding_id` cascades on Finding deletion, contradicting `FR-13` | **`BUG-1`** — a defect, not planned work. The requirement predates the schema |
+| ~~`[MISSING]`~~ **resolved** | `BundleView.tsx` carried four light-theme literals on a surface rendered under either theme | **Done — `W6-S1` at `420ecce`.** Line 93 now reads `backgroundColor: 'var(--color-bg)'` |
+| `[MISSING]` | The Markdown preview is not distinguishable from a disabled input to a screen reader | Planned work — `NFR-16` |
+| `[PARTIAL]` | Composition is all-or-nothing in code; whether a failure partway leaves image copies in the Vault was not verified | `wdi-question`, before G4 opens |
 
 ## Design Notes
 

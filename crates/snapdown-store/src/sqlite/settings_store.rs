@@ -1,8 +1,10 @@
-use std::path::Path;
+﻿use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use rusqlite::{Connection, OpenFlags};
-use snapdown_core::domain::setting::{QualityBudget, Setting, SettingKey, SettingValue};
+use snapdown_core::domain::setting::{
+    QualityBudget, ResolvedPair, Setting, SettingKey, SettingValue,
+};
 use snapdown_core::error::CoreError;
 use snapdown_core::ports::SettingsStore;
 
@@ -210,8 +212,9 @@ fn parse_setting_value(key: &SettingKey, raw: &str) -> Result<SettingValue, Core
         SettingKey::QualityBudget => {
             let qb: QualityBudget = serde_json::from_str(raw)
                 .map_err(|e| CoreError::Validation(format!("Invalid QualityBudget JSON: {e}")))?;
-            // Validate ranges
-            QualityBudget::new(qb.max_long_edge, qb.encoder_quality)?;
+            if let Some(custom) = qb.custom_pair {
+                ResolvedPair::new(custom.max_long_edge, custom.encoder_quality)?;
+            }
             Ok(SettingValue::QualityBudget(qb))
         }
         SettingKey::RunAtStartup | SettingKey::OpenEditorAfterCapture => {
@@ -222,6 +225,13 @@ fn parse_setting_value(key: &SettingKey, raw: &str) -> Result<SettingValue, Core
                     "Invalid boolean for key: {}",
                     key.as_str()
                 )))
+            }
+        }
+        SettingKey::StartupRegistered => {
+            if let Ok(b) = raw.parse::<bool>() {
+                Ok(SettingValue::Boolean(b))
+            } else {
+                Ok(SettingValue::String(raw.to_string()))
             }
         }
         SettingKey::VaultPath

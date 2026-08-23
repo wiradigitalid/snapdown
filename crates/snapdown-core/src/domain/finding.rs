@@ -19,6 +19,10 @@ impl Region {
             height,
         }
     }
+
+    pub fn long_edge(&self) -> u32 {
+        self.width.max(self.height)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -30,6 +34,12 @@ pub struct Finding {
     pub captured_at: String,
     pub source_monitor: String,
     pub region: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_long_edge: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_encoder_quality: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget_name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -100,6 +110,67 @@ pub struct FindingDetail {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::setting::{NamedBudget, QualityBudget};
+
+    #[test]
+    fn auto_resolves_a_different_pair_for_a_small_region_than_for_a_full_screen() {
+        let budget = QualityBudget::new(NamedBudget::Auto, None);
+
+        // Tooltip region: 312 x 118
+        let tooltip_region = Region::new(100, 100, 312, 118);
+        let resolved_a = budget.resolve(tooltip_region.long_edge());
+
+        // 4K Dashboard: 3840 x 2160
+        let screen_region = Region::new(0, 0, 3840, 2160);
+        let resolved_b = budget.resolve(screen_region.long_edge());
+
+        // SCN-03 key assertion: resolved(A) != resolved(B)
+        assert_ne!(
+            resolved_a, resolved_b,
+            "Auto budget must resolve different parameter pairs for small tooltip vs 4K dashboard"
+        );
+        assert_ne!(resolved_a.encoder_quality, resolved_b.encoder_quality);
+    }
+
+    #[test]
+    fn auto_resolves_a_higher_encoder_quality_when_no_downscale_applies() {
+        let budget = QualityBudget::new(NamedBudget::Auto, None);
+
+        // Small tooltip (no downscale cap needed)
+        let tooltip_region = Region::new(0, 0, 312, 118);
+        let resolved_small = budget.resolve(tooltip_region.long_edge());
+
+        // Large 4K screen (downscaled)
+        let screen_region = Region::new(0, 0, 3840, 2160);
+        let resolved_large = budget.resolve(screen_region.long_edge());
+
+        assert!(
+            resolved_small.encoder_quality > resolved_large.encoder_quality,
+            "Small un-downscaled region must receive higher encoder quality (got small: {}, large: {})",
+            resolved_small.encoder_quality,
+            resolved_large.encoder_quality
+        );
+    }
+
+    #[test]
+    fn a_finding_can_state_which_named_budget_produced_it() {
+        let finding = Finding {
+            id: "f-1".to_string(),
+            image_path: "findings/f1.png".to_string(),
+            image_width: 312,
+            image_height: 118,
+            captured_at: "2026-08-24T00:00:00Z".to_string(),
+            source_monitor: "DISPLAY1".to_string(),
+            region: "0,0,312,118".to_string(),
+            resolved_long_edge: Some(1280),
+            resolved_encoder_quality: Some(92),
+            budget_name: Some("Auto".to_string()),
+        };
+
+        assert_eq!(finding.budget_name.as_deref(), Some("Auto"));
+        assert_eq!(finding.resolved_long_edge, Some(1280));
+        assert_eq!(finding.resolved_encoder_quality, Some(92));
+    }
 
     #[test]
     fn marker_coordinate_validation_bounds() {

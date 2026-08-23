@@ -1,0 +1,19 @@
+---
+topic: Snapdown — W6 SPEC, the desktop experience rework
+artifact: _bmad-output/specs/w6-desktop-experience/SPEC.md
+updated: 2026-08-23T23:00
+---
+
+- (event) 2026-08-23 headless run, intent create, slug w6-desktop-experience. SPEC.md and stories.yaml written; 10 stories across 4 epics
+- (constraint) the SPEC is a PROJECTION of .what/ and .how/ and introduces nothing they do not say. Where something was missing it is reported in section Open questions rather than invented
+- (question) THE ONE REAL GAP: the exact Auto curve for the Quality Budget is specified nowhere upstream. LC-003-image-reducer.md states three REQUIREMENTS it must satisfy and explicitly leaves the curve as an implementation choice. The SPEC carries the three requirements and names the choice as W6-S4's builder's, to be recorded in the code against OQ-3. Inventing a curve here would have been the SPEC stating something .what/ and .how/ do not
+- (decision) capabilities are CAP-9, CAP-2 and CAP-6 rather than a new one. Nothing in this wave is a new capability: CAP-9 was born at G2 for exactly this, and CAP-2 and CAP-6 are amended by DEC-004 and the FR-18 change
+- (decision) the two defect stories, W6-S9 (BUG-1) and W6-S10, are in the wave rather than handled as hotfixes. Both are code disagreeing with a requirement active since G2, both need a migration or an error path in the same files this wave already touches, and splitting them out would mean two branches racing on the same schema
+- (constraint) success signal is stated as seven checks a person can run on a clean machine, not as "the tests pass". Item 2 — a grep for a hex literal returning nothing — is the one that proves AD-10 rather than merely testing around it
+- (decision) Non-goals carries six entries, and three of them are things a reasonable builder would otherwise ADD: a sub-navigation inside Settings, an annotation tool, and a periodic hotkey health check. Each was considered upstream and rejected with a reason, and a Non-goal is the only place a rejection survives into the build
+- (note) the narrative in DEC-003/004/005 — alternatives, reversal triggers, Cost — is deliberately NOT lifted. Logged under Wrapper-only content so the drop is on the record. The DEC files stay in companions: for a reader who needs the reasoning
+- (event) STORY FILES ARE NOT WRITTEN HERE. They are the output of Phase 3 Step 1, bmad-build-auto with `Halt after planning.`, and they carry the intent-contract plus baseline_revision. V18 correctly reports all ten as missing and goes green as each is planned. Hand-authoring them would be writing the planner's contract for it
+- (event) self-validate pass 1, coherence: every capability carries intent and success; intents describe WHAT (the Auto curve is the test case and it stayed a requirement, not a prescription); all ten constraints bend a decision; six non-goals; the success signal is seven runnable checks; CAP ids are reused from the registry and not renumbered
+- (event) self-validate pass 2, preservation: every load-bearing claim from the 47 companion documents landed in the kernel, a constraint, a non-goal, or a story's invoke_dev_with. Dropped deliberately and logged: the DEC narrative above
+- (constraint) the DAG was linearised over shared `touches` before the SPEC was written, after V11 reported 14 pairs sharing settings-store, editor-ui or local-db with no depends_on relation. The chain is S1 -> S2 -> S3 -> S4 -> S5 -> S6 -> S7 -> S8, with S9 off S4 and S10 off S6. Genuine parallelism survives: S9 runs alongside S5/S6, and S10 alongside S7/S8
+- (decision) W6-S1 runs ALONE and first, per wdi-build's "run the biggest blocker alone first, let its shape decisions land, then fan out". Every other story in the wave writes UI, and without S1 each would invent its own colours again

@@ -1,21 +1,29 @@
-import React from 'react';
+﻿import React from 'react';
 import { Button } from './Button';
 
 export interface EmptyStateProps {
   heading: string;
   description: string;
+  illustration?: React.ReactNode;
   actionLabel?: string;
   onAction?: () => void;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
   heading,
   description,
+  illustration,
   actionLabel,
   onAction,
+  className = '',
+  style,
 }) => {
   return (
     <div
+      data-testid="empty-state"
+      className={className}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -24,8 +32,14 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
         padding: 'var(--space-6)',
         textAlign: 'center',
         gap: 'var(--space-2)',
+        ...style,
       }}
     >
+      {illustration && (
+        <div style={{ marginBottom: 'var(--space-2)', color: 'var(--color-text-muted)' }}>
+          {illustration}
+        </div>
+      )}
       <h3
         style={{
           margin: 0,

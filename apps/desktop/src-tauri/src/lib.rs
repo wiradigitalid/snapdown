@@ -1,8 +1,12 @@
-use snapdown_core::domain::setting::HotkeyAction;
+﻿use snapdown_core::domain::setting::HotkeyAction;
+use snapdown_core::ports::Clock;
+use snapdown_store::error::StoreError;
 use snapdown_store::sqlite::{
     SqliteAccessKeyStore, SqliteBundleStore, SqliteFindingStore, SqlitePublicationStore,
     SqliteSettingsStore,
 };
+use snapdown_store::system::SystemClock;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{
     menu::{Menu, MenuItem},
@@ -33,16 +37,130 @@ use commands::finding::{
 };
 use commands::hotkey::{clear_hotkey, get_hotkeys, set_hotkey};
 use commands::settings::{
-    get_latest_finding_size, get_settings, open_vault_folder, pick_vault_folder,
-    set_quality_budget, set_vault_path,
+    get_latest_finding_size, get_quality_budget_presets, get_settings, open_vault_folder,
+    pick_vault_folder, set_quality_budget, set_vault_path,
 };
 use commands::sharing::{
     get_publication_status, publish_bundle, reconcile_publication, unpublish_bundle,
 };
 use commands::startup::{get_startup_status, set_startup_status};
 use hotkey::{DesktopHotkeyRegistrar, TauriGlobalShortcutBackend};
-use startup::{DesktopStartupRegistrar, TauriAutoStartBackend};
+use startup::{reconcile_startup_on_boot, DesktopStartupRegistrar, TauriAutoStartBackend};
 use state::AppState;
+
+#[derive(Debug, thiserror::Error)]
+pub enum StartupError {
+    #[error("Database open failed at {path}: {source}")]
+    DatabaseOpen {
+        path: PathBuf,
+        #[source]
+        source: StoreError,
+    },
+}
+
+pub struct StoresBundle {
+    pub settings_store: SqliteSettingsStore,
+    pub finding_store: SqliteFindingStore,
+    pub bundle_store: SqliteBundleStore,
+    pub access_key_store: SqliteAccessKeyStore,
+    pub publication_store: SqlitePublicationStore,
+}
+
+pub fn init_app_stores(db_path: &Path) -> Result<StoresBundle, StartupError> {
+    let settings_store =
+        SqliteSettingsStore::open(db_path).map_err(|source| StartupError::DatabaseOpen {
+            path: db_path.to_path_buf(),
+            source,
+        })?;
+    let finding_store =
+        SqliteFindingStore::open(db_path).map_err(|source| StartupError::DatabaseOpen {
+            path: db_path.to_path_buf(),
+            source,
+        })?;
+    let bundle_store =
+        SqliteBundleStore::open(db_path).map_err(|source| StartupError::DatabaseOpen {
+            path: db_path.to_path_buf(),
+            source,
+        })?;
+    let access_key_store =
+        SqliteAccessKeyStore::open(db_path).map_err(|source| StartupError::DatabaseOpen {
+            path: db_path.to_path_buf(),
+            source,
+        })?;
+    let publication_store =
+        SqlitePublicationStore::open(db_path).map_err(|source| StartupError::DatabaseOpen {
+            path: db_path.to_path_buf(),
+            source,
+        })?;
+
+    Ok(StoresBundle {
+        settings_store,
+        finding_store,
+        bundle_store,
+        access_key_store,
+        publication_store,
+    })
+}
+
+pub fn format_startup_error_message(err: &StartupError) -> String {
+    match err {
+        StartupError::DatabaseOpen { path, source } => {
+            format!(
+                "Snapdown could not open its library database at {}.\n\nError: {}\n\nSnapdown will not recreate or overwrite this file to prevent data loss.",
+                path.display(),
+                source
+            )
+        }
+    }
+}
+
+#[cfg(windows)]
+pub fn show_native_message_dialog(title: &str, message: &str) {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr::null_mut;
+
+    #[link(name = "user32")]
+    extern "system" {
+        fn MessageBoxW(
+            hWnd: *mut std::ffi::c_void,
+            lpText: *const u16,
+            lpCaption: *const u16,
+            uType: u32,
+        ) -> i32;
+    }
+
+    let wide_title: Vec<u16> = OsStr::new(title).encode_wide().chain(Some(0)).collect();
+    let wide_msg: Vec<u16> = OsStr::new(message).encode_wide().chain(Some(0)).collect();
+
+    const MB_OK: u32 = 0x00000000;
+    const MB_ICONERROR: u32 = 0x00000010;
+
+    unsafe {
+        MessageBoxW(
+            null_mut(),
+            wide_msg.as_ptr(),
+            wide_title.as_ptr(),
+            MB_OK | MB_ICONERROR,
+        );
+    }
+}
+
+#[cfg(not(windows))]
+pub fn show_native_message_dialog(title: &str, message: &str) {
+    eprintln!("{title}: {message}");
+}
+
+pub fn report_startup_error(err: &StartupError, app_data_dir: &Path) {
+    let msg = format_startup_error_message(err);
+    let log_path = app_data_dir.join("startup-error.log");
+    let clock = SystemClock::new();
+    let _ = std::fs::write(
+        &log_path,
+        format!("{}\nTimestamp: {}\n", msg, clock.now_rfc3339()),
+    );
+    show_native_message_dialog("Snapdown - Database Error", &msg);
+}
 
 fn show_settings_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -106,23 +224,20 @@ pub fn run() {
             }
 
             let db_path = app_data_dir.join("library.db");
-            let store = SqliteSettingsStore::open(&db_path)
-                .expect("Failed to initialize SqliteSettingsStore");
-            let finding_store = SqliteFindingStore::open(&db_path)
-                .expect("Failed to initialize SqliteFindingStore");
-            let bundle_store =
-                SqliteBundleStore::open(&db_path).expect("Failed to initialize SqliteBundleStore");
-            let access_key_store = SqliteAccessKeyStore::open(&db_path)
-                .expect("Failed to initialize SqliteAccessKeyStore");
-            let publication_store = SqlitePublicationStore::open(&db_path)
-                .expect("Failed to initialize SqlitePublicationStore");
+            let stores = match init_app_stores(&db_path) {
+                Ok(s) => s,
+                Err(err) => {
+                    report_startup_error(&err, &app_data_dir);
+                    return Err(Box::new(std::io::Error::other(err.to_string())));
+                }
+            };
 
-            let is_first_run = check_is_first_run(&store);
-            let arc_store = Arc::new(store);
-            let arc_finding_store = Arc::new(finding_store);
-            let arc_bundle_store = Arc::new(bundle_store);
-            let arc_access_key_store = Arc::new(access_key_store);
-            let arc_publication_store = Arc::new(publication_store);
+            let is_first_run = check_is_first_run(&stores.settings_store);
+            let arc_store = Arc::new(stores.settings_store);
+            let arc_finding_store = Arc::new(stores.finding_store);
+            let arc_bundle_store = Arc::new(stores.bundle_store);
+            let arc_access_key_store = Arc::new(stores.access_key_store);
+            let arc_publication_store = Arc::new(stores.publication_store);
 
             let backend = Arc::new(TauriGlobalShortcutBackend::new(handle.clone()));
             let mut registrar = DesktopHotkeyRegistrar::new(arc_store.clone(), Some(backend));
@@ -131,7 +246,12 @@ pub fn run() {
             let arc_registrar = Arc::new(Mutex::new(registrar));
 
             let autostart_backend = Arc::new(TauriAutoStartBackend::new(handle.clone()));
-            let startup_registrar = DesktopStartupRegistrar::new(autostart_backend);
+            let mut startup_registrar = DesktopStartupRegistrar::new(autostart_backend);
+
+            // Reconcile startup on boot (BR-112, SCN-02)
+            let clock = SystemClock::new();
+            let _ = reconcile_startup_on_boot(arc_store.as_ref(), &mut startup_registrar, &clock);
+
             let arc_startup_registrar = Arc::new(Mutex::new(startup_registrar));
 
             app.manage(AppState {
@@ -187,6 +307,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_settings,
+            get_quality_budget_presets,
             set_vault_path,
             set_quality_budget,
             get_latest_finding_size,

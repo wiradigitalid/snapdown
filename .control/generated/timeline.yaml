@@ -1,0 +1,333 @@
+asof: '2026-08-23'
+capabilities:
+- id: CAP-1
+  text: ''
+  size: ''
+  priority: ''
+  owner: ''
+  target_release: r1
+  planned_start: ''
+  planned_end: ''
+  estimate_mandays: 0
+  actual_start: ''
+  actual_end: ''
+  delta_days: null
+  state: not-started
+  children:
+  - id: FR-1
+    text: ''
+    stories: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-2
+    text: ''
+    stories: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-3
+    text: ''
+    stories: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  waiting_on: []
+- id: CAP-2
+  text: ''
+  size: ''
+  priority: ''
+  owner: ''
+  target_release: r1
+  planned_start: ''
+  planned_end: ''
+  estimate_mandays: 0
+  actual_start: '2026-08-23'
+  actual_end: ''
+  delta_days: null
+  state: in-progress
+  children:
+  - id: FR-4
+    text: ''
+    stories: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-5
+    text: ''
+    stories:
+    - W1-S3
+    - W6-S4
+    actual_start: '2026-08-23'
+    actual_end: ''
+    state: in-progress
+  waiting_on:
+  - W6-S4
+- id: CAP-3
+  text: ''
+  size: ''
+  priority: ''
+  owner: ''
+  target_release: r1
+  planned_start: ''
+  planned_end: ''
+  estimate_mandays: 0
+  actual_start: '2026-08-23'
+  actual_end: '2026-08-23'
+  delta_days: null
+  state: done
+  children:
+  - id: FR-6
+    text: ''
+    stories:
+    - W6-S7
+    actual_start: '2026-08-23'
+    actual_end: '2026-08-23'
+    state: done
+  - id: FR-7
+    text: ''
+    stories:
+    - W6-S7
+    actual_start: '2026-08-23'
+    actual_end: '2026-08-23'
+    state: done
+  - id: FR-8
+    text: ''
+    stories:
+    - W6-S7
+    actual_start: '2026-08-23'
+    actual_end: '2026-08-23'
+    state: done
+  - id: FR-9
+    text: ''
+    stories:
+    - W6-S7
+    actual_start: '2026-08-23'
+    actual_end: '2026-08-23'
+    state: done
+  waiting_on: []
+- id: CAP-4
+  text: ''
+  size: ''
+  priority: ''
+  owner: ''
+  target_release: r1
+  planned_start: ''
+  planned_end: ''
+  estimate_mandays: 0
+  actual_start: ''
+  actual_end: ''
+  delta_days: null
+  state: not-started
+  children:
+  - id: FR-10
+    text: ''
+    stories: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-11
+    text: ''
+    stories:
+    - W6-S8
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-12
+    text: ''
+    stories:
+    - W6-S8
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-14
+    text: ''
+    stories: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  waiting_on:
+  - W6-S8
+- id: CAP-5
+  text: ''
+  size: ''
+  priority: ''
+  owner: ''
+  target_release: r1
+  planned_start: ''
+  planned_end: ''
+  estimate_mandays: 0
+  actual_start: ''
+  actual_end: ''
+  delta_days: null
+  state: not-started
+  children:
+  - id: FR-13
+    text: ''
+    stories: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-15
+    text: ''
+    stories: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  waiting_on: []
+- id: CAP-6
+  text: ''
+  size: ''
+  priority: ''
+  owner: ''
+  target_release: r1
+  planned_start: ''
+  planned_end: ''
+  estimate_mandays: 0
+  actual_start: '2026-08-23'
+  actual_end: ''
+  delta_days: null
+  state: in-progress
+  children:
+  - id: FR-16
+    text: ''
+    stories:
+    - W1-S3
+    actual_start: '2026-08-23'
+    actual_end: '2026-08-23'
+    state: done
+  - id: FR-17
+    text: ''
+    stories:
+    - W1-S4
+    - W6-S6
+    actual_start: '2026-08-23'
+    actual_end: ''
+    state: in-progress
+  - id: FR-18
+    text: ''
+    stories:
+    - W1-S5
+    - W6-S5
+    actual_start: '2026-08-23'
+    actual_end: ''
+    state: in-progress
+  waiting_on:
+  - W6-S5
+  - W6-S6
+- id: CAP-7
+  text: ''
+  size: ''
+  priority: ''
+  owner: ''
+  target_release: r2
+  planned_start: ''
+  planned_end: ''
+  estimate_mandays: 0
+  actual_start: ''
+  actual_end: ''
+  delta_days: null
+  state: not-started
+  children:
+  - id: FR-19
+    text: ''
+    stories: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-20
+    text: ''
+    stories: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-21
+    text: ''
+    stories: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-22
+    text: ''
+    stories: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  waiting_on: []
+- id: CAP-8
+  text: ''
+  size: ''
+  priority: ''
+  owner: ''
+  target_release: r2
+  planned_start: ''
+  planned_end: ''
+  estimate_mandays: 0
+  actual_start: ''
+  actual_end: ''
+  delta_days: null
+  state: not-started
+  children:
+  - id: FR-23
+    text: ''
+    stories: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-24
+    text: ''
+    stories: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-25
+    text: ''
+    stories: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-26
+    text: ''
+    stories: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  waiting_on: []
+- id: CAP-9
+  text: ''
+  size: ''
+  priority: ''
+  owner: ''
+  target_release: r3
+  planned_start: ''
+  planned_end: ''
+  estimate_mandays: 0
+  actual_start: '2026-08-23'
+  actual_end: ''
+  delta_days: null
+  state: in-progress
+  children:
+  - id: FR-27
+    text: ''
+    stories:
+    - W6-S2
+    actual_start: '2026-08-23'
+    actual_end: '2026-08-23'
+    state: done
+  - id: FR-28
+    text: ''
+    stories:
+    - W6-S2
+    actual_start: '2026-08-23'
+    actual_end: '2026-08-23'
+    state: done
+  - id: FR-29
+    text: ''
+    stories:
+    - W6-S3
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  waiting_on:
+  - W6-S3
+uncommitted_stories: []

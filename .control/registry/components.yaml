@@ -20,11 +20,16 @@ product_components:
     caps: [CAP-1, CAP-2, CAP-3, CAP-5]
     owns: [Finding, Note, Marker]
     containers: [desktop-app]
-    mode: guarded
+    # Raised catalog-of-record depth on 2026-08-23: guarded -> deep. The code already runs, so what
+    # G4 produces here is an AS-BUILT RECORD under sdd-guide.md's evidence labels, not a design.
+    mode: deep
     risk_accepted: low
     risk_note: A Capture may contain personal data, and deleting a Finding is an irreversible action
       that removes a file from disk. Nothing here touches money and there is no contractual promise
       to an outside party.
+    # Reset on 2026-08-23 when the depth moved under it, then re-passed at `deep` the same day:
+    # behaviour and design both written, reviewed under structure + prose + edge-case-hunter, findings
+    # resolved before stamping.
     g4_passed: true
 
   - id: bundle
@@ -34,9 +39,14 @@ product_components:
     caps: [CAP-4]
     owns: [Bundle, BundleItem]
     containers: [desktop-app]
+    # Raised on 2026-08-23: inherited `outline` -> explicit `deep`. As-built record, code already runs.
+    mode: deep
     risk_accepted: low
     risk_note: Deleting a Bundle is an irreversible action that removes files from disk, and a
       Bundle carries copies of images that may hold personal data. No money, no third party.
+    # Reset on 2026-08-23 for the same reason as `finding`, then re-passed at `deep` the same day.
+    # BUG-1 was found during this pass; a defect found is not a gate failed, and it is registered
+    # in defects.yaml rather than blocking the gate.
     g4_passed: true
 
   - id: settings
@@ -46,13 +56,17 @@ product_components:
     caps: [CAP-6]
     owns: [Setting]
     containers: [desktop-app]
-    mode: catalog
+    # Raised on 2026-08-23: catalog -> deep. This is the largest change in the pass. At `catalog`
+    # this component SKIPPED G4 entirely, which is why the four choices it holds have no flow, no
+    # state, and no screen specification behind them — and why the owner's Settings complaints have
+    # nowhere in the corpus to be answered. At `deep`, G4 now runs for it.
+    mode: deep
     risk_accepted: medium
     risk_note: No money, no personal data, no irreversible action. The worst outcome is a hotkey
       that does not register, which is visible immediately.
-    # `mode: catalog` skips G4 by design, so this stays false and means nothing. V22 does not read it
-    # for a catalog component, and setting it true would claim a gate that never ran.
-    g4_passed: false
+    # Was false-and-meaningless while this sat at `catalog`, because catalog skips G4. At `deep` it
+    # means something again, and G4 ran for this component for the FIRST time on 2026-08-23.
+    g4_passed: true
 
   - id: agent-access
     title: Agent access
@@ -162,6 +176,22 @@ logical_components:
     component: finding
     area: marker-canvas
     depends_on: [LC-004]
+  # LC-029 and LC-030 born 2026-08-23 by wdi-ux. Both are screens inventory-screen.md already named
+  # (rows 2 and 7) that carried no build unit.
+  - id: LC-029
+    name: capture-note-field
+    lc_type: ui-composite
+    container: desktop-app
+    component: finding
+    area: capture-pipeline
+    depends_on: [LC-001]
+  - id: LC-030
+    name: orphan-report
+    lc_type: ui-screen
+    container: desktop-app
+    component: finding
+    area: editor-ui
+    depends_on: [LC-008]
   - id: LC-008
     name: orphan-sweeper
     lc_type: service
@@ -198,6 +228,14 @@ logical_components:
     component: bundle
     area: local-db
     depends_on: [LC-005]
+  # LC-031 born 2026-08-23 by wdi-ux. inventory-screen.md row 9 named it; nothing built it.
+  - id: LC-031
+    name: compose-bundle-dialog
+    lc_type: ui-composite
+    container: desktop-app
+    component: bundle
+    area: editor-ui
+    depends_on: [LC-010, LC-013]
   - id: LC-014
     name: bundles-editor
     lc_type: ui-screen
@@ -206,13 +244,25 @@ logical_components:
     area: editor-ui
     depends_on: [LC-010, LC-013]
   # --- settings · desktop-app -------------------------------------------------------
+  # LC-028 born 2026-08-23 by wdi-ux, landing DESIGN-settings.md. FR-27 and FR-28 are promises about
+  # the WINDOW FRAME, and in the shipped build the frame is inline JSX at the top of App.tsx owned by
+  # nothing. A promise with no build unit behind it is a promise nobody checks.
+  - id: LC-028
+    name: editor-shell
+    lc_type: ui-screen
+    container: desktop-app
+    component: settings
+    area: editor-ui
+    depends_on: []
   - id: LC-015
     name: settings-screen
     lc_type: ui-screen
     container: desktop-app
     component: settings
     area: settings-store
-    depends_on: [LC-025, LC-026]
+    # LC-009 added 2026-08-23. The Settings screen displays and edits hotkey bindings, so it has always
+    # depended on the registrar; the registry said otherwise and SDD-settings.md said the truth.
+    depends_on: [LC-025, LC-026, LC-009]
   - id: LC-025
     name: settings-store
     lc_type: store
@@ -306,4 +356,10 @@ logical_components:
     component: sharing
     area: web-service
     depends_on: [LC-023]
-
+  - id: LC-032
+    name: desktop-build
+    lc_type: service
+    container: desktop-app
+    component: settings
+    area: build-tooling
+    depends_on: []
