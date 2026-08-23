@@ -244,6 +244,13 @@ that adds a component, grep for `<ComponentName` across `apps/desktop/src` and `
 excluding its own file and its tests.** No hit means nobody can reach it. `V12` will not catch this:
 it checks that an `LC` is *registered*, not that it is *reached*.
 
+**`let _ =` on a Result an invariant depends on is a defect, not a style.** Five instances found on
+2026-08-23 across two files: `vault_migration.rs` swallowed both `fs::remove_file` results, and
+`bundle.rs` swallowed the Markdown write, the Vault open, the unpublish, and two blob deletes. The
+worst of them leaves a published Bundle **live on the internet** after the Reviewer deletes it. It
+reads as deliberate, clippy ignores it at default levels, and no test catches it because every store
+test uses a writable temp directory. Before writing one, ask what invariant the call is holding up.
+
 **Colour lives in exactly one file.** `web/ui/src/styles/tokens.css`, defined for both themes
 (`AD-10`). A lint rule refuses a colour literal anywhere else. The four deliberately theme-invariant
 groups — `--color-marker*`, `--color-overlay-scrim`, `--color-overlay-ring`, `--canvas-checker` —

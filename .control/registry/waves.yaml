@@ -467,18 +467,42 @@ waves:
         title: BUG-1 and the swallowed file errors
         stories:
           - id: W6-S9
-            title: A Bundle survives the deletion of a Finding it holds
+            title: A Bundle survives the deletion of a Finding it holds, and stops swallowing its failures
             component: bundle
             satisfies: []
             depends_on: [W6-S7]
-            touches: [local-db]
+            touches: [local-db, vault-fs, bundle-render]
             spec_folder: _bmad-output/specs/w6-desktop-experience/
             why: |
               BUG-1. bundle_item.finding_id carries ON DELETE CASCADE and foreign_keys is ON, so
               deleting a Finding silently removes the Bundle's record of that item while its Markdown
               and image copy survive. FR-13's third consequence has been active since G2 and says the
               opposite. Migration; rows already lost are not recoverable.
+
+              **This story also carries BUG-9**, found on 2026-08-23 by sweeping for `let _ =` after
+              the same habit produced W6-S10. bundle.rs swallows every filesystem and unpublish
+              Result on three paths, and one of them has a consequence the others do not:
+
+                :72-74  composition swallows the Markdown write AND the VaultBlobStore open, then
+                        commits the Bundle row anyway. FR-10 is all-or-nothing; AD-2 forbids
+                        committing a record before its files exist.
+                :116    delete_bundle swallows unpublish_bundle. The unpublish fails, the deletion
+                        proceeds, the local record is gone, and THE PUBLISHED COPY STAYS LIVE ON THE
+                        PUBLIC INTERNET with nothing pointing at it. The Reviewer believes they
+                        deleted it. BR-20 exists to say the opposite: an unpublish that fails leaves
+                        the Bundle marked published, so nobody is told something is private when it
+                        may not be.
+                :135,137 file deletion swallowed - orphaned image copies, unreported (FR-14, NFR-5).
+
+              Both defects are `bundle`, both are error-handling honesty, and a reviewer wants them
+              in one diff. Part 2 reaches `sharing` behaviour from a `bundle` command and is NOT
+              frozen work: the swallow is in bundle.rs, the fix is in bundle.rs, and DEC-005 says in
+              its own text that it does not forbid fixing what already shipped.
             tests:
+              - cargo::composition_that_cannot_write_its_markdown_writes_no_bundle_row
+              - cargo::composition_that_cannot_open_the_vault_is_refused_not_silently_skipped
+              - cargo::deleting_a_published_bundle_whose_unpublish_fails_aborts_and_reports
+              - cargo::deleting_a_bundle_reports_an_image_copy_it_could_not_remove
               - cargo::deleting_a_finding_leaves_its_bundle_item_in_place
               - cargo::deleting_a_finding_leaves_the_bundle_markdown_byte_identical
               - cargo::deleting_a_finding_leaves_the_bundles_own_image_copy_in_the_vault

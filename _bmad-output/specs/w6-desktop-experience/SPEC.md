@@ -99,6 +99,16 @@ this product has passing unit tests, and nothing tests composition.** `CaptureOv
 `MarkerLayer` are both correct and both unmounted. A green suite proved the parts and never asked
 whether they were assembled.
 
+**A second habit, found the same way and equally systemic: `let _ =` on a `Result` that an invariant
+depends on.** Three instances — `vault_migration.rs:141` and `:180` (`W6-S10`), and three paths in
+`bundle.rs` (`BUG-9`, folded into `W6-S9`). One of them matters more than the rest: `delete_bundle`
+swallows the unpublish, so a failed unpublish leaves the published copy **live on the public
+internet** while the local record is deleted and the Reviewer believes it is gone. `BR-20` was
+written to forbid exactly that outcome.
+
+`let _ =` reads as deliberate, clippy does not flag it at default levels, and no test exercises a
+failing filesystem — every store test uses a writable temp directory.
+
 Who is affected: the Reviewer, on every screen. Nothing here is visible to an agent. `DEC-005` freezes
 `sharing` and `agent-access`; their surfaces stay reachable (`BR-120`) and gain no behaviour.
 

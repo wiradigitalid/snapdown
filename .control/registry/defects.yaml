@@ -319,3 +319,60 @@ defects:
     related: [BUG-2, OQ-22]
     blocked_by: DEC-005, which freezes `sharing`.
     status: open
+  - id: BUG-9
+    title: "Bundle composition and deletion swallow every filesystem and unpublish Result"
+    found: "2026-08-23"
+    found_by: coordinator, sweeping for `let _ =` after the same pattern produced W6-S10
+    component: bundle
+    severity: high
+    contradicts: [AD-2, FR-10, FR-14, BR-20, BR-23, NFR-5]
+    evidence: |
+      apps/desktop/src-tauri/src/commands/bundle.rs
+        :72-74  if let Ok(vault_store) = VaultBlobStore::new(&vault_path) {
+                    let _ = vault_store.write_blob(&md_filename, markdown_content.as_bytes());
+                }
+                ... then the Bundle row is built and stored unconditionally.
+        :116        let _ = unpublish_bundle(id.clone(), state.clone());
+        :135        let _ = vault_store.delete_blob(&detail.bundle.markdown_path);
+        :137            let _ = vault_store.delete_blob(&item.image_path);
+      Note :72 also swallows the VaultBlobStore::new failure: if the store cannot be opened the `if
+      let Ok` simply does not run, and composition continues as though the file had been written.
+    impact: |
+      THREE DISTINCT FAILURES, and they are not equally bad.
+
+      1. COMPOSITION (:72-74). FR-10 is all-or-nothing and AD-2 says a record MUST NOT be committed
+         before its files exist. If the Markdown write fails - or the Vault cannot be opened at all -
+         the Bundle row is created anyway with markdown_path naming a file that does not exist. The
+         Reviewer is told the Bundle was composed. bundle.markdown still holds the bytes, so Copy
+         Markdown works and only the file on disk is missing, which is precisely the kind of partial
+         state AD-2 exists to forbid.
+
+      2. UNPUBLISH ON DELETE (:116). THIS IS THE SERIOUS ONE. BR-23 makes the unpublish part of the
+         same action; BR-20 says an unpublish that fails leaves the Bundle marked published, so the
+         Reviewer is NEVER told something is private when it may not be. Swallowing the Result does
+         the opposite: the unpublish fails, the deletion proceeds, the local record is gone, and the
+         published copy STAYS LIVE ON THE PUBLIC INTERNET with nothing left pointing at it. The
+         Reviewer believes they deleted it. AD-6 and the brief's personal-data constraint are what
+         this reaches.
+
+      3. FILE DELETION (:135, :137). FR-14 promises the image copies go with the Bundle and NFR-5
+         says the Vault holds no file the Library does not point at. A swallowed delete leaves
+         orphaned files, unreported. Same shape as W6-S10's vault-move swallow, and milder: the
+         orphan report (FR-15) can find these - once BUG-6 makes it reachable.
+    why_undetected: |
+      `let _ =` is invisible to clippy at default levels and reads as deliberate. No test exercises a
+      failing filesystem or a failing unpublish, because every store test uses a writable temp dir
+      and a live path. This is the third instance today of one habit - vault_migration.rs:141 and
+      :180 were the first two - which is why it is registered as its own defect rather than folded
+      into W6-S10.
+    fix: |
+      Composition: propagate the write failure and roll back, so FR-10's all-or-nothing is real.
+      Do not swallow VaultBlobStore::new either.
+      Unpublish: on failure, ABORT THE DELETE and report it. BR-20 already dictates the behaviour -
+      leave it marked published. Never delete a local record whose remote copy may still be live.
+      File deletion: report what could not be removed, as W6-S10 does for the Vault move.
+    note: |
+      Part 2 is `sharing` behaviour reached from a `bundle` command, and DEC-005 freezes `sharing`.
+      It is NOT frozen work: the swallow is in bundle.rs, the fix is in bundle.rs, and DEC-005 says
+      in its own text that it does not forbid fixing a defect in what already shipped.
+    status: open
