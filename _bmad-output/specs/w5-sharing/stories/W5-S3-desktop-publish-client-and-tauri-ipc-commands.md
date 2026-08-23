@@ -2,7 +2,7 @@
 id: W5-S3
 title: Desktop publish client and Tauri IPC commands
 wave: W5
-status: planned
+status: done
 created: 2026-08-23
 dependencies: [W5-S1, W5-S2]
 files:
