@@ -161,7 +161,10 @@ mod tests {
         assert_eq!(report.total_vault_files, 2);
         assert_eq!(report.referenced_files, 2);
         assert_eq!(report.orphan_files, vec!["findings/orphan.png".to_string()]);
-        assert_eq!(report.missing_files, vec!["findings/finding2.png".to_string()]);
+        assert_eq!(
+            report.missing_files,
+            vec!["findings/finding2.png".to_string()]
+        );
 
         // Clean orphans
         let cleaned = OrphanSweeper::clean_orphans(&vault_store, &report.orphan_files).unwrap();
