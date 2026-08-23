@@ -2,7 +2,7 @@
 id: W4-S5
 title: Integration verification suite for agent access and refusal envelopes
 wave: W4
-status: planned
+status: done
 created: 2026-08-23
 dependencies: [W4-S1, W4-S2, W4-S3, W4-S4]
 files:
