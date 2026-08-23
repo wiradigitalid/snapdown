@@ -318,6 +318,9 @@ rtm:
   wave: W6
   release: r3
   test:
+  - vitest::the_overlay_window_url_mounts_the_capture_overlay_and_not_the_editor
+  - vitest::the_default_window_url_mounts_the_editor_and_not_the_overlay
+  - cargo::the_capture_hotkey_produces_a_finding_end_to_end
   - cargo::the_build_produces_exactly_one_desktop_executable
   - cargo::the_executable_name_the_tray_tooltip_and_the_window_title_share_one_source
   - vitest::the_workspace_window_titles_itself_snapdown_editor
@@ -339,6 +342,9 @@ rtm:
   wave: W6
   release: r3
   test:
+  - vitest::the_overlay_window_url_mounts_the_capture_overlay_and_not_the_editor
+  - vitest::the_default_window_url_mounts_the_editor_and_not_the_overlay
+  - cargo::the_capture_hotkey_produces_a_finding_end_to_end
   - cargo::the_build_produces_exactly_one_desktop_executable
   - cargo::the_executable_name_the_tray_tooltip_and_the_window_title_share_one_source
   - vitest::the_workspace_window_titles_itself_snapdown_editor
@@ -440,6 +446,10 @@ rtm:
   wave: W6
   release: r3
   test:
+  - vitest::the_findings_detail_pane_renders_the_findings_image
+  - vitest::the_marker_canvas_is_mounted_over_that_image
+  - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
+  - vitest::the_orphan_report_is_reachable_from_the_findings_surface
   - vitest::findings_renders_correctly_in_both_windows_themes
   - vitest::the_empty_state_teaches_the_bound_capture_combination
   - vitest::nothing_selected_is_visually_distinct_from_empty
@@ -460,6 +470,10 @@ rtm:
   wave: W6
   release: r3
   test:
+  - vitest::the_findings_detail_pane_renders_the_findings_image
+  - vitest::the_marker_canvas_is_mounted_over_that_image
+  - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
+  - vitest::the_orphan_report_is_reachable_from_the_findings_surface
   - vitest::findings_renders_correctly_in_both_windows_themes
   - vitest::the_empty_state_teaches_the_bound_capture_combination
   - vitest::nothing_selected_is_visually_distinct_from_empty
@@ -480,6 +494,10 @@ rtm:
   wave: W6
   release: r3
   test:
+  - vitest::the_findings_detail_pane_renders_the_findings_image
+  - vitest::the_marker_canvas_is_mounted_over_that_image
+  - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
+  - vitest::the_orphan_report_is_reachable_from_the_findings_surface
   - vitest::findings_renders_correctly_in_both_windows_themes
   - vitest::the_empty_state_teaches_the_bound_capture_combination
   - vitest::nothing_selected_is_visually_distinct_from_empty
@@ -500,6 +518,10 @@ rtm:
   wave: W6
   release: r3
   test:
+  - vitest::the_findings_detail_pane_renders_the_findings_image
+  - vitest::the_marker_canvas_is_mounted_over_that_image
+  - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
+  - vitest::the_orphan_report_is_reachable_from_the_findings_surface
   - vitest::findings_renders_correctly_in_both_windows_themes
   - vitest::the_empty_state_teaches_the_bound_capture_combination
   - vitest::nothing_selected_is_visually_distinct_from_empty

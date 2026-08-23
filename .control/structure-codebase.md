@@ -14,8 +14,8 @@ Written and refreshed only by `wdi-init` intent `structure`, never by hand. Rule
 
 ## Verified
 
-Re-derived from the tree on disk on **2026-08-23**, at commit **4c5c901**, on branch `main` after
-W1–W5 closed.
+Re-derived from the tree on disk on **2026-08-23**, at commit **4c5c901**, and refreshed at
+**414d576** on branch `wave/w6-gates-rerun` after W6-S1 round 1 landed.
 
 The previous stamp read commit `90d55a7`, "after merging Wave W1 stories" — four waves stale. Two
 `built: true` containers, `mcp-bridge` and `web-api`, had no heading here at all, which V25 refuses:
@@ -112,7 +112,12 @@ web/ui/
   vitest.config.ts   test configuration
   src/
     index.ts         ★ the public surface. A component not exported here does not exist to a consumer
-    components/      Button, TextField, TextArea, Modal, Toast, ConfirmDialog, Checkbox, Markdown, EmptyState
+    components/      Button, TextField, TextArea, Modal, Toast, ConfirmDialog, Checkbox,
+                     EmptyState, ErrorState, Badge, HotkeyChip, SegmentedControl, Toggle,
+                     BundleComposer, FindingsEditor, MarkerLayer, MarkerBadge
+    screens/         AgentAccessView. The only screen here; the desktop's own screens live in
+                     apps/desktop/src/components/. inventory-screen.md rows 14 and 15 name two more
+                     that DO NOT EXIST — BUG-2
     styles/
       tokens.css     ★ every token's value, in both colour schemes. The single source
       components.css ★ every interactive state — focus-visible, hover, active, invalid, disabled
