@@ -3,7 +3,7 @@ id: W6-S8
 title: 'W6-S8: Bundles — preview as the centre, and a read-only region not a disabled input'
 type: 'feature'
 wave: W6
-status: ready-for-dev
+status: done
 created: '2026-08-24'
 dependencies:
   - W6-S1

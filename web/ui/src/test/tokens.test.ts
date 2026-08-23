@@ -44,6 +44,9 @@ describe('Design Tokens Integrity and Parity', () => {
       '--radius-sm',
       '--radius-md',
       '--radius-full',
+      '--preview-line-height',
+      '--bundle-list-width',
+      '--item-list-width',
       '--settings-group-gap',
       '--settings-column-min',
       '--settings-row-height',
@@ -72,6 +75,9 @@ describe('Design Tokens Integrity and Parity', () => {
     const darkContent = darkBlockMatch![1];
 
     const requiredDarkTokens = [
+      '--preview-line-height',
+      '--bundle-list-width',
+      '--item-list-width',
       '--color-bg',
       '--color-surface',
       '--color-surface-raised',
@@ -98,6 +104,9 @@ describe('Design Tokens Integrity and Parity', () => {
       '--color-overlay-scrim',
       '--color-overlay-ring',
       '--canvas-checker',
+      '--preview-line-height',
+      '--bundle-list-width',
+      '--item-list-width',
       '--settings-group-gap',
       '--settings-column-min',
       '--settings-row-height',
