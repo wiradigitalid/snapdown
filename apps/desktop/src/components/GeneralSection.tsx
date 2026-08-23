@@ -15,13 +15,14 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
   return (
     <section
       data-testid="general-section"
+      aria-label="Startup"
       style={{
         display: 'flex',
         flexDirection: 'column',
         gap: 'var(--space-3)',
         padding: 'var(--space-4)',
         border: '1px solid var(--color-border)',
-        borderRadius: 'var(--radius-lg)',
+        borderRadius: 'var(--radius-md)',
         backgroundColor: 'var(--color-surface)',
       }}
     >
@@ -29,13 +30,13 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         <h2
           style={{
             margin: 0,
-            fontSize: 'var(--text-md)',
+            fontSize: 'var(--text-base)',
             fontWeight: 600,
             fontFamily: 'var(--font-ui)',
             color: 'var(--color-text)',
           }}
         >
-          General
+          Startup
         </h2>
         <p
           style={{
@@ -54,18 +55,20 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           display: 'flex',
           flexDirection: 'column',
           gap: 'var(--space-2)',
-          paddingTop: 'var(--space-2)',
+          paddingTop: 'var(--space-1)',
         }}
       >
-        <Checkbox
-          data-testid="startup-toggle"
-          label="Run at Windows startup"
-          checked={runAtStartup}
-          disabled={disabled}
-          onChange={(e) => {
-            void onToggleStartup(e.target.checked);
-          }}
-        />
+        <div style={{ minHeight: 'var(--settings-row-height)', display: 'flex', alignItems: 'center' }}>
+          <Checkbox
+            data-testid="startup-toggle"
+            label="Run at Windows startup"
+            checked={runAtStartup}
+            disabled={disabled}
+            onChange={(e) => {
+              void onToggleStartup(e.target.checked);
+            }}
+          />
+        </div>
         <span
           style={{
             fontSize: 'var(--text-xs)',

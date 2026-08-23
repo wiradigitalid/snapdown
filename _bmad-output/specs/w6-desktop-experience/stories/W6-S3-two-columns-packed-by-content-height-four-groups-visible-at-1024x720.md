@@ -3,7 +3,7 @@ id: W6-S3
 title: 'W6-S3: Two columns packed by content height, four groups visible at 1024x720'
 type: 'feature'
 wave: W6
-status: ready-for-dev
+status: done
 created: '2026-08-24'
 dependencies:
   - W6-S1
