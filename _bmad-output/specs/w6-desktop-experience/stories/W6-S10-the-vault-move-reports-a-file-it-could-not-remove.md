@@ -3,7 +3,7 @@ id: W6-S10
 title: 'W6-S10: The Vault move reports a file it could not remove'
 type: 'bug'
 wave: W6
-status: ready-for-dev
+status: done
 created: '2026-08-24'
 review_loop_iteration: 0
 followup_review_recommended: false
