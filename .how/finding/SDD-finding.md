@@ -180,7 +180,7 @@ health check in `settings` was rejected rather than deferred.
 |---|---|---|
 | `[MISSING]` | `Auto` does not exist. `ImageReducer` reads `DEFAULT_MAX_LONG_EDGE_PX = 1600` and `DEFAULT_ENCODER_QUALITY = 75` | Planned work — `FR-5`, `DEC-004`, `SCN-03` |
 | `[MISSING]` | No Finding stores the resolved pair applied to it | Planned work — `NFR-18`, `BR-105` |
-| `[MISSING]` | `FindingsView.tsx` and its panels carry light-theme literals; the surface renders under either theme | Planned work — `AD-10`, `NFR-16`, `NFR-17` |
+| ~~`[MISSING]`~~ **resolved** | `FindingsView.tsx` and its panels carried light-theme literals on a surface rendered under either theme | **Done — `W6-S1` at `420ecce`.** Every panel draws from tokens; a grep for a literal under `apps/desktop/src` returns nothing |
 | `[NEEDS CONFIRMATION]` | Whether a Marker with no Note line is currently surfaced anywhere, or silently tolerated | `wdi-question`, before G4 opens |
 | `[PARTIAL]` | Multi-monitor DPI handling is implemented; whether a region spanning two monitors at different scales is correct at each was not exercised by the UI audit | `wdi-question` |
 

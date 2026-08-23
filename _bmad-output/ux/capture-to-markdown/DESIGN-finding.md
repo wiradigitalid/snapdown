@@ -114,10 +114,10 @@ list surfaces at a fixed height and leaves a third of the window dark beneath th
 | Image missing | Canvas shows a `--color-warning-bg` panel naming the missing file, with one action: open the orphan report |
 | Error | Centred `ErrorState`: the Library could not be read, one Retry |
 
-**Every panel here draws from `--color-surface` and `--color-text`.** The shipped `FindingsView` paints
-`#ffffff` and `#f8fafc` panels regardless of theme, and under the Windows dark theme the shell's white
-`--color-text` lands on them. That is the white-on-white the Reviewer reported, and it is fixed by
-having no literal in the component at all (`NFR-17`).
+**Every panel here draws from `--color-surface` and `--color-text`.** `FindingsView` used to paint
+`#ffffff` and `#f8fafc` panels regardless of theme, so under the Windows dark theme the shell's white
+`--color-text` landed on them — the white-on-white the Reviewer reported. **Resolved by `W6-S1` at
+`420ecce`**, and by the only fix that holds: no literal in the component at all (`NFR-17`).
 
 ### Marker canvas (`LC-007`)
 

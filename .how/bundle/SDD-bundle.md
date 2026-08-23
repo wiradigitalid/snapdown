@@ -105,9 +105,10 @@ component does not tidy another component's collection.
 
 **AD-10 — Colour has exactly one authority, and every colour exists in both themes**
 
-`[MISSING]` — `BundleView.tsx` carries `#f8fafc` (line 93), `#e0f2fe` / `#ffffff` (114), `#ffffff`
-(137), `#f1f5f9` (173). All light-theme values on a surface that renders under either theme. This is
-the panel the Reviewer saw as white-on-white.
+**Was `[MISSING]`; resolved by `W6-S1` at `420ecce`.** `BundleView.tsx` carried `#f8fafc` (line 93),
+`#e0f2fe` / `#ffffff` (114), `#ffffff` (137), `#f1f5f9` (173) — all light-theme values on a surface
+rendered under either theme, and this was the panel the Reviewer saw as white-on-white. Line 93 now
+reads `backgroundColor: 'var(--color-bg)'`.
 
 ## Failure Behaviour · [guarded]
 
@@ -162,7 +163,7 @@ progress state. Everything else is a read or a delete. Nothing here is scheduled
 | Label | Claim | Disposition |
 |---|---|---|
 | `[MISSING]` | `bundle_item.finding_id` cascades on Finding deletion, contradicting `FR-13` | **`BUG-1`** — a defect, not planned work. The requirement predates the schema |
-| `[MISSING]` | `BundleView.tsx` carries four light-theme literals on a surface rendered under either theme | Planned work — `AD-10`, `NFR-16`, `NFR-17` |
+| ~~`[MISSING]`~~ **resolved** | `BundleView.tsx` carried four light-theme literals on a surface rendered under either theme | **Done — `W6-S1` at `420ecce`.** Line 93 now reads `backgroundColor: 'var(--color-bg)'` |
 | `[MISSING]` | The Markdown preview is not distinguishable from a disabled input to a screen reader | Planned work — `NFR-16` |
 | `[PARTIAL]` | Composition is all-or-nothing in code; whether a failure partway leaves image copies in the Vault was not verified | `wdi-question`, before G4 opens |
 

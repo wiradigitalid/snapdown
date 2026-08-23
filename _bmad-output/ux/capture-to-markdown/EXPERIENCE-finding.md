@@ -124,5 +124,5 @@ silently pointing his numbering at the wrong place.
 | The Note is left empty | The Finding is saved anyway. An image with no note is still an observation, and forcing text at capture time is the tax the product exists to remove |
 | A Marker is placed and the Note has no matching line | The Marker exists and the pane shows it unbound. Neither is deleted to tidy the other |
 | The Vault fills up or goes read-only mid-session | The capture fails loudly with the folder named. `FR-16`'s "refused at the point of choosing" cannot cover a folder that changed underneath |
-| A Finding is deleted while it is inside a Bundle | Allowed — the Bundle holds its own copy (`FR-13`). The confirmation says so, because the Reviewer will otherwise assume the Bundle broke |
+| A Finding is deleted while it is inside a Bundle | Allowed — the Bundle holds its own copy (`FR-13`). The confirmation says so, because the Reviewer will otherwise assume the Bundle broke. **This does not currently hold in the shipped product: `BUG-1`.** `bundle_item.finding_id` cascades, so the deletion silently removes the Bundle's record of that item while its Markdown and image copy survive |
 | Windows theme changes while the canvas is open | The app repaints; the image and its burned Markers do not, and must not (`NFR-17`) |

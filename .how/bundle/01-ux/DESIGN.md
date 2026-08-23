@@ -54,8 +54,10 @@ build unit carried it.
 - Actions sit at the **item list's foot**, not floating over the preview. Copy Markdown is the one
   `primary` Button on the surface; Publish is `secondary`; Delete is `danger`.
 - All three panels draw from `--color-surface` on `--color-bg` and take the height available. The
-  shipped build paints `#f8fafc`, `#ffffff`, and `#e0f2fe` literals at a fixed height, which produces
-  both the dark-theme contrast failure and roughly a third of the window left empty beneath.
+  shipped build painted `#f8fafc`, `#ffffff`, and `#e0f2fe` literals at a fixed height, which produced
+  both the dark-theme contrast failure and roughly a third of the window left empty beneath. The
+  literals are gone as of `W6-S1` (`420ecce`); **the fixed height is not** — that is this surface's own
+  work, in `W6-S8`.
 
 | State | Rendering |
 |---|---|

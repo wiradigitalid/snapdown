@@ -63,9 +63,14 @@ The Windows theme reaches the webview as a CSS media query. Microsoft owns when 
 a change is signalled to a running process.
 
 `NFR-17` requires a theme change to be honoured without a restart, which means the product must not
-read the theme once at boot. **`[MISSING]`** — the shipped code does not read it at all in the places
-that matter: 23 hex literals across `apps/desktop/src` are light-theme values with no query behind
-them.
+read the theme once at boot.
+
+**Was `[MISSING]`; resolved by `W6-S1` at `420ecce`.** Every colour is now a CSS custom property inside a
+`prefers-color-scheme` block, and no JavaScript reads a token value — a grep for `getComputedStyle`
+and `getPropertyValue` across `apps/desktop/src` and `web/ui/src` returns nothing. The repaint is the
+browser's, which is why `waves.yaml` records a runtime-theme-change test under
+`tests_deliberately_not_written`: after W6-S1 there is no application code left in that path to
+break.
 
 ## What is deliberately not here
 

@@ -16,14 +16,19 @@ updated: "2026-08-23"
 | Desktop reset | `apps/desktop/src/styles/tokens.css` | Imports the above; adds the desktop reset and nothing else |
 | Shared UI package | `web/ui/src/` | The base elements the desktop imports as `@snapdown/ui`. Where an element's states actually live |
 
-**One rule governs this whole document, and the product currently breaks it.** A literal colour outside
-the token stylesheet is a defect, not a shortcut. The shipped desktop build carries 23 distinct hex
-literals across `apps/desktop/src/**/*.tsx` — `#ffffff`, `#f8fafc`, `#f1f5f9`, `#e0f2fe`, `#dcfce7`,
-`#fef3c7` and the rest. Every one of them was chosen for a light background, and the token file also
-defines a dark theme under `prefers-color-scheme`. Where the two meet, they disagree: `FindingsView`
-and `BundleView` paint white panels, the shell paints `--color-text` white over them, and the result
-is white on white. That is not a styling slip; it is the predictable outcome of having two colour
-authorities. `NFR-17` makes the single authority a requirement and asks for a lint rule to hold it.
+**One rule governs this whole document.** A literal colour outside the token stylesheet is a defect,
+not a shortcut.
+
+**This document was written against a build that broke it 23 times.** `apps/desktop/src/**/*.tsx` held
+`#ffffff`, `#f8fafc`, `#f1f5f9`, `#e0f2fe`, `#dcfce7`, `#fef3c7` and the rest — every one chosen for a
+light background, while this file also defined a dark theme under `prefers-color-scheme`. Where the
+two met they disagreed: `FindingsView` and `BundleView` painted white panels, the shell painted
+`--color-text` white over them, and the result was white on white. Not a styling slip — the
+predictable outcome of two colour authorities.
+
+**Resolved by `W6-S1` at `420ecce`.** A grep for a hex literal outside this file now returns nothing, and
+the lint rule `NFR-17` asked for refuses a new one. The paragraph above is kept in the past tense
+rather than deleted, because the rule only reads as a rule once you know what it cost.
 
 ## Themes
 

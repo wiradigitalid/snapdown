@@ -78,9 +78,10 @@ composing failed, with nothing half-written.
 - Copy Markdown announces its result. A clipboard write with no announcement is invisible to a screen
   reader, and it is the primary handoff path in the whole product.
 - The item list is a list, and each row names its Finding and its position in the Bundle.
-- Contrast holds in both Windows themes. The shipped `BundleView` paints `#f8fafc`, `#ffffff`,
-  `#e0f2fe`, and `#f1f5f9` panels regardless of theme, and under the Windows dark theme the shell's
-  white text lands on them.
+- Contrast holds in both Windows themes. `BundleView` used to paint `#f8fafc`, `#ffffff`, `#e0f2fe`
+  and `#f1f5f9` panels regardless of theme, so under the Windows dark theme the shell's white text
+  landed on them. Resolved by `W6-S1`; the promise is what remains, and it is now checked by an
+  assertion rather than by inspection.
 
 ## Key flows
 
@@ -102,7 +103,7 @@ confirms. The Vault holds no file the Library does not point at (`NFR-5`).
 |---|---|
 | A Bundle name is already taken | Refused while typing, in the modal, naming the existing Bundle |
 | Composition fails partway | Nothing is written — no half-Bundle, no orphan images. `FR-10` is all-or-nothing |
-| A Finding in the Bundle was deleted afterwards | The Bundle is intact; it holds its own image copies. The item list still names the Finding. This is `FR-13` working, not a fault |
+| A Finding in the Bundle was deleted afterwards | The Bundle is intact; it holds its own image copies. The item list still names the Finding. This is `FR-13` working, not a fault. **It does not hold in the shipped product: `BUG-1`.** `bundle_item.finding_id` cascades, so the item list silently loses its row while the Markdown and the image copy survive. Fixed by `W6-S9` |
 | A Bundle's own image copy is missing from the Vault | The item is flagged, the Bundle still opens, Delete still works, and the orphan report is offered |
 | Copy Markdown while the clipboard is locked by another program | The failure is reported. A silent failure here loses the handoff and the Reviewer would not know |
 | A Bundle of one Finding | Allowed and normal. `OQ-16` records that the extra step may want a shortcut; it is not a different path |

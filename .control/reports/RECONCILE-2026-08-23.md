@@ -149,3 +149,29 @@ editable, and the fix — `wdi-decision` intent `apply` — is also the step tha
 validator, and it will recur on every story in this wave. Each story that removes a defect makes the
 document describing that defect false. The evidence ladder in `sdd-guide.md` is the existing answer;
 what this sweep suggests is that it needs running at **each story's close**, not only at the wave's.
+
+---
+
+## Resolution log — appended 2026-08-23, after the report was written
+
+The report above describes the state **before** anything moved, and it is not edited. What was done
+about it:
+
+| Finding | Action | By |
+|---|---|---|
+| **D1** — three decisions `accepted` behaving as `applied` | `touches` filled from citations (10, 17, 11 files) and all three raised to `applied`. `V8` green. Step 2 of intent `apply` had nothing to do and the memlog says so | `wdi-decision` intent `apply` |
+| **D2** — thirteen documents asserting removed literals | Resolved, **not deleted**: each claim moved to the past tense and stamped `Resolved by W6-S1 at 420ecce`, per the evidence ladder in `sdd-guide.md`. Three `[MISSING]` rows against `AD-10` struck through and marked done | `wdi-component` for the SDDs, `wdi-ux` for `design-system.md` and the three `DESIGN.md` |
+| **D3** — the run folder diverged | All seven files resynced from the landed copies | `wdi-ux` |
+| **C1 · C2 · C3** | Untouched. Each needs a decision that is the owner's, and each is already filed — `OQ-22`, `OQ-23`, `BUG-7` | the owner |
+
+**One finding was made while fixing D2**, which the sweep had missed: `.what/bundle/04-usecases/EXPERIENCE.md`
+listed *a Finding in the Bundle was deleted afterwards → this is `FR-13` working, not a fault* with no
+mention of `BUG-1`, which makes it untrue in the shipped product. The same row in
+`.what/finding/04-usecases/EXPERIENCE.md` had already been flagged; this one had not. Now flagged.
+
+**Kept in the past tense rather than deleted, everywhere.** `AD-10` reads as a preference until you
+know it was written against 23 literals in one codebase. A document that erases what it cost keeps
+being right and stops being persuasive.
+
+**The observation D2 ends on stands, and this pass is its first instance.** Each story in this wave
+that removes a defect makes the document describing that defect false. Nine stories remain.

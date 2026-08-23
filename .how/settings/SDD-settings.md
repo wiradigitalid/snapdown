@@ -97,10 +97,13 @@ it; nothing here initiates a network call.
 > A token that is deliberately theme-invariant — the Marker badge, the capture overlay's scrim — MUST
 > say so where it is defined and MUST still be defined in the token file.
 
-**The shipped code violates this.** `HotkeySection.tsx` carries `#dcfce7`, `#166534`, `#f1f5f9`,
-`#64748b`, `#fef3c7`, `#fde047`, `#854d0e`, `#eff6ff`. All are light-theme values, and the surface
-renders under either theme. `[MISSING]` — dispositioned as planned work in the next wave, not as a
-bug, because the requirement (`NFR-16`, `NFR-17`) was written after the code.
+**The shipped code violated this**, and `W6-S1` fixed it at `420ecce`. `HotkeySection.tsx` carried
+`#dcfce7`, `#166534`, `#f1f5f9`, `#64748b`, `#fef3c7`, `#fde047`, `#854d0e`, `#eff6ff` — all
+light-theme values on a surface that renders under either theme. It now uses the `--color-success-*`
+and `--color-neutral-*` pairs, each proven against its own background once.
+
+Recorded in the past tense rather than removed: `AD-10` reads as a preference until you know it was
+written against eight literals in one file.
 
 **AD-11 — One process owns the Library, and the Editor is a persona of it**
 > Exactly one desktop process MUST own the Library. The tray, the global hotkeys, the capture
@@ -188,7 +191,7 @@ Failure Behaviour was rejected rather than deferred.
 
 | Label | Claim | Disposition |
 |---|---|---|
-| `[MISSING]` | No lint rule or contrast assertion enforces `AD-10`; eight literals in `HotkeySection.tsx` alone | Planned work — `NFR-16`, `NFR-17` |
+| ~~`[MISSING]`~~ **resolved** | No lint rule or contrast assertion enforced `AD-10`; eight literals in `HotkeySection.tsx` alone | **Done — `W6-S1` at `420ecce`.** Lint rule refuses a literal; the contrast assertion parses `tokens.css` in both themes and was verified by mutation |
 | `[MISSING]` | No build assertion prevents a second desktop executable (`BR-121`) | Planned work — `FR-27` |
 | `[MISSING]` | `Auto` does not exist; the budget is two constants | Planned work — `FR-5`, `DEC-004` |
 | `[MISSING]` | The startup control has no `Unknown` state; `App.tsx` initialises `useState<boolean>(true)` | Planned work — `FR-18`, `BR-108` |
