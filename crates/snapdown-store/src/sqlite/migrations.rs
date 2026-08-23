@@ -8,10 +8,11 @@ pub struct Migration {
     pub sql: &'static str,
 }
 
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    description: "create setting and schema_version tables",
-    sql: r#"
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        description: "create setting and schema_version tables",
+        sql: r#"
         CREATE TABLE IF NOT EXISTS schema_version (
             version INTEGER PRIMARY KEY,
             applied_at TEXT NOT NULL
@@ -23,7 +24,42 @@ pub const MIGRATIONS: &[Migration] = &[Migration {
             updated_at TEXT NOT NULL
         );
     "#,
-}];
+    },
+    Migration {
+        version: 2,
+        description: "create finding, note, and marker tables",
+        sql: r#"
+        CREATE TABLE IF NOT EXISTS finding (
+            id TEXT PRIMARY KEY,
+            image_path TEXT NOT NULL,
+            image_width INTEGER NOT NULL,
+            image_height INTEGER NOT NULL,
+            captured_at TEXT NOT NULL,
+            source_monitor TEXT NOT NULL,
+            region TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS note (
+            id TEXT PRIMARY KEY,
+            finding_id TEXT NOT NULL UNIQUE,
+            body TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(finding_id) REFERENCES finding(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS marker (
+            id TEXT PRIMARY KEY,
+            finding_id TEXT NOT NULL,
+            ordinal INTEGER NOT NULL,
+            x REAL NOT NULL,
+            y REAL NOT NULL,
+            comment TEXT NOT NULL,
+            FOREIGN KEY(finding_id) REFERENCES finding(id) ON DELETE CASCADE,
+            UNIQUE(finding_id, ordinal)
+        );
+    "#,
+    },
+];
 
 pub fn run_migrations(conn: &mut Connection) -> Result<(), StoreError> {
     // First, ensure schema_version table exists so we can inspect current version

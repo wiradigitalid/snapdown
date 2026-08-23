@@ -1,3 +1,4 @@
+use crate::domain::finding::{Finding, FindingDetail, Marker, Note};
 use crate::domain::setting::{Setting, SettingKey};
 use crate::error::CoreError;
 
@@ -22,6 +23,49 @@ pub trait BlobStore {
     fn write_blob(&self, relative_path: &str, bytes: &[u8]) -> Result<(), CoreError>;
     fn delete_blob(&self, relative_path: &str) -> Result<(), CoreError>;
     fn blob_exists(&self, relative_path: &str) -> Result<bool, CoreError>;
+}
+
+pub trait FindingStore {
+    fn create_finding(
+        &self,
+        finding: &Finding,
+        note: &Note,
+        markers: &[Marker],
+    ) -> Result<(), CoreError>;
+
+    fn get_finding(&self, id: &str) -> Result<Option<FindingDetail>, CoreError>;
+
+    fn list_findings(&self) -> Result<Vec<FindingDetail>, CoreError>;
+
+    fn delete_finding(&self, id: &str) -> Result<(), CoreError>;
+
+    fn update_note(&self, finding_id: &str, body: &str, updated_at: &str) -> Result<(), CoreError>;
+
+    fn add_marker(
+        &self,
+        finding_id: &str,
+        marker_id: &str,
+        x: f64,
+        y: f64,
+        comment: &str,
+    ) -> Result<Marker, CoreError>;
+
+    fn update_marker(
+        &self,
+        finding_id: &str,
+        marker_id: &str,
+        x: f64,
+        y: f64,
+        comment: &str,
+    ) -> Result<Marker, CoreError>;
+
+    fn delete_marker(&self, finding_id: &str, marker_id: &str) -> Result<(), CoreError>;
+
+    fn reorder_markers(
+        &self,
+        finding_id: &str,
+        ordered_marker_ids: &[&str],
+    ) -> Result<(), CoreError>;
 }
 
 pub trait HotkeyRegistrar {
