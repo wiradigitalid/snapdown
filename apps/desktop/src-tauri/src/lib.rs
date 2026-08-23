@@ -12,10 +12,12 @@ use tauri_plugin_global_shortcut::{
 
 pub mod commands;
 pub mod hotkey;
+pub mod overlay;
 pub mod startup;
 pub mod state;
 pub mod vault_migration;
 
+use commands::capture::{capture_screen_region, dismiss_overlay, trigger_overlay};
 use commands::hotkey::{clear_hotkey, get_hotkeys, set_hotkey};
 use commands::settings::{
     get_latest_finding_size, get_settings, open_vault_folder, set_quality_budget, set_vault_path,
@@ -62,6 +64,7 @@ pub fn run() {
                                 match action {
                                     HotkeyAction::Capture => {
                                         let _ = app.emit("capture-requested", ());
+                                        let _ = trigger_overlay(app.clone());
                                     }
                                     HotkeyAction::OpenEditor => {
                                         show_settings_window(app);
@@ -158,7 +161,10 @@ pub fn run() {
             set_hotkey,
             clear_hotkey,
             get_startup_status,
-            set_startup_status
+            set_startup_status,
+            capture_screen_region,
+            trigger_overlay,
+            dismiss_overlay
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
