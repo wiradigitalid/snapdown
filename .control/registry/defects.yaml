@@ -376,3 +376,40 @@ defects:
       It is NOT frozen work: the swallow is in bundle.rs, the fix is in bundle.rs, and DEC-005 says
       in its own text that it does not forbid fixing a defect in what already shipped.
     status: open
+  - id: BUG-10
+    title: "The MCP bridge can hand an agent an error with an empty message"
+    found: "2026-08-23"
+    found_by: coordinator, extending the `let _ =` sweep into snapdown-bridge
+    component: agent-access
+    severity: low
+    contradicts: [AD-7, BR-17]
+    evidence: |
+      crates/snapdown-bridge/src/client.rs:155-163
+        fn parse_error_response(_code: u16, resp: ureq::Response) -> String {
+            let mut body = String::new();
+            let _ = resp.into_reader().read_to_string(&mut body);
+            if let Ok(env) = serde_json::from_str::<ApiErrorEnvelope>(&body) { ... } else { body }
+        }
+      If the body read fails, `body` stays "", the envelope parse fails, and the function returns the
+      empty string as the error message. The caller wraps it in Err() and the MCP tool surfaces an
+      error with nothing in it.
+    impact: |
+      AD-7 exists so one error envelope crosses every process boundary, and BR-17 says a refusal is
+      always distinguishable from an empty result. An error whose message is the empty string is a
+      refusal that says nothing - the agent learns only that something failed.
+      LOW, and honestly so: this is the error path of a call that has ALREADY failed, so it needs a
+      second failure to reach. The likely readings are a dropped connection mid-error-body or a
+      non-UTF-8 body. Neither is common and neither loses data.
+    why_undetected: |
+      Same habit as BUG-9 and W6-S10 - `let _ =` on a Result an invariant depends on - which is now a
+      pitfall in AGENTS.md. Found by extending that sweep into a component nobody was looking at.
+      No test exercises a failing body read; every bridge test uses a live loopback response.
+    fix: |
+      On a failed read, return a message that says so - the status code plus "the error body could not
+      be read" - rather than "". Never return an empty error string.
+    note: |
+      Also swept and NOT registered: main.rs:21-22 swallows the stdout write and flush in the stdio
+      loop. That is defensible - there is nothing useful to do about a failure on the very channel you
+      would report it over - and it is recorded here so the next sweep does not re-raise it.
+    blocked_by: DEC-005, which freezes `agent-access`.
+    status: open
