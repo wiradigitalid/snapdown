@@ -22,6 +22,7 @@ tauri-plugin-global-shortcut = { workspace = true }
 tauri-plugin-autostart = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+chrono = { workspace = true }
 thiserror = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
