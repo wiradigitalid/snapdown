@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { QualityBudget, Settings } from '../types/settings';
+import { HotkeyAction, HotkeySettingsDto, QualityBudget, Settings } from '../types/settings';
 
 export const getSettings = async (): Promise<Settings> => {
   return await invoke<Settings>('get_settings');
@@ -31,4 +31,24 @@ export const getLatestFindingSize = async (): Promise<number | null> => {
 
 export const openVaultFolder = async (): Promise<void> => {
   await invoke<void>('open_vault_folder');
+};
+
+export const getHotkeys = async (): Promise<HotkeySettingsDto> => {
+  return await invoke<HotkeySettingsDto>('get_hotkeys');
+};
+
+export const setHotkey = async (
+  action: HotkeyAction,
+  shortcut: string
+): Promise<void> => {
+  await invoke<void>('set_hotkey', {
+    action,
+    shortcut,
+  });
+};
+
+export const clearHotkey = async (action: HotkeyAction): Promise<void> => {
+  await invoke<void>('clear_hotkey', {
+    action,
+  });
 };

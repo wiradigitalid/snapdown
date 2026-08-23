@@ -10,6 +10,55 @@ pub const MAX_LONG_EDGE_PX: u32 = 7680;
 pub const MIN_ENCODER_QUALITY: u8 = 10;
 pub const MAX_ENCODER_QUALITY: u8 = 100;
 
+pub const DEFAULT_HOTKEY_CAPTURE: &str = "CommandOrControl+Shift+S";
+pub const DEFAULT_HOTKEY_OPEN_EDITOR: &str = "CommandOrControl+Shift+E";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HotkeyAction {
+    Capture,
+    OpenEditor,
+}
+
+impl HotkeyAction {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Capture => "capture",
+            Self::OpenEditor => "open_editor",
+        }
+    }
+
+    pub fn to_setting_key(&self) -> SettingKey {
+        match self {
+            Self::Capture => SettingKey::HotkeyCapture,
+            Self::OpenEditor => SettingKey::HotkeyOpenEditor,
+        }
+    }
+
+    pub fn from_setting_key(key: &SettingKey) -> Option<Self> {
+        match key {
+            SettingKey::HotkeyCapture => Some(Self::Capture),
+            SettingKey::HotkeyOpenEditor => Some(Self::OpenEditor),
+            _ => None,
+        }
+    }
+
+    pub fn from_action_str(s: &str) -> Option<Self> {
+        match s {
+            "capture" | "Capture" => Some(Self::Capture),
+            "open_editor" | "OpenEditor" | "open-editor" => Some(Self::OpenEditor),
+            _ => None,
+        }
+    }
+
+    pub fn default_shortcut(&self) -> &'static str {
+        match self {
+            Self::Capture => DEFAULT_HOTKEY_CAPTURE,
+            Self::OpenEditor => DEFAULT_HOTKEY_OPEN_EDITOR,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QualityBudget {
     pub max_long_edge: u32,
@@ -152,5 +201,44 @@ mod tests {
             assert_eq!(key.as_str(), key_str);
             assert_eq!(SettingKey::from_key_str(key_str), key);
         }
+    }
+
+    #[test]
+    fn hotkey_action_mapping_and_defaults() {
+        assert_eq!(HotkeyAction::Capture.as_str(), "capture");
+        assert_eq!(HotkeyAction::OpenEditor.as_str(), "open_editor");
+        assert_eq!(
+            HotkeyAction::Capture.to_setting_key(),
+            SettingKey::HotkeyCapture
+        );
+        assert_eq!(
+            HotkeyAction::OpenEditor.to_setting_key(),
+            SettingKey::HotkeyOpenEditor
+        );
+        assert_eq!(
+            HotkeyAction::from_setting_key(&SettingKey::HotkeyCapture),
+            Some(HotkeyAction::Capture)
+        );
+        assert_eq!(
+            HotkeyAction::from_setting_key(&SettingKey::HotkeyOpenEditor),
+            Some(HotkeyAction::OpenEditor)
+        );
+        assert_eq!(HotkeyAction::from_setting_key(&SettingKey::VaultPath), None);
+        assert_eq!(
+            HotkeyAction::from_action_str("capture"),
+            Some(HotkeyAction::Capture)
+        );
+        assert_eq!(
+            HotkeyAction::from_action_str("open_editor"),
+            Some(HotkeyAction::OpenEditor)
+        );
+        assert_eq!(
+            HotkeyAction::Capture.default_shortcut(),
+            DEFAULT_HOTKEY_CAPTURE
+        );
+        assert_eq!(
+            HotkeyAction::OpenEditor.default_shortcut(),
+            DEFAULT_HOTKEY_OPEN_EDITOR
+        );
     }
 }

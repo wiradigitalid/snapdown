@@ -1,18 +1,25 @@
+use snapdown_core::domain::setting::HotkeyAction;
 use snapdown_store::sqlite::SqliteSettingsStore;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager,
+    AppHandle, Emitter, Manager,
+};
+use tauri_plugin_global_shortcut::{
+    Builder as GlobalShortcutBuilder, Shortcut, ShortcutEvent, ShortcutState,
 };
 
 pub mod commands;
+pub mod hotkey;
 pub mod state;
 pub mod vault_migration;
 
+use commands::hotkey::{clear_hotkey, get_hotkeys, set_hotkey};
 use commands::settings::{
     get_latest_finding_size, get_settings, open_vault_folder, set_quality_budget, set_vault_path,
 };
+use hotkey::{DesktopHotkeyRegistrar, TauriGlobalShortcutBackend};
 use state::AppState;
 
 fn show_settings_window(app: &AppHandle) {
@@ -32,6 +39,33 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_settings_window(app);
         }))
+        .plugin(
+            GlobalShortcutBuilder::new()
+                .with_handler(
+                    |app: &AppHandle, shortcut: &Shortcut, event: ShortcutEvent| {
+                        if event.state() == ShortcutState::Pressed {
+                            let shortcut_str = shortcut.into_string();
+                            let action = {
+                                let state = app.state::<AppState>();
+                                let registrar = state.hotkey_registrar.lock().ok();
+                                registrar.and_then(|r| r.action_for_shortcut_str(&shortcut_str))
+                            };
+
+                            if let Some(action) = action {
+                                match action {
+                                    HotkeyAction::Capture => {
+                                        let _ = app.emit("capture-requested", ());
+                                    }
+                                    HotkeyAction::OpenEditor => {
+                                        show_settings_window(app);
+                                    }
+                                }
+                            }
+                        }
+                    },
+                )
+                .build(),
+        )
         .setup(|app| {
             let handle = app.handle().clone();
 
@@ -50,8 +84,15 @@ pub fn run() {
             let is_first_run = check_is_first_run(&store);
             let arc_store = Arc::new(store);
 
+            let backend = Arc::new(TauriGlobalShortcutBackend::new(handle.clone()));
+            let mut registrar = DesktopHotkeyRegistrar::new(arc_store.clone(), Some(backend));
+            let _ = registrar.init_from_store();
+
+            let arc_registrar = Arc::new(Mutex::new(registrar));
+
             app.manage(AppState {
                 settings_store: arc_store,
+                hotkey_registrar: arc_registrar,
             });
 
             // Setup Tray Menu
@@ -96,7 +137,10 @@ pub fn run() {
             set_vault_path,
             set_quality_budget,
             get_latest_finding_size,
-            open_vault_folder
+            open_vault_folder,
+            get_hotkeys,
+            set_hotkey,
+            clear_hotkey
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
