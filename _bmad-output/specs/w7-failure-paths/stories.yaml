@@ -1,0 +1,58 @@
+- id: "W7-S1"
+  title: Open the stores fallibly, and report the file that could not be opened
+  description: >-
+    Replace the five `.expect()` store opens in apps/desktop/src-tauri/src/lib.rs:109-119 with
+    fallible opens, and on failure show a visible report naming the path of the file that could not
+    be opened. The unreadable file is left exactly as found and no fresh store is started beside it.
+    See SPEC.md CAP-6, .control/registry/defects.yaml BUG-12, and SDD-settings.md § Failure
+    Behaviour, row LC-025 -> library.db, which already specifies this behaviour.
+  invoke_dev_with: >-
+    AD-11 is what makes this hard and it must shape the design: one process owns the tray, the
+    hotkeys, the overlay and the Editor, so at the moment a store open fails there is NO surviving
+    surface to report into and the report cannot assume a window already exists. A Tauri release
+    binary on Windows has no console either, so writing to stderr reports to nobody. BR-118 is
+    non-negotiable and is the trap here: the tempting fix — start a replacement store so the app
+    keeps running — trades a visible failure for SILENT DATA LOSS and is worse than the defect. The
+    store is opened, never created over. Do not sweep the other unwrap/expect calls: BUG-12's
+    register entry already swept and deliberately did not register three groups, and re-raising them
+    is out of scope. No test in this repository has ever opened a corrupt database — every store test
+    uses open_in_memory() — so the fixture is new work and is the point of the story.
+
+- id: "W7-S2"
+  title: Escape the published Markdown before it reaches the page
+  description: >-
+    apps/web-service/internal/server/server.go:145 builds the published page with fmt.Sprintf and a
+    raw %s for b.Markdown, which escapes nothing. Render through html/template, or escape before
+    interpolation, so a Note reaches the browser as text rather than as markup. Escape the slug on
+    the same pass. See SPEC.md CAP-8 and .control/registry/defects.yaml BUG-3.
+  invoke_dev_with: >-
+    DEC-005 freezes `sharing` and permits this by its own sentence — "This decision does not forbid a
+    fix. It forbids new work." Do NOT widen: no new route, no new promise, and do not build the
+    reader SPA that inventory-screen row 14 describes and that does not exist. NFR-15 must survive
+    unchanged — the service still exposes no route that lists, searches, or enumerates Publications,
+    and an unknown slug and a revoked one still return the same refusal; add a test that pins that
+    rather than assuming it. Escape the slug too even though it is a 160-bit CSPRNG value today: that
+    is a property of the generator, not of this render, and a renderer safe only because of what its
+    caller happens to pass is one refactor from unsafe. The existing route tests assert response
+    codes and the identical-404 and nothing asserts what the HTML BODY does with hostile content —
+    that gap is why this shipped.
+
+- id: "W7-S3"
+  title: Never hand an agent an error with no message in it
+  description: >-
+    crates/snapdown-bridge/src/client.rs:155-163 reads the error body with `let _ =`; when that read
+    fails the empty string is returned as the error message. Return a message that says what
+    happened — the status code plus that the error body could not be read — so no path through
+    parse_error_response yields an empty message. See SPEC.md CAP-7 and
+    .control/registry/defects.yaml BUG-10.
+  invoke_dev_with: >-
+    AD-7 binds the SHAPE and this story does not change it: every failure crossing a process boundary
+    is returned in the cross-cutting.md envelope carrying a code from that catalogue. What changes is
+    the message inside it. BR-17 is the exact anchor — a refusal is always distinguishable from an
+    empty result — and an error whose message is the empty string is not. DEC-005 freezes
+    `agent-access` and permits a fix; do not widen. Honestly low severity: this is the error path of
+    a call that has ALREADY failed, so reaching it needs a second failure (a dropped connection
+    mid-error-body, or a non-UTF-8 body) — write the test against those two readings. Also swept and
+    deliberately NOT in scope: main.rs:21-22 swallows the stdout write and flush in the stdio loop,
+    which is defensible because there is nothing useful to do about a failure on the very channel you
+    would report it over.
