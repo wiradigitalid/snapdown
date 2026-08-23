@@ -429,6 +429,24 @@ waves:
             why: |
               DEC-004. Carries the migration adding quality_budget.named, and the three columns
               NFR-18 needs on `finding`. SCN-03's one assertion is the only one a constant cannot pass.
+
+              **Four existing tests encode the OLD constant behaviour and will break here.** Found by
+              sweep on 2026-08-23:
+                crates/snapdown-core/src/domain/image.rs:92-93     assert 4K reduces to 1600x900
+                crates/snapdown-core/src/domain/setting.rs:171     assert the default is 1600
+                crates/snapdown-store/src/image/pipeline.rs:92     assert width == 1600
+                crates/snapdown-store/tests/test_image_reduction.rs:16  assert width == 1600
+
+              They are NOT broken tests today - each fails if the constant changes, which is what a
+              test should do. The trap is what happens when `Auto` removes the constant.
+
+              **Do not re-point them at whatever number Auto happens to produce.** That turns each one
+              into a tautology: assert-what-the-code-does, which passes forever and proves nothing.
+              Replace them with SCN-03's shape - that a small region and a full screen resolve
+              DIFFERENT pairs - and keep an assertion on the FIXED budgets (Sharp, Balanced, Small),
+              where a stated number is still a promise worth pinning.
+              This is the same failure this wave already caught once: W6-S1's contrast test asserted a
+              hardcoded copy of the token values and passed whatever tokens.css said.
             tests:
               - cargo::auto_resolves_a_different_pair_for_a_small_region_than_for_a_full_screen
               - cargo::auto_resolves_a_higher_encoder_quality_when_no_downscale_applies
