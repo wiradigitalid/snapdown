@@ -67,5 +67,10 @@ touches_vocabulary:
   - local-api             # the loopback HTTP API and its token
   - mcp-bridge            # the stdio MCP binary
   - publish-client        # the desktop side of web publishing
-  - web-service           # the Axum service that serves published bundles
+  - web-service           # the Go + chi service that serves published bundles. It was written here
+                          # as "the Axum service" until 2026-08-23 - a leftover from before the
+                          # language was settled. Nothing read it, which is why it survived.
   - settings-store        # persisted preferences, autostart registration
+  - build-tooling         # how the desktop application is actually built and packaged. Added
+                          # 2026-08-23 for BUG-11: the vocabulary had no word for it, which is a
+                          # fair reflection of the fact that nobody owned it.

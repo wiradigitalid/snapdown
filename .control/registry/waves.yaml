@@ -349,6 +349,46 @@ waves:
                   Approximated by `renders_children_within_the_main_content_area_without_crashing`,
                   which is weaker: it renders a child, it does not render a FAILING child. FR-28
                   requires navigation to survive any surface's failure. Follow-up.
+          - id: W6-S11
+            title: Make the desktop application buildable, and have CI build it
+            component: settings
+            satisfies: []
+            depends_on: [W6-S7]
+            touches: [build-tooling]
+            spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              BUG-11, added to the wave on 2026-08-23 after a UI verification launched a
+              locally built binary and got a webview showing ERR_CONNECTION_REFUSED.
+
+              That was not a product defect. It is what a Tauri release binary does without the
+              Tauri CLI: it keeps requesting `devUrl` from tauri.conf.json instead of the bundled
+              `frontendDist`. And the CLI is absent from this repository entirely - not a cargo
+              subcommand, not an npm devDependency, no `tauri` script, no build command documented
+              anywhere, and desktop-ci.yml produces no desktop artifact at all.
+
+              So the Snapdown.exe the owner ran was built by means nobody wrote down, nobody can
+              reproduce it, and CI has never built the product whose parts it tests.
+
+              **This is placed fourth, immediately after W6-S7, for a reason that outranks its own
+              severity: until it lands, NOTHING in this wave can be verified in the product.** Every
+              story after it writes UI, and the only instrument for checking UI is a binary that
+              does not currently exist in reproducible form. W6-S2's fix for BUG-4 is still
+              unverified outside jsdom for exactly this reason.
+
+              Same shape as BUG-4 and BUG-11's own cause: a seam between the Rust side and the
+              frontend that no component owns. `build-tooling` was added to the touches vocabulary
+              for this story, because the vocabulary had no word for it - which is a fair reflection
+              of the fact that nobody owned it.
+            tests:
+              - ci::desktop_ci_builds_a_bundled_desktop_artifact
+              - ci::the_build_produces_exactly_one_desktop_executable_from_a_real_build
+              - manual::a_freshly_built_binary_loads_its_bundled_frontend_not_devurl
+            notes: |
+              The third check is `manual::` on purpose and it is the honest label. Proving that a
+              built binary loads its own frontend means launching it and looking, and this project
+              has no reliable way to do that from CI - see OQ-24, where three dispatched UI
+              verifications produced three different failures. Writing it as an automated test name
+              would claim an instrument that does not exist.
       - id: EP-settings-surface
         component: settings
         title: A Settings screen that fits, and controls that can be answered
@@ -470,7 +510,7 @@ waves:
             title: A Bundle survives the deletion of a Finding it holds, and stops swallowing its failures
             component: bundle
             satisfies: []
-            depends_on: [W6-S7]
+            depends_on: [W6-S11]
             touches: [local-db, vault-fs, bundle-render]
             spec_folder: _bmad-output/specs/w6-desktop-experience/
             why: |

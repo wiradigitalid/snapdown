@@ -201,6 +201,10 @@ At the end of this wave, on a clean Windows 11 machine, in **both** themes, at 1
    today (`BUG-4`), and no other item on this list matters if this one fails.
 9. **Opening that Finding shows its image, and clicking the image places a numbered Marker bound to
    a numbered Note line.** It does not today (`BUG-5`). Items 8 and 9 together are the product.
+10. **A build produces a binary that loads its own frontend.** It does not today (`BUG-11`): without
+    the Tauri CLI a release binary requests `devUrl` and shows `ERR_CONNECTION_REFUSED`. **Items 1
+    through 9 cannot be checked in the product until this one is true** — every one of them is a
+    claim about a running application, and there is currently no reproducible way to produce one.
 
 ## Order
 
@@ -213,9 +217,10 @@ Resequenced 2026-08-23, **risk first**:
 | 1 | `W6-S1` | The colour foundation every later story writes against. **Done** |
 | 2 | `W6-S2` | `BUG-4` — the capture path does not work |
 | 3 | `W6-S7` | `BUG-5` — the Editor never renders a Finding's image · `BUG-6` — the orphan report is unreachable |
-| 4 | `W6-S9` | `BUG-1` — deleting a Finding guts every Bundle holding it |
-| 5 | `W6-S10` | The Vault move reports success while leaving an unreported duplicate |
-| 6–10 | `S3` `S4` `S5` `S6` `S8` | Everything the owner originally reported. Unpleasant rather than wrong |
+| 4 | `W6-S11` | `BUG-11` — **the application cannot be built reproducibly.** Until this lands, nothing in this wave can be verified in the product |
+| 5 | `W6-S9` | `BUG-1` — deleting a Finding guts every Bundle holding it · `BUG-9` — a deleted Bundle can stay live on the internet |
+| 6 | `W6-S10` | The Vault move reports success while leaving an unreported duplicate |
+| 7–11 | `S3` `S4` `S5` `S6` `S8` | Everything the owner originally reported. Unpleasant rather than wrong |
 
 The original order put those four at positions 7, 9 and 10. Nobody chose that — it fell out of
 linearising the DAG over shared `touches` to satisfy `V11`, and a sequencing artifact is a bad reason
