@@ -631,4 +631,20 @@ defects:
       Found by rebuilding rather than by reading. The first build of W6-S11 ran in a fresh worktree
       where the bridge had never been built, so the guard's blind spot could not show itself there.
     related: BUG-11
-    status: open
+    resolved: |
+      2026-08-24, by the coordinator. The guard no longer counts the directory. It names the two
+      binaries this workspace legitimately produces - Snapdown.exe and snapdown-bridge.exe - and
+      fails on anything else, which is the question FR-27 actually asks: is there a second
+      executable claiming to BE the desktop app.
+
+      Verified by mutation, both directions, on a real build:
+        Snapdown.exe + snapdown-bridge.exe present  -> PASS (the old guard counted 2 and failed)
+        a stale desktop.exe planted beside them     -> FAIL, naming desktop.exe
+
+      The second case is the exact scenario FR-27 was written for - a stale desktop.exe beside the
+      correct Snapdown.exe is what made the Reviewer run the wrong binary and report four defects
+      that did not exist.
+
+      A new workspace binary now requires adding its name to the list in that step, which is the
+      right friction: a second executable appearing unannounced is what the guard is for.
+    status: resolved
