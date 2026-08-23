@@ -6,7 +6,7 @@ use snapdown_store::vault::VaultBlobStore;
 use std::path::PathBuf;
 use tauri::State;
 
-use crate::commands::sharing::unpublish_bundle;
+use crate::commands::sharing::unpublish_bundle_impl;
 use crate::state::AppState;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,10 +15,9 @@ pub struct CreateBundleInput {
     pub finding_ids: Vec<String>,
 }
 
-#[tauri::command]
-pub fn create_bundle(
+pub fn create_bundle_impl(
     input: CreateBundleInput,
-    state: State<AppState>,
+    state: &AppState,
 ) -> Result<BundleDetail, String> {
     if input.name.trim().is_empty() {
         return Err("Bundle name cannot be empty".into());
@@ -69,27 +68,38 @@ pub fn create_bundle(
         _ => dirs_or_default_vault().to_string_lossy().to_string(),
     };
 
-    if let Ok(vault_store) = VaultBlobStore::new(&vault_path) {
-        let _ = vault_store.write_blob(&md_filename, markdown_content.as_bytes());
-    }
+    let vault_store = VaultBlobStore::new(&vault_path)
+        .map_err(|e| format!("Failed to open vault at {vault_path}: {e}"))?;
+
+    vault_store
+        .write_blob(&md_filename, markdown_content.as_bytes())
+        .map_err(|e| format!("Failed to write bundle markdown file: {e}"))?;
 
     let bundle = Bundle {
         id: bundle_id,
         name: input.name,
         markdown: markdown_content,
-        markdown_path: md_filename,
+        markdown_path: md_filename.clone(),
         composed_at,
     };
 
-    state
-        .bundle_store
-        .create_bundle(&bundle, &bundle_items)
-        .map_err(|e| e.to_string())?;
+    if let Err(e) = state.bundle_store.create_bundle(&bundle, &bundle_items) {
+        let _ = vault_store.delete_blob(&md_filename);
+        return Err(e.to_string());
+    }
 
     Ok(BundleDetail {
         bundle,
         items: bundle_items,
     })
+}
+
+#[tauri::command]
+pub fn create_bundle(
+    input: CreateBundleInput,
+    state: State<AppState>,
+) -> Result<BundleDetail, String> {
+    create_bundle_impl(input, &state)
 }
 
 #[tauri::command]
@@ -108,17 +118,25 @@ pub fn get_bundle_detail(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub fn delete_bundle(id: String, state: State<AppState>) -> Result<(), String> {
-    // 1. If bundle is currently published, unpublish automatically (BR-23)
-    if let Ok(Some(pub_record)) = state.publication_store.get_by_bundle_id(&id) {
+pub fn delete_bundle_impl(id: &str, state: &AppState) -> Result<(), String> {
+    // 1. If bundle is currently published, unpublish automatically (BR-20, BR-23)
+    // If unpublish fails, abort immediately without deleting local DB records or files
+    if let Some(pub_record) = state
+        .publication_store
+        .get_by_bundle_id(id)
+        .map_err(|e| e.to_string())?
+    {
         if pub_record.is_live() {
-            let _ = unpublish_bundle(id.clone(), state.clone());
+            unpublish_bundle_impl(id, state)?;
         }
     }
 
     // 2. Delete associated vault markdown file and burned images if present (AD-2, INV-BUNDLE-001)
-    if let Ok(Some(detail)) = state.bundle_store.get_bundle(&id) {
+    if let Some(detail) = state
+        .bundle_store
+        .get_bundle(id)
+        .map_err(|e| e.to_string())?
+    {
         let vault_path = match state
             .settings_store
             .get(&snapdown_core::domain::setting::SettingKey::VaultPath)
@@ -131,10 +149,31 @@ pub fn delete_bundle(id: String, state: State<AppState>) -> Result<(), String> {
             _ => dirs_or_default_vault().to_string_lossy().to_string(),
         };
 
-        if let Ok(vault_store) = VaultBlobStore::new(&vault_path) {
-            let _ = vault_store.delete_blob(&detail.bundle.markdown_path);
-            for item in &detail.items {
-                let _ = vault_store.delete_blob(&item.image_path);
+        let vault_store = VaultBlobStore::new(&vault_path)
+            .map_err(|e| format!("Failed to open vault at {vault_path}: {e}"))?;
+
+        if vault_store
+            .blob_exists(&detail.bundle.markdown_path)
+            .map_err(|e| e.to_string())?
+        {
+            vault_store
+                .delete_blob(&detail.bundle.markdown_path)
+                .map_err(|e| {
+                    format!(
+                        "Failed to delete bundle markdown file {}: {e}",
+                        detail.bundle.markdown_path
+                    )
+                })?;
+        }
+
+        for item in &detail.items {
+            if vault_store
+                .blob_exists(&item.image_path)
+                .map_err(|e| e.to_string())?
+            {
+                vault_store.delete_blob(&item.image_path).map_err(|e| {
+                    format!("Failed to delete bundle image {}: {e}", item.image_path)
+                })?;
             }
         }
     }
@@ -142,19 +181,28 @@ pub fn delete_bundle(id: String, state: State<AppState>) -> Result<(), String> {
     // 3. Cascade delete bundle and bundle_item records from database
     state
         .bundle_store
-        .delete_bundle(&id)
+        .delete_bundle(id)
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn copy_bundle_to_clipboard(id: String, state: State<AppState>) -> Result<String, String> {
+pub fn delete_bundle(id: String, state: State<AppState>) -> Result<(), String> {
+    delete_bundle_impl(&id, &state)
+}
+
+pub fn copy_bundle_to_clipboard_impl(id: &str, state: &AppState) -> Result<String, String> {
     let detail = state
         .bundle_store
-        .get_bundle(&id)
+        .get_bundle(id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Bundle not found: {id}"))?;
 
     Ok(detail.bundle.markdown)
+}
+
+#[tauri::command]
+pub fn copy_bundle_to_clipboard(id: String, state: State<AppState>) -> Result<String, String> {
+    copy_bundle_to_clipboard_impl(&id, &state)
 }
 
 fn dirs_or_default_vault() -> PathBuf {
@@ -200,7 +248,7 @@ mod tests {
             )),
             startup_registrar: Arc::new(std::sync::Mutex::new(
                 crate::startup::DesktopStartupRegistrar::new(Arc::new(
-                    crate::startup::tests::MockAutoStartBackend::default(),
+                    crate::startup::NoopAutoStartBackend,
                 )),
             )),
         };

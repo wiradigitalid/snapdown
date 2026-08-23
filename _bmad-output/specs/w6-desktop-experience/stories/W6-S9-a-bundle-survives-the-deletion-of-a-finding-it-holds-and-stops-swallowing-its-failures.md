@@ -3,7 +3,7 @@ id: W6-S9
 title: 'W6-S9: A Bundle survives the deletion of a Finding it holds, and stops swallowing its failures'
 type: 'bug'
 wave: W6
-status: ready-for-dev
+status: done
 created: '2026-08-23'
 review_loop_iteration: 0
 followup_review_recommended: false
