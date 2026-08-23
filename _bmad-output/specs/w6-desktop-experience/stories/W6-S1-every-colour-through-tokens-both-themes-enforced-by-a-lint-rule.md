@@ -3,7 +3,7 @@ id: W6-S1
 title: 'W6-S1: Every colour through tokens, both themes, enforced by a lint rule'
 type: 'feature'
 wave: W6
-status: done
+status: ready-for-dev
 created: '2026-08-23'
 dependencies: []
 files:
@@ -192,3 +192,37 @@ The application currently violates the single colour authority principle (AD-10,
 - `npm --prefix apps/desktop run build` -- expected: Production Vite build succeeds
 - `cargo test --workspace` -- expected: All Rust crate unit and integration tests remain green
 
+## Spec Change Log
+
+### 2026-08-23 — round 1 must-fix, from panel adjudication
+
+**Finding: `web/ui/src/test/contrast.test.ts` asserts a hardcoded copy of the token values instead of
+the values in `tokens.css`.**
+
+The file declares `const lightTokens = { bg: '#f8fafc', text: '#0f172a', textMuted: '#475569', ... }`
+and computes contrast over that object. Nothing in it reads `src/styles/tokens.css`.
+
+**Why this is a must-fix and not a follow-up.** It is a test that cannot fail in the way it claims to.
+Change `--color-text-muted` in `tokens.css` to something with a 2:1 ratio and this suite still passes,
+because it is checking its own copy. `NFR-16` says *every text element meets WCAG AA against its own
+background*, enforced by *an automated contrast assertion* — an assertion over a literal is not that.
+It is also a second source of truth for colour, which is precisely what `AD-10` exists to forbid, so
+the test contradicts the invariant the story was written to establish.
+
+`tokens.test.ts` in the same commit does it correctly: it reads `src/styles/tokens.css` from disk and
+asserts presence and light/dark parity. That is the pattern to follow.
+
+**Required change.** Parse the token values out of `tokens.css` — both the `:root` block and the
+`prefers-color-scheme: dark` block — and compute every contrast assertion over the parsed values. No
+colour literal may remain in the test file. Add one assertion that proves the parse is live: a pairing
+whose ratio is computed from the file, not stated.
+
+**Not in scope for this round.** The token *names* in the code (`--color-overlay-scrim`,
+`--color-overlay-ring`) differ from the names in `.how/_platform/design-system.md` (`--overlay-dim`,
+`--overlay-region-ring`). The code's naming is the more consistent of the two and **the document is
+being corrected to match it**, by the coordinator, not by this story. Do not rename anything.
+
+Everything else in round 1 was verified green by the coordinator and stands: no colour literal outside
+the token file anywhere under `apps/desktop/src` or `web/ui/src`; `cargo fmt`, `cargo test --workspace`,
+both typechecks, both lints, and both vitest suites (70 tests) pass; the lint rule, `Badge`,
+`ErrorState`, `HotkeyChip`, `SegmentedControl` and `Toggle` are in place.
