@@ -488,7 +488,24 @@ defects:
       One thing WAS verified from that broken build and it is worth keeping: the window title read
       "Snapdown Editor". W6-S2's persona naming (DEC-003, FR-27) is correct in a real running window,
       which is the first time anything about the product has been confirmed outside jsdom.
-    status: open
+    resolved: |
+      W6-S11, 2026-08-23. @tauri-apps/cli@^2.0.0 is a devDependency of apps/desktop with a `tauri`
+      script, pinned to the same major as the tauri = "2.0" crates. The build command now sits in
+      codebase-stack-guide.md beside the verification commands - the place it was missing from, not
+      a wave folder that later closes. desktop-ci.yml builds the bundle on windows-latest and asserts
+      exactly one .exe in target/release, so BR-121 is finally checked against a real build.
+
+      Verified by the coordinator on the worktree, exit codes read directly rather than through a
+      pipe: `tauri build --no-bundle` exits 0, produces exactly one executable (Snapdown.exe,
+      13.3 MB), and the freshly built frontend bundle name (index-BBTULvhi.js) is present INSIDE the
+      binary. The assets are embedded, which is precisely what was not happening before. CI is green
+      on the head SHA.
+
+      What that does NOT prove: that the window renders. The embedded-asset check is a headless proxy
+      for the cause; it is not the manual check. `manual::a_freshly_built_binary_loads_its_bundled_frontend_not_devurl`
+      remains unrun, and BUG-4, BUG-5 and BUG-12 stay unproven in a running product until it is.
+      What changed is that running it is now possible for the first time.
+    status: resolved-pending-product-verification
   - id: BUG-12
     title: "A corrupt or unreadable library.db makes the application vanish on launch"
     found: "2026-08-23"
