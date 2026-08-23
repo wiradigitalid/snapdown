@@ -177,6 +177,9 @@ mod tests {
             ),
             finding_store: f_store,
             bundle_store: b_store.clone(),
+            access_key_store: Arc::new(
+                snapdown_store::sqlite::SqliteAccessKeyStore::open_in_memory().unwrap(),
+            ),
             hotkey_registrar: Arc::new(std::sync::Mutex::new(
                 crate::hotkey::DesktopHotkeyRegistrar::new(
                     Arc::new(
