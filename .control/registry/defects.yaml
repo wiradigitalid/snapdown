@@ -35,7 +35,19 @@ defects:
       a BundleItem refers to a Finding that MAY no longer exist, which is exactly what a foreign
       key exists to forbid. Requires a migration; existing rows already lost are not recoverable.
     scenario: .what/bundle/05-scenarios/SCN-05-a-finding-deleted-out-from-under-a-bundle.md
-    status: open
+    resolved: |
+      W6-S9, 2026-08-24. Migration v6 recreates bundle_item without the finding_id foreign key at
+      all - not merely without its cascade - and keeps the bundle_id cascade, because deleting a
+      Bundle does still delete its items (FR-14). A BundleItem legitimately refers to a Finding that
+      may no longer exist, which is the precise condition a foreign key exists to forbid.
+
+      Rows already lost are not reconstructed and the migration does not pretend otherwise.
+
+      Verified by the coordinator: cargo test --workspace exits 0, and both directions are covered by
+      tests that did not exist in this repository before -
+      deleting_a_finding_leaves_its_bundle_item_in_place is the first test here that asserts a cascade
+      does NOT fire, and deleting_a_bundle_still_cascades_to_its_items holds the other side.
+    status: resolved
   - id: BUG-2
     title: Three `sharing` screens are recorded as delivered and do not exist in the repository
     found: "2026-08-23"
@@ -386,7 +398,28 @@ defects:
       Part 2 is `sharing` behaviour reached from a `bundle` command, and DEC-005 freezes `sharing`.
       It is NOT frozen work: the swallow is in bundle.rs, the fix is in bundle.rs, and DEC-005 says
       in its own text that it does not forbid fixing a defect in what already shipped.
-    status: open
+    resolved: |
+      W6-S9, 2026-08-24. delete_bundle now aborts and reports when unpublish fails, instead of
+      deleting the local record while the published copy stays live on the public internet with
+      nothing pointing at it. BR-20 was written to forbid exactly that, and the fix follows from the
+      rule rather than from taste. The swallows on the composition path and the file-deletion path
+      are gone too, including the second one hiding inside the first - the if let Ok(...) on
+      VaultBlobStore::new that simply did not run.
+
+      Proving it took three attempts, and the obstacle is worth keeping: the first two produced a
+      test binary that could not start at all - STATUS_ENTRYPOINT_NOT_FOUND - because it built a
+      tauri::test::mock_app. The resolution was to extract the logic of create_bundle, delete_bundle,
+      copy_bundle_to_clipboard, unpublish_bundle and delete_finding into plain _impl functions taking
+      &AppState, leaving each #[tauri::command] as a one-line shim. AppState is a plain struct, so
+      the tests build it directly and Tauri is not involved.
+
+      One attempt had put tauri's `test` feature on the PRODUCTION dependency in the workspace
+      Cargo.toml, which would have shipped the test harness inside the release binary. It is out.
+
+      Verified by the coordinator, exit codes read directly: cargo test --workspace 0, cargo fmt 0,
+      cargo clippy --all-targets -D warnings 0. The test that matters now runs and passes:
+      deleting_a_published_bundle_whose_unpublish_fails_aborts_and_reports.
+    status: resolved
   - id: BUG-10
     title: "The MCP bridge can hand an agent an error with an empty message"
     found: "2026-08-23"
