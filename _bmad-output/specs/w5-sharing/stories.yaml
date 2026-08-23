@@ -1,0 +1,19 @@
+---
+wave: W5
+title: Sharing complete — publish, the web service, the reader
+stories:
+  - id: W5-S1
+    title: SQLite schema migration v5 (publication) and PublicationStore
+    dependencies: []
+  - id: W5-S2
+    title: Go web service with embedded SQLite, staged publish, and public routes
+    dependencies: []
+  - id: W5-S3
+    title: Desktop publish client and Tauri IPC commands
+    dependencies: [W5-S1, W5-S2]
+  - id: W5-S4
+    title: Web reader SPA for published reviews (Screen 14 and 15)
+    dependencies: [W5-S2]
+  - id: W5-S5
+    title: Publish dialog UI and end-to-end publishing verification
+    dependencies: [W5-S1, W5-S2, W5-S3, W5-S4]
