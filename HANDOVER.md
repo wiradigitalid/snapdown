@@ -157,7 +157,38 @@ that component had no flow, no state machine, no failure behaviour, and no scree
 for five waves. Every one of the owner's Settings complaints was a question the corpus had no slot to
 answer, because the gate that would have answered it was configured off.
 
-### Two defects, found by reading code against the deepened documents
+### The two that matter most: the product's defining interactions have no working UI
+
+**`BUG-4` — the capture path does not work.** `capture.rs:106` opens the overlay window at
+`index.html?overlay=true`. Nothing in the frontend reads `window.location.search`, there is one html
+entry point, and `vite.config.ts` declares no second input. The overlay window mounts the Editor
+shell — opening on Settings — instead of `CaptureOverlay`. No dim, no crosshair, no region drag, no
+note field, no Finding. `FR-1`, `FR-2`, `UC-1`, `UC-2` unmet.
+
+**`BUG-5` — the Editor never renders a Finding's image.** `MarkerLayer` is exported from
+`web/ui/src/index.ts` and mounted nowhere. `FindingsEditor.tsx` shows metadata, a Note field, and
+`{f.markers.length} markers` as *text*. Markers cannot be placed. `AD-1` — Markers and Note lines are
+one sequence, the invariant this product is built on — has **no user interface**. `BG-1` says a note
+is unambiguously attached to the image it describes; the attachment lives in the database and is
+invisible.
+
+**`BUG-6`** — the orphan report is built, tested, and unreachable. No route, tab, or mount point.
+
+#### The finding underneath all three
+
+A sweep for `<ComponentName` across the tree found **four components built, unit-tested, and mounted
+nowhere**: `CaptureOverlay`, `MarkerLayer`, `OrphanReportView`, `EmptyState`. Every one correct in
+isolation. None assembled into anything a Reviewer can reach.
+
+**This repository has no composition test of any kind.** Every suite proves a part; nothing asks
+whether the parts were wired together. Five waves closed green on that basis, and three requirements
+are unmet in a build whose tests all pass. `V12` cannot catch it — it checks that an `LC` is
+*registered*, not that it is *reached*. Filed as `OQ-23`; the grep that catches it is now the first
+pitfall in `AGENTS.md` § Code.
+
+`W6-S2` carries `BUG-4`. `W6-S7` carries `BUG-5` and `BUG-6`.
+
+### Two more, found by reading code against the deepened documents
 
 **`BUG-1` — deleting a Finding silently guts every Bundle that holds it.**
 `bundle_item.finding_id` carries `ON DELETE CASCADE`, and `foreign_keys` is `ON`. `FR-13`'s third

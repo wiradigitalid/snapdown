@@ -133,15 +133,35 @@ Rewritten as `FR-5` under `DEC-004`.
 Findings and Bundles both leave large dead areas below their panels rather than filling the window.
 Visible in both screenshots.
 
-## What this audit could not settle
+## What this audit could not settle — and why three of those items were the wrong question
 
-- **Light theme.** Untested. `NFR-17`'s both-themes render test is the right instrument, not another
-  manual pass.
-- **The capture overlay, the note field, and the marker canvas.** Never reached. These are the most
-  frequently used surfaces in the product and they have no visual record. This is the largest gap.
-- **The hotkey conflict message.** `FR-17` requires a refused combination to name the conflict. Not
-  exercised.
-- **Whether Settings fits at the 1024×720 minimum after the redesign.** Nothing to measure yet.
+Two audit attempts failed to photograph four surfaces. The first ran out of context. The second did
+static analysis instead. Both were recorded as *the largest gap in this audit*.
+
+**That framing was wrong, and the second attempt is what showed it.** Three of those four surfaces
+cannot be photographed because **they never render**:
+
+| Surface | Why there is no picture |
+|---|---|
+| Capture overlay | `BUG-4` — the overlay window mounts the Editor shell. There is no overlay to photograph |
+| Capture note field | `BUG-4`, same window. It is never reached |
+| Marker canvas | `BUG-5` — `MarkerLayer` is mounted nowhere and the Editor renders no image at all |
+
+A missing screenshot of a screen that does not exist is not a gap in the audit. It **is** the finding,
+and the audit reached it by reading the code rather than by pointing a camera at nothing.
+
+What genuinely remains:
+
+- **The hotkey conflict message.** `FR-17` requires a refused combination to name the conflict.
+  Neither attempt exercised it, and it is the one item here that a person still has to go and look at.
+- **The light theme.** No longer needs a photograph. W6-S1 landed a contrast assertion that parses
+  `tokens.css` and checks every pair in **both** themes, verified by mutation. `NFR-17`'s instrument
+  exists now, which is a better answer than a screenshot would have been.
+- **Whether Settings fits at 1024×720 after the redesign.** Nothing to measure until W6-S3 lands.
+
+The honest summary of two failed audit attempts: one died of its own appetite, the other answered the
+questions from source and overstated its method — and between them they found the two most serious
+defects in the product. The picture-taking was never where the value was.
 
 ## A finding about the repository, not the product
 
