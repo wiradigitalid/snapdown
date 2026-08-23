@@ -122,7 +122,7 @@ waves:
 
   - id: W4
     title: Agent access complete — the key, the Local API, the MCP bridge
-    status: open
+    status: closed
     release: r2
     prd: [agent-handoff]
     fr: [FR-19, FR-20, FR-21, FR-22]
@@ -138,7 +138,7 @@ waves:
 
   - id: W5
     title: Sharing complete — publish, the web service, the reader
-    status: planned
+    status: open
     release: r2
     prd: [agent-handoff]
     fr: [FR-23, FR-24, FR-25, FR-26]
@@ -146,6 +146,7 @@ waves:
     size: L
     depends_on: [W3]
     spec_folder: _bmad-output/specs/w5-sharing/
+    opened: "2026-08-23"
     scope: >-
       The staged publish client, the Publication record with its sticky failure, the Go service with
       its embedded store and identical refusals, and the React reader. Three containers and two
