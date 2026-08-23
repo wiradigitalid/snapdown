@@ -415,6 +415,20 @@ waves:
             depends_on: [W6-S10]
             touches: [editor-ui, settings-store]
             spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              The owner asked for Settings to be dense - "padat-padat" - and specifically to avoid
+              a panel that has to be scrolled. On 2026-08-23 that was a report; on 2026-08-24 it is
+              a photograph. AUDIT-4's shot-4-settings.png, taken from the first properly built
+              binary, shows a vertical scrollbar down the right edge with the Hotkeys group cut off
+              at the window's bottom, while the General group above it is more than half empty.
+
+              That pairing is the whole story: the layout stretches groups to match their
+              neighbours instead of packing them by content height, so space is spent where there
+              is nothing to show and withheld where there is.
+
+              The third test is not layout. Agent access is a PRIMARY SURFACE reachable from the
+              rail (FR-28), not a group inside Settings, and a rebuild of this panel is exactly
+              when that boundary gets blurred by accident.
             tests:
               - vitest::all_four_settings_groups_are_visible_at_the_minimum_window_size
               - vitest::no_group_is_stretched_to_match_a_neighbours_height
@@ -500,6 +514,22 @@ waves:
             depends_on: [W6-S5]
             touches: [settings-store, capture-pipeline, editor-ui]
             spec_folder: _bmad-output/specs/w6-desktop-experience/
+            why: |
+              Two things this story fixes are now photographed rather than argued, both in AUDIT-4's
+              shot-4-settings.png from the first properly built binary.
+
+              The Capture Region row reads `Disabled` and its box says `Click to record`. Nothing is
+              bound. **On a fresh profile the capture hotkey does nothing at all**, so the capture
+              path - the reason the product exists - is unreachable by keyboard until the Reviewer
+              discovers the Settings panel and records a combination. FR-1 and UC-15 assume a hotkey
+              is there to press.
+
+              The keystroke recorder the owner asked for does exist and does say what to do, so the
+              interaction is right and the default is missing.
+
+              The last test is not decoration. `Active` and `Disabled` are rendered as badges, and a
+              badge that carries only a colour is unreadable to anyone who cannot separate those two
+              colours - the same accessibility floor EXPERIENCE.md sets for Markers.
             tests:
               - vitest::a_listening_chip_stops_listening_when_focus_leaves_it
               - vitest::a_snapdown_internal_conflict_is_worded_differently_from_an_os_conflict
