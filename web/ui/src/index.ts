@@ -9,3 +9,4 @@ export * from './components/MarkerBadge';
 export * from './components/MarkerLayer';
 export * from './components/EmptyState';
 export * from './components/FindingsEditor';
+export * from './components/BundleComposer';

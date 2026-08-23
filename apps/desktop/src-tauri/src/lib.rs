@@ -1,5 +1,5 @@
 use snapdown_core::domain::setting::HotkeyAction;
-use snapdown_store::sqlite::{SqliteFindingStore, SqliteSettingsStore};
+use snapdown_store::sqlite::{SqliteBundleStore, SqliteFindingStore, SqliteSettingsStore};
 use std::sync::{Arc, Mutex};
 use tauri::{
     menu::{Menu, MenuItem},
@@ -17,6 +17,7 @@ pub mod startup;
 pub mod state;
 pub mod vault_migration;
 
+use commands::bundle::{create_bundle, delete_bundle, get_bundle_detail, list_bundles};
 use commands::capture::{capture_screen_region, dismiss_overlay, trigger_overlay};
 use commands::finding::{
     add_marker, clean_orphans, delete_finding, delete_marker, get_finding_detail, list_findings,
@@ -97,9 +98,12 @@ pub fn run() {
                 .expect("Failed to initialize SqliteSettingsStore");
             let finding_store = SqliteFindingStore::open(&db_path)
                 .expect("Failed to initialize SqliteFindingStore");
+            let bundle_store =
+                SqliteBundleStore::open(&db_path).expect("Failed to initialize SqliteBundleStore");
             let is_first_run = check_is_first_run(&store);
             let arc_store = Arc::new(store);
             let arc_finding_store = Arc::new(finding_store);
+            let arc_bundle_store = Arc::new(bundle_store);
 
             let backend = Arc::new(TauriGlobalShortcutBackend::new(handle.clone()));
             let mut registrar = DesktopHotkeyRegistrar::new(arc_store.clone(), Some(backend));
@@ -114,6 +118,7 @@ pub fn run() {
             app.manage(AppState {
                 settings_store: arc_store,
                 finding_store: arc_finding_store,
+                bundle_store: arc_bundle_store,
                 hotkey_registrar: arc_registrar,
                 startup_registrar: arc_startup_registrar,
             });
@@ -181,7 +186,11 @@ pub fn run() {
             clean_orphans,
             add_marker,
             update_marker,
-            delete_marker
+            delete_marker,
+            create_bundle,
+            list_bundles,
+            get_bundle_detail,
+            delete_bundle
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
