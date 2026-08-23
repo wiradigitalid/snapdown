@@ -34,3 +34,9 @@ gen/schemas
 .work/**/*.jpg
 .work/**/*.jpeg
 .work/**/*.webp
+
+# Raw accessibility-tree dumps from UI audit workers. They are JSON snapshots of the RUNNING
+# product and they embed absolute paths under the operator's home directory, so they fall under the
+# same brief constraint as a screenshot: derived from real capture output, and this repo is public.
+# The distilled AUDIT*.md files are what survives an audit; the raw dumps are scratch.
+.work/**/tree-*.txt

@@ -13,7 +13,7 @@ smoothed over, because the second half of the brief was never executed.
 
 | Asked for | Result |
 |---|---|
-| Four primary tabs, screenshot + accessibility tree | **Done** — `shot-{settings,findings,bundles,agent-access}.png`, `tree-*.txt` |
+| Four primary tabs, screenshot + accessibility tree | **Done.** Neither artifact survives in the repo — see below |
 | Vault folder Browse | **Done** — `shot-folder-browse.png` |
 | Startup toggle, both directions | **Partly** — first toggle done; the worker died on the second |
 | Hotkey recording, and a conflicting binding | **NOT TESTED** |
@@ -24,6 +24,11 @@ smoothed over, because the second half of the brief was never executed.
 
 Nothing below is inferred from the untested rows. Where a defect could only be confirmed in dark
 theme, it says so.
+
+**Neither the screenshots nor the accessibility trees are committed.** The `tree-*.txt` dumps were
+committed and then removed: they are JSON snapshots of the running product and embed absolute paths
+under the operator's home directory, which puts them under the same brief constraint as a screenshot.
+They were caught by a pre-push audit of the branch diff, not by CI.
 
 **The screenshots themselves are NOT committed.** The product brief forbids it — this repository is
 public and a Capture may contain personal data — and nothing in CI enforced that until this audit
