@@ -1,8 +1,8 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Badge, Button, HotkeyChip } from '@snapdown/ui';
 import { HotkeyAction, HotkeySettingsDto } from '../types/settings';
 
-interface HotkeySectionProps {
+export interface HotkeySectionProps {
   hotkeySettings: HotkeySettingsDto;
   onSaveHotkey: (action: HotkeyAction, shortcut: string) => Promise<void>;
   onClearHotkey: (action: HotkeyAction) => Promise<void>;
@@ -74,6 +74,7 @@ export const HotkeySection: React.FC<HotkeySectionProps> = ({
   return (
     <section
       data-testid="hotkey-section"
+      aria-label="Hotkeys"
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -104,7 +105,7 @@ export const HotkeySection: React.FC<HotkeySectionProps> = ({
             color: 'var(--color-text-muted)',
           }}
         >
-          Click a shortcut box and press your preferred key combination on the keyboard.
+          Click a shortcut box and press your preferred key combination.
         </p>
       </div>
 

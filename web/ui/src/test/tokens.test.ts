@@ -44,6 +44,9 @@ describe('Design Tokens Integrity and Parity', () => {
       '--radius-sm',
       '--radius-md',
       '--radius-full',
+      '--settings-group-gap',
+      '--settings-column-min',
+      '--settings-row-height',
       '--font-ui',
       '--font-mono',
       '--text-xs',
@@ -95,6 +98,9 @@ describe('Design Tokens Integrity and Parity', () => {
       '--color-overlay-scrim',
       '--color-overlay-ring',
       '--canvas-checker',
+      '--settings-group-gap',
+      '--settings-column-min',
+      '--settings-row-height',
     ];
 
     for (const token of requiredDarkTokens) {

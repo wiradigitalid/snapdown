@@ -82,12 +82,14 @@ export const QualityBudgetSection: React.FC<QualityBudgetSectionProps> = ({
 
   return (
     <section
+      data-testid="quality-budget-section"
+      aria-label="Quality Budget"
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 'var(--space-4)',
+        gap: 'var(--space-3)',
         backgroundColor: 'var(--color-surface)',
-        padding: 'var(--space-5)',
+        padding: 'var(--space-4)',
         borderRadius: 'var(--radius-md)',
         border: '1px solid var(--color-border)',
       }}
@@ -96,7 +98,8 @@ export const QualityBudgetSection: React.FC<QualityBudgetSectionProps> = ({
         <h2
           style={{
             margin: 0,
-            fontSize: 'var(--text-lg)',
+            fontSize: 'var(--text-base)',
+            fontWeight: 600,
             fontFamily: 'var(--font-ui)',
             color: 'var(--color-text)',
           }}
@@ -111,7 +114,7 @@ export const QualityBudgetSection: React.FC<QualityBudgetSectionProps> = ({
             color: 'var(--color-text-muted)',
           }}
         >
-          Manage screenshot image dimension limits and compression quality to balance visual fidelity and storage footprint.
+          Manage screenshot image dimension limits and compression quality.
         </p>
       </div>
 
@@ -162,7 +165,8 @@ export const QualityBudgetSection: React.FC<QualityBudgetSectionProps> = ({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: 'var(--space-3)',
+          padding: 'var(--space-2) var(--space-3)',
+          minHeight: 'var(--settings-row-height)',
           backgroundColor: 'var(--color-surface-raised)',
           borderRadius: 'var(--radius-sm)',
           border: '1px solid var(--color-border)',

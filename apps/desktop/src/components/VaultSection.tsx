@@ -77,6 +77,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
   return (
     <section
       data-testid="vault-section"
+      aria-label="Vault Folder"
       style={{
         display: 'flex',
         flexDirection: 'column',

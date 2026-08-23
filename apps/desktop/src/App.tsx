@@ -1,10 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Toast } from '@snapdown/ui';
 import { EditorShell, NavigationTab } from './components/EditorShell';
-import { VaultSection } from './components/VaultSection';
-import { QualityBudgetSection } from './components/QualityBudgetSection';
-import { HotkeySection } from './components/HotkeySection';
-import { GeneralSection } from './components/GeneralSection';
+import { SettingsView } from './components/SettingsView';
 import { FindingsView } from './components/FindingsView';
 import { BundleView } from './components/BundleView';
 import { AgentAccessView } from './components/AgentAccessView';
@@ -168,44 +165,18 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
           </div>
         )}
         {activeTab === 'settings' && (
-          <div
-            style={{
-              maxWidth: '56rem',
-              margin: '0 auto',
-              padding: 'var(--space-5)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 'var(--space-4)',
-            }}
-          >
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
-              <GeneralSection
-                runAtStartup={runAtStartup}
-                onToggleStartup={handleToggleStartup}
-                disabled={isLoading}
-              />
-              <QualityBudgetSection
-                qualityBudget={settings.quality_budget}
-                latestFindingSize={settings.latest_finding_size}
-                onSaveQualityBudget={handleSaveQualityBudget}
-                disabled={isLoading}
-              />
-            </div>
-
-            <VaultSection
-              vaultPath={settings.vault_path}
-              onSaveVaultPath={handleSaveVaultPath}
-              onOpenExplorer={handleOpenExplorer}
-              disabled={isLoading}
-            />
-
-            <HotkeySection
-              hotkeySettings={hotkeySettings}
-              onSaveHotkey={handleSaveHotkey}
-              onClearHotkey={handleClearHotkey}
-              disabled={isLoading}
-            />
-          </div>
+          <SettingsView
+            settings={settings}
+            hotkeySettings={hotkeySettings}
+            runAtStartup={runAtStartup}
+            onSaveVaultPath={handleSaveVaultPath}
+            onOpenExplorer={handleOpenExplorer}
+            onSaveQualityBudget={handleSaveQualityBudget}
+            onSaveHotkey={handleSaveHotkey}
+            onClearHotkey={handleClearHotkey}
+            onToggleStartup={handleToggleStartup}
+            disabled={isLoading}
+          />
         )}
       </EditorShell>
 
