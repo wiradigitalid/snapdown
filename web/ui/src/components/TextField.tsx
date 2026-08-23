@@ -1,4 +1,4 @@
-import React, { InputHTMLAttributes } from 'react';
+import React, { InputHTMLAttributes, useId } from 'react';
 
 export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -9,6 +9,7 @@ export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const TextField: React.FC<TextFieldProps> = ({
+  id: providedId,
   label,
   invalid = false,
   errorMessage,
@@ -20,6 +21,8 @@ export const TextField: React.FC<TextFieldProps> = ({
   style,
   ...props
 }) => {
+  const generatedId = useId();
+  const inputId = providedId || generatedId;
   const currentLength = typeof value === 'string' ? value.length : 0;
   const inputClass = `text-field-input ${invalid ? 'invalid' : ''} ${className}`.trim();
 
@@ -27,6 +30,7 @@ export const TextField: React.FC<TextFieldProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', width: '100%' }}>
       {label && (
         <label
+          htmlFor={inputId}
           style={{
             fontFamily: 'var(--font-ui)',
             fontSize: 'var(--text-xs)',
@@ -37,6 +41,7 @@ export const TextField: React.FC<TextFieldProps> = ({
         </label>
       )}
       <input
+        id={inputId}
         disabled={disabled}
         value={value}
         maxLength={maxLength}

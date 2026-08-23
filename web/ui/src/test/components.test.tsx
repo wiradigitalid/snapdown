@@ -36,6 +36,36 @@ describe('web/ui components suite', () => {
   });
 
   describe('TextField', () => {
+    it('renders label with htmlFor linking to input id', () => {
+      render(
+        <TextField
+          id="vault-path-input"
+          label="Vault Path"
+          value="test-path"
+          readOnly
+        />
+      );
+      const label = screen.getByText('Vault Path');
+      expect(label).toHaveAttribute('for', 'vault-path-input');
+      const input = screen.getByRole('textbox', { name: 'Vault Path' });
+      expect(input).toHaveAttribute('id', 'vault-path-input');
+    });
+
+    it('generates fallback id linking label htmlFor to input id', () => {
+      render(
+        <TextField
+          label="Vault Path"
+          value="test-path"
+          readOnly
+        />
+      );
+      const label = screen.getByText('Vault Path');
+      const htmlFor = label.getAttribute('for');
+      expect(htmlFor).toBeTruthy();
+      const input = screen.getByRole('textbox', { name: 'Vault Path' });
+      expect(input.id).toBe(htmlFor);
+    });
+
     it('renders label and character count', () => {
       render(
         <TextField
