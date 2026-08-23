@@ -2,7 +2,7 @@
 id: W5-S2
 title: Go web service with embedded SQLite, staged publish, and public routes
 wave: W5
-status: planned
+status: done
 created: 2026-08-23
 dependencies: []
 files:
