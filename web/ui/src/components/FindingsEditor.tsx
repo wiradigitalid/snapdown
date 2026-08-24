@@ -9,6 +9,7 @@ import { StudioRibbon } from './StudioRibbon';
 import { FilmstripTray } from './FilmstripTray';
 import { PropertiesPanel } from './PropertiesPanel';
 import { CropOverlay, CropRect } from './CropOverlay';
+import { ContextMenu, ContextMenuItem } from './ContextMenu';
 
 export interface FindingItemDto {
   id: string;
@@ -65,6 +66,9 @@ export interface FindingsEditorProps {
   onOpenFileClick?: () => void;
   onPasteClick?: () => void;
   onCopyImage?: () => void;
+  onCopyBurnedImage?: () => void;
+  onOpenFileLocation?: (findingId: string) => void;
+  onApplyCrop?: (findingId: string, crop: CropRect) => Promise<void> | void;
   onShareBundle?: () => void;
   onRetry?: () => void;
 }
@@ -94,6 +98,9 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
   onOpenFileClick,
   onPasteClick,
   onCopyImage,
+  onCopyBurnedImage,
+  onOpenFileLocation,
+  onApplyCrop,
   onShareBundle,
   onRetry,
 }) => {
@@ -109,17 +116,26 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
   const [imageLoadError, setImageLoadError] = useState(false);
   const [isMarkerMode, setIsMarkerMode] = useState(true);
   const [isCropMode, setIsCropMode] = useState(false);
+  const [contextMenuState, setContextMenuState] = useState<{
+    x: number;
+    y: number;
+    items: ContextMenuItem[];
+  } | null>(null);
 
   // Sync note text when selection changes
   useEffect(() => {
     if (selectedFinding) {
       setNoteText(selectedFinding.note.body);
-      setImageLoadError(false);
       setSelectedMarkerId(null);
     } else {
       setNoteText('');
     }
   }, [selectedFindingId, selectedFinding]);
+
+  // Reset image error state when selected finding id explicitly changes
+  useEffect(() => {
+    setImageLoadError(false);
+  }, [selectedFindingId]);
 
   // Handle Note Save
   const handleSaveNote = useCallback(async (newText: string) => {
@@ -227,6 +243,182 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
     if (selectedMarkerId === markerId) {
       setSelectedMarkerId(null);
     }
+  };
+
+  // Handle Filmstrip Card Right-Click Context Menu
+  const handleFilmstripCardContextMenu = (id: string, e: React.MouseEvent) => {
+    // If clicked card is not in current multiple selection, make it the single selection
+    if (!checkedFindingIds.has(id)) {
+      onSelectFinding(id);
+      setCheckedFindingIds(new Set([id]));
+    }
+
+    const targetIds = checkedFindingIds.has(id) && checkedFindingIds.size > 1
+      ? Array.from(checkedFindingIds)
+      : [id];
+
+    const isMultiple = targetIds.length > 1;
+
+    const items: ContextMenuItem[] = [
+      {
+        id: 'assemble',
+        label: isMultiple ? `Assemble ${targetIds.length} to Bundle` : 'Assemble to Bundle',
+        icon: '📦',
+        onClick: () => {
+          onCompose?.(targetIds);
+        },
+      },
+      {
+        id: 'open-location',
+        label: 'Open File Location',
+        icon: '📂',
+        disabled: isMultiple,
+        onClick: () => {
+          onOpenFileLocation?.(id);
+        },
+      },
+      {
+        id: 'copy-image',
+        label: 'Copy Image',
+        icon: '📋',
+        disabled: isMultiple,
+        onClick: () => {
+          onCopyImage?.();
+        },
+      },
+      {
+        id: 'copy-burned-image',
+        label: 'Copy Burned Image (with Markers)',
+        icon: '🎨',
+        disabled: isMultiple,
+        onClick: () => {
+          onCopyBurnedImage?.();
+        },
+      },
+      {
+        id: 'sep-1',
+        label: '',
+        separator: true,
+        onClick: () => {},
+      },
+      {
+        id: 'delete',
+        label: isMultiple ? `Delete ${targetIds.length} Screenshots` : 'Delete Screenshot',
+        icon: '🗑️',
+        danger: true,
+        shortcut: 'Del',
+        onClick: () => {
+          promptDeleteFinding(targetIds);
+        },
+      },
+    ];
+
+    setContextMenuState({
+      x: e.clientX,
+      y: e.clientY,
+      items,
+    });
+  };
+
+  // Handle Marker Right-Click Context Menu
+  const handleMarkerContextMenu = (marker: MarkerItem, e: React.MouseEvent) => {
+    setSelectedMarkerId(marker.id);
+    const items: ContextMenuItem[] = [
+      {
+        id: 'edit-comment',
+        label: `Select Marker ${marker.ordinal}`,
+        icon: '✏️',
+        onClick: () => {
+          setSelectedMarkerId(marker.id);
+        },
+      },
+      {
+        id: 'sep-marker',
+        label: '',
+        separator: true,
+        onClick: () => {},
+      },
+      {
+        id: 'delete-marker',
+        label: `Delete Marker ${marker.ordinal}`,
+        icon: '🗑️',
+        danger: true,
+        shortcut: 'Del',
+        onClick: () => {
+          handleDeleteMarker(marker.id);
+        },
+      },
+    ];
+
+    setContextMenuState({
+      x: e.clientX,
+      y: e.clientY,
+      items,
+    });
+  };
+
+  // Handle Canvas Image Right-Click Context Menu
+  const handleCanvasContextMenu = (e: React.MouseEvent) => {
+    if (!selectedFinding) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const items: ContextMenuItem[] = [
+      {
+        id: 'copy-image',
+        label: 'Copy Image to Clipboard',
+        icon: '📋',
+        onClick: () => {
+          onCopyImage?.();
+        },
+      },
+      {
+        id: 'copy-burned-image',
+        label: 'Copy Burned Image (with Markers)',
+        icon: '🎨',
+        onClick: () => {
+          onCopyBurnedImage?.();
+        },
+      },
+      {
+        id: 'open-location',
+        label: 'Open File Location',
+        icon: '📂',
+        onClick: () => {
+          onOpenFileLocation?.(selectedFinding.finding.id);
+        },
+      },
+      {
+        id: 'assemble',
+        label: 'Assemble to Bundle',
+        icon: '📦',
+        onClick: () => {
+          onCompose?.([selectedFinding.finding.id]);
+        },
+      },
+      {
+        id: 'sep-canvas',
+        label: '',
+        separator: true,
+        onClick: () => {},
+      },
+      {
+        id: 'delete',
+        label: 'Delete Screenshot',
+        icon: '🗑️',
+        danger: true,
+        shortcut: 'Del',
+        onClick: () => {
+          promptDeleteFinding([selectedFinding.finding.id]);
+        },
+      },
+    ];
+
+    setContextMenuState({
+      x: e.clientX,
+      y: e.clientY,
+      items,
+    });
   };
 
   // Handle Confirm Delete Finding
@@ -459,6 +651,7 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
                   }}
                 >
                   <div
+                    onContextMenu={handleCanvasContextMenu}
                     style={{
                       position: 'relative',
                       display: 'inline-block',
@@ -466,11 +659,12 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
                       maxHeight: '100%',
                       boxShadow: 'var(--shadow-raised)',
                       borderRadius: 'var(--radius-sm)',
-                      overflow: 'hidden',
+                      overflow: isCropMode ? 'visible' : 'hidden',
                       lineHeight: 0,
                     }}
                   >
                     <img
+                      key={selectedFinding.imageSrc || selectedFinding.finding.image_path}
                       data-testid="finding-image"
                       src={selectedFinding.imageSrc || selectedFinding.finding.image_path}
                       alt={`Finding ${selectedFinding.finding.id}`}
@@ -494,6 +688,7 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
                       onSelectMarker={setSelectedMarkerId}
                       onHoverMarker={setHoveredMarkerId}
                       onDeleteMarker={handleDeleteMarker}
+                      onMarkerContextMenu={handleMarkerContextMenu}
                       disabled={isCropMode || !isMarkerMode}
                     />
 
@@ -502,9 +697,11 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
                       <CropOverlay
                         imageWidth={selectedFinding.finding.image_width}
                         imageHeight={selectedFinding.finding.image_height}
-                        onApplyCrop={(rect: CropRect) => {
-                          console.log('Applied crop:', rect);
+                        onApplyCrop={async (rect: CropRect) => {
                           setIsCropMode(false);
+                          if (onApplyCrop) {
+                            await onApplyCrop(selectedFinding.finding.id, rect);
+                          }
                         }}
                         onCancelCrop={() => setIsCropMode(false)}
                       />
@@ -581,6 +778,7 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
             activeFindingId={selectedFindingId}
             selectedFindingIds={checkedFindingIds}
             onCardClick={handleFilmstripCardClick}
+            onCardContextMenu={handleFilmstripCardContextMenu}
             onAssembleBatch={() => {
               const ids = checkedFindingIds.size > 0 ? Array.from(checkedFindingIds) : (selectedFinding ? [selectedFinding.finding.id] : []);
               onCompose?.(ids);
@@ -667,6 +865,16 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
           </div>
         )}
       </div>
+
+      {/* Custom Context Menu */}
+      {contextMenuState && (
+        <ContextMenu
+          x={contextMenuState.x}
+          y={contextMenuState.y}
+          items={contextMenuState.items}
+          onClose={() => setContextMenuState(null)}
+        />
+      )}
 
       {/* Confirm Deletion Dialog */}
       <ConfirmDialog

@@ -49,6 +49,14 @@ pub trait FindingStore {
 
     fn update_note(&self, finding_id: &str, body: &str, updated_at: &str) -> Result<(), CoreError>;
 
+    fn update_finding_image(
+        &self,
+        finding_id: &str,
+        image_path: &str,
+        image_width: u32,
+        image_height: u32,
+    ) -> Result<(), CoreError>;
+
     fn add_marker(
         &self,
         finding_id: &str,

@@ -56,7 +56,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     render(<App initialTab="settings" />);
 
     expect(screen.getByTestId('app-shell')).toBeInTheDocument();
-    expect(screen.getByText('Snapdown')).toBeInTheDocument();
+    expect(screen.getAllByText('Snapdown').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Startup')).toBeInTheDocument();
     expect(screen.getByText('Vault Folder')).toBeInTheDocument();
     expect(screen.getByText('Quality Budget')).toBeInTheDocument();

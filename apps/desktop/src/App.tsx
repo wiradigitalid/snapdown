@@ -91,15 +91,29 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
   }, [refreshBundles]);
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    let unlistenSwitch: (() => void) | undefined;
+    let unlistenSettings: (() => void) | undefined;
+    let unlistenCapture: (() => void) | undefined;
     try {
       listen<string>('switch-tab', (event) => {
         if (['findings', 'bundles', 'agent-access', 'settings'].includes(event.payload)) {
-          setActiveTab(event.payload as NavigationTab);
+          if (event.payload === 'settings') {
+            setIsSettingsModalOpen(true);
+          } else {
+            setActiveTab(event.payload as NavigationTab);
+          }
         }
       })
         .then((fn) => {
-          unlisten = fn;
+          unlistenSwitch = fn;
+        })
+        .catch(() => {});
+
+      listen('open-settings', () => {
+        setIsSettingsModalOpen(true);
+      })
+        .then((fn) => {
+          unlistenSettings = fn;
         })
         .catch(() => {});
 
@@ -111,7 +125,9 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
     }
 
     return () => {
-      if (unlisten) unlisten();
+      if (unlistenSwitch) unlistenSwitch();
+      if (unlistenSettings) unlistenSettings();
+      if (unlistenCapture) unlistenCapture();
     };
   }, []);
 
@@ -306,6 +322,8 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
             onToggleStartup={handleToggleStartup}
             onRetryStartup={handleRetryStartup}
             disabled={isLoading}
+            onClose={() => setActiveTab('findings')}
+            agentAccessContent={<AgentAccessView />}
           />
         )}
       </EditorShell>
@@ -374,10 +392,13 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
               borderRadius: 'var(--radius-lg)',
               boxShadow: 'var(--shadow-modal)',
               border: '1px solid var(--color-border)',
+              height: '620px',
               maxHeight: '90vh',
-              overflowY: 'auto',
               width: '100%',
               maxWidth: '56rem',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
             }}
           >
             <SettingsView

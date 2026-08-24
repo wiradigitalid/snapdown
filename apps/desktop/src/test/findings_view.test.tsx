@@ -14,6 +14,8 @@ vi.mock('../services/finding', () => ({
   deleteMarker: vi.fn(),
   scanOrphans: vi.fn(),
   cleanOrphans: vi.fn(),
+  showItemInFolder: vi.fn(),
+  getBurnedImageBase64: vi.fn(),
 }));
 
 vi.mock('../services/settings', () => ({
@@ -225,6 +227,61 @@ describe('FindingsView Composition Tests (BUG-5, BUG-6, SCN-04)', () => {
     // Assert return to FindingsView
     await waitFor(() => {
       expect(screen.getByTestId('findings-editor')).toBeInTheDocument();
+    });
+  });
+
+  it('composition: right-clicking filmstrip card opens contextual menu with actions', async () => {
+    vi.mocked(findingService.showItemInFolder).mockResolvedValue(undefined);
+
+    render(<FindingsView />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('filmstrip-card-fid-1')).toBeInTheDocument();
+    });
+
+    const card = screen.getByTestId('filmstrip-card-fid-1');
+    fireEvent.contextMenu(card, { clientX: 200, clientY: 300 });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('context-menu')).toBeInTheDocument();
+      expect(screen.getByTestId('context-menu-item-assemble')).toBeInTheDocument();
+      expect(screen.getByTestId('context-menu-item-open-location')).toBeInTheDocument();
+      expect(screen.getByTestId('context-menu-item-copy-image')).toBeInTheDocument();
+      expect(screen.getByTestId('context-menu-item-delete')).toBeInTheDocument();
+    });
+
+    // Click "Open File Location"
+    const openLocBtn = screen.getByTestId('context-menu-item-open-location');
+    fireEvent.click(openLocBtn);
+
+    await waitFor(() => {
+      expect(findingService.showItemInFolder).toHaveBeenCalledWith('findings/finding-1.png');
+      expect(screen.queryByTestId('context-menu')).not.toBeInTheDocument();
+    });
+  });
+
+  it('composition: right-clicking marker badge opens marker context menu', async () => {
+    vi.mocked(findingService.deleteMarker).mockResolvedValue(undefined);
+
+    render(<FindingsView />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('marker-badge-1')).toBeInTheDocument();
+    });
+
+    const markerBadge = screen.getByTestId('marker-badge-1');
+    fireEvent.contextMenu(markerBadge, { clientX: 150, clientY: 250 });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('context-menu')).toBeInTheDocument();
+      expect(screen.getByTestId('context-menu-item-delete-marker')).toBeInTheDocument();
+    });
+
+    const deleteMarkerBtn = screen.getByTestId('context-menu-item-delete-marker');
+    fireEvent.click(deleteMarkerBtn);
+
+    await waitFor(() => {
+      expect(findingService.deleteMarker).toHaveBeenCalledWith('fid-1', 'm1');
     });
   });
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import appIconSrc from '../assets/app-icon.png';
 import { GeneralSection } from './GeneralSection';
 import { VaultSection } from './VaultSection';
@@ -13,7 +13,7 @@ import {
   StartupState,
 } from '../types/settings';
 
-export type SettingsTab = 'general' | 'hotkeys' | 'agent-bridge' | 'about';
+export type SettingsTab = 'general' | 'agent-bridge' | 'about';
 
 export interface SettingsViewProps {
   settings: Settings;
@@ -29,6 +29,7 @@ export interface SettingsViewProps {
   disabled?: boolean;
   onClose?: () => void;
   agentAccessContent?: React.ReactNode;
+  initialTab?: SettingsTab;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -45,8 +46,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   disabled = false,
   onClose,
   agentAccessContent,
+  initialTab = 'general',
 }) => {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+
+  // Keyboard shortcut Esc to close / back to editor
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && onClose) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  const tabs: { id: SettingsTab; label: string; icon: string }[] = [
+    { id: 'general', label: 'General & Quality', icon: '⚙️' },
+    { id: 'agent-bridge', label: 'Local Agent Bridge', icon: '🤖' },
+    { id: 'about', label: 'About', icon: 'ℹ️' },
+  ];
 
   return (
     <div
@@ -62,9 +81,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         gap: 'var(--settings-group-gap)',
         boxSizing: 'border-box',
         width: '100%',
+        height: '100%',
+        overflowY: 'auto',
       }}
     >
-      {/* Tab bar spanning 100% width */}
+      {/* Top Navigation Bar with Tabs & Back Button */}
       <div
         data-testid="settings-tabs-header"
         style={{
@@ -73,62 +94,95 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           borderBottom: '1px solid var(--color-border)',
-          paddingBottom: 'var(--space-2)',
+          paddingBottom: 'var(--space-3)',
           marginBottom: 'var(--space-2)',
           flexShrink: 0,
+          gap: 'var(--space-2)',
         }}
       >
-        <div style={{ display: 'flex', gap: 'var(--space-1)', backgroundColor: 'var(--color-surface-sunken)', padding: '2px', borderRadius: 'var(--radius-md)' }}>
-          {[
-            { id: 'general', label: '⚙️ General & Quality' },
-            { id: 'hotkeys', label: '⌨️ Hotkeys' },
-            { id: 'agent-bridge', label: '🤖 Local Agent Bridge' },
-            { id: 'about', label: 'ℹ️ About' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              data-testid={`settings-tab-${tab.id}`}
-              onClick={() => setActiveTab(tab.id as SettingsTab)}
-              style={{
-                padding: 'var(--space-1) var(--space-3)',
-                borderRadius: 'var(--radius-sm)',
-                border: 'none',
-                backgroundColor: activeTab === tab.id ? 'var(--color-surface)' : 'transparent',
-                color: activeTab === tab.id ? 'var(--color-text)' : 'var(--color-text-muted)',
-                fontWeight: activeTab === tab.id ? 700 : 500,
-                fontSize: 'var(--text-xs)',
-                cursor: 'pointer',
-                boxShadow: activeTab === tab.id ? 'var(--shadow-sm)' : 'none',
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
+        {/* Horizontal Navigation Pills */}
+        <div
+          role="tablist"
+          aria-label="Settings Categories"
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 'var(--space-1)',
+            backgroundColor: 'var(--color-surface-sunken)',
+            padding: '3px',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--color-border)',
+          }}
+        >
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                id={`settings-tab-btn-${tab.id}`}
+                aria-selected={isActive}
+                aria-controls={`settings-tabpanel-${tab.id}`}
+                data-testid={`settings-tab-${tab.id}`}
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-1)',
+                  padding: 'var(--space-1) var(--space-3)',
+                  borderRadius: 'var(--radius-sm)',
+                  border: 'none',
+                  backgroundColor: isActive ? 'var(--color-surface)' : 'transparent',
+                  color: isActive ? 'var(--color-text)' : 'var(--color-text-muted)',
+                  fontWeight: isActive ? 700 : 500,
+                  fontSize: 'var(--text-xs)',
+                  cursor: 'pointer',
+                  boxShadow: isActive ? 'var(--shadow-sm)' : 'none',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span>{tab.icon}</span>
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
+        {/* Prominent Back to Editor Button */}
         {onClose && (
           <button
             type="button"
             data-testid="settings-close-btn"
+            aria-label="Back to Snapdown Editor"
+            title="Back to Snapdown Editor (Esc)"
             onClick={onClose}
             style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '1rem',
-              color: 'var(--color-text-muted)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 'var(--space-2)',
+              padding: 'var(--space-1) var(--space-3)',
+              backgroundColor: 'var(--color-surface-sunken)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-md)',
+              fontSize: 'var(--text-xs)',
+              fontWeight: 600,
+              color: 'var(--color-text)',
               cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              flexShrink: 0,
             }}
           >
-            ✕
+            <span>←</span>
+            <span>Back to Editor</span>
           </button>
         )}
       </div>
 
-      {/* TAB 1: General & Quality (Height-packed 2 columns) */}
+      {/* TAB 1: General & Quality (2-Column Unified Preferences) */}
       {activeTab === 'general' && (
         <>
-          {/* Column A: Startup & Vault */}
+          {/* Column A: Startup & Vault Storage */}
           <div
             data-testid="settings-column-a"
             style={{
@@ -183,21 +237,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </>
       )}
 
-      {/* TAB 2: Shortcuts & Hotkeys Detail */}
-      {activeTab === 'hotkeys' && (
-        <div style={{ width: '100%', minHeight: '380px', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          <HotkeySection
-            hotkeySettings={hotkeySettings}
-            onSaveHotkey={onSaveHotkey}
-            onClearHotkey={onClearHotkey}
-            disabled={disabled}
-          />
-        </div>
-      )}
-
-      {/* TAB 3: Local Agent Bridge & Access Token */}
+      {/* TAB 2: Local Agent Bridge & Token Management */}
       {activeTab === 'agent-bridge' && (
-        <div style={{ width: '100%', minHeight: '380px', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <div
+          id="settings-tabpanel-agent-bridge"
+          role="tabpanel"
+          aria-labelledby="settings-tab-btn-agent-bridge"
+          data-testid="settings-tabpanel-agent-bridge"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-4)',
+            width: '100%',
+          }}
+        >
           <div
             style={{
               padding: 'var(--space-4)',
@@ -210,27 +263,40 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 700, fontSize: 'var(--text-sm)', color: 'var(--color-text)' }}>Local Loopback Bridge</span>
-              <span style={{ color: 'var(--color-success-text)', backgroundColor: 'var(--color-success-bg)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', fontWeight: 800, fontSize: 'var(--text-2xs)' }}>
+              <span style={{ fontWeight: 700, fontSize: 'var(--text-sm)', color: 'var(--color-text)' }}>
+                Local Loopback Bridge
+              </span>
+              <span
+                style={{
+                  color: 'var(--color-success-text)',
+                  backgroundColor: 'var(--color-success-bg)',
+                  padding: '2px 8px',
+                  borderRadius: 'var(--radius-sm)',
+                  fontWeight: 800,
+                  fontSize: 'var(--text-2xs)',
+                }}
+              >
                 🟢 Port 3849 Active
               </span>
             </div>
             <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-              Provides stdio & HTTP bridge for Claude Code, Codex, and OpenCode AI agents.
+              Provides stdio & HTTP bridge for Claude Code, Codex, and OpenCode AI agents to observe and capture UI states.
             </p>
           </div>
           {agentAccessContent}
         </div>
       )}
 
-      {/* TAB 4: About & System Info */}
+      {/* TAB 3: About Snapdown & Architecture */}
       {activeTab === 'about' && (
         <div
+          id="settings-tabpanel-about"
+          role="tabpanel"
+          aria-labelledby="settings-tab-btn-about"
+          data-testid="settings-tabpanel-about"
           style={{
             width: '100%',
-            height: 'calc(100% - 48px)',
-            minHeight: '480px',
-            alignSelf: 'stretch',
+            minHeight: '440px',
             padding: 'var(--space-8) var(--space-6)',
             backgroundColor: 'var(--color-surface)',
             border: '1px solid var(--color-border)',
@@ -248,8 +314,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             src={appIconSrc}
             alt="Snapdown Logo"
             style={{
-              width: '64px',
-              height: '64px',
+              width: '72px',
+              height: '72px',
               borderRadius: 'var(--radius-lg)',
               objectFit: 'contain',
               boxShadow: 'var(--shadow-md)',
@@ -259,7 +325,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <h2 style={{ margin: 0, fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--color-text)', letterSpacing: '-0.02em' }}>
               Snapdown
             </h2>
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)', backgroundColor: 'var(--color-surface-sunken)', padding: '2px 8px', borderRadius: 'var(--radius-xs)' }}>
+            <span
+              style={{
+                fontSize: 'var(--text-xs)',
+                color: 'var(--color-text-muted)',
+                fontFamily: 'var(--font-mono)',
+                backgroundColor: 'var(--color-surface-sunken)',
+                padding: '2px 8px',
+                borderRadius: 'var(--radius-xs)',
+              }}
+            >
               Version 1.4.0 (Tauri v2 · x64 Windows 11)
             </span>
           </div>

@@ -19,6 +19,7 @@ export interface MarkerLayerProps {
   onSelectMarker?: (markerId: string | null) => void;
   onHoverMarker?: (markerId: string | null) => void;
   onDeleteMarker?: (markerId: string) => void;
+  onMarkerContextMenu?: (marker: MarkerItem, e: React.MouseEvent) => void;
   disabled?: boolean;
   style?: React.CSSProperties;
   className?: string;
@@ -33,6 +34,7 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
   onSelectMarker,
   onHoverMarker,
   onDeleteMarker,
+  onMarkerContextMenu,
   disabled = false,
   style,
   className = '',
@@ -146,6 +148,13 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
             onMouseDown={(e) => handleMouseDownBadge(e, marker.id)}
             onMouseEnter={() => onHoverMarker?.(marker.id)}
             onMouseLeave={() => onHoverMarker?.(null)}
+            onContextMenu={(e) => {
+              if (onMarkerContextMenu) {
+                e.preventDefault();
+                e.stopPropagation();
+                onMarkerContextMenu(marker, e);
+              }
+            }}
             style={{
               position: 'absolute',
               left: `${marker.x * 100}%`,

@@ -27,6 +27,28 @@ export const Root: React.FC = () => {
   const isOverlay = isOverlayMode();
 
   useEffect(() => {
+    // Disable default browser context menu across application webview
+    const handleContextMenu = (e: MouseEvent) => {
+      // Allow context menu only on native editable text elements if needed, otherwise prevent default
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      e.preventDefault();
+    };
+
+    window.addEventListener('contextmenu', handleContextMenu);
+    return () => {
+      window.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, []);
+
+  useEffect(() => {
     if (isOverlay) {
       document.documentElement.classList.add('overlay-mode');
       document.body.classList.add('overlay-mode');

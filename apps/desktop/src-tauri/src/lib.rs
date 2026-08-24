@@ -32,8 +32,9 @@ use commands::bundle::{
 };
 use commands::capture::{capture_screen_region, dismiss_overlay, trigger_overlay};
 use commands::finding::{
-    add_marker, clean_orphans, delete_finding, delete_marker, get_burned_image_base64,
-    get_finding_detail, import_image_data, list_findings, save_note, scan_orphans, update_marker,
+    add_marker, clean_orphans, crop_finding, delete_finding, delete_marker, get_burned_image_base64,
+    get_finding_detail, import_image_data, list_findings, save_note, scan_orphans,
+    show_item_in_folder, update_marker,
 };
 use commands::hotkey::{clear_hotkey, get_hotkeys, set_hotkey};
 use commands::settings::{
@@ -167,6 +168,7 @@ pub fn report_startup_error(err: &StartupError, app_data_dir: &Path) {
 fn show_main_window(app: &AppHandle, tab: Option<&str>) {
     if let Some(window) = app.get_webview_window("main") {
         if let Some(t) = tab {
+            let _ = window.emit("open-settings", ());
             let _ = window.emit("switch-tab", t);
         }
         let _ = window.show();
@@ -376,6 +378,8 @@ pub fn run() {
             delete_marker,
             get_burned_image_base64,
             import_image_data,
+            crop_finding,
+            show_item_in_folder,
             create_bundle,
             list_bundles,
             get_bundle_detail,

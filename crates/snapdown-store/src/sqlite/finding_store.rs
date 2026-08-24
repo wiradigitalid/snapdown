@@ -426,6 +426,34 @@ impl FindingStore for SqliteFindingStore {
         Ok(())
     }
 
+    fn update_finding_image(
+        &self,
+        finding_id: &str,
+        image_path: &str,
+        image_width: u32,
+        image_height: u32,
+    ) -> Result<(), CoreError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        let rows_affected = conn
+            .execute(
+                "UPDATE finding SET image_path = ?1, image_width = ?2, image_height = ?3 WHERE id = ?4;",
+                rusqlite::params![image_path, image_width, image_height, finding_id],
+            )
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        if rows_affected == 0 {
+            return Err(CoreError::NotFound(format!(
+                "Finding not found: {finding_id}"
+            )));
+        }
+
+        Ok(())
+    }
+
     fn add_marker(
         &self,
         finding_id: &str,

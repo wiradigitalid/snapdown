@@ -4,6 +4,7 @@ import { listen } from '@tauri-apps/api/event';
 import { FindingsEditor, FindingDetailItemDto } from '@snapdown/ui';
 import {
   addMarker,
+  cropFinding,
   deleteFinding,
   deleteMarker,
   FindingDetailDto,
@@ -11,6 +12,7 @@ import {
   importImageData,
   listFindings,
   saveNote,
+  showItemInFolder,
   updateMarker,
 } from '../services/finding';
 import { getHotkeys, getSettings } from '../services/settings';
@@ -79,6 +81,7 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'findings' | 'orphan-report'>('findings');
+  const [imageTimestamps, setImageTimestamps] = useState<Record<string, number>>({});
 
   const fetchFindingsData = useCallback(async (autoSelectFirst = false) => {
     setIsLoading(true);
@@ -175,34 +178,40 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
   }, [findings, vaultPath, imageSizes]);
 
   const uiFindings: FindingDetailItemDto[] = useMemo(() => {
-    return findings.map((f) => ({
-      finding: {
-        id: f.finding.id,
-        image_path: f.finding.image_path,
-        image_width: f.finding.image_width,
-        image_height: f.finding.image_height,
-        captured_at: f.finding.captured_at,
-        source_monitor: f.finding.source_monitor,
-        region: f.finding.region,
-        file_size_bytes: imageSizes[f.finding.id] || null,
-      },
-      note: {
-        id: f.note.id,
-        finding_id: f.note.finding_id,
-        body: f.note.body,
-        updated_at: f.note.updated_at,
-      },
-      markers: f.markers.map((m) => ({
-        id: m.id,
-        finding_id: m.finding_id,
-        ordinal: m.ordinal,
-        x: m.x,
-        y: m.y,
-        comment: m.comment,
-      })),
-      imageSrc: resolveImagePath(f.finding.image_path, vaultPath),
-    }));
-  }, [findings, vaultPath, imageSizes]);
+    return findings.map((f) => {
+      const baseSrc = resolveImagePath(f.finding.image_path, vaultPath);
+      const ts = imageTimestamps[f.finding.id];
+      const imageSrc = ts && baseSrc ? `${baseSrc}${baseSrc.includes('?') ? '&' : '?'}t=${ts}` : baseSrc;
+
+      return {
+        finding: {
+          id: f.finding.id,
+          image_path: f.finding.image_path,
+          image_width: f.finding.image_width,
+          image_height: f.finding.image_height,
+          captured_at: f.finding.captured_at,
+          source_monitor: f.finding.source_monitor,
+          region: f.finding.region,
+          file_size_bytes: imageSizes[f.finding.id] || null,
+        },
+        note: {
+          id: f.note.id,
+          finding_id: f.note.finding_id,
+          body: f.note.body,
+          updated_at: f.note.updated_at,
+        },
+        markers: f.markers.map((m) => ({
+          id: m.id,
+          finding_id: m.finding_id,
+          ordinal: m.ordinal,
+          x: m.x,
+          y: m.y,
+          comment: m.comment,
+        })),
+        imageSrc,
+      };
+    });
+  }, [findings, vaultPath, imageSizes, imageTimestamps]);
 
   const handleSaveNote = async (findingId: string, noteBody: string) => {
     await saveNote(findingId, noteBody);
@@ -389,10 +398,34 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
     }
   };
 
-  const handleCopyImage = async () => {
-    if (!selectedId) return;
+  const handleCopyRawImage = async (findingId?: string) => {
+    const fid = findingId || selectedId;
+    if (!fid) return;
+    const targetFinding = findings.find((f) => f.finding.id === fid);
+    if (!targetFinding) return;
+
     try {
-      const base64 = await getBurnedImageBase64(selectedId);
+      const src = resolveImagePath(targetFinding.finding.image_path, vaultPath);
+      const res = await fetch(src);
+      const blob = await res.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': blob,
+        }),
+      ]);
+      if (onShowToast) {
+        onShowToast('✓ Image copied to clipboard!');
+      }
+    } catch (err) {
+      console.error('Failed to copy raw image to clipboard:', err);
+    }
+  };
+
+  const handleCopyBurnedImage = async (findingId?: string) => {
+    const fid = findingId || selectedId;
+    if (!fid) return;
+    try {
+      const base64 = await getBurnedImageBase64(fid);
       const byteCharacters = atob(base64);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
@@ -412,6 +445,47 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
       }
     } catch (err) {
       console.error('Failed to copy burned image to clipboard:', err);
+    }
+  };
+
+  const handleOpenFileLocation = async (findingId: string) => {
+    const target = findings.find((f) => f.finding.id === findingId);
+    if (!target) return;
+    try {
+      await showItemInFolder(target.finding.image_path);
+    } catch (err) {
+      console.error('Failed to open file location:', err);
+    }
+  };
+
+  const handleApplyCrop = async (
+    findingId: string,
+    crop: { x: number; y: number; width: number; height: number }
+  ) => {
+    try {
+      await cropFinding({
+        findingId,
+        x: crop.x,
+        y: crop.y,
+        width: crop.width,
+        height: crop.height,
+      });
+      // Invalidate image size and image asset cache timestamp for immediate re-render
+      setImageTimestamps((prev) => ({ ...prev, [findingId]: Date.now() }));
+      setImageSizes((prev) => {
+        const next = { ...prev };
+        delete next[findingId];
+        return next;
+      });
+      await fetchFindingsData(false);
+      if (onShowToast) {
+        onShowToast('✓ Image cropped successfully!');
+      }
+    } catch (err) {
+      console.error('Failed to crop finding image:', err);
+      if (onShowToast) {
+        onShowToast('❌ Failed to crop image');
+      }
     }
   };
 
@@ -444,7 +518,10 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
         onCaptureClick={handleCaptureClick}
         onOpenFileClick={handleOpenFileClick}
         onPasteClick={handlePasteClick}
-        onCopyImage={handleCopyImage}
+        onCopyImage={() => handleCopyRawImage()}
+        onCopyBurnedImage={() => handleCopyBurnedImage()}
+        onOpenFileLocation={handleOpenFileLocation}
+        onApplyCrop={handleApplyCrop}
         onRetry={() => fetchFindingsData(false)}
       />
     </div>

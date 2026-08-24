@@ -6,6 +6,7 @@ export interface FilmstripTrayProps {
   activeFindingId: string | null;
   selectedFindingIds: Set<string>;
   onCardClick: (id: string, e: React.MouseEvent) => void;
+  onCardContextMenu?: (id: string, e: React.MouseEvent) => void;
   onAssembleBatch: () => void;
   className?: string;
   style?: React.CSSProperties;
@@ -26,6 +27,7 @@ export const FilmstripTray: React.FC<FilmstripTrayProps> = ({
   activeFindingId,
   selectedFindingIds,
   onCardClick,
+  onCardContextMenu,
   onAssembleBatch,
   className = '',
   style,
@@ -124,6 +126,13 @@ export const FilmstripTray: React.FC<FilmstripTrayProps> = ({
               key={f.finding.id}
               data-testid={`filmstrip-card-${f.finding.id}`}
               onClick={(e) => onCardClick(f.finding.id, e)}
+              onContextMenu={(e) => {
+                if (onCardContextMenu) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onCardContextMenu(f.finding.id, e);
+                }
+              }}
               style={{
                 width: '136px',
                 minWidth: '136px',

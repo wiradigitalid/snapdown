@@ -18,6 +18,8 @@ import {
   Toggle,
   SegmentedControl,
   HotkeyChip,
+  ContextMenu,
+  CropOverlay,
 } from '../index';
 
 describe('web/ui components suite', () => {
@@ -479,6 +481,106 @@ describe('web/ui components suite', () => {
       expect(screen.getByText('1')).toBeInTheDocument();
     });
   });
+  describe('ContextMenu', () => {
+    it('renders menu items and triggers item click callback then closes', () => {
+      const handleClose = vi.fn();
+      const handleItemClick = vi.fn();
+      render(
+        <ContextMenu
+          x={100}
+          y={150}
+          items={[
+            { id: 'copy', label: 'Copy Image', onClick: handleItemClick },
+            { id: 'sep', label: '', separator: true, onClick: () => {} },
+            { id: 'delete', label: 'Delete', danger: true, onClick: vi.fn() },
+          ]}
+          onClose={handleClose}
+        />
+      );
+
+      expect(screen.getByTestId('context-menu')).toBeInTheDocument();
+      expect(screen.getByText('Copy Image')).toBeInTheDocument();
+      expect(screen.getByTestId('context-menu-separator')).toBeInTheDocument();
+      expect(screen.getByText('Delete')).toBeInTheDocument();
+
+      const copyBtn = screen.getByTestId('context-menu-item-copy');
+      fireEvent.click(copyBtn);
+      expect(handleItemClick).toHaveBeenCalledTimes(1);
+      expect(handleClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes on Escape key press', () => {
+      const handleClose = vi.fn();
+      render(
+        <ContextMenu
+          x={100}
+          y={150}
+          items={[{ id: 'item1', label: 'Item 1', onClick: vi.fn() }]}
+          onClose={handleClose}
+        />
+      );
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(handleClose).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('CropOverlay Interactive Drag & Resize', () => {
+    it('renders 8 handles and applies crop when clicked', () => {
+      const handleApply = vi.fn();
+      const handleCancel = vi.fn();
+
+      render(
+        <CropOverlay
+          imageWidth={1000}
+          imageHeight={800}
+          onApplyCrop={handleApply}
+          onCancelCrop={handleCancel}
+        />
+      );
+
+      expect(screen.getByTestId('crop-mode-overlay')).toBeInTheDocument();
+      expect(screen.getByTestId('active-crop-boundary')).toBeInTheDocument();
+      expect(screen.getByTestId('crop-handle-nw')).toBeInTheDocument();
+      expect(screen.getByTestId('crop-handle-se')).toBeInTheDocument();
+      expect(screen.getByText('800 × 640 px')).toBeInTheDocument();
+
+      const applyBtn = screen.getByTestId('apply-crop-button');
+      fireEvent.click(applyBtn);
+      expect(handleApply).toHaveBeenCalledWith({
+        x: 0.1,
+        y: 0.1,
+        width: 0.8,
+        height: 0.8,
+      });
+
+      const cancelBtn = screen.getByTestId('cancel-crop-button');
+      fireEvent.click(cancelBtn);
+      expect(handleCancel).toHaveBeenCalledTimes(1);
+    });
+
+    it('cancels on Escape key press and applies on Enter key press', () => {
+      const handleApply = vi.fn();
+      const handleCancel = vi.fn();
+
+      render(
+        <CropOverlay
+          imageWidth={1000}
+          imageHeight={800}
+          onApplyCrop={handleApply}
+          onCancelCrop={handleCancel}
+        />
+      );
+
+      const overlay = screen.getByTestId('crop-mode-overlay');
+      fireEvent.keyDown(overlay, { key: 'Escape' });
+      expect(handleCancel).toHaveBeenCalledTimes(1);
+
+      fireEvent.keyDown(overlay, { key: 'Enter' });
+      expect(handleApply).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('Navigation Rail and Interactive Focus States (LC-028, NFR-16)', () => {
     it('defines focus-visible styling for navigation rail items and buttons in components.css', () => {
       const cssPath = path.resolve(process.cwd(), 'src/styles/components.css');

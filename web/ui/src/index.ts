@@ -23,3 +23,4 @@ export * from './components/StudioRibbon';
 export * from './components/FilmstripTray';
 export * from './components/PropertiesPanel';
 export * from './components/BundlesDrawer';
+export * from './components/ContextMenu';

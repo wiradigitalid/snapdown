@@ -118,6 +118,10 @@ export const deleteMarker = async (
   });
 };
 
+export const showItemInFolder = async (imagePath: string): Promise<void> => {
+  await invoke<void>('show_item_in_folder', { imagePath });
+};
+
 export const getBurnedImageBase64 = async (
   findingId: string
 ): Promise<string> => {
@@ -135,3 +139,26 @@ export const importImageData = async (
     sourceName: sourceName || null,
   });
 };
+
+export interface CropFindingParams {
+  findingId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export const cropFinding = async (
+  params: CropFindingParams
+): Promise<FindingDetailDto> => {
+  return await invoke<FindingDetailDto>('crop_finding', {
+    input: {
+      finding_id: params.findingId,
+      x: params.x,
+      y: params.y,
+      width: params.width,
+      height: params.height,
+    },
+  });
+};
+
