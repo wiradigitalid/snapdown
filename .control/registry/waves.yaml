@@ -692,45 +692,95 @@ waves:
       - "These three stories `satisfies: []` and that is deliberate, not an omission. A defect fix
          restores a promise that already exists; it schedules no use case. Writing a `UC-` here to
          quiet V3 would be the guess the recovery note refuses."
+      - "THE `depends_on` CHAIN IS NOT A TECHNICAL DEPENDENCY AND MUST NOT BE READ AS ONE. The SPEC
+         review raised this (finding M7) and it is upheld. The three stories touch entirely disjoint
+         trees - apps/desktop/src-tauri (Rust), apps/web-service (Go), crates/snapdown-bridge (Rust)
+         - and share no file, symbol, schema, or fixture. The chain exists because V11 demands that
+         every PAIR of stories in a wave either share a `touches` value or sit on a `depends_on`
+         path, and these three share neither. Declaring `depends_on: []` on all three, which is what
+         M7 asks for, makes V11 fail on all three pairs. The chain is therefore a V11 artifact
+         recording INTENDED ORDER, not a build gate, and all three MAY be dispatched in parallel -
+         their Step 1 planners were, in three isolated worktrees. Filed as OQ-25: V11 makes a wave of
+         unrelated defect fixes express a dependency that does not exist, and naming it here is
+         better than letting the next reader believe it."
+    spec_reviewed:
+      date: "2026-08-24"
+      sha: 7c67dfb
+      lenses: [structure, prose, edge-case-hunter]
+      # 3 high, 10 medium, 9 low; report at _bmad-output/specs/w7-failure-paths/review-W7-spec.md.
+      # H1 found that W7-S1's defect was already fixed (see that story's `why`), and H3 found BUG-15,
+      # a live BR-118 violation in all five stores that no existing test can reach. Every high and
+      # every medium was upheld; findings were resolved into the SPEC, this registry, three new
+      # defect rows, and OQ-25 before this trace was written.
     epics:
       - id: EP-startup
         component: settings
         title: The application says what went wrong instead of vanishing
         stories:
           - id: W7-S1
-            title: Open the stores fallibly, and report the file that could not be opened
+            title: Close the three defects W6-S5's startup path left open, and name the tests
             component: settings
             satisfies: []
             depends_on: []
             touches: [local-db, settings-store]
             spec_folder: _bmad-output/specs/w7-failure-paths/
             why: |
-              BUG-12, high, and it is first because it is the only one of the three that can make the
-              whole product disappear.
+              RE-SCOPED 2026-08-24, after the SPEC review. This story was opened against BUG-12 and
+              BUG-12 WAS ALREADY FIXED - by W6-S5 (commit aa30434), which was not scoped to it and
+              closed it as a side effect of needing a fallible startup path. The register row still
+              read `open`, a planner was dispatched against it, and it wrote a full implementation
+              plan for code that already existed. The review caught it by reading the code instead of
+              the register. defects.yaml BUG-12 now carries that history in full.
 
-              apps/desktop/src-tauri/src/lib.rs:109-119 opens five stores and `.expect()`s every one.
-              A Tauri release binary on Windows has no console, so a panic in the setup hook unwinds
-              and the process exits: the Reviewer double-clicks Snapdown.exe and NOTHING happens - no
-              window, no tray icon, no message, no file named. The product does not look broken; it
-              looks absent.
+              What W6-S5 did NOT close is real, and it is what this story now carries:
 
-              AD-11 is what makes it total. One process owns the tray, the hotkeys, the overlay and
-              the Editor, so there is no surviving surface to report into. That is exactly the cost
-              DEC-003 accepted IN WRITING - "a panic in the editor's Tauri commands kills the tray,
-              the hotkeys, and the overlay with it ... this raises the bar on every unwrap in the
-              command layer" - and nobody then went and looked at the unwraps. The prediction was
-              recorded and never turned into a check.
+              BUG-15, HIGH. All five stores switch the database to WAL BEFORE running quick_check
+              (settings_store.rs:28 then :33, identically in the four siblings). Switching an existing
+              database to WAL mutates page 1 and creates `-wal` and `-shm` beside it, so for a file
+              with a VALID header and corrupt B-tree pages the store IS written to and files ARE
+              created next to it - and the Reviewer is then told nothing was touched. That sentence
+              is false, and it is the one thing they would rely on before taking a backup. BR-118 and
+              the SDD's "a store recreated beside a corrupt one is silent data loss" are both broken
+              by the code path that reports them.
 
-              SDD-settings.md Failure Behaviour, the LC-025 to library.db row, already specifies the
-              answer - "Reported with the file's path, and NOTHING IS CREATED OVER IT (BR-118). A
-              store recreated beside a corrupt one is silent data loss." Half of that is kept today -
-              the panic does guarantee nothing is written over the corrupt file - and half is not.
-              BR-118 is not in question and MUST NOT be weakened to make the report easier.
+              THE TEST CANNOT SEE IT, and that is the part worth carrying: the only corrupt fixture
+              anyone has used is garbage bytes, which SQLite rejects at Connection::open before a
+              single pragma runs. The byte-identity assertion passes without ever reaching the code
+              that breaks it. The W7-S1 plan named this exact case in its own edge-case matrix and
+              then specified a fixture that avoids it.
+
+              BUG-16, medium. The exit is still a panic, through the `.expect()` at lib.rs:347 that
+              BUG-12 deliberately excluded from its sweep. That exclusion's reason - "there is nothing
+              left to report with" - was true when every store open panicked before reaching it, and
+              W6-S5 made it the routine exit path without anyone re-reading the premise.
+
+              BUG-17, medium. MessageBoxW is called with a NULL owner and none of MB_SETFOREGROUND,
+              MB_TOPMOST or MB_SYSTEMMODAL, so it can open behind other windows - which is the
+              "nothing happens at all" symptom BUG-12 existed to end. Whether it is then actually
+              visible is a MANUAL check and MUST NOT be claimed by a cargo test (OQ-24).
             tests:
+              # The four names below are the ones this wave promised. Two already exist under
+              # different names and are RENAMED, not rewritten, so the registry and the suite agree:
+              #   an_unreadable_library_db_is_reported_with_its_path_and_not_recreated
+              #   a_corrupt_library_db_does_not_panic_the_setup_hook
+              # a_readable_store_still_starts_normally has no coverage today.
               - cargo::a_store_that_cannot_be_opened_yields_an_error_not_a_panic
               - cargo::the_startup_error_names_the_path_of_the_file_that_failed
               - cargo::a_corrupt_store_is_never_recreated_beside_itself
               - cargo::a_readable_store_still_starts_normally
+              # BUG-15. The first is the fixture that makes the third name above mean something.
+              - cargo::a_valid_header_with_corrupt_pages_is_not_written_to_before_it_is_checked
+              - cargo::a_failed_open_leaves_no_wal_or_shm_file_beside_the_database
+              # BUG-16.
+              - cargo::a_store_failure_exits_without_panicking
+            tests_deliberately_not_written:
+              - name: the_startup_dialog_reaches_the_foreground
+                why: |
+                  BUG-17's fix is MB_SETFOREGROUND | MB_TOPMOST, and no unit test can observe whether
+                  a native dialog actually reached the foreground. Asserting the flag constants were
+                  passed would test a copy of the input, which is the literal-assert failure this
+                  repository has landed three times. It is a manual check, it is recorded as one, and
+                  OQ-24 says this project currently has no working way to run one.
       - id: EP-frozen-fixes
         component: sharing
         title: Two frozen components stop lying about failure

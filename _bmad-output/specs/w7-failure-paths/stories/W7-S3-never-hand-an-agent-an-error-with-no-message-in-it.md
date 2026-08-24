@@ -156,6 +156,43 @@ This is honestly low severity (`BUG-10`). Because it sits on the error path of a
 
 <!-- Append-only. Populated during review loops. -->
 
+### 2026-08-24 — SPEC review, finding M8
+
+**`M8` (medium) — the story says it does not change the error shape, and its remedy has the bridge
+invent an error, which `cross-cutting.md` forbids in as many words.**
+
+`.how/_platform/cross-cutting.md` § Error envelope, the rule immediately after `AD-7`:
+
+> **The MCP Bridge does not invent its own errors.** It maps a Local API envelope onto an MCP tool
+> error, preserving `code` and `message` verbatim.
+
+and `error.code` is *"from the catalogue below"*, always present.
+
+The prescribed replacements — `"HTTP 502: (failed to read error response: connection reset)"` and
+`"HTTP 404: (empty error response)"` — are errors the bridge invents, free-form, carrying **no code
+from the catalogue**. The story asserted the opposite: *"`AD-7` binds the SHAPE and this story does
+not change it."*
+
+This is a defect in the **claim**, not in the direction: a non-empty invented message is
+unambiguously better than `""`. But `AD-7`'s own wording is what makes the code the point rather than
+a nicety — *"A refusal MUST be distinguishable from an empty result **by its code**, never only by
+its body being empty."* A message with no code satisfies the letter of "not empty" while missing
+what the rule is for.
+
+*Resolution:* where there is no envelope to map, `parse_error_response_reader` MUST **synthesise a
+catalogue code** rather than return a bare string — `internal` (500, *"something the producer did not
+anticipate"*) for a body that could not be read. The boundary line changes from *"does not change the
+shape"* to *"synthesises the one code the catalogue provides for an unanticipated producer failure"*.
+
+If the builder prefers `unavailable` (503) for the dropped-connection reading specifically, that is a
+refinement and not a contradiction. If the builder prefers to keep a free-form string, that is a
+**deliberate deviation from `cross-cutting.md`** and MUST be reported as a `DEC-` through
+`wdi-decision`, never absorbed silently.
+
+**Carried forward unchanged from the original plan, and confirmed correct by the review:** the second
+empty-message path this story found on its own — a body that **reads successfully and is empty** also
+returned `""` — is real and `BUG-10` did not name it. Both paths must return a message.
+
 ## Design Notes
 
 **Why factor out `parse_error_response_reader`:**

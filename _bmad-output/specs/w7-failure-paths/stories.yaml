@@ -1,30 +1,32 @@
 - id: "W7-S1"
-  title: Open the stores fallibly, and report the file that could not be opened
+  title: Close the three defects W6-S5's startup path left open, and name the tests
   description: >-
-    Replace the five `.expect()` store opens in apps/desktop/src-tauri/src/lib.rs:109-119 with
-    fallible opens, and on failure show a visible report naming the path of the file that could not
-    be opened. The unreadable file is left exactly as found and no fresh store is started beside it.
-    See SPEC.md CAP-6, .control/registry/defects.yaml BUG-12, and SDD-settings.md § Failure
-    Behaviour, row LC-025 -> library.db, which already specifies this behaviour.
+    RE-SCOPED after the SPEC review: BUG-12 was already fixed by W6-S5 (aa30434) and the register
+    row was stale. What is still open is BUG-15 (all five stores switch to WAL before quick_check,
+    so a corrupt store IS written to and -wal/-shm ARE created beside it), BUG-16 (the exit is still
+    a panic through the .expect() BUG-12 excused) and BUG-17 (the dialog has no foreground flag and
+    can open behind other windows). See SPEC.md CAP-6 and defects.yaml BUG-15, BUG-16, BUG-17.
   invoke_dev_with: >-
-    AD-11 is what makes this hard and it must shape the design: one process owns the tray, the
-    hotkeys, the overlay and the Editor, so at the moment a store open fails there is NO surviving
-    surface to report into and the report cannot assume a window already exists. A Tauri release
-    binary on Windows has no console either, so writing to stderr reports to nobody. BR-118 is
-    non-negotiable and is the trap here: the tempting fix — start a replacement store so the app
-    keeps running — trades a visible failure for SILENT DATA LOSS and is worse than the defect. The
-    store is opened, never created over. Do not sweep the other unwrap/expect calls: BUG-12's
-    register entry already swept and deliberately did not register three groups, and re-raising them
-    is out of scope. No test in this repository has ever opened a corrupt database — every store test
-    uses open_in_memory() — so the fixture is new work and is the point of the story.
+    Read the code before planning against any defect row - that is why this story was re-scoped. Do
+    not rebuild init_app_stores, StartupError, format_startup_error_message, show_native_message_dialog
+    or the fallible setup hook; all of them are at HEAD. THE FIXTURE IS THE STORY: every corrupt-database
+    test in this repository uses garbage bytes, which SQLite rejects at Connection::open before a single
+    pragma runs, so the existing byte-identity assertion passes without ever reaching the code that
+    breaks it. Build a database with a VALID header and corrupt pages - create a real one, then
+    overwrite a page in the middle - and assert byte-identity AND the absence of -wal and -shm.
+    SQLITE_OPEN_CREATE is not the defect and must stay: creating a store that is ABSENT is first run,
+    and BR-118 forbids creating one OVER a corrupt file, which that flag does not do. BUG-17's
+    visibility is a MANUAL check: do not write a test for it, and do not assert the flag constants were
+    passed, which would test a copy of the input.
 
 - id: "W7-S2"
   title: Escape the published Markdown before it reaches the page
   description: >-
-    apps/web-service/internal/server/server.go:145 builds the published page with fmt.Sprintf and a
-    raw %s for b.Markdown, which escapes nothing. Render through html/template, or escape before
+    apps/web-service/internal/server/server.go:148-152 builds the published page with fmt.Sprintf and
+    a raw %s for b.Markdown, which escapes nothing. Render through html/template, or escape before
     interpolation, so a Note reaches the browser as text rather than as markup. Escape the slug on
-    the same pass. See SPEC.md CAP-8 and .control/registry/defects.yaml BUG-3.
+    the same pass. The raw-Markdown paths stay verbatim. See SPEC.md CAP-8 and
+    .control/registry/defects.yaml BUG-3.
   invoke_dev_with: >-
     DEC-005 freezes `sharing` and permits this by its own sentence — "This decision does not forbid a
     fix. It forbids new work." Do NOT widen: no new route, no new promise, and do not build the
@@ -35,7 +37,17 @@
     is a property of the generator, not of this render, and a renderer safe only because of what its
     caller happens to pass is one refactor from unsafe. The existing route tests assert response
     codes and the identical-404 and nothing asserts what the HTML BODY does with hostile content —
-    that gap is why this shipped.
+    that gap is why this shipped. THE RAW PATHS MUST STAY UNESCAPED: GET /b/{slug}/raw.md, and
+    GET /b/{slug} under Accept: text/markdown or text/plain, serve verbatim bytes, because an agent
+    consuming a Bundle needs pristine Markdown. TWO THINGS THE SPEC REVIEW CAUGHT. (1) The slug
+    fixture MUST be legal as a Windows path segment - store.go joins the slug into a filesystem path,
+    `<` and `>` are illegal in Windows filenames, and the Go CI job runs on ubuntu, so a fixture like
+    `test<slug>&42` is a green CI over a red developer machine. Use something hostile to HTML but
+    legal as a path, such as `a&b"c'd`, or drive the escaping unit directly. (2) The four registry
+    test names are not legal Go identifiers; map them as t.Run subtests under one parent so that
+    `go test -run` matches the registry name, and say so in the story - a guess here is a silent
+    rename against a registry the gate checks. Path traversal on the slug is real, unfiltered, and
+    explicitly OUT OF SCOPE - it is named as a non-goal in SPEC.md rather than left unwritten.
 
 - id: "W7-S3"
   title: Never hand an agent an error with no message in it
@@ -47,9 +59,18 @@
     .control/registry/defects.yaml BUG-10.
   invoke_dev_with: >-
     AD-7 binds the SHAPE and this story does not change it: every failure crossing a process boundary
-    is returned in the cross-cutting.md envelope carrying a code from that catalogue. What changes is
-    the message inside it. BR-17 is the exact anchor — a refusal is always distinguishable from an
-    empty result — and an error whose message is the empty string is not. DEC-005 freezes
+    is returned in the cross-cutting.md envelope carrying a code from that catalogue. THE SPEC REVIEW
+    SHARPENED THIS AND IT CHANGES THE REMEDY. cross-cutting.md says in as many words: "The MCP Bridge
+    does not invent its own errors. It maps a Local API envelope onto an MCP tool error, preserving
+    code and message verbatim." A free-form replacement like "HTTP 502: (failed to read error
+    response)" carries NO catalogue code, so it is exactly the invention that rule forbids - and
+    AD-7's own wording is what makes the code the point, not a nicety: "A refusal MUST be
+    distinguishable from an empty result BY ITS CODE, never only by its body being empty." Where
+    there is no envelope to map, SYNTHESISE a catalogue code: `internal` (500, "something the
+    producer did not anticipate") for a body that could not be read. BR-17 is the anchor — a refusal
+    is always distinguishable from an empty result — and an error whose message is the empty string
+    is not. A SECOND EMPTY PATH exists that BUG-10 did not name: a body that reads successfully and
+    is empty also produced "". Both paths must return a message. DEC-005 freezes
     `agent-access` and permits a fix; do not widen. Honestly low severity: this is the error path of
     a call that has ALREADY failed, so reaching it needs a second failure (a dropped connection
     mid-error-body, or a non-UTF-8 body) — write the test against those two readings. Also swept and

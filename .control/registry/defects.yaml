@@ -88,7 +88,7 @@ defects:
     severity: medium
     contradicts: [NFR-15]
     evidence: |
-      apps/web-service/internal/server/server.go:145
+      apps/web-service/internal/server/server.go:148-152
         html := fmt.Sprintf(`<!DOCTYPE html>...<body><pre>%s</pre></body>...`, slug, b.Markdown)
       b.Markdown is the Reviewer's own Note text, published verbatim. `%s` performs no escaping, so
       a Note containing `</pre><script>` breaks out of the block and executes in the browser of
@@ -105,7 +105,13 @@ defects:
     fix: |
       html/template, or html.EscapeString on b.Markdown before interpolation. Escaping the slug too:
       it is a 160-bit CSPRNG value today and that is a property of the generator, not of this render.
-    blocked_by: DEC-005, which freezes `sharing`. Registered now, fixed when that lifts.
+    scheduled: W7-S2
+    note_on_the_freeze: |
+      NOT blocked. DEC-005 freezes `sharing` against NEW WORK and permits a fix in its own words -
+      "This decision does not forbid a fix. It forbids new work." This row read `blocked_by: DEC-005`
+      from 2026-08-23 to 2026-08-24, which was a misreading: a public unauthenticated HTML-injection
+      path sat unfixed for a day because the register said a freeze forbade it and nobody re-read the
+      decision. Scheduled into W7-S2.
     note: |
       Found 2026-08-23 while checking CI coverage, and it makes this defect worse than first written:
       NO WORKFLOW TOUCHED GO AT ALL. apps/web-service was never built, vetted, or tested by CI, so
@@ -474,7 +480,9 @@ defects:
       Also swept and NOT registered: main.rs:21-22 swallows the stdout write and flush in the stdio
       loop. That is defensible - there is nothing useful to do about a failure on the very channel you
       would report it over - and it is recorded here so the next sweep does not re-raise it.
-    blocked_by: DEC-005, which freezes `agent-access`.
+    scheduled: W7-S3
+    note_on_the_freeze: |
+      NOT blocked, for the same reason as BUG-3: DEC-005 permits a fix and forbids new work.
     status: open
   - id: BUG-11
     title: "There is no reproducible way to build the desktop application"
@@ -603,7 +611,45 @@ defects:
           fails there is nothing left to report with.
         bridge mcp.rs:55,81 - serde_json::to_string on a well-formed response struct. Effectively
           infallible, and the bridge has no channel to report a serialisation failure over anyway.
-    status: open
+
+      THE SECOND EXCLUSION ABOVE HAS EXPIRED. Its reason - "there is nothing left to report with" -
+      was true while every store open panicked before reaching that line. W6-S5's fallible open made
+      it the ROUTINE exit path for a store failure, and the premise stopped holding without anyone
+      noticing. Registered as BUG-16. Re-read a sweep's exclusions whenever the code they reasoned
+      about changes; this is the second time an exclusion has outlived its reason.
+    resolved_by: W6-S5, commit aa30434
+    resolution: |
+      RESOLVED, AND THE REGISTER WAS WRONG FOR A DAY. Fixed on 2026-08-23 by W6-S5 ("Run at Windows
+      startup"), which was not scoped to this defect and closed it as a side effect of needing a
+      fallible startup path. Nobody updated this row, so it still read `open` on 2026-08-24 - and
+      wave W7 was opened with a whole story, W7-S1, planned against it. The planner was dispatched,
+      wrote a full implementation plan, and reported success; the SPEC review caught it by reading
+      the code instead of the register.
+
+      What aa30434 actually landed in apps/desktop/src-tauri/src/lib.rs:
+        StartupError::DatabaseOpen { path, source }   :51-59
+        StoresBundle                                  :61-67
+        init_app_stores -> Result<_, StartupError>    :69-102
+        format_startup_error_message                  :105-120
+        show_native_message_dialog via MessageBoxW    :122-152
+        report_startup_error, writes startup-error.log :154-163
+        the fallible setup hook returning Err         :226-233
+      The five .expect() store opens are gone. `grep -n '\.expect(' lib.rs` returns one hit, :347,
+      which is BUG-16.
+
+      THREE THINGS IT DID NOT CLOSE, each now its own row rather than residue hidden here:
+        BUG-15  the WAL pragma writes to the file before quick_check runs, so a corrupt store IS
+                written to and -wal/-shm ARE created beside it. This is the half of BR-118 the fix
+                was supposed to protect, and the byte-identity test passes only because its fixture
+                is garbage bytes that SQLite rejects before any pragma runs.
+        BUG-16  the exit is still a panic, through the excluded .expect() above.
+        BUG-17  the dialog has no owner and no foreground flag, so it can open behind other windows.
+
+      THE LESSON, and it is the same one as the four unreachable components: a register entry is a
+      claim about code at a moment, and it goes stale silently. Read the code before planning against
+      a defect row. W7-S1 was re-scoped rather than cancelled - BUG-15/16/17 are real and they are
+      what it now carries.
+    status: resolved
 
   - id: BUG-13
     title: "The new CI guard counts every .exe, but FR-27 promises one DESKTOP executable"
@@ -756,4 +802,111 @@ defects:
       real defect that would still be there. What W6 could not do is notice that the core was hollow,
       because nothing in its scope decoded an image either.
     related: BUG-4
+    status: open
+
+  - id: BUG-15
+    title: "Opening a store switches it to WAL before checking it, so a corrupt store IS written to"
+    found: "2026-08-24"
+    found_by: W7 SPEC review, edge-case-hunter lens, dispatched reader
+    component: settings
+    severity: high
+    contradicts: [BR-118, "SDD-settings.md Failure Behaviour"]
+    evidence: |
+      All FIVE stores share the shape. crates/snapdown-store/src/sqlite/settings_store.rs:22-38,
+      and identically in finding_store.rs, bundle_store.rs, access_key_store.rs,
+      publication_store.rs (each at :28 and :33):
+
+        let flags = OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE;
+        let mut conn = Connection::open_with_flags(path_ref, flags)?;
+        conn.pragma_update(None, "journal_mode", "WAL")?;      // <- WRITES to the file
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+        conn.pragma_update(None, "busy_timeout", 5000)?;
+        // only now:
+        let mut integrity_stmt = conn.prepare("PRAGMA quick_check;")?;
+
+      Switching an existing database to WAL mutates page 1 of the file and creates `library.db-wal`
+      and `library.db-shm` beside it. Both happen BEFORE anything has checked whether the file is
+      intact.
+    impact: |
+      BR-118 says the settings store is "opened, never created over", and SDD-settings.md § Failure
+      Behaviour says in as many words that "a store recreated beside a corrupt one is silent data
+      loss". For a database with a VALID SQLite header and corrupt B-tree pages - the case
+      quick_check exists to catch - the file is modified and two files are created next to it before
+      the corruption is ever detected.
+      The failure is then reported correctly and the Reviewer is told nothing was touched. That
+      sentence is false, and it is the one thing they would rely on before taking a backup.
+    why_undetected: |
+      W6-S5 landed the fallible open, the StartupError, the path-naming report and the byte-identity
+      test, and all of it is right. But the ONLY corrupt fixture anyone has ever used is garbage
+      bytes, and SQLite rejects those at Connection::open before a single pragma runs - so the test
+      that asserts byte-identity passes without ever reaching the code that breaks it.
+      The W7-S1 story plan named the dangerous case in its own edge-case matrix, row 2, and then
+      specified a fixture that avoids it. The matrix named it; the fixture dodged it.
+    fix: |
+      Run quick_check BEFORE any writing pragma - open read-only for the check first, then reopen
+      read-write and apply pragmas once the file is known to be intact. Add the valid-header /
+      corrupt-pages fixture, and assert the absence of `-wal` and `-shm` as well as byte identity.
+      SQLITE_OPEN_CREATE is NOT the defect and MUST stay: creating a store that is absent is first
+      run, and BR-118 forbids creating one OVER a corrupt file, which the CREATE flag does not do.
+    scheduled: W7-S1
+    status: open
+
+  - id: BUG-16
+    title: "A store failure exits by panic through the very `.expect()` BUG-12 excused from its sweep"
+    found: "2026-08-24"
+    found_by: W7 SPEC review, edge-case-hunter lens, dispatched reader
+    component: settings
+    severity: medium
+    contradicts: [AD-11, DEC-003]
+    evidence: |
+      apps/desktop/src-tauri/src/lib.rs:346-347
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+      A setup hook returning Err makes Builder::run return Err, and that `.expect()` turns it into a
+      panic.
+    impact: |
+      Lower than it looks, and it should be recorded that way: the native dialog is shown FIRST, so
+      the Reviewer is not left in the dark and BUG-12's headline symptom does not return. What is
+      wrong is that the process still exits by panic rather than by a matched exit.
+    why_undetected: |
+      BUG-12 deliberately excluded this line from its sweep, and gave a reason that was TRUE AT THE
+      TIME: "If that fails there is nothing left to report with." That held while every store open
+      panicked before reaching it. W6-S5's fallible open made this the ROUTINE exit path for a store
+      failure, and the exclusion's premise quietly stopped being true.
+      This is the second time an exclusion outlived its reason. Re-read a sweep's exclusions whenever
+      the code they reasoned about changes.
+    fix: |
+      Replace the `.expect()` with a matched exit that reports and returns a non-zero status.
+    related: BUG-12
+    scheduled: W7-S1
+    status: open
+
+  - id: BUG-17
+    title: "The startup error dialog has no owner and no foreground flag, so it can open behind other windows"
+    found: "2026-08-24"
+    found_by: W7 SPEC review, edge-case-hunter lens, dispatched reader
+    component: settings
+    severity: medium
+    contradicts: [BR-118, "CAP-6 success criterion"]
+    evidence: |
+      apps/desktop/src-tauri/src/lib.rs:122-152 - show_native_message_dialog calls
+        MessageBoxW(null_mut(), text, caption, MB_OK | MB_ICONERROR)
+      with no owner window and none of MB_SETFOREGROUND, MB_TOPMOST, or MB_SYSTEMMODAL.
+    impact: |
+      Windows may not bring an unowned message box to the foreground when the calling process has no
+      foreground activation. A double-clicked exe that fails at setup, with the Explorer window still
+      focused, is exactly that case - so the Reviewer sees a taskbar flash and nothing else, which is
+      the "nothing happens at all" symptom BUG-12 existed to end.
+      Two further properties nobody has written down: the call BLOCKS the setup hook until someone
+      clicks OK, and tauri-plugin-single-instance is in the dependency list, so a second launch while
+      the box is up behaves in a way nothing specifies.
+    why_undetected: |
+      No unit test can observe whether a native dialog reached the foreground. This is a
+      UI-verification item, and OQ-24 records that this project has no working way to run one -
+      four dispatched UI verifications, four failures.
+    fix: |
+      Add MB_SETFOREGROUND | MB_TOPMOST. Whether it is then actually visible stays a manual check,
+      and MUST NOT be claimed by a cargo test.
+    related: BUG-12
+    scheduled: W7-S1
     status: open

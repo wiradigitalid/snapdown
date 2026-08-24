@@ -77,6 +77,47 @@ Furthermore, `slug` is interpolated directly into `<title>` without escaping. Al
 
 <!-- Append-only. Populated during review loops. -->
 
+### 2026-08-24 — SPEC review, findings M5, M6, M10, L1
+
+**`M6` (medium) — the slug fixture cannot run on Windows, and CI will not notice.** Acceptance
+criterion 3 required a slug of `test<slug>&42`. `apps/web-service/internal/store/store.go:103-128`
+does `filepath.Join(s.dataDir, "blobs", slug)` and `os.MkdirAll` on the result, and `<` and `>` are
+**illegal in Windows filenames** — so `Publish` fails and the fixture cannot be built. The Go CI job
+runs on `ubuntu-latest`, where it passes, while this repository's primary platform is Windows and the
+story's own verification command is the one that breaks. That is a green CI over a red developer
+machine, a shape `AGENTS.md` already records twice.
+
+*Resolution:* the slug fixture MUST be hostile to HTML but legal as a path segment — `a&b"c'd` — or
+the escaping unit MUST be driven directly instead of through `Publish`.
+
+**`M10` (medium) — the four registry test names are not legal Go identifiers.** Go requires
+`func TestXxx(t *testing.T)`; `a_note_containing_markup_is_escaped_in_the_rendered_page` cannot be a
+function name, and the repository's one existing Go test uses a third convention
+(`TestWebServiceLifecycleAndPublicRoutes`). Nothing said how to map them, so the builder would guess
+— and a guess here is a silent rename against a registry the gate checks.
+
+*Resolution:* map each registry name to a `t.Run("<registry name>", …)` subtest under one parent, so
+`go test -run` matches the registry name exactly. State the mapping in § Approach.
+
+**`M5` (medium) — acceptance criteria assert literals.** Criteria naming the exact expected output
+(`Snapdown Review - test&lt;slug&gt;&amp;42`) restate the implementation's own escaping rather than
+the behaviour, which is the failure this SPEC forbids two sections earlier and which this repository
+has landed three times.
+
+*Resolution:* assert that the hostile markup does not survive **as markup** — that no live `<script>`
+or block-closing tag exists in the parsed output — rather than comparing against a hand-written
+escaped string. Where a literal is unavoidable, prove the test can fail by mutating the fix.
+
+**`L1` (low) — stale line reference.** The `fmt.Sprintf` is at `server.go:148-152`; line 145 is a
+closing brace. Corrected here, in `stories.yaml`, in `SPEC.md`, and in `defects.yaml` `BUG-3`.
+
+**Carried forward unchanged from the original plan, and confirmed correct by the review:** the
+raw-Markdown paths (`/raw.md`, and `Accept: text/markdown` or `text/plain`) MUST stay **unescaped**,
+because an agent consuming a Bundle needs pristine bytes. Escaping is scoped to the HTML render.
+
+**Out of scope, named so it is not lost:** `store.go` joins the slug into a filesystem path
+unfiltered, which is a path-traversal seam. Recorded as a non-goal in `SPEC.md`.
+
 ## Design Notes
 
 **Escaping Strategy:**
