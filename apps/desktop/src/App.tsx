@@ -284,6 +284,7 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
           <FindingsView
             onCompose={handleComposeModal}
             onActiveFindingChange={setActiveFinding}
+            onShowToast={(msg) => setToastMessage(msg)}
           />
         )}
         {activeTab === 'bundles' && <BundleView />}

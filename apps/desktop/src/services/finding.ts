@@ -118,6 +118,12 @@ export const deleteMarker = async (
   });
 };
 
+export const getBurnedImageBase64 = async (
+  findingId: string
+): Promise<string> => {
+  return await invoke<string>('get_burned_image_base64', { findingId });
+};
+
 export const importImageData = async (
   imageBytesBase64: string,
   note?: string,

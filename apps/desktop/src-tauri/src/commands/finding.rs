@@ -2,7 +2,7 @@ use snapdown_core::domain::finding::{Finding, FindingDetail, Marker, Note};
 use snapdown_core::domain::image::ImageDimensions;
 use snapdown_core::domain::setting::{QualityBudget, Setting, SettingKey, SettingValue};
 use snapdown_core::ports::{BlobStore, Clock, EntropySource, FindingStore, SettingsStore};
-use snapdown_store::image::ImageReducer;
+use snapdown_store::image::{ImageReducer, MarkerBurner};
 use snapdown_store::system::{SystemClock, SystemEntropySource};
 use snapdown_store::vault::{OrphanScanReport, OrphanSweeper, VaultBlobStore};
 use std::path::PathBuf;
@@ -147,6 +147,46 @@ pub fn delete_marker(
         .finding_store
         .delete_marker(&finding_id, &marker_id)
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_burned_image_base64(
+    finding_id: String,
+    state: State<AppState>,
+) -> Result<String, String> {
+    use base64::Engine;
+    let detail = state
+        .finding_store
+        .get_finding(&finding_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Finding not found".to_string())?;
+
+    let vault_path = match state
+        .settings_store
+        .get(&SettingKey::VaultPath)
+        .map_err(|e| e.to_string())?
+    {
+        Some(Setting {
+            value: SettingValue::String(s),
+            ..
+        }) => s,
+        _ => dirs_or_default_vault().to_string_lossy().to_string(),
+    };
+
+    let vault_store = VaultBlobStore::new(&vault_path).map_err(|e| e.to_string())?;
+    let raw_bytes = vault_store
+        .read_blob(&detail.finding.image_path)
+        .map_err(|e| format!("Failed to read image blob: {e}"))?;
+
+    // Burn markers if any exist
+    let final_bytes = if !detail.markers.is_empty() {
+        MarkerBurner::burn_markers(&raw_bytes, &detail.markers)
+            .map_err(|e| format!("Failed to burn markers: {e}"))?
+    } else {
+        raw_bytes
+    };
+
+    Ok(base64::engine::general_purpose::STANDARD.encode(final_bytes))
 }
 
 #[tauri::command]

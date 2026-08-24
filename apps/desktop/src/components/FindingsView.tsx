@@ -7,6 +7,7 @@ import {
   deleteFinding,
   deleteMarker,
   FindingDetailDto,
+  getBurnedImageBase64,
   importImageData,
   listFindings,
   saveNote,
@@ -63,11 +64,13 @@ function renumberNoteAfterMarkerDelete(noteBody: string, deletedOrdinal: number)
 export interface FindingsViewProps {
   onCompose?: (selectedFindingIds: string[]) => void;
   onActiveFindingChange?: (finding: FindingDetailDto | null) => void;
+  onShowToast?: (message: string) => void;
 }
 
 export const FindingsView: React.FC<FindingsViewProps> = ({
   onCompose,
   onActiveFindingChange,
+  onShowToast,
 }) => {
   const [findings, setFindings] = useState<FindingDetailDto[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -345,6 +348,32 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
     }
   };
 
+  const handleCopyImage = async () => {
+    if (!selectedId) return;
+    try {
+      const base64 = await getBurnedImageBase64(selectedId);
+      const byteCharacters = atob(base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'image/png' });
+
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': blob,
+        }),
+      ]);
+
+      if (onShowToast) {
+        onShowToast('✓ Burned image copied to clipboard!');
+      }
+    } catch (err) {
+      console.error('Failed to copy burned image to clipboard:', err);
+    }
+  };
+
   if (viewMode === 'orphan-report') {
     return (
       <div data-testid="findings-view" style={{ width: '100%', height: '100%' }}>
@@ -374,6 +403,7 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
         onCaptureClick={handleCaptureClick}
         onOpenFileClick={handleOpenFileClick}
         onPasteClick={handlePasteClick}
+        onCopyImage={handleCopyImage}
         onRetry={() => fetchFindingsData(false)}
       />
     </div>
