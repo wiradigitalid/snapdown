@@ -1,13 +1,11 @@
 import React from 'react';
 import { FindingDetailItemDto } from './FindingsEditor';
-import { Checkbox } from './Checkbox';
 
 export interface FilmstripTrayProps {
   findings: FindingDetailItemDto[];
   activeFindingId: string | null;
   selectedFindingIds: Set<string>;
-  onSelectActiveFinding: (id: string) => void;
-  onToggleSelectFinding: (id: string, e: React.MouseEvent) => void;
+  onCardClick: (id: string, e: React.MouseEvent) => void;
   onAssembleBatch: () => void;
   className?: string;
   style?: React.CSSProperties;
@@ -27,8 +25,7 @@ export const FilmstripTray: React.FC<FilmstripTrayProps> = ({
   findings,
   activeFindingId,
   selectedFindingIds,
-  onSelectActiveFinding,
-  onToggleSelectFinding,
+  onCardClick,
   onAssembleBatch,
   className = '',
   style,
@@ -86,17 +83,17 @@ export const FilmstripTray: React.FC<FilmstripTrayProps> = ({
           type="button"
           data-testid="filmstrip-assemble-btn"
           onClick={onAssembleBatch}
-          disabled={selectedFindingIds.size === 0}
+          disabled={selectedFindingIds.size === 0 && !activeFindingId}
           style={{
             width: '100%',
             padding: 'var(--space-1) 0',
-            backgroundColor: selectedFindingIds.size > 0 ? 'var(--color-accent)' : 'var(--color-surface-sunken)',
-            color: selectedFindingIds.size > 0 ? 'var(--color-accent-text)' : 'var(--color-text-dim)',
+            backgroundColor: selectedFindingIds.size > 0 || activeFindingId ? 'var(--color-accent)' : 'var(--color-surface-sunken)',
+            color: selectedFindingIds.size > 0 || activeFindingId ? 'var(--color-accent-text)' : 'var(--color-text-dim)',
             border: 'none',
             borderRadius: 'var(--radius-xs)',
             fontSize: 'var(--text-2xs)',
             fontWeight: 700,
-            cursor: selectedFindingIds.size > 0 ? 'pointer' : 'not-allowed',
+            cursor: selectedFindingIds.size > 0 || activeFindingId ? 'pointer' : 'not-allowed',
             transition: 'background-color 0.15s ease',
           }}
         >
@@ -104,7 +101,7 @@ export const FilmstripTray: React.FC<FilmstripTrayProps> = ({
         </button>
       </div>
 
-      {/* Horizontal Filmstrip Cards */}
+      {/* Horizontal Filmstrip Cards (Windows Explorer multi-select UX) */}
       <div
         data-testid="filmstrip-scroll-area"
         style={{
@@ -126,14 +123,16 @@ export const FilmstripTray: React.FC<FilmstripTrayProps> = ({
             <div
               key={f.finding.id}
               data-testid={`filmstrip-card-${f.finding.id}`}
-              onClick={() => onSelectActiveFinding(f.finding.id)}
+              onClick={(e) => onCardClick(f.finding.id, e)}
               style={{
                 width: '136px',
                 minWidth: '136px',
                 height: '84px',
-                backgroundColor: 'var(--color-surface)',
-                border: isActive
+                backgroundColor: isSelected ? 'var(--color-accent-subtle)' : 'var(--color-surface)',
+                border: isSelected
                   ? '2px solid var(--color-accent)'
+                  : isActive
+                  ? '2px solid var(--color-border-strong)'
                   : '1px solid var(--color-border)',
                 borderRadius: 'var(--radius-sm)',
                 cursor: 'pointer',
@@ -141,7 +140,7 @@ export const FilmstripTray: React.FC<FilmstripTrayProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
-                boxShadow: isActive ? 'var(--shadow-md)' : 'none',
+                boxShadow: isSelected ? 'var(--shadow-md)' : 'none',
                 transition: 'all 0.15s ease',
               }}
             >
@@ -179,31 +178,6 @@ export const FilmstripTray: React.FC<FilmstripTrayProps> = ({
                     {f.finding.image_width}×{f.finding.image_height}
                   </span>
                 )}
-
-                {/* Top-Left Selection Checkbox */}
-                <div
-                  data-testid={`filmstrip-card-checkbox-${f.finding.id}`}
-                  onClick={(e) => onToggleSelectFinding(f.finding.id, e)}
-                  style={{
-                    position: 'absolute',
-                    top: '2px',
-                    left: '2px',
-                    zIndex: 10,
-                    backgroundColor: 'var(--color-surface)',
-                    borderRadius: '2px',
-                    padding: '1px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: 'var(--shadow-sm)',
-                  }}
-                >
-                  <Checkbox
-                    checked={isSelected}
-                    onChange={() => {}}
-                    aria-label={`Select item ${f.finding.id}`}
-                  />
-                </div>
 
                 {/* Top-Right Step Marker Count Badge */}
                 {f.markers.length > 0 && (
@@ -260,7 +234,7 @@ export const FilmstripTray: React.FC<FilmstripTrayProps> = ({
                   justifyContent: 'space-between',
                   fontSize: 'var(--text-2xs)',
                   fontFamily: 'var(--font-mono)',
-                  color: isActive ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                  color: isSelected ? 'var(--color-accent)' : 'var(--color-text-muted)',
                   borderTop: '1px solid var(--color-border)',
                 }}
               >

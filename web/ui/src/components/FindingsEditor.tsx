@@ -102,6 +102,7 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
   const [checkedFindingIds, setCheckedFindingIds] = useState<Set<string>>(new Set());
+  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -140,18 +141,35 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
     }
   };
 
-  // Toggle multi-select checkbox for finding
-  const handleToggleCheck = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCheckedFindingIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+  // Windows Explorer style multi-select click handler
+  const handleFilmstripCardClick = (id: string, e: React.MouseEvent) => {
+    const clickedIdx = findings.findIndex((f) => f.finding.id === id);
+    onSelectFinding(id);
+
+    if (e.ctrlKey || e.metaKey) {
+      // Ctrl+Click: Toggle individual selection without clearing others
+      setCheckedFindingIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+        return next;
+      });
+      setLastClickedIndex(clickedIdx);
+    } else if (e.shiftKey && lastClickedIndex !== null && clickedIdx !== -1) {
+      // Shift+Click: Range selection between lastClickedIndex and clickedIdx
+      const start = Math.min(lastClickedIndex, clickedIdx);
+      const end = Math.max(lastClickedIndex, clickedIdx);
+      const rangeIds = findings.slice(start, end + 1).map((f) => f.finding.id);
+
+      setCheckedFindingIds(new Set(rangeIds));
+    } else {
+      // Plain Click: Focus and select this item alone
+      setCheckedFindingIds(new Set([id]));
+      setLastClickedIndex(clickedIdx);
+    }
   };
 
   // Prompt delete single finding or batch checked
@@ -563,13 +581,12 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
             )}
           </div>
 
-          {/* BOTTOM: Filmstrip Tray */}
+          {/* BOTTOM: Filmstrip Tray with Explorer Multi-Select */}
           <FilmstripTray
             findings={findings}
             activeFindingId={selectedFindingId}
             selectedFindingIds={checkedFindingIds}
-            onSelectActiveFinding={onSelectFinding}
-            onToggleSelectFinding={handleToggleCheck}
+            onCardClick={handleFilmstripCardClick}
             onAssembleBatch={() => {
               const ids = checkedFindingIds.size > 0 ? Array.from(checkedFindingIds) : (selectedFinding ? [selectedFinding.finding.id] : []);
               onCompose?.(ids);
@@ -638,7 +655,7 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
             })}
             <div
               data-testid={`finding-checkbox-wrapper-${selectedFinding.finding.id}`}
-              onClick={(e) => handleToggleCheck(selectedFinding.finding.id, e)}
+              onClick={(e) => handleFilmstripCardClick(selectedFinding.finding.id, e)}
             >
               check
             </div>
