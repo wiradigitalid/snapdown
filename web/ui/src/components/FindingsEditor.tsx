@@ -8,6 +8,7 @@ import { MarkerLayer, MarkerItem } from './MarkerLayer';
 import { StudioRibbon } from './StudioRibbon';
 import { FilmstripTray } from './FilmstripTray';
 import { PropertiesPanel } from './PropertiesPanel';
+import { CropOverlay, CropRect } from './CropOverlay';
 
 export interface FindingItemDto {
   id: string;
@@ -106,6 +107,8 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [imageLoadError, setImageLoadError] = useState(false);
+  const [isMarkerMode, setIsMarkerMode] = useState(true);
+  const [isCropMode, setIsCropMode] = useState(false);
 
   // Sync note text when selection changes
   useEffect(() => {
@@ -336,6 +339,10 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
         onCaptureClick={onCaptureClick}
         onOpenFileClick={onOpenFileClick}
         onPasteClick={onPasteClick}
+        isMarkerActive={isMarkerMode}
+        onToggleMarker={() => setIsMarkerMode((v) => !v)}
+        isCropActive={isCropMode}
+        onToggleCrop={() => setIsCropMode((v) => !v)}
         onAssembleBundle={() => {
           const ids = checkedFindingIds.size > 0 ? Array.from(checkedFindingIds) : (selectedFinding ? [selectedFinding.finding.id] : []);
           onCompose?.(ids);
@@ -487,7 +494,21 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
                       onSelectMarker={setSelectedMarkerId}
                       onHoverMarker={setHoveredMarkerId}
                       onDeleteMarker={handleDeleteMarker}
+                      disabled={isCropMode || !isMarkerMode}
                     />
+
+                    {/* Crop Overlay when active */}
+                    {isCropMode && (
+                      <CropOverlay
+                        imageWidth={selectedFinding.finding.image_width}
+                        imageHeight={selectedFinding.finding.image_height}
+                        onApplyCrop={(rect: CropRect) => {
+                          console.log('Applied crop:', rect);
+                          setIsCropMode(false);
+                        }}
+                        onCancelCrop={() => setIsCropMode(false)}
+                      />
+                    )}
                   </div>
                 </div>
               )
