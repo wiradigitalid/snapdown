@@ -17,10 +17,14 @@ companions:
   - .how/finding/04-components/LC-003-image-reducer.md
   - .how/finding/06-flows/flow-capture.md
   - .how/bundle/SDD-bundle.md
+  - .how/bundle/05-model/data-model.md
+  - .what/bundle/SRS-bundle.md
+  - .what/bundle/04-usecases/UC-9-turn-what-i-picked-into-one-review.md
   - .constitution/project/codebase-stack-guide.md
 sources:
   - .control/registry/requirements.yaml
   - .control/reports/ASSESS-BUG-14.md
+  - .control/questions/assumptions.md
 ---
 
 > **Canonical contract.** This SPEC and the files in `companions:` are the complete,
@@ -42,6 +46,7 @@ all. This is the product's central capability, and it has been reported as deliv
 | `store/src/image/pipeline.rs:26` `reduce_image` | Same fake header, then copies `input_bytes[16..]` through. Its own comment says *"downscaled payload simulation"* |
 | `store/src/image/burner.rs:20` `burn_markers` | Same fake header. Markers are **never drawn onto anything** |
 | `CaptureOverlay.tsx:76-100` | Captures on mouse-up and never asks for a Note. `grep note` returns zero hits |
+| `commands/bundle.rs:41-48` | Records `bundles/{id}/finding_{pos}_burned.webp` for every item. **Nothing ever writes that file** |
 
 **This is not a design gap. The design is right and was never built.**
 `ARCHITECTURE-SPINE.md:245` already lays out `snapdown-capture/  # screen capture, overlay geometry,
@@ -52,6 +57,16 @@ Every one of those is a decision taken at G3 and never executed. `crates/` holds
 
 **Why it survived five waves and three audits: nothing ever decoded an image.** Every test here
 asserts *dimensions*, and a fake header carries correct dimensions.
+
+**And the burn is reached by nobody** (`BUG-19`, found while writing the `W8-S5` brief). A repo-wide
+grep for `MarkerBurner` outside its own file and tests returns exactly two hits, and both are
+re-exports. `SDD-bundle.md:36` says *"Markers are burned at compose time, into a copy"* and
+`data-model.md:63` says `image_path` is *"the Bundle's own copy"* — the design is written, the burner
+is built, and the composer never calls it. This is the **fifth** time this shape has landed here,
+after `BUG-4`, `BUG-5`, `BUG-6` and the `EmptyState` sweep, and it is worse than its predecessors in
+one respect: the caller writes a path that *implies* the call happened, so a dangling reference reads
+as a bug in whoever reads it. `W8-S3`'s five tests are green and honest — they prove the burner draws
+correctly, and they cannot prove anybody calls it.
 
 ## Capabilities
 
@@ -76,6 +91,13 @@ asserts *dimensions*, and a fake header carries correct dimensions.
     where Markers sit, and keeps its source's dimensions. Burning no Markers returns the source bytes
     unchanged.
 
+- **CAP-4** — Compose a Bundle whose recorded image copies exist (the composition half)
+  - **intent:** When the Reviewer hands a Bundle over, every image reference in it resolves to a file
+    that is really there, with that Finding's Markers drawn on it.
+  - **success:** After composing a Bundle, the file at each `BundleItem.image_path` **exists and
+    decodes**, and it carries the Markers of the Finding it came from — asserted on the file, never on
+    the path string. The stored image is not re-reduced on the way through.
+
 ## Constraints
 
 - **The dimension arithmetic already written is correct and MUST be kept.**
@@ -92,6 +114,18 @@ asserts *dimensions*, and a fake header carries correct dimensions.
   image.** An app-only state must not be burned into an artifact that is read on another machine
   under another theme.
 - **`BR-31` — a region smaller than 8×8 is refused.** Already enforced; it must survive.
+- **`AD-2` — a record MUST NOT be committed before its files exist.** The `bundle_item` row and the
+  file at its `image_path` belong to one unit of work, and if any part of it fails the prior state
+  stands. `UC-9`'s failure flows are explicit: a failed burn abandons the whole composition, no rows
+  and no files (`BR-5`), and a store write that fails after the files are written removes them again.
+- **`BR-13` — a selected Finding whose image file is missing refuses the whole composition** and names
+  the Finding. No Bundle with a broken image reference is ever written.
+- **`AD-3` — normalised coordinates become pixels in `LC-012` and nowhere else**, at the stored
+  image's own dimensions. `BR-8` forbids any later step re-encoding or re-scaling, so the composition
+  burn reads the already-reduced bytes exactly as `AD-4` left them.
+- **A Finding with no Markers still gets its own image copy**, with nothing drawn on it (`UC-9`
+  alternate flow 1). “Burning no Markers returns the source bytes unchanged” is what makes that copy
+  byte-identical, not a reason to skip writing it.
 - **Marker colours are theme-invariant on purpose.** `--color-marker*` is one of the four deliberately
   theme-invariant token groups (`AD-10`), because the burned image is read elsewhere. The burn must
   not consult the running theme.
@@ -114,13 +148,16 @@ asserts *dimensions*, and a fake header carries correct dimensions.
 - **Changing the Marker interaction in the Editor.** `W6-S7` built `MarkerLayer` and mounted it. This
   wave changes what the **burn** does with Markers, not how they are placed.
 - **A capture history, retake, or multi-region capture.** Not promised anywhere.
+- **`BUG-1`, the `finding_id` cascade on `bundle_item`.** `data-model.md` calls it live and wrong and
+  `SCN-05` carries the case. `W8-S6` writes the file the row records; it does not touch the schema.
+- **Naming the stored image format in the corpus.** See `OQ-26` below.
 
 ## Success signal
 
 The Reviewer presses the hotkey, boxes a region, types what is wrong, and presses Enter. What lands
 in the Vault is a **picture of the thing they boxed**, smaller than the screen, with their sentence
-beside it — and when they hand a Bundle to someone else, the numbered badges are visible on the
-image on that person's machine.
+beside it — and when they hand a Bundle to someone else, every image the Bundle references is a file
+that is really there, with the numbered badges visible on it on that person's machine.
 
 ## Assumptions
 
@@ -133,3 +170,10 @@ image on that person's machine.
 - **The test-surface conversion may reveal that a currently-green assertion was never meaningful.**
   `W8-S5` names the files to read. Where a test turns out to have been asserting nothing, that is a
   finding to report, not a line to quietly rewrite.
+- **`OQ-26` — the stored image format is unnamed anywhere in the corpus.** A corpus-wide search for
+  `png` and `webp` returns zero hits outside the registries, while `bundle.rs:41` records a `.webp`
+  path and `burner.rs` emits PNG. **This SPEC does not resolve it and MUST NOT be read as resolving
+  it.** `OQ-26` frames the two branches: if a format is an encoder choice, `W8-S6` picks one and
+  records a `DEC-` while the corpus stays silent on purpose; if it is a promise, it belongs in the
+  spine as an `AD-N`. What is certain either way is that the present state is not a choice — one half
+  of the pipeline writes a path the other half cannot fill.
