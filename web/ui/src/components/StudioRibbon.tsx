@@ -67,18 +67,16 @@ export const StudioRibbon: React.FC<StudioRibbonProps> = ({
             width: '38px',
             height: '38px',
             padding: 0,
-            backgroundColor: 'var(--color-snagit-red)',
-            color: 'var(--color-accent-text)',
-            border: 'none',
+            backgroundColor: 'var(--color-surface)',
+            color: 'var(--color-text)',
+            border: '1px solid var(--color-border)',
             borderRadius: 'var(--radius-sm)',
-            fontWeight: 700,
-            fontSize: '1.1rem',
+            fontSize: '1rem',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
-            boxShadow: 'var(--shadow-sm)',
-            transition: 'background-color 0.15s ease',
+            transition: 'background-color 0.15s ease, border-color 0.15s ease',
           }}
         >
           🔴

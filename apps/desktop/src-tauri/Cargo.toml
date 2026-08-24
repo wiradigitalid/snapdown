@@ -42,4 +42,3 @@ winreg = { workspace = true }
 tempfile = { workspace = true }
 ureq = "2.9"
 rusqlite = { workspace = true }
-image = { workspace = true }
