@@ -156,10 +156,18 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
     if (phase !== 'narrating' || !pendingRegion) return;
     setPhase('saving');
     try {
-      const res = await captureScreenRegion({
-        ...pendingRegion,
+      // Account for DPI scaling on Windows (logical CSS px -> physical grab coordinates)
+      const dpr = typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 1.0;
+
+      const physicalRegion = {
+        x: Math.round(pendingRegion.x * dpr),
+        y: Math.round(pendingRegion.y * dpr),
+        width: Math.round(pendingRegion.width * dpr),
+        height: Math.round(pendingRegion.height * dpr),
         note,
-      });
+      };
+
+      const res = await captureScreenRegion(physicalRegion);
       resetState();
       if (onCaptureComplete) {
         onCaptureComplete(res);

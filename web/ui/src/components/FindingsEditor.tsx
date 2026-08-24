@@ -308,39 +308,6 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
     );
   }
 
-  // State 3: Empty State
-  if (!isLoading && findings.length === 0) {
-    return (
-      <div
-        data-testid="findings-empty-state"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100%',
-          width: '100%',
-          backgroundColor: 'var(--color-bg)',
-          padding: 'var(--space-6)',
-        }}
-      >
-        <EmptyState
-          heading="No findings yet"
-          description="Capture screenshots with the shortcut below to inspect findings."
-          illustration={
-            <div style={{ marginTop: 'var(--space-2)' }}>
-              <HotkeyChip
-                shortcut={captureHotkey}
-                disabled
-                aria-label={`Capture shortcut: ${captureHotkey}`}
-              />
-            </div>
-          }
-        />
-      </div>
-    );
-  }
-
   const isImageMissing = selectedFinding?.isImageMissing || imageLoadError;
 
   return (
@@ -536,19 +503,35 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
                 </div>
               )
             ) : (
+              /* Ready / Empty Canvas State keeping studio shell fully interactive */
               <div
-                data-testid="no-finding-selected"
+                data-testid="findings-empty-state"
                 style={{
                   display: 'flex',
+                  flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
                   height: '100%',
                   color: 'var(--color-text-muted)',
                   fontSize: 'var(--text-sm)',
                   fontFamily: 'var(--font-ui)',
+                  padding: 'var(--space-6)',
+                  gap: 'var(--space-3)',
                 }}
               >
-                Select a finding from the filmstrip to inspect details.
+                <EmptyState
+                  heading="No findings yet"
+                  description="Press capture shortcut below or click 🔴/📂/📥 in ribbon to start observing."
+                  illustration={
+                    <div style={{ marginTop: 'var(--space-2)' }}>
+                      <HotkeyChip
+                        shortcut={captureHotkey}
+                        disabled
+                        aria-label={`Capture shortcut: ${captureHotkey}`}
+                      />
+                    </div>
+                  }
+                />
               </div>
             )}
 
