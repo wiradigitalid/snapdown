@@ -1089,3 +1089,52 @@ defects:
       right, the two currently disagree and the corpus has to be read before choosing.
     related: BUG-14
     status: open
+
+  - id: BUG-20
+    title: "The marker burn's no-markers fast path returns a corrupt source as success, having never decoded it"
+    found: "2026-08-24"
+    found_by: W8-S5 planner, auditing the image test surface
+    component: bundle
+    severity: medium
+    contradicts: ["AD-4"]
+    evidence: |
+      crates/snapdown-store/src/image/burner.rs:48-50 - burn_markers returns before any decode when
+      no Marker carries a Note line:
+
+        if active_markers.is_empty() {
+            return Ok(input_bytes.to_vec());
+        }
+
+      image::load_from_memory is only reached on the line AFTER this branch, so a corrupt, truncated
+      or non-image blob is returned as Ok and the caller has no way to know. The dimension check
+      immediately below is skipped for the same reason, so a blob whose recorded dimensions do not
+      match its content also passes.
+    impact: |
+      AD-4 says "A Bundle's image is a copy of the Finding's image with Markers drawn on it, at the
+      same dimensions." The fast path can satisfy neither clause for a corrupt source: it cannot know
+      the dimensions and it has not read the image.
+
+      Reach is currently ZERO, and this is the honest part: BUG-19 means burn_markers is called from
+      nowhere at all. It becomes reachable the moment W8-S6 wires the export call, and at that point
+      a corrupt Finding blob propagates silently into a Bundle that reports success. SCN-04 makes the
+      path routine rather than exotic - a Finding whose Markers all lack Note lines takes it every
+      time, and so does a Finding with no Markers.
+    why_undetected: |
+      The fast path is CORRECT for its intended case and that is what makes it easy to read past: for
+      a valid image with nothing to draw, returning the bytes unchanged is exactly what AD-9's
+      byte-identity promise requires, and burning_no_markers_returns_the_source_bytes_unchanged
+      proves that half honestly.
+
+      The same shape as the sweep-exclusion pitfall already recorded in AGENTS.md: a branch is
+      justified by a premise - here, that the caller has already validated the blob - and the premise
+      is never written down, so nobody re-checks it when the caller changes. W8-S6 is the change.
+    fix: |
+      Decide first whether the burner is the right place to validate. It may not be: the alternative
+      is that the export path validates the stored blob before calling, which keeps the burner a pure
+      draw. Whichever is chosen, the fast path MUST NOT report success for bytes it has not read.
+
+      A test for this must use a VALID PNG HEADER WITH CORRUPT PAYLOAD, not garbage bytes. W7 proved
+      garbage never reaches the code under test - it is rejected at the decoder's front door.
+    related: BUG-19
+    scheduled: W8-S6
+    status: open

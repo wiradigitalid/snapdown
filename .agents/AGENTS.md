@@ -284,6 +284,16 @@ test uses a writable temp directory. Before writing one, ask what invariant the 
 groups — `--color-marker*`, `--color-overlay-scrim`, `--color-overlay-ring`, `--canvas-checker` —
 are the one exception and they live in that file too, each with a comment saying why.
 
+**An image test that asserts a signature and a dimension is a test that a fake header passes.** That
+is not a hypothetical: a 17-byte `PNG` + width + height passed every image assertion in this
+repository for five waves and three audits, and `FR-4` and `NFR-3` were reported met on the strength
+of a correct number inside a fabrication. **Decode the output.** The defect such a test misses is
+never the presence of a signature check — it is the absence of a decode. And the prohibition cannot
+be a test: any mechanical form of it scans the test sources, which asserts a copy of its own input
+and passes by construction the moment the offending line is deleted. It lives here instead, and its
+positive half is `every_image_producing_path_decodes_its_own_output`, which fails when an image
+producer is added without one.
+
 **A test that asserts a literal is a test that cannot fail.** `contrast.test.ts` originally hardcoded
 its own copy of the token values; changing a token to a 2:1 ratio left it green. It now parses
 `tokens.css` and was verified by mutation. Assert the behaviour, not a copy of the input.

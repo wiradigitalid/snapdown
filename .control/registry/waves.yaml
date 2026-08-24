@@ -1102,7 +1102,17 @@ waves:
               - cargo::the_golden_bundle_markdown_is_regenerated_from_real_image_output
               - cargo::a_bundle_copies_the_same_bytes_as_the_finding_it_came_from
               - cargo::changing_one_pixel_of_a_source_image_changes_the_bundle_copy
-              - cargo::no_image_test_asserts_only_a_signature_and_a_dimension
+              # RENAMED 2026-08-24 by the coordinator, adjudicating W8-S5's planning report.
+              # The original name was `no_image_test_asserts_only_a_signature_and_a_dimension`.
+              # It cannot be written as an honest cargo test: its only mechanical form scans the
+              # test sources for a magic-byte comparison, so its subject is source text and it
+              # asserts a copy of its own input - the exact failure this story exists to clean up.
+              # It is also blind to the real defect, which is the ABSENCE OF A DECODE rather than
+              # the presence of a signature check, and it passes by construction the moment the
+              # offending line is deleted. The replacement is a positive obligation over all three
+              # image producers, and it is mutation-sensitive against production code. The
+              # prohibition survives as a pitfall line in AGENTS.md instead.
+              - cargo::every_image_producing_path_decodes_its_own_output
           - id: W8-S6
             title: The burn is actually called, and the recorded path holds a file
             component: bundle
