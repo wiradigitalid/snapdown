@@ -1,4 +1,4 @@
-﻿use snapdown_core::domain::setting::HotkeyAction;
+use snapdown_core::domain::setting::HotkeyAction;
 use snapdown_core::ports::Clock;
 use snapdown_store::error::StoreError;
 use snapdown_store::sqlite::{
@@ -135,13 +135,15 @@ pub fn show_native_message_dialog(title: &str, message: &str) {
 
     const MB_OK: u32 = 0x00000000;
     const MB_ICONERROR: u32 = 0x00000010;
+    const MB_SETFOREGROUND: u32 = 0x00010000;
+    const MB_TOPMOST: u32 = 0x00040000;
 
     unsafe {
         MessageBoxW(
             null_mut(),
             wide_msg.as_ptr(),
             wide_title.as_ptr(),
-            MB_OK | MB_ICONERROR,
+            MB_OK | MB_ICONERROR | MB_SETFOREGROUND | MB_TOPMOST,
         );
     }
 }
@@ -175,7 +177,7 @@ fn check_is_first_run(store: &SqliteSettingsStore) -> bool {
 }
 
 pub fn run() {
-    tauri::Builder::default()
+    if let Err(err) = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_settings_window(app);
         }))
@@ -344,5 +346,8 @@ pub fn run() {
             reconcile_publication
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    {
+        eprintln!("error while running tauri application: {err}");
+        std::process::exit(1);
+    }
 }

@@ -237,7 +237,7 @@ the frontend. The CLI is currently absent from this repository entirely — see 
 fixed, **a locally built `Snapdown.exe` is not the application**, and any UI finding taken from one is
 a finding about the build.
 
-**Three ways a verification run lies, all hit on 2026-08-23:**
+**Four ways a verification run lies, all hit on 2026-08-23:**
 
 - **`cmd | tail` reports the exit code of `tail`, not of `cmd`.** A `cargo build` that failed with
   *package ID specification did not match any packages* was reported as exit 0 because it was piped.
@@ -245,6 +245,10 @@ a finding about the build.
 - **The coordinator's own worktree goes stale the moment a story adds a dependency.** `web/ui`
   typecheck failed locally on missing `@types/node` while CI was green: CI runs `npm ci` from the
   lockfile, a long-lived worktree does not. Run `npm --prefix <pkg> ci` before believing a local red.
+- **`cmd; echo "EXIT=$?"` makes the harness report 0 whatever `cmd` did.** The script's exit code is
+  `echo`'s, and `echo` always succeeds — so the background-task notification says *exit code 0* while
+  the echoed line says `EXIT=1`. A `tauri build` that died on *Access is denied* was reported as a
+  success this way. Read the echoed value, never the notification's code.
 
 ### Pitfalls
 
@@ -299,6 +303,69 @@ through it. Delete that ref, `git reflog expire --expire=now --all`, then `git g
 with `git log --all --oneline -- <path>` returning nothing. This was missed once, on 2026-08-23, and
 found only because the tag cleanup prompted a second look.
 
+**A defect register entry is a claim about code at a moment, and it goes stale silently.** `BUG-12`
+read `status: open` for a day after `W6-S5` had already fixed it — that story was not scoped to the
+defect and closed it as a side effect of needing a fallible startup path. Wave `W7` was opened
+against it, a planner was dispatched, and it wrote a complete implementation plan for code that
+already existed. Nothing caught it until a review read the code instead of the register. **Before
+planning against a defect row, grep for the symbols its `fix:` describes.** The same read found the
+opposite failure too: `BUG-3` and `BUG-10` carried `blocked_by: DEC-005` when that decision says in
+its own words *"This decision does not forbid a fix. It forbids new work"* — so a public,
+unauthenticated HTML-injection path sat unfixed because a register field misquoted a decision.
+
+**A sweep's exclusions expire when the code they reasoned about changes.** `BUG-12` deliberately left
+`lib.rs:347` unregistered because *"if that fails there is nothing left to report with"* — true while
+every store open panicked before reaching it. `W6-S5` made it the **routine** exit path and the
+premise quietly stopped holding, which is now `BUG-16`. Second time this has happened. When you
+change a path, re-read what was excused on the strength of it.
+
+**A writing pragma is a write.** All five SQLite stores ran `journal_mode = WAL` before
+`PRAGMA quick_check`, which mutates page 1 and creates `-wal`/`-shm` — so a corrupt store *was*
+written to while the Reviewer was shown a dialog promising it had not been (`BUG-15`). Check
+integrity on a read-only connection first.
+
+**Prove a corrupt-file fixture actually reaches the code you think it does.** Every corrupt-database
+test here used garbage bytes, which SQLite rejects at `Connection::open` before a single pragma runs
+— so the byte-identity assertion passed without ever executing the defect. A valid header with
+corrupt pages is what reaches it. And note the subtler result from the same story:
+`a_failed_open_leaves_no_wal_or_shm_file_beside_the_database` **still passes with the bug present**,
+because SQLite removes those files on a clean close. It is accurate to its name and insensitive to
+the defect — belt-and-braces, not a guard. **Mutation is the only way to tell those apart.**
+
+**A test fixture must be legal on Windows, and CI will not tell you.** A `sharing` fixture used a
+slug of `test<slug>&42`; `store.go` joins the slug into a filesystem path and Windows refuses `<`
+and `>`. The Go job runs on `ubuntu-latest`, so it would have been green in CI and red on every
+developer machine here.
+
 **Stale binaries mislead.** Renaming the product left `desktop.exe` beside `Snapdown.exe` in
 `target/release/`, the owner ran the old one, and reported four defects that did not exist. `FR-27`
 now makes a second desktop executable a build failure.
+
+**A dispatched worktree branches from `main`, not from the branch you are on.** `worker-start
+--worktree new-child` without `--base-branch` gave W6-S9's planner a checkout at `main`'s tip, so the
+whole wave — `SPEC.md`, `stories.yaml`, every dispatch brief — was absent, and the worker rebuilt them
+from scratch as new files. Pass `--base-branch` explicitly for any wave work, and take only the files
+the brief asked for out of a worktree that got this wrong: its reconstructed registries are guesses,
+and overwriting the real ones with them loses everything the wave has written.
+
+**A leftover `Snapdown.exe` process locks its own file and fails the next build.** A binary launched
+by an earlier UI audit was still running hours later; `tauri build` died with *failed to remove file
+`Snapdown.exe`: Access is denied (os error 5)*, which reads like a permissions problem and is not.
+`Get-Process -Name Snapdown` before rebuilding, and treat a still-running instance as cleanup the
+same way a stale worktree is.
+
+**`agent_prompt_stalled` does not mean the worktree failed.** Orca's `worker-start --worktree
+new-child` creates the checkout first and injects the agent's prompt second, so a stall leaves a
+perfectly good worktree behind at the right commit. Retrying with `new-child` makes another one;
+`w6-s3-plan` and `w6-s3-plan2` were both born this way. Check
+`D:/Developer/orca-workspaces/<repo>/` first and re-dispatch into the existing one with
+`--worktree path:<path>`. Attaching a terminal in another worktree does not work either — the Run is
+bound to the main worktree and refuses the handle.
+
+**`orca terminal send --text ... --enter` does not submit to a TUI agent.** The text goes into the
+input box and nothing happens. `--text` writes a **bracketed-paste** block — `ESC[200~`, the text,
+`ESC[201~`, then the CR — and TUI input widgets deliberately swallow a CR that arrives inside a paste
+so that multi-line pastes do not fire early. Byte counts show it: a 12-character message with
+`--enter` writes 25 bytes, while `--enter` alone writes **1**. Send the text, then send `--enter` as a
+**separate call** so the CR lands outside the paste block. This is only for driving a worker's TUI;
+workers report back through `orca orchestration worker-done`, which is a CLI call and unaffected.

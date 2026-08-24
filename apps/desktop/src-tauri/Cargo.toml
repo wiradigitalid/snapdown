@@ -39,3 +39,4 @@ winreg = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 ureq = "2.9"
+rusqlite = { workspace = true }

@@ -5,13 +5,14 @@ use desktop_lib::hotkey::DesktopHotkeyRegistrar;
 use desktop_lib::startup::{reconcile_startup_on_boot, AutoStartBackend, DesktopStartupRegistrar};
 use desktop_lib::state::AppState;
 use desktop_lib::{format_startup_error_message, init_app_stores, StartupError};
-use snapdown_core::domain::setting::SettingKey;
-use snapdown_core::ports::SettingsStore;
+use snapdown_core::domain::setting::{Setting, SettingKey, SettingValue};
+use snapdown_core::ports::{Clock, SettingsStore};
 use snapdown_store::sqlite::{
     SqliteAccessKeyStore, SqliteBundleStore, SqliteFindingStore, SqlitePublicationStore,
     SqliteSettingsStore,
 };
 use snapdown_store::system::SystemClock;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tempfile::NamedTempFile;
@@ -67,14 +68,58 @@ fn create_test_app_state(
     }
 }
 
+fn create_valid_header_corrupt_db(path: &Path) -> Vec<u8> {
+    // Create standard SQLite database with schema and multiple pages in rollback journal mode
+    {
+        let conn = rusqlite::Connection::open(path).unwrap();
+        conn.execute(
+            "CREATE TABLE test_table (id INTEGER PRIMARY KEY, content TEXT);",
+            [],
+        )
+        .unwrap();
+        for i in 0..200 {
+            conn.execute(
+                "INSERT INTO test_table (content) VALUES (?1);",
+                [format!(
+                    "test content row with long padding text data to allocate multiple pages {i}"
+                )],
+            )
+            .unwrap();
+        }
+    }
+
+    let mut bytes = std::fs::read(path).unwrap();
+    assert!(bytes.len() >= 8192, "Database must span multiple pages");
+    assert_eq!(&bytes[0..16], b"SQLite format 3\0");
+
+    // Keep page 1 (schema) intact, corrupt page 2 and beyond (4096..)
+    for b in &mut bytes[4096..] {
+        *b = 0xAA;
+    }
+
+    std::fs::write(path, &bytes).unwrap();
+    bytes
+}
+
 #[test]
-fn an_unreadable_library_db_is_reported_with_its_path_and_not_recreated() {
+fn a_store_that_cannot_be_opened_yields_an_error_not_a_panic() {
     let tmp = NamedTempFile::new().unwrap();
     let db_path = tmp.path().to_path_buf();
+    create_valid_header_corrupt_db(&db_path);
 
-    // Corrupt the database file
-    let corrupt_bytes = b"CORRUPTED INVALID SQLITE HEADER 0x00 0x11";
-    std::fs::write(&db_path, corrupt_bytes).unwrap();
+    // init_app_stores returns Err instead of panicking
+    let result = init_app_stores(&db_path);
+    assert!(
+        result.is_err(),
+        "Corrupt database must yield Err, not a panic"
+    );
+}
+
+#[test]
+fn the_startup_error_names_the_path_of_the_file_that_failed() {
+    let tmp = NamedTempFile::new().unwrap();
+    let db_path = tmp.path().to_path_buf();
+    create_valid_header_corrupt_db(&db_path);
 
     let open_res = init_app_stores(&db_path);
     assert!(
@@ -103,8 +148,18 @@ fn an_unreadable_library_db_is_reported_with_its_path_and_not_recreated() {
             );
         }
     }
+}
 
-    // BR-118: Verify file on disk is left untouched and not overwritten or deleted
+#[test]
+fn a_corrupt_store_is_never_recreated_beside_itself() {
+    let tmp = NamedTempFile::new().unwrap();
+    let db_path = tmp.path().to_path_buf();
+    let corrupt_bytes = create_valid_header_corrupt_db(&db_path);
+
+    let open_res = init_app_stores(&db_path);
+    assert!(open_res.is_err());
+
+    // BR-118: Verify file on disk is left untouched and not overwritten or recreated
     let remaining_bytes = std::fs::read(&db_path).unwrap();
     assert_eq!(
         remaining_bytes, corrupt_bytes,
@@ -113,14 +168,105 @@ fn an_unreadable_library_db_is_reported_with_its_path_and_not_recreated() {
 }
 
 #[test]
-fn a_corrupt_library_db_does_not_panic_the_setup_hook() {
+fn a_readable_store_still_starts_normally() {
     let tmp = NamedTempFile::new().unwrap();
     let db_path = tmp.path().to_path_buf();
-    std::fs::write(&db_path, b"SOME JUNK DATA TO SIMULATE CORRUPT DB").unwrap();
 
-    // init_app_stores returns Err instead of panicking
-    let result = init_app_stores(&db_path);
-    assert!(result.is_err());
+    let stores = init_app_stores(&db_path).expect("Opening valid store must succeed");
+
+    let clock = SystemClock::new();
+    let setting = Setting::new(
+        SettingKey::VaultPath,
+        SettingValue::String("C:/Users/test/Vault".into()),
+        clock.now_rfc3339(),
+    );
+    stores
+        .settings_store
+        .set(&setting)
+        .expect("Setting should save successfully");
+
+    let loaded = stores
+        .settings_store
+        .get(&SettingKey::VaultPath)
+        .expect("Get should succeed");
+    assert!(loaded.is_some());
+    assert_eq!(
+        loaded.unwrap().value,
+        SettingValue::String("C:/Users/test/Vault".into())
+    );
+}
+
+#[test]
+fn a_valid_header_with_corrupt_pages_is_not_written_to_before_it_is_checked() {
+    let tmp = NamedTempFile::new().unwrap();
+    let db_path = tmp.path().to_path_buf();
+    let original_corrupt_bytes = create_valid_header_corrupt_db(&db_path);
+
+    let res = init_app_stores(&db_path);
+    assert!(res.is_err(), "Store open must fail on corrupt pages");
+
+    let bytes_after_attempt = std::fs::read(&db_path).unwrap();
+    assert_eq!(
+        bytes_after_attempt, original_corrupt_bytes,
+        "Database bytes must be byte-identical on disk (no WAL pragma mutation on page 1)"
+    );
+}
+
+#[test]
+fn a_failed_open_leaves_no_wal_or_shm_file_beside_the_database() {
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let db_path = tmp_dir.path().join("library.db");
+    create_valid_header_corrupt_db(&db_path);
+
+    let wal_path = tmp_dir.path().join("library.db-wal");
+    let shm_path = tmp_dir.path().join("library.db-shm");
+
+    assert!(!wal_path.exists());
+    assert!(!shm_path.exists());
+
+    let res = init_app_stores(&db_path);
+    assert!(res.is_err(), "Store open must fail");
+
+    assert!(
+        !wal_path.exists(),
+        "Failed open must not create -wal auxiliary file on disk"
+    );
+    assert!(
+        !shm_path.exists(),
+        "Failed open must not create -shm auxiliary file on disk"
+    );
+}
+
+#[test]
+fn a_store_failure_exits_without_panicking() {
+    let tmp = NamedTempFile::new().unwrap();
+    let db_path = tmp.path().to_path_buf();
+    create_valid_header_corrupt_db(&db_path);
+
+    // Opening corrupt db yields Err without panicking
+    let result = std::panic::catch_unwind(|| init_app_stores(&db_path));
+
+    assert!(result.is_ok(), "init_app_stores must not panic on failure");
+    let open_res = result.unwrap();
+    assert!(
+        open_res.is_err(),
+        "init_app_stores must return Err on failure"
+    );
+
+    let err = match open_res {
+        Err(e) => e,
+        Ok(_) => unreachable!(),
+    };
+
+    let msg = format_startup_error_message(&err);
+    assert!(
+        msg.contains("Snapdown could not open its library database"),
+        "Error message must describe database open failure"
+    );
+    assert!(
+        msg.contains(&db_path.display().to_string()),
+        "Error message must contain exact database path"
+    );
 }
 
 #[test]

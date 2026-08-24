@@ -114,3 +114,29 @@ fn test_unreachable_server_fails_fast() {
     assert!(resp.contains("Snapdown is not running"));
     assert!(resp.contains("isError"));
 }
+
+#[test]
+fn test_mcp_empty_or_broken_error_response_returns_non_empty_message() {
+    let server = Server::http("127.0.0.1:0").unwrap();
+    let port = server.server_addr().to_ip().unwrap().port();
+
+    thread::spawn(move || {
+        while let Ok(req) = server.recv() {
+            let url = req.url().to_string();
+            if url == "/v1/bundles/empty-err" {
+                let _ = req.respond(Response::empty(500));
+            } else {
+                let _ = req.respond(Response::empty(404));
+            }
+        }
+    });
+
+    let client = LocalApiClient::new(port);
+    let mut handler = McpHandler::new(client);
+
+    let read_bundle_req = r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"mcp:read_bundle","arguments":{"bundle_id":"empty-err"}}}"#;
+    let resp = handler.handle_message(read_bundle_req).unwrap();
+    assert!(resp.contains("isError"));
+    assert!(resp.contains("internal: HTTP 500"));
+    assert!(!resp.contains(r#""text": """#));
+}

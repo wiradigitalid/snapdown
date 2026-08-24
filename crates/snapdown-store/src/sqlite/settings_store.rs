@@ -1,4 +1,4 @@
-﻿use std::path::Path;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use rusqlite::{Connection, OpenFlags};
@@ -20,25 +20,27 @@ impl SqliteSettingsStore {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, StoreError> {
         let path_ref = path.as_ref();
 
-        // Check if database file exists. If it exists, make sure it is not corrupt before proceeding.
-        let flags = OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE;
-        let mut conn = Connection::open_with_flags(path_ref, flags)?;
-
-        // Apply pragmas
-        conn.pragma_update(None, "journal_mode", "WAL")?;
-        conn.pragma_update(None, "foreign_keys", "ON")?;
-        conn.pragma_update(None, "busy_timeout", 5000)?;
-
-        // Quick integrity check to detect corruption
-        {
-            let mut integrity_stmt = conn.prepare("PRAGMA quick_check;")?;
+        // Check if database file exists. If it exists, verify integrity on a read-only connection
+        // before opening read-write or applying any modifying pragmas (BUG-15, BR-118).
+        if path_ref.exists() {
+            let ro_flags = OpenFlags::SQLITE_OPEN_READ_ONLY;
+            let ro_conn = Connection::open_with_flags(path_ref, ro_flags)?;
+            let mut integrity_stmt = ro_conn.prepare("PRAGMA quick_check;")?;
             let integrity_res: String = integrity_stmt.query_row([], |row| row.get(0))?;
             if integrity_res != "ok" {
                 return Err(StoreError::Corruption(integrity_res));
             }
+            drop(integrity_stmt);
+            drop(ro_conn);
         }
 
-        // Run migrations
+        let flags = OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE;
+        let mut conn = Connection::open_with_flags(path_ref, flags)?;
+
+        conn.pragma_update(None, "journal_mode", "WAL")?;
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+        conn.pragma_update(None, "busy_timeout", 5000)?;
+
         run_migrations(&mut conn)?;
 
         Ok(Self {

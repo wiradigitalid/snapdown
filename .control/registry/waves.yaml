@@ -647,3 +647,252 @@ waves:
               - cargo::vault_move_reports_a_source_file_it_could_not_remove
               - cargo::vault_move_reports_a_destination_copy_it_could_not_clean_up
               - cargo::vault_move_failing_at_file_n_leaves_every_source_file_in_place
+
+  - id: W7
+    title: The panic surface, and the two fixes the freeze allows
+    status: closed
+    release: r3
+    prd: [capture-to-markdown, agent-handoff]
+    # No FR. Every story here is a DEFECT FIX against a promise that already exists, and this wave
+    # deliberately adds no promise. What each story contradicts is named in its own `why`.
+    fr: []
+    components: [settings, sharing, agent-access]
+    size: M
+    depends_on: [W6]
+    spec_folder: _bmad-output/specs/w7-failure-paths/
+    opened: "2026-08-24"
+    scope: >-
+      Three defects that share one habit: a failure the code declines to report. BUG-12 panics on a
+      store it cannot open, in a process with no console, so the product appears not to exist. BUG-3
+      interpolates the Reviewer's own Note into HTML unescaped. BUG-10 can hand an agent an error
+      whose message is the empty string. None of the three needs a decision from the owner and none
+      of them adds behaviour.
+
+      TWO OF THE THREE COMPONENTS ARE FROZEN, and this wave is allowed under that freeze by its own
+      terms. DEC-005 says it plainly - "This decision does not forbid a fix. It forbids new work."
+      Its Cost section already named the awkwardness - "a defect in the frozen components has an
+      awkward home ... it lands as a defect row and a patch release, and that path is thinner than a
+      wave's". A wave is used here rather than a fastpath because BUG-3 contradicts NFR-15, and
+      fastpath work that turns out to touch a requirement MUST stop and be raised to a wave anyway.
+
+      NOTHING NEW IS PROMISED to `sharing` or `agent-access` - no FR, no use case, no UX pass, and no
+      depth above the `guarded` they already carry. Both keep the code they have; two paths in it
+      start telling the truth.
+    known_gaps:
+      # Named at OPENING rather than discovered at close, because opening this wave is what causes
+      # them and a reader should not have to work that out from a validator.
+      - "V3 gains SEVEN new findings the moment this wave opens - UC-17, UC-18, UC-19 (agent-access)
+         and UC-20, UC-21, UC-22, UC-23 (sharing). None of them is new drift. V3's touched set is
+         built from STORY `component` fields, and W4 and W5 hold no stories here at all: the RECOVERY
+         NOTE at the top of this file records that their story files are gone or carry no `UC-`
+         reference, and OQ-21 decided in advance not to reconstruct a traceability that was never
+         written. W7-S2 and W7-S3 are the first stories those two components have ever had in this
+         registry, which is the whole cause. The correct state is RED, exactly as it already is for
+         `finding` and `bundle`, and a green V3 here would mean somebody had guessed."
+      - "These three stories `satisfies: []` and that is deliberate, not an omission. A defect fix
+         restores a promise that already exists; it schedules no use case. Writing a `UC-` here to
+         quiet V3 would be the guess the recovery note refuses."
+      - "THE `depends_on` CHAIN IS NOT A TECHNICAL DEPENDENCY AND MUST NOT BE READ AS ONE. The SPEC
+         review raised this (finding M7) and it is upheld. The three stories touch entirely disjoint
+         trees - apps/desktop/src-tauri (Rust), apps/web-service (Go), crates/snapdown-bridge (Rust)
+         - and share no file, symbol, schema, or fixture. The chain exists because V11 demands that
+         every PAIR of stories in a wave either share a `touches` value or sit on a `depends_on`
+         path, and these three share neither. Declaring `depends_on: []` on all three, which is what
+         M7 asks for, makes V11 fail on all three pairs. The chain is therefore a V11 artifact
+         recording INTENDED ORDER, not a build gate, and all three MAY be dispatched in parallel -
+         their Step 1 planners were, in three isolated worktrees. Filed as OQ-25: V11 makes a wave of
+         unrelated defect fixes express a dependency that does not exist, and naming it here is
+         better than letting the next reader believe it."
+    spec_reviewed:
+      date: "2026-08-24"
+      sha: 7c67dfb
+      lenses: [structure, prose, edge-case-hunter]
+      # 3 high, 10 medium, 9 low; report at _bmad-output/specs/w7-failure-paths/review-W7-spec.md.
+      # H1 found that W7-S1's defect was already fixed (see that story's `why`), and H3 found BUG-15,
+      # a live BR-118 violation in all five stores that no existing test can reach. Every high and
+      # every medium was upheld; findings were resolved into the SPEC, this registry, three new
+      # defect rows, and OQ-25 before this trace was written.
+    closed: "2026-08-24"
+    close_record: |
+      PHASE 4, walked in order.
+
+      1. REGISTRY CATCH-UP. Every `touches` value resolves to a registered `area` -
+         local-db, settings-store, web-service, mcp-bridge. No new LC was created: all three stories
+         changed existing components rather than adding boundaries. V12 green.
+
+      2. INVENTORIES REFRESHED FROM CODE. inventory.py reports 4 plan-versus-code gaps in
+         inventory-screen, and ALL FOUR ARE ALREADY REGISTERED - three are BUG-2's `sharing` screens
+         (PublishDialog, PublishedBundleReader, PublicationNotFound), one is the capture note field
+         under BUG-14/LC-029. Reported, not patched: the gap is a finding routed to the skill that
+         owns its side.
+
+      3. STRUCTURE MAPS. Not re-derived, and that is correct rather than skipped: no base folder was
+         born or removed and no key file moved. Three source files and two test files changed inside
+         folders the maps already describe.
+
+      4. DISTILLATION. Nothing durable is left in the spec folder. The review's findings left it as
+         they were resolved - three new defect rows (BUG-15/16/17), BUG-12 corrected to resolved,
+         OQ-25 filed, and the SPEC and story files amended in place. review-W7-spec.md stays in the
+         spec folder as the working record of a run, which is what _bmad-output is for.
+
+      5. RETROSPECTIVE. SKIPPED, and stated rather than silent, as V19 requires: this is a wave `M`,
+         where the retrospective is advisory. The wave's one durable lesson is already recorded where
+         it will be read - BUG-12's resolution block, and a new pitfall in AGENTS.md: a register entry
+         is a claim about code at a moment, and it goes stale silently.
+
+      6. RTM. No FR is claimed by this wave (`fr: []`) and no UC is scheduled, so there is no
+         traceability row to turn green. That is the correct shape for a wave of defect fixes and it
+         is why V3 stays red here - see known_gaps.
+
+      7. VERIFICATION RUN BY THE COORDINATOR on the merged branch, not taken from any worker report:
+           cargo fmt --all -- --check                                   exit 0
+           cargo clippy --workspace --all-targets -- -D warnings        exit 0
+           cargo test --workspace                                       exit 0, 31 suites
+           go build ./... && go vet ./... && go test ./...  (Windows)    exit 0
+           web/ui   typecheck + lint + test                             exit 0, 69 tests
+           apps/desktop typecheck + lint + test + build                 exit 0
+         All three fixes were additionally verified BY MUTATION; one test was found insensitive to
+         the defect it names and is recorded as belt-and-braces rather than counted as protection.
+         See BUG-15's resolution.
+
+      ONE TRANSIENT FAILURE, recorded so it is not mistaken for a defect next time: the first
+      `cargo test --workspace` died with LNK1201 writing test_no_io's PDB. 176 GB free, so not disk
+      space - a stale locked PDB. Deleting it and re-running was clean. Infrastructure, retried once,
+      not patched around.
+    epics:
+      - id: EP-startup
+        component: settings
+        title: The application says what went wrong instead of vanishing
+        stories:
+          - id: W7-S1
+            title: Close the three defects W6-S5's startup path left open, and name the tests
+            component: settings
+            satisfies: []
+            depends_on: []
+            touches: [local-db, settings-store]
+            spec_folder: _bmad-output/specs/w7-failure-paths/
+            why: |
+              RE-SCOPED 2026-08-24, after the SPEC review. This story was opened against BUG-12 and
+              BUG-12 WAS ALREADY FIXED - by W6-S5 (commit aa30434), which was not scoped to it and
+              closed it as a side effect of needing a fallible startup path. The register row still
+              read `open`, a planner was dispatched against it, and it wrote a full implementation
+              plan for code that already existed. The review caught it by reading the code instead of
+              the register. defects.yaml BUG-12 now carries that history in full.
+
+              What W6-S5 did NOT close is real, and it is what this story now carries:
+
+              BUG-15, HIGH. All five stores switch the database to WAL BEFORE running quick_check
+              (settings_store.rs:28 then :33, identically in the four siblings). Switching an existing
+              database to WAL mutates page 1 and creates `-wal` and `-shm` beside it, so for a file
+              with a VALID header and corrupt B-tree pages the store IS written to and files ARE
+              created next to it - and the Reviewer is then told nothing was touched. That sentence
+              is false, and it is the one thing they would rely on before taking a backup. BR-118 and
+              the SDD's "a store recreated beside a corrupt one is silent data loss" are both broken
+              by the code path that reports them.
+
+              THE TEST CANNOT SEE IT, and that is the part worth carrying: the only corrupt fixture
+              anyone has used is garbage bytes, which SQLite rejects at Connection::open before a
+              single pragma runs. The byte-identity assertion passes without ever reaching the code
+              that breaks it. The W7-S1 plan named this exact case in its own edge-case matrix and
+              then specified a fixture that avoids it.
+
+              BUG-16, medium. The exit is still a panic, through the `.expect()` at lib.rs:347 that
+              BUG-12 deliberately excluded from its sweep. That exclusion's reason - "there is nothing
+              left to report with" - was true when every store open panicked before reaching it, and
+              W6-S5 made it the routine exit path without anyone re-reading the premise.
+
+              BUG-17, medium. MessageBoxW is called with a NULL owner and none of MB_SETFOREGROUND,
+              MB_TOPMOST or MB_SYSTEMMODAL, so it can open behind other windows - which is the
+              "nothing happens at all" symptom BUG-12 existed to end. Whether it is then actually
+              visible is a MANUAL check and MUST NOT be claimed by a cargo test (OQ-24).
+            tests:
+              # The four names below are the ones this wave promised. Two already exist under
+              # different names and are RENAMED, not rewritten, so the registry and the suite agree:
+              #   an_unreadable_library_db_is_reported_with_its_path_and_not_recreated
+              #   a_corrupt_library_db_does_not_panic_the_setup_hook
+              # a_readable_store_still_starts_normally has no coverage today.
+              - cargo::a_store_that_cannot_be_opened_yields_an_error_not_a_panic
+              - cargo::the_startup_error_names_the_path_of_the_file_that_failed
+              - cargo::a_corrupt_store_is_never_recreated_beside_itself
+              - cargo::a_readable_store_still_starts_normally
+              # BUG-15. The first is the fixture that makes the third name above mean something.
+              - cargo::a_valid_header_with_corrupt_pages_is_not_written_to_before_it_is_checked
+              - cargo::a_failed_open_leaves_no_wal_or_shm_file_beside_the_database
+              # BUG-16.
+              - cargo::a_store_failure_exits_without_panicking
+            tests_deliberately_not_written:
+              - name: the_startup_dialog_reaches_the_foreground
+                why: |
+                  BUG-17's fix is MB_SETFOREGROUND | MB_TOPMOST, and no unit test can observe whether
+                  a native dialog actually reached the foreground. Asserting the flag constants were
+                  passed would test a copy of the input, which is the literal-assert failure this
+                  repository has landed three times. It is a manual check, it is recorded as one, and
+                  OQ-24 says this project currently has no working way to run one.
+      - id: EP-frozen-fixes
+        component: sharing
+        title: Two frozen components stop lying about failure
+        stories:
+          - id: W7-S2
+            title: Escape the published Markdown before it reaches the page
+            component: sharing
+            satisfies: []
+            depends_on: [W7-S1]
+            touches: [web-service]
+            spec_folder: _bmad-output/specs/w7-failure-paths/
+            why: |
+              BUG-3, medium, contradicting NFR-15.
+
+              apps/web-service/internal/server/server.go:145 builds the page with fmt.Sprintf and a
+              raw `%s` for b.Markdown. `%s` escapes nothing, so a Note containing a closing pre tag
+              followed by a script tag leaves the block and executes in the browser of whoever opens
+              the URL. The endpoint is public and unauthenticated.
+
+              The author and the publisher are the same person, so this is not third-party injection.
+              The exposure is to WHOEVER THE REVIEWER HANDS THE URL TO - and a Note is free text that
+              may be pasted out of the page being reviewed, which is precisely where a hostile string
+              would come from.
+
+              Escape the slug too. It is a 160-bit CSPRNG value today, and that is a property of the
+              generator rather than of this render; a renderer that is only safe because of what its
+              caller happens to pass is one refactor away from not being safe.
+
+              WHY NO TEST CAUGHT IT - the route tests assert the NFR-15 identical-404 and the
+              response codes. Nothing asserts what the HTML BODY does with hostile content. Note also
+              that no workflow touched Go at all until 2026-08-23, so this shipped into a container CI
+              never built. A `web-service` job exists now, which is regression protection and not a
+              fix.
+            tests:
+              - go::a_note_containing_markup_is_escaped_in_the_rendered_page
+              - go::a_note_that_closes_the_pre_block_cannot_reach_the_browser_as_markup
+              - go::the_slug_is_escaped_in_the_rendered_page
+              - go::an_unknown_slug_still_returns_the_identical_refusal
+          - id: W7-S3
+            title: Never hand an agent an error with no message in it
+            component: agent-access
+            satisfies: []
+            depends_on: [W7-S2]
+            touches: [mcp-bridge]
+            spec_folder: _bmad-output/specs/w7-failure-paths/
+            why: |
+              BUG-10, low, contradicting AD-7 and BR-17. Last because it is genuinely the smallest,
+              and it is in the wave because it is the third instance of one habit - fixing two of
+              three leaves the pattern alive.
+
+              crates/snapdown-bridge/src/client.rs:155-163 - parse_error_response reads the body with
+              `let _ =`. If that read fails, `body` stays empty, the envelope parse fails, and the
+              empty string is returned as the error message. The caller wraps it in Err() and the MCP
+              tool surfaces an error with nothing in it.
+
+              AD-7 exists so that ONE error envelope crosses every process boundary, and BR-17 says a
+              refusal is always distinguishable from an empty result. An error whose message is the
+              empty string is a refusal that says nothing: the agent learns only that something
+              failed.
+
+              Honestly low - this is the error path of a call that has ALREADY failed, so it needs a
+              second failure to reach. The likely readings are a dropped connection mid-error-body or
+              a non-UTF-8 body. Neither is common and neither loses data. On a failed read, say so:
+              the status code plus that the error body could not be read.
+            tests:
+              - cargo::a_failed_error_body_read_never_yields_an_empty_message
+              - cargo::the_status_code_survives_a_failed_error_body_read
+              - cargo::a_readable_error_envelope_is_still_parsed_as_before

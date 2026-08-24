@@ -1,8 +1,13 @@
-  V24  .agent/skills/bmad-project-context/references/template.md: cites `src/lib/money.ts` which does not exist
-  V24  .agent/skills/bmad-project-context/references/template.md: cites `src/routes/webhooks.ts` which does not exist
   V3   UC-1: component `finding` has already been touched by a wave, but this UC is not scheduled to any story
   V3   UC-12: component `bundle` has already been touched by a wave, but this UC is not scheduled to any story
+  V3   UC-17: component `agent-access` has already been touched by a wave, but this UC is not scheduled to any story
+  V3   UC-18: component `agent-access` has already been touched by a wave, but this UC is not scheduled to any story
+  V3   UC-19: component `agent-access` has already been touched by a wave, but this UC is not scheduled to any story
   V3   UC-2: component `finding` has already been touched by a wave, but this UC is not scheduled to any story
+  V3   UC-20: component `sharing` has already been touched by a wave, but this UC is not scheduled to any story
+  V3   UC-21: component `sharing` has already been touched by a wave, but this UC is not scheduled to any story
+  V3   UC-22: component `sharing` has already been touched by a wave, but this UC is not scheduled to any story
+  V3   UC-23: component `sharing` has already been touched by a wave, but this UC is not scheduled to any story
   V3   UC-7: component `finding` has already been touched by a wave, but this UC is not scheduled to any story
   V3   UC-8: component `finding` has already been touched by a wave, but this UC is not scheduled to any story
   V3   UC-9: component `bundle` has already been touched by a wave, but this UC is not scheduled to any story

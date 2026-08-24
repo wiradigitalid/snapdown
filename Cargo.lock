@@ -3377,6 +3377,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "rand",
+ "rusqlite",
  "serde",
  "serde_json",
  "snapdown-core",
