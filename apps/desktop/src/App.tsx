@@ -40,7 +40,7 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isComposerModalOpen, setIsComposerModalOpen] = useState(false);
-  const [allFindings, setAllFindings] = useState<FindingDetailItemDto[]>([]);
+  const [composerFindings, setComposerFindings] = useState<FindingDetailItemDto[]>([]);
   const [savedBundles, setSavedBundles] = useState<BundleDetailDto[]>([]);
   const [activeFinding, setActiveFinding] = useState<FindingDetailDto | null>(null);
 
@@ -86,19 +86,9 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
     }
   }, []);
 
-  const refreshFindings = useCallback(async () => {
-    try {
-      const data = await listFindings();
-      setAllFindings(data);
-    } catch {
-      // Ignored
-    }
-  }, []);
-
   useEffect(() => {
     refreshBundles();
-    refreshFindings();
-  }, [refreshBundles, refreshFindings]);
+  }, [refreshBundles]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -115,7 +105,6 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
 
       listen('capture-completed', () => {
         setActiveTab('findings');
-        refreshFindings();
       }).catch(() => {});
     } catch {
       // Ignored outside Tauri
@@ -124,7 +113,7 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
     return () => {
       if (unlisten) unlisten();
     };
-  }, [refreshFindings]);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -238,15 +227,25 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
     }
   };
 
-  const handleComposeModal = () => {
-    setIsComposerModalOpen(true);
+  const handleComposeModal = async (selectedIds: string[]) => {
+    try {
+      const currentFindings = await listFindings();
+      // Filter findings to strictly match what was selected on filmstrip
+      const targetFindings = selectedIds.length > 0
+        ? currentFindings.filter((f) => selectedIds.includes(f.finding.id))
+        : (activeFinding ? [activeFinding] : currentFindings.slice(0, 1));
+
+      setComposerFindings(targetFindings);
+      setIsComposerModalOpen(true);
+    } catch (err) {
+      console.error('Failed to prepare bundle compose:', err);
+    }
   };
 
   const handleCreateBundle = async (name: string, selectedIds: string[]) => {
     await createBundle({ name, finding_ids: selectedIds });
     setIsComposerModalOpen(false);
     await refreshBundles();
-    await refreshFindings();
     setToastMessage(`Bundle "${name}" assembled and saved!`);
   };
 
@@ -329,7 +328,7 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
         >
           <div onClick={(e) => e.stopPropagation()}>
             <BundleComposer
-              findings={allFindings}
+              findings={composerFindings}
               onCreateBundle={handleCreateBundle}
               onCancel={() => setIsComposerModalOpen(false)}
             />

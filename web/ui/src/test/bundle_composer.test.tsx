@@ -46,7 +46,7 @@ describe('BundleComposer Component', () => {
     vi.clearAllMocks();
   });
 
-  it('selects findings and triggers onCreateBundle', async () => {
+  it('renders selected findings with visual preview and triggers onCreateBundle', async () => {
     const onCreateBundle = vi.fn().mockResolvedValue(undefined);
 
     render(
@@ -59,9 +59,13 @@ describe('BundleComposer Component', () => {
     const titleInput = screen.getByLabelText('Bundle Title');
     fireEvent.change(titleInput, { target: { value: 'Alpha Release Review' } });
 
-    // Select all findings
-    const selectAllBtn = screen.getByRole('button', { name: 'Select All' });
-    fireEvent.click(selectAllBtn);
+    // Verify row items are listed
+    expect(screen.getByTestId('bundle-finding-row-f1')).toBeInTheDocument();
+    expect(screen.getByTestId('bundle-finding-row-f2')).toBeInTheDocument();
+
+    // Verify preview modes
+    expect(screen.getByTestId('preview-mode-visual-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('preview-mode-md-btn')).toBeInTheDocument();
 
     const submitBtn = screen.getByRole('button', { name: 'Create Bundle' });
     fireEvent.click(submitBtn);
