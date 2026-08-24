@@ -1,5 +1,6 @@
 import React from 'react';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import appIconSrc from '../assets/app-icon.png';
 
 export type NavigationTab = 'findings' | 'bundles' | 'agent-access' | 'settings';
 
@@ -106,27 +107,20 @@ export const EditorShell: React.FC<EditorShellProps> = ({
             overflow: 'hidden',
           }}
         >
-          {/* Snapdown Studio Brand Icon */}
-          <div
+          {/* Snapdown Brand Icon */}
+          <img
+            src={appIconSrc}
+            alt="Snapdown Logo"
             style={{
               width: '20px',
               height: '20px',
               borderRadius: 'var(--radius-xs)',
-              backgroundColor: 'var(--color-accent)',
-              border: '1px solid var(--color-border-strong)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--color-accent-text)',
-              fontWeight: 800,
-              fontSize: '0.7rem',
+              objectFit: 'contain',
               boxShadow: 'var(--shadow-sm)',
             }}
-          >
-            ⚡
-          </div>
+          />
           <span style={{ fontWeight: 800, color: 'var(--color-text)', letterSpacing: '-0.02em' }}>
-            Snapdown Studio
+            Snapdown
           </span>
           <span style={{ color: 'var(--color-border-strong)' }}>|</span>
           <span

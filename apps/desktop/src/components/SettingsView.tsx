@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import appIconSrc from '../assets/app-icon.png';
 import { GeneralSection } from './GeneralSection';
 import { VaultSection } from './VaultSection';
 import { QualityBudgetSection } from './QualityBudgetSection';
@@ -74,6 +75,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           borderBottom: '1px solid var(--color-border)',
           paddingBottom: 'var(--space-2)',
           marginBottom: 'var(--space-2)',
+          flexShrink: 0,
         }}
       >
         <div style={{ display: 'flex', gap: 'var(--space-1)', backgroundColor: 'var(--color-surface-sunken)', padding: '2px', borderRadius: 'var(--radius-md)' }}>
@@ -183,7 +185,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* TAB 2: Shortcuts & Hotkeys Detail */}
       {activeTab === 'hotkeys' && (
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <div style={{ width: '100%', minHeight: '380px', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <HotkeySection
             hotkeySettings={hotkeySettings}
             onSaveHotkey={onSaveHotkey}
@@ -195,7 +197,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* TAB 3: Local Agent Bridge & Access Token */}
       {activeTab === 'agent-bridge' && (
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <div style={{ width: '100%', minHeight: '380px', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <div
             style={{
               padding: 'var(--space-4)',
@@ -208,7 +210,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 700, fontSize: 'var(--text-sm)' }}>Local Loopback Bridge</span>
+              <span style={{ fontWeight: 700, fontSize: 'var(--text-sm)', color: 'var(--color-text)' }}>Local Loopback Bridge</span>
               <span style={{ color: 'var(--color-success-text)', backgroundColor: 'var(--color-success-bg)', padding: '2px 8px', borderRadius: 'var(--radius-sm)', fontWeight: 800, fontSize: 'var(--text-2xs)' }}>
                 🟢 Port 3849 Active
               </span>
@@ -226,7 +228,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <div
           style={{
             width: '100%',
-            padding: 'var(--space-6)',
+            height: 'calc(100% - 48px)',
+            minHeight: '480px',
+            alignSelf: 'stretch',
+            padding: 'var(--space-8) var(--space-6)',
             backgroundColor: 'var(--color-surface)',
             border: '1px solid var(--color-border)',
             borderRadius: 'var(--radius-md)',
@@ -234,23 +239,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             flexDirection: 'column',
             alignItems: 'center',
             textAlign: 'center',
-            gap: 'var(--space-3)',
+            gap: 'var(--space-4)',
+            boxSizing: 'border-box',
+            justifyContent: 'center',
           }}
         >
-          <div style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-accent)', color: 'var(--color-accent-text)', fontSize: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
-            ⚡
-          </div>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 800, color: 'var(--color-text)' }}>
-              Snapdown Studio
+          <img
+            src={appIconSrc}
+            alt="Snapdown Logo"
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: 'var(--radius-lg)',
+              objectFit: 'contain',
+              boxShadow: 'var(--shadow-md)',
+            }}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', alignItems: 'center' }}>
+            <h2 style={{ margin: 0, fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--color-text)', letterSpacing: '-0.02em' }}>
+              Snapdown
             </h2>
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)', backgroundColor: 'var(--color-surface-sunken)', padding: '2px 8px', borderRadius: 'var(--radius-xs)' }}>
               Version 1.4.0 (Tauri v2 · x64 Windows 11)
             </span>
           </div>
-          <p style={{ margin: 0, maxWidth: '32rem', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+          <p style={{ margin: 0, maxWidth: '34rem', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
             Visual UI/UX Observation & Multimodal Handoff Tool built for AI Coding Agents. Developed under WDI Method by Wira Digital Indonesia.
           </p>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
+            <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
+              Port 3849 · Vault Integration · AES-256 GCM Keyring
+            </span>
+          </div>
         </div>
       )}
     </div>
