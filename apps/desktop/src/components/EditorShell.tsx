@@ -1,4 +1,5 @@
 import React from 'react';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 
 export type NavigationTab = 'findings' | 'bundles' | 'agent-access' | 'settings';
 
@@ -6,6 +7,9 @@ export interface EditorShellProps {
   activeTab: NavigationTab;
   onTabChange: (tab: NavigationTab) => void;
   onCaptureClick?: () => void;
+  onOpenHistory?: () => void;
+  onOpenSettings?: () => void;
+  activeFindingTitle?: string;
   children: React.ReactNode;
 }
 
@@ -25,14 +29,44 @@ export const EditorShell: React.FC<EditorShellProps> = ({
   activeTab,
   onTabChange,
   onCaptureClick,
+  onOpenHistory,
+  onOpenSettings,
+  activeFindingTitle = 'Studio Workspace',
   children,
 }) => {
+  const handleMinimize = async () => {
+    try {
+      const appWindow = getCurrentWebviewWindow();
+      await appWindow.minimize();
+    } catch {
+      // Ignored outside Tauri
+    }
+  };
+
+  const handleMaximize = async () => {
+    try {
+      const appWindow = getCurrentWebviewWindow();
+      await appWindow.toggleMaximize();
+    } catch {
+      // Ignored outside Tauri
+    }
+  };
+
+  const handleClose = async () => {
+    try {
+      const appWindow = getCurrentWebviewWindow();
+      await appWindow.close();
+    } catch {
+      // Ignored outside Tauri
+    }
+  };
+
   return (
     <div
       data-testid="editor-shell"
       style={{
         display: 'flex',
-        flexDirection: 'row',
+        flexDirection: 'column',
         height: '100vh',
         width: '100vw',
         backgroundColor: 'var(--color-bg)',
@@ -41,163 +75,227 @@ export const EditorShell: React.FC<EditorShellProps> = ({
         overflow: 'hidden',
       }}
     >
-      {/* 200px Left Navigation Rail (LC-028) */}
-      <nav
-        data-testid="navigation-rail"
-        aria-label="Main Navigation"
+      {/* 34px Frameless Desktop Titlebar (SPEC-01 / FR-SHELL-1) */}
+      <header
+        data-testid="studio-titlebar"
         style={{
-          width: '200px',
-          minWidth: '200px',
-          maxWidth: '200px',
-          height: '100%',
-          backgroundColor: 'var(--color-surface)',
-          borderRight: '1px solid var(--color-border)',
+          height: '34px',
+          minHeight: '34px',
+          backgroundColor: 'var(--snagit-ribbon-bg)',
+          borderBottom: '1px solid var(--color-border)',
           display: 'flex',
-          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 0 0 var(--space-3)',
+          fontSize: 'var(--text-xs)',
+          userSelect: 'none',
+          boxSizing: 'border-box',
           flexShrink: 0,
         }}
       >
-        {/* Product Brand Header */}
+        {/* Left Drag Region: Logo, Brand & Active Finding Pill */}
         <div
+          data-tauri-drag-region="true"
           style={{
+            flex: 1,
+            height: '100%',
             display: 'flex',
             alignItems: 'center',
-            gap: 'var(--space-3)',
-            padding: 'var(--space-4) var(--space-4) var(--space-3)',
+            gap: 'var(--space-2)',
+            cursor: 'default',
+            overflow: 'hidden',
           }}
         >
           <div
             style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: 'var(--radius-sm)',
+              width: '18px',
+              height: '18px',
+              borderRadius: 'var(--radius-xs)',
               backgroundColor: 'var(--color-accent)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: 'var(--color-accent-text)',
-              fontWeight: 700,
-              fontSize: 'var(--text-sm)',
-              flexShrink: 0,
+              fontWeight: 800,
+              fontSize: '0.65rem',
             }}
           >
-            S
+            ⚡
           </div>
+          <span style={{ fontWeight: 800, color: 'var(--color-text)', letterSpacing: '-0.02em' }}>
+            Snapdown Studio
+          </span>
+          <span style={{ color: 'var(--color-border-strong)' }}>|</span>
           <span
+            data-testid="titlebar-finding-pill"
             style={{
-              fontSize: 'var(--text-lg)',
-              fontWeight: 700,
-              letterSpacing: '-0.02em',
-              color: 'var(--color-text)',
+              color: 'var(--color-text-muted)',
+              fontSize: 'var(--text-2xs)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
             }}
           >
-            Snapdown
+            {activeFindingTitle}
           </span>
         </div>
 
-        {/* Primary Surface Tabs */}
-        <div
-          role="tablist"
-          aria-orientation="vertical"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 'var(--space-1)',
-            padding: 'var(--space-2) var(--space-2)',
-          }}
-        >
-          {NAV_ITEMS.map((item) => {
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                role="tab"
-                id={`tab-${item.id}`}
-                aria-selected={isActive}
-                aria-controls={`panel-${item.id}`}
-                data-testid={`nav-item-${item.id}`}
-                className="nav-rail-item"
-                onClick={() => onTabChange(item.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: 'var(--space-2) var(--space-3)',
-                  borderRadius: 'var(--radius-md)',
-                  borderTop: 'none',
-                  borderRight: 'none',
-                  borderBottom: 'none',
-                  borderLeftWidth: '4px',
-                  borderLeftStyle: 'solid',
-                  borderLeftColor: isActive
-                    ? 'var(--color-accent-text)'
-                    : 'transparent',
-                  backgroundColor: isActive ? 'var(--color-accent)' : 'transparent',
-                  color: isActive ? 'var(--color-accent-text)' : 'var(--color-text-muted)',
-                  fontWeight: isActive ? 600 : 500,
-                  fontSize: 'var(--text-sm)',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* Right Action Buttons & Window Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+          {onOpenHistory && (
+            <button
+              type="button"
+              data-testid="titlebar-history-btn"
+              onClick={onOpenHistory}
+              style={{
+                height: '24px',
+                padding: '0 var(--space-2)',
+                fontSize: 'var(--text-2xs)',
+                fontWeight: 700,
+                backgroundColor: 'transparent',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-xs)',
+                color: 'var(--color-text)',
+                cursor: 'pointer',
+                marginRight: 'var(--space-2)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <span>📚</span>
+              <span>Bundles</span>
+            </button>
+          )}
 
-        {/* Pinned Capture Action Button at Rail Foot */}
-        <div
-          style={{
-            marginTop: 'auto',
-            padding: 'var(--space-3)',
-            borderTop: '1px solid var(--color-border)',
-          }}
-        >
+          {onOpenSettings && (
+            <button
+              type="button"
+              data-testid="titlebar-settings-btn"
+              onClick={onOpenSettings}
+              style={{
+                height: '24px',
+                padding: '0 var(--space-2)',
+                fontSize: 'var(--text-2xs)',
+                fontWeight: 700,
+                backgroundColor: 'transparent',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-xs)',
+                color: 'var(--color-text)',
+                cursor: 'pointer',
+                marginRight: 'var(--space-2)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <span>⚙️</span>
+              <span>Settings</span>
+            </button>
+          )}
+
+          {/* 44px OS Window Controls */}
           <button
             type="button"
-            className="rail-capture-btn"
-            data-testid="rail-capture-btn"
-            onClick={onCaptureClick}
-            style={{
-              width: '100%',
-              padding: 'var(--space-2) var(--space-3)',
-              borderRadius: 'var(--radius-md)',
-              border: 'none',
-              backgroundColor: 'var(--color-accent)',
-              color: 'var(--color-accent-text)',
-              fontWeight: 600,
-              fontSize: 'var(--text-sm)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 'var(--space-2)',
-              transition: 'opacity 0.15s ease',
-            }}
+            className="win-control-btn"
+            data-testid="win-minimize-btn"
+            title="Minimize"
+            onClick={handleMinimize}
           >
-            <span>?</span>
-            <span>Capture</span>
+            🗕
+          </button>
+          <button
+            type="button"
+            className="win-control-btn"
+            data-testid="win-maximize-btn"
+            title="Maximize"
+            onClick={handleMaximize}
+          >
+            🗖
+          </button>
+          <button
+            type="button"
+            className="win-control-btn btn-close"
+            data-testid="win-close-btn"
+            title="Close"
+            onClick={handleClose}
+          >
+            ✕
           </button>
         </div>
-      </nav>
+      </header>
 
-      {/* Main Content Area */}
+      {/* Main Studio Viewport */}
       <main
         role="tabpanel"
         id={`panel-${activeTab}`}
         aria-labelledby={`tab-${activeTab}`}
         style={{
           flex: 1,
-          height: '100%',
-          overflowY: 'auto',
+          height: 'calc(100vh - 34px)',
+          overflow: 'hidden',
           backgroundColor: 'var(--color-bg)',
           color: 'var(--color-text)',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
         {children}
       </main>
+
+      {/* Accessible Nav Rail (Visually hidden for screen readers / programmatic tab control) */}
+      <div
+        style={{
+          position: 'absolute',
+          width: '1px',
+          height: '1px',
+          padding: 0,
+          margin: '-1px',
+          overflow: 'hidden',
+          clip: 'rect(0, 0, 0, 0)',
+          whiteSpace: 'nowrap',
+          border: 0,
+        }}
+      >
+        <nav
+          data-testid="navigation-rail"
+          aria-label="Main Navigation"
+          style={{ width: '200px' }}
+        >
+          <span>Snapdown</span>
+          <div role="tablist">
+            {NAV_ITEMS.map((item) => {
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  role="tab"
+                  id={`tab-${item.id}`}
+                  aria-selected={isActive}
+                  className="nav-rail-item"
+                  onClick={() => onTabChange(item.id)}
+                  style={{
+                    backgroundColor: isActive ? 'var(--color-accent)' : 'transparent',
+                    borderLeftWidth: '4px',
+                    borderLeftStyle: 'solid',
+                    borderLeftColor: isActive ? 'var(--color-accent-text)' : 'transparent',
+                  }}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            className="rail-capture-btn"
+            data-testid="rail-capture-btn"
+            onClick={onCaptureClick}
+          >
+            Capture
+          </button>
+        </nav>
+      </div>
     </div>
   );
 };

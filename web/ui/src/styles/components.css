@@ -328,7 +328,64 @@
   transition: opacity 0.15s ease-out;
 }
 
-/* Navigation Rail (LC-028) */
+/* Tooltip floating styles */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: -32px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-text);
+  color: var(--color-surface);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  font-family: var(--font-ui);
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--trans-fast), transform var(--trans-fast);
+  z-index: 50;
+  box-shadow: var(--shadow-md);
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(2px);
+}
+
+/* Studio Frameless Titlebar & Window Controls */
+.win-control-btn {
+  width: 44px;
+  height: 100%;
+  background: transparent;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  outline: none;
+}
+
+.win-control-btn:hover {
+  background-color: var(--color-surface-sunken);
+  color: var(--color-text);
+}
+
+.win-control-btn.btn-close:hover {
+  background-color: var(--color-danger);
+  color: var(--color-danger-text);
+}
+
+/* Navigation Rail (Legacy / Backward Compatibility) */
 .nav-rail-item {
   outline: none;
 }

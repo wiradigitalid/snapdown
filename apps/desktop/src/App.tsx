@@ -1,6 +1,12 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { Toast } from '@snapdown/ui';
+import {
+  Toast,
+  BundlesDrawer,
+  BundleComposer,
+  FindingDetailItemDto,
+  BundleDetailDto,
+} from '@snapdown/ui';
 import { EditorShell, NavigationTab } from './components/EditorShell';
 import { SettingsView } from './components/SettingsView';
 import { FindingsView } from './components/FindingsView';
@@ -18,6 +24,8 @@ import {
   setVaultPath as apiSetVaultPath,
 } from './services/settings';
 import { triggerOverlay } from './services/capture';
+import { listBundles, createBundle, deleteBundle } from './services/bundle';
+import { listFindings } from './services/finding';
 import {
   HotkeyAction,
   HotkeySettingsDto,
@@ -29,6 +37,12 @@ import {
 
 export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'findings' }) => {
   const [activeTab, setActiveTab] = useState<NavigationTab>(initialTab);
+  const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isComposerModalOpen, setIsComposerModalOpen] = useState(false);
+  const [allFindings, setAllFindings] = useState<FindingDetailItemDto[]>([]);
+  const [savedBundles, setSavedBundles] = useState<BundleDetailDto[]>([]);
+
   const [settings, setSettings] = useState<Settings>({
     vault_path: '',
     quality_budget: {
@@ -62,6 +76,29 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const refreshBundles = useCallback(async () => {
+    try {
+      const data = await listBundles();
+      setSavedBundles(data);
+    } catch {
+      // Ignored
+    }
+  }, []);
+
+  const refreshFindings = useCallback(async () => {
+    try {
+      const data = await listFindings();
+      setAllFindings(data);
+    } catch {
+      // Ignored
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshBundles();
+    refreshFindings();
+  }, [refreshBundles, refreshFindings]);
+
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     try {
@@ -77,6 +114,7 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
 
       listen('capture-completed', () => {
         setActiveTab('findings');
+        refreshFindings();
       }).catch(() => {});
     } catch {
       // Ignored outside Tauri
@@ -85,7 +123,7 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
     return () => {
       if (unlisten) unlisten();
     };
-  }, []);
+  }, [refreshFindings]);
 
   useEffect(() => {
     let isMounted = true;
@@ -199,14 +237,45 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
     }
   };
 
+  const handleComposeModal = () => {
+    setIsComposerModalOpen(true);
+  };
+
+  const handleCreateBundle = async (name: string, selectedIds: string[]) => {
+    await createBundle({ name, finding_ids: selectedIds });
+    setIsComposerModalOpen(false);
+    await refreshBundles();
+    await refreshFindings();
+    setToastMessage(`Bundle "${name}" assembled and saved!`);
+  };
+
+  const handleCopyMarkdown = async (bundleId: string) => {
+    const target = savedBundles.find((b) => b.bundle.id === bundleId);
+    if (target?.bundle?.markdown) {
+      await navigator.clipboard.writeText(target.bundle.markdown);
+      setToastMessage('Bundle Markdown copied to clipboard');
+    }
+  };
+
+  const handleDeleteBundle = async (bundleId: string) => {
+    await deleteBundle(bundleId);
+    await refreshBundles();
+    setToastMessage('Bundle deleted successfully');
+  };
+
   return (
     <div data-testid="app-shell" style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <EditorShell
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onCaptureClick={handleCaptureClick}
+        onOpenHistory={() => {
+          refreshBundles();
+          setIsHistoryDrawerOpen(true);
+        }}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
       >
-        {activeTab === 'findings' && <FindingsView />}
+        {activeTab === 'findings' && <FindingsView onCompose={handleComposeModal} />}
         {activeTab === 'bundles' && <BundleView />}
         {activeTab === 'agent-access' && (
           <div style={{ padding: 'var(--space-5)', maxWidth: '56rem', margin: '0 auto' }}>
@@ -229,6 +298,95 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
           />
         )}
       </EditorShell>
+
+      {/* 3-Column Bundle Review & Assembly Modal (SPEC-05) */}
+      {isComposerModalOpen && (
+        <div
+          data-testid="bundle-composer-modal-backdrop"
+          onClick={() => setIsComposerModalOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'var(--color-overlay-scrim)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 300,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 'var(--space-4)',
+          }}
+        >
+          <div onClick={(e) => e.stopPropagation()}>
+            <BundleComposer
+              findings={allFindings}
+              onCreateBundle={handleCreateBundle}
+              onCancel={() => setIsComposerModalOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Saved Bundles History Drawer (SPEC-06) */}
+      <BundlesDrawer
+        isOpen={isHistoryDrawerOpen}
+        onClose={() => setIsHistoryDrawerOpen(false)}
+        bundles={savedBundles}
+        onSelectBundle={() => {
+          setIsHistoryDrawerOpen(false);
+          setActiveTab('bundles');
+        }}
+        onCopyMarkdown={handleCopyMarkdown}
+        onDeleteBundle={handleDeleteBundle}
+      />
+
+      {/* Settings Modal (State 6) */}
+      {isSettingsModalOpen && (
+        <div
+          data-testid="settings-modal-backdrop"
+          onClick={() => setIsSettingsModalOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'var(--color-overlay-scrim)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 300,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 'var(--space-4)',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: 'var(--color-surface)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: 'var(--shadow-modal)',
+              border: '1px solid var(--color-border)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              width: '100%',
+              maxWidth: '56rem',
+            }}
+          >
+            <SettingsView
+              settings={settings}
+              hotkeySettings={hotkeySettings}
+              startupStatus={startupStatus}
+              onSaveVaultPath={handleSaveVaultPath}
+              onOpenExplorer={handleOpenExplorer}
+              onSaveQualityBudget={handleSaveQualityBudget}
+              onSaveHotkey={handleSaveHotkey}
+              onClearHotkey={handleClearHotkey}
+              onToggleStartup={handleToggleStartup}
+              onRetryStartup={handleRetryStartup}
+              onClose={() => setIsSettingsModalOpen(false)}
+              agentAccessContent={<AgentAccessView />}
+              disabled={isLoading}
+            />
+          </div>
+        </div>
+      )}
 
       {toastMessage && (
         <Toast

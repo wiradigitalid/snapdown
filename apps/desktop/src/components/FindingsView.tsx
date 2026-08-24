@@ -12,6 +12,7 @@ import {
   updateMarker,
 } from '../services/finding';
 import { getHotkeys, getSettings } from '../services/settings';
+import { triggerOverlay } from '../services/capture';
 import { OrphanReportView } from './OrphanReportView';
 
 function resolveImagePath(imagePath: string, vaultPath: string): string {
@@ -58,7 +59,11 @@ function renumberNoteAfterMarkerDelete(noteBody: string, deletedOrdinal: number)
   return result.join('\n');
 }
 
-export const FindingsView: React.FC = () => {
+export interface FindingsViewProps {
+  onCompose?: (selectedFindingIds: string[]) => void;
+}
+
+export const FindingsView: React.FC<FindingsViewProps> = ({ onCompose }) => {
   const [findings, setFindings] = useState<FindingDetailDto[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [vaultPath, setVaultPath] = useState<string>('');
@@ -235,6 +240,14 @@ export const FindingsView: React.FC = () => {
     await fetchFindingsData();
   };
 
+  const handleCaptureClick = async () => {
+    try {
+      await triggerOverlay();
+    } catch (err) {
+      console.error('Failed to trigger capture overlay:', err);
+    }
+  };
+
   if (viewMode === 'orphan-report') {
     return (
       <div data-testid="findings-view" style={{ width: '100%', height: '100%' }}>
@@ -258,6 +271,8 @@ export const FindingsView: React.FC = () => {
         onUpdateMarkerPosition={handleUpdateMarkerPosition}
         onDeleteMarker={handleDeleteMarker}
         onOpenOrphanReport={() => setViewMode('orphan-report')}
+        onCompose={onCompose}
+        onCaptureClick={handleCaptureClick}
         onRetry={() => fetchFindingsData(false)}
       />
     </div>
