@@ -116,26 +116,9 @@ export const CaptureNoteField: React.FC<CaptureNoteFieldProps> = ({
           fontSize: 'var(--text-xs)',
           color: 'var(--color-text-muted)',
           userSelect: 'none',
-          display: 'flex',
-          justifyContent: 'space-between',
         }}
       >
-        <span>Enter to save · Esc to cancel</span>
-        <button
-          type="button"
-          onClick={onSave}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--color-accent)',
-            fontWeight: 700,
-            fontSize: 'var(--text-xs)',
-            cursor: 'pointer',
-            padding: 0,
-          }}
-        >
-          Save (Enter)
-        </button>
+        Enter to save · Esc to cancel
       </div>
     </div>
   );
