@@ -1103,3 +1103,34 @@ waves:
               - cargo::a_bundle_copies_the_same_bytes_as_the_finding_it_came_from
               - cargo::changing_one_pixel_of_a_source_image_changes_the_bundle_copy
               - cargo::no_image_test_asserts_only_a_signature_and_a_dimension
+          - id: W8-S6
+            title: The burn is actually called, and the recorded path holds a file
+            component: bundle
+            satisfies: []
+            depends_on: [W8-S5]
+            touches: [image-encoding, bundle-render]
+            spec_folder: _bmad-output/specs/w8-capture-becomes-real/
+            why: |
+              BUG-19, found 2026-08-24 while writing the W8-S5 brief - by reading the export path
+              rather than the register.
+
+              bundle.rs:41-48 records `bundles/{id}/finding_{pos}_burned.webp` for every item and
+              NOTHING EVER WRITES THAT FILE. A repo-wide grep for MarkerBurner outside its own file
+              and tests returns two hits and both are re-exports, so the burn W8-S3 built is
+              unreachable from the running application.
+
+              THIS IS THE FIFTH TIME THIS SHAPE HAS LANDED - after BUG-4, BUG-5, BUG-6 and the
+              EmptyState sweep. A unit built, unit-tested, and mounted nowhere. W8-S3's five tests
+              are green and honest; they prove the burner draws correctly and cannot prove anybody
+              calls it.
+
+              It is worse than its predecessors in one way: the caller writes a path that IMPLIES
+              the call happened, so a dangling reference reads as a bug in whoever reads it.
+
+              The story is opened separately rather than folded into W8-S5 because S5 converts a
+              test surface and this wires a call - different work, different failure modes, and
+              folding them would let one hide behind the other.
+            tests:
+              - cargo::a_bundle_item_image_path_holds_a_file_that_decodes
+              - cargo::an_exported_bundle_image_carries_the_markers_of_its_finding
+              - cargo::a_bundle_export_does_not_re_reduce_the_stored_image

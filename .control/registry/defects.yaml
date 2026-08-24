@@ -1039,3 +1039,53 @@ defects:
     scheduled: W8-S4
     related: BUG-14
     status: open
+
+  - id: BUG-19
+    title: "Bundle export records a burned image path and never writes the file; MarkerBurner is called from nowhere"
+    found: "2026-08-24"
+    found_by: coordinator, reading the bundle export path while writing the W8-S5 brief
+    component: bundle
+    severity: high
+    contradicts: [FR-8, "AD-2", "LC-013"]
+    evidence: |
+      apps/desktop/src-tauri/src/commands/bundle.rs:41-48 builds a path for every item -
+      `bundles/{bundle_id}/finding_{pos}_burned.webp` - and stores it as BundleItem.image_path.
+      Nothing ever writes a file there. The only write_blob calls in the whole desktop crate are
+      bundle.rs:75 (the Markdown) and capture.rs:107 (the reduced capture).
+
+      A repo-wide grep for MarkerBurner outside its own file and its tests returns exactly two hits,
+      and both are re-exports:
+        crates/snapdown-store/src/image/mod.rs:4  pub use burner::MarkerBurner;
+        crates/snapdown-store/src/lib.rs:8        pub use image::{ImageReducer, MarkerBurner, ...};
+
+      So the burn W8-S3 just built is unreachable from the running application, and the path recorded
+      in the database points at a file that has never existed.
+    impact: |
+      FR-8 promises a handed-over Bundle carries its Markers on the image. The Bundle records that it
+      does and does not. A Reviewer exporting a Bundle gets Markdown plus a set of dangling image
+      references.
+
+      It also reaches the deletion path: bundle.rs:171-175 checks blob_exists before deleting each
+      item image, so the miss is silent there too - the guard that would have surfaced it is the same
+      guard that hides it.
+
+      W8-S3's five tests are all green and all honest. They prove the burner draws correctly. They
+      cannot prove anybody calls it.
+    why_undetected: |
+      THE FIFTH TIME THIS EXACT SHAPE HAS LANDED, after BUG-4, BUG-5, BUG-6 and the EmptyState sweep.
+      A unit is built, unit-tested, and mounted nowhere. There is still no composition test class
+      (OQ-23), and V12 does not help: it checks that an LC is REGISTERED, not that it is REACHED.
+
+      This one is worse than its predecessors in one respect: the caller writes a path that implies
+      the call happened. A dangling path reads as a wiring bug in the reader, not a missing call in
+      the writer.
+    fix: |
+      Call MarkerBurner on each Finding's stored image during bundle export and write the result to
+      the recorded path, before the BundleItem row is committed. AD-4 still governs: the burn takes
+      the ALREADY-REDUCED bytes and MUST NOT re-reduce them. The test must assert that the file at
+      BundleItem.image_path exists and decodes - not that the path string was constructed.
+
+      Note the extension: the recorded path says .webp while the burner emits PNG. Whichever is
+      right, the two currently disagree and the corpus has to be read before choosing.
+    related: BUG-14
+    status: open
