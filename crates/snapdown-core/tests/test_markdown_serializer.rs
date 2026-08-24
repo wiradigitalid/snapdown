@@ -2,7 +2,7 @@ use snapdown_core::domain::finding::{Finding, FindingDetail, Marker, Note};
 use snapdown_core::domain::markdown::MarkdownSerializer;
 
 #[test]
-fn markdown_serializer_multi_finding_golden_flow() {
+fn the_markdown_serializer_renders_two_findings_byte_exactly() {
     let f1 = FindingDetail {
         finding: Finding {
             id: "f1".into(),
@@ -57,10 +57,35 @@ fn markdown_serializer_multi_finding_golden_flow() {
 
     let doc = MarkdownSerializer::serialize_bundle("Sprint 42 Bug Batch", &[f1, f2]);
 
-    assert!(doc.starts_with("# Sprint 42 Bug Batch\n\n"));
-    assert!(doc.contains("## Finding 1"));
-    assert!(doc.contains("![Finding 1](./findings/f1.webp)"));
-    assert!(doc.contains("1. Badge 1 comment"));
-    assert!(doc.contains("## Finding 2"));
-    assert!(doc.contains("![Finding 2](./findings/f2.webp)"));
+    let expected = "# Sprint 42 Bug Batch\n\
+\n\
+## Finding 1\n\
+\n\
+![Finding 1](./findings/f1.webp)\n\
+\n\
+- **Captured:** 2026-08-23T10:00:00Z\n\
+- **Resolution:** 1920 \u{00D7} 1080 px\n\
+- **Monitor:** DISPLAY1\n\
+\n\
+First defect observed\n\
+\n\
+### Annotations\n\
+\n\
+1. Badge 1 comment\n\
+\n\
+## Finding 2\n\
+\n\
+![Finding 2](./findings/f2.webp)\n\
+\n\
+- **Captured:** 2026-08-23T11:00:00Z\n\
+- **Resolution:** 800 \u{00D7} 600 px\n\
+- **Monitor:** DISPLAY2\n\
+\n\
+Second defect observed\n\
+\n";
+
+    assert_eq!(
+        doc, expected,
+        "MarkdownSerializer output must match full document byte-for-byte across multiple findings"
+    );
 }

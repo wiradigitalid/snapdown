@@ -3,7 +3,7 @@ id: W8-S5
 title: "W8-S5: The golden test stops proving byte-identity of a fabrication"
 type: 'chore'
 wave: W8
-status: ready-for-dev
+status: done
 created: '2026-08-24'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -418,6 +418,25 @@ Record each result — mutation applied, red observed, restored — in the Spec 
   reachable, mutation-sensitive today — with the file-level forms left to `W8-S6`'s three named tests.
 - Defined eight mutations across the five tests, all to be run with `--no-fail-fast` after `W8-S2`
   lost a round trip to a fail-fast run reading a live test as dead.
+
+
+### 2026-08-24 — Step 2: Implementation & Mutation Verification Complete
+
+- **Implemented `test_golden_markdown.rs`**: Converted `the_golden_bundle_markdown_is_regenerated_from_real_image_output` to derive all Finding dimensions (`image_width`/`image_height`) directly from a decode of real `ImageReducer::reduce_image` output with a pinned `ResolvedPair`, comparing byte-for-byte with the inline golden literal and asserting decoded dimensions equal the expected pair.
+- **Implemented `test_markdown_serializer.rs`**: Converted `the_markdown_serializer_renders_two_findings_byte_exactly` to assert the entire serialized CommonMark document byte-for-byte across two findings, verifying `**Resolution:**` lines and the absence of `### Annotations` for zero-marker findings.
+- **Implemented `test_bundle_image_copy.rs`**: Added `a_bundle_copies_the_same_bytes_as_the_finding_it_came_from` (verifying exact byte-identity for zero-marker and SCN-04 whitespace-only comments, and dimensional/pixel-level non-re-encoding preservation for active markers) and `changing_one_pixel_of_a_source_image_changes_the_bundle_copy` (verifying pixel propagation with proven off-badge target pixel and fixture validity decodes), both at the `MarkerBurner` seam with rustdoc comments documenting `AD-4`/`BR-8` backing and the `W8-S6` file-level boundary.
+- **Implemented `test_image_surface.rs`**: Added `every_image_producing_path_decodes_its_own_output` across all three deterministic producers (`RegionCapturer::crop_and_encode_image`, `ImageReducer::reduce_image`, `MarkerBurner::burn_markers`), asserting each decodes, matches expected dimensions, and is not a uniform fill.
+- **Executed All 8 Mutations under `--no-fail-fast`**:
+  1. `Resolution:` separator `×` -> `x`: Observed RED (`assertion left == right failed: MarkdownSerializer output must match golden reference byte-for-byte`), restored GREEN.
+  1b. `compute_reduced_dimensions_with_edge` dimension rounding altered (-1): Observed RED (`assertion left == right failed: Decoded width must match pinned pair width, left: 1919, right: 1920`), restored GREEN.
+  1c. `reduce_image` returning unreduced input bytes: Observed RED (`assertion left == right failed: Decoded width must match pinned pair width, left: 3840, right: 1920`), restored GREEN.
+  2. Emit `### Annotations` for zero-marker finding: Observed RED (`assertion left == right failed: MarkdownSerializer output must match full document byte-for-byte`), restored GREEN.
+  3. Fast-path zero-marker burn disabled in `burner.rs`: Observed RED (`assertion left == right failed: Bundle copy of finding with zero markers must be byte-identical to source`), restored GREEN.
+  3b. Re-encode at half-dimensions in `burn_markers`: Observed RED (`assertion left == right failed: left: 200, right: 400`), restored GREEN.
+  4. Blank canvas rendering in `burn_markers`: Observed RED (`assertion left != right failed: Burned copy A must differ from Burned copy B`), restored GREEN.
+  5. Producer returns 17-byte fake header: Observed RED (`RegionCapturer output must decode cleanly as PNG: IoError(Kind(UnexpectedEof))`), restored GREEN.
+  5b. Producer returns valid solid-fill PNG: Observed RED (`RegionCapturer: Decoded image output is a uniform fill; expected non-uniform image content`), restored GREEN.
+- **Full Verification Suite**: Verified `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and all frontend typecheck, lint, test, and build commands across `web/ui` and `apps/desktop`.
 
 ## Design Notes
 
