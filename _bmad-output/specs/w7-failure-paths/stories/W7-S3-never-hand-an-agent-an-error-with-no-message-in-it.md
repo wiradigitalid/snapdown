@@ -3,7 +3,7 @@ id: W7-S3
 title: 'W7-S3: Never hand an agent an error with no message in it'
 type: 'bug'
 wave: W7
-status: ready-for-dev
+status: done
 created: '2026-08-24'
 review_loop_iteration: 0
 followup_review_recommended: false
