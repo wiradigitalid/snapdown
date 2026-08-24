@@ -1,9 +1,9 @@
----
+﻿---
 id: W8-S1
 title: "W8-S1: The snapdown-capture crate, and a real grab of the requested region"
 type: 'feature'
 wave: W8
-status: ready-for-dev
+status: done
 created: '2026-08-24'
 review_loop_iteration: 0
 followup_review_recommended: false
@@ -83,7 +83,7 @@ In automated CI environments (such as GitHub Actions runners or containerized te
 1. **`snapdown-core` Zero-I/O Invariant:**
    `crates/snapdown-core` is strictly pure domain and port interfaces. It has no I/O, no OS API access, and no screen capture dependencies. The existing workspace integrity test `snapdown_core_has_no_io_dependency` (`crates/snapdown-core/tests/test_no_io.rs`) MUST continue to pass cleanly. `crates/snapdown-capture` depends on `snapdown-core`, never the reverse.
 2. **`BR-31` Region Validation:**
-   Any requested capture region smaller than 8×8 pixels is invalid and MUST be rejected with an error (`CaptureError::InvalidRegion` / `Err("Region must be at least 8x8 pixels")`).
+   Any requested capture region smaller than 8Ã—8 pixels is invalid and MUST be rejected with an error (`CaptureError::InvalidRegion` / `Err("Region must be at least 8x8 pixels")`).
 3. **Preservation of Existing Dimension Arithmetic:**
    The resolution arithmetic in `snapdown_core::domain::image::ImageDimensions` (`compute_reduced_dimensions_for_pair`, `compute_reduced_dimensions_with_edge`, `Auto` budget derivation from `W6-S4`, fixed presets `Sharp`, `Balanced`, `Small`) is correct and MUST be preserved without alteration. `W8-S1` produces the unscaled real capture of the requested region; `W8-S2` will handle the decode-scale-encode pipeline.
 4. **Monitor Bounds & Multi-Monitor Geometry:**
@@ -118,10 +118,10 @@ In automated CI environments (such as GitHub Actions runners or containerized te
      - Write the real PNG bytes to the Vault via `vault_store.write_blob`.
 4. **Implement the 4 Required Tests:**
    In `crates/snapdown-capture/tests/test_capture.rs` (and integration tests):
-   1. `cargo::a_captured_region_decodes_as_a_real_image` — Assert that captured and encoded bytes decode via `image::load_from_memory` into a valid `DynamicImage` / `RgbaImage` with valid dimensions.
-   2. `cargo::a_captured_region_has_the_dimensions_that_were_requested` — Assert that cropping a region of `W × H` yields an image whose decoded pixel buffer is exactly `W × H`.
-   3. `cargo::a_captured_image_is_not_uniformly_one_colour` — Assert that capturing a multi-color patterned canvas yields non-uniform pixel values across the decoded image buffer (preventing blank/uniform grab regressions).
-   4. `cargo::a_region_larger_than_the_monitor_is_refused_not_clamped_silently` — Assert that requesting a region exceeding monitor dimensions returns `Err(CaptureError::RegionExceedsMonitorBounds)` rather than silently clamping to monitor dimensions.
+   1. `cargo::a_captured_region_decodes_as_a_real_image` â€” Assert that captured and encoded bytes decode via `image::load_from_memory` into a valid `DynamicImage` / `RgbaImage` with valid dimensions.
+   2. `cargo::a_captured_region_has_the_dimensions_that_were_requested` â€” Assert that cropping a region of `W Ã— H` yields an image whose decoded pixel buffer is exactly `W Ã— H`.
+   3. `cargo::a_captured_image_is_not_uniformly_one_colour` â€” Assert that capturing a multi-color patterned canvas yields non-uniform pixel values across the decoded image buffer (preventing blank/uniform grab regressions).
+   4. `cargo::a_region_larger_than_the_monitor_is_refused_not_clamped_silently` â€” Assert that requesting a region exceeding monitor dimensions returns `Err(CaptureError::RegionExceedsMonitorBounds)` rather than silently clamping to monitor dimensions.
 
 ## Boundaries & Constraints
 
@@ -129,7 +129,7 @@ In automated CI environments (such as GitHub Actions runners or containerized te
 - Keep `snapdown-core` strictly free of I/O or capture dependencies.
 - Pin `xcap = "0.9.8"` and `image = "0.25.10"` in `Cargo.toml`.
 - Encode real, valid PNGs (with valid IHDR, IDAT, and IEND chunks).
-- Reject regions smaller than 8×8 (`BR-31`).
+- Reject regions smaller than 8Ã—8 (`BR-31`).
 - Refuse regions larger than the target monitor with an explicit error.
 - Programmatically synthesise all image test fixtures in code.
 
@@ -146,9 +146,9 @@ In automated CI environments (such as GitHub Actions runners or containerized te
 
 | Scenario | Input / State | Expected Behavior / Output | Invariants & Guarantees |
 |---|---|---|---|
-| Valid Region Capture | Region `(x: 100, y: 100, w: 400, h: 300)` on active monitor | Captures frame, crops `400 × 300` pixel rect, encodes standard PNG | Decodable real image, exact dimensions; `CAP-1`, `LC-002` |
+| Valid Region Capture | Region `(x: 100, y: 100, w: 400, h: 300)` on active monitor | Captures frame, crops `400 Ã— 300` pixel rect, encodes standard PNG | Decodable real image, exact dimensions; `CAP-1`, `LC-002` |
 | Small Region Refusal | Region `(w: 4, h: 4)` | Returns `Err("Region must be at least 8x8 pixels")` | `BR-31` enforced before grab |
-| Region Exceeds Monitor | Region `(w: 5000, h: 4000)` on a `1920 × 1080` monitor | Returns `Err(CaptureError::RegionExceedsMonitorBounds)` | Must NOT clamp silently; `a_region_larger_than_the_monitor_is_refused_not_clamped_silently` |
+| Region Exceeds Monitor | Region `(w: 5000, h: 4000)` on a `1920 Ã— 1080` monitor | Returns `Err(CaptureError::RegionExceedsMonitorBounds)` | Must NOT clamp silently; `a_region_larger_than_the_monitor_is_refused_not_clamped_silently` |
 | Headless / No Display (CI) | `Monitor::all()` returns empty slice | Returns `Err(CaptureError::NoDisplayFound)` | No panic, no fake image buffer |
 | Multi-Color Pattern Image | Programmatic test pattern (e.g. stripes/gradients) | Decoded image contains variance across pixel values | `a_captured_image_is_not_uniformly_one_colour` |
 | Image Decoding Roundtrip | Valid captured PNG bytes | `image::load_from_memory(&bytes)` returns `Ok(DynamicImage)` with matching dimensions | `a_captured_region_decodes_as_a_real_image` |
@@ -157,22 +157,22 @@ In automated CI environments (such as GitHub Actions runners or containerized te
 
 ## Code Map
 
-- `Cargo.toml` — Add `crates/snapdown-capture` to workspace members; add `xcap` and `image` to workspace dependencies.
-- `crates/snapdown-capture/Cargo.toml` — Package manifest for `snapdown-capture` with dependencies on `snapdown-core`, `xcap`, `image`, `thiserror`.
-- `crates/snapdown-capture/src/lib.rs` — Module declarations and public API re-exports for `RegionCapturer` and `CaptureError`.
-- `crates/snapdown-capture/src/error.rs` — Domain error type `CaptureError` implementing `thiserror::Error`.
-- `crates/snapdown-capture/src/capturer.rs` — Implementation of `RegionCapturer` (`LC-002`) providing monitor resolution, screen grabbing, cropping, and PNG encoding.
-- `crates/snapdown-capture/tests/test_capture.rs` — Unit and integration test suite implementing the 4 required tests from `waves.yaml`.
-- `apps/desktop/src-tauri/Cargo.toml` — Add `snapdown-capture` dependency.
-- `apps/desktop/src-tauri/src/commands/capture.rs` — Replace `generate_placeholder_image` with real capture call from `snapdown-capture`.
+- `Cargo.toml` â€” Add `crates/snapdown-capture` to workspace members; add `xcap` and `image` to workspace dependencies.
+- `crates/snapdown-capture/Cargo.toml` â€” Package manifest for `snapdown-capture` with dependencies on `snapdown-core`, `xcap`, `image`, `thiserror`.
+- `crates/snapdown-capture/src/lib.rs` â€” Module declarations and public API re-exports for `RegionCapturer` and `CaptureError`.
+- `crates/snapdown-capture/src/error.rs` â€” Domain error type `CaptureError` implementing `thiserror::Error`.
+- `crates/snapdown-capture/src/capturer.rs` â€” Implementation of `RegionCapturer` (`LC-002`) providing monitor resolution, screen grabbing, cropping, and PNG encoding.
+- `crates/snapdown-capture/tests/test_capture.rs` â€” Unit and integration test suite implementing the 4 required tests from `waves.yaml`.
+- `apps/desktop/src-tauri/Cargo.toml` â€” Add `snapdown-capture` dependency.
+- `apps/desktop/src-tauri/src/commands/capture.rs` â€” Replace `generate_placeholder_image` with real capture call from `snapdown-capture`.
 
 ## Tasks & Acceptance
 
 **Execution:**
-1. `Cargo.toml` — Register `crates/snapdown-capture` member and declare workspace dependencies `xcap = "0.9.8"`, `image = "0.25.10"`.
-2. `crates/snapdown-capture/` — Create crate implementing `RegionCapturer` (`LC-002`) and `CaptureError`.
-3. `apps/desktop/src-tauri/src/commands/capture.rs` — Remove `generate_placeholder_image` and connect `capture_screen_region` to `snapdown_capture::RegionCapturer`.
-4. `crates/snapdown-capture/tests/test_capture.rs` — Implement the 4 named tests:
+1. `Cargo.toml` â€” Register `crates/snapdown-capture` member and declare workspace dependencies `xcap = "0.9.8"`, `image = "0.25.10"`.
+2. `crates/snapdown-capture/` â€” Create crate implementing `RegionCapturer` (`LC-002`) and `CaptureError`.
+3. `apps/desktop/src-tauri/src/commands/capture.rs` â€” Remove `generate_placeholder_image` and connect `capture_screen_region` to `snapdown_capture::RegionCapturer`.
+4. `crates/snapdown-capture/tests/test_capture.rs` â€” Implement the 4 named tests:
    - `cargo::a_captured_region_decodes_as_a_real_image`
    - `cargo::a_captured_region_has_the_dimensions_that_were_requested`
    - `cargo::a_captured_image_is_not_uniformly_one_colour`
@@ -187,7 +187,7 @@ In automated CI environments (such as GitHub Actions runners or containerized te
 
 ## Spec Change Log
 
-### 2026-08-24 — Initial Story Specification (Step 1: Plan Only)
+### 2026-08-24 â€” Initial Story Specification (Step 1: Plan Only)
 
 - Created specification for `W8-S1` executing `CAP-1` and implementing `LC-002 region-capturer`.
 - Recorded the third-party dependency decisions: `xcap = "0.9.8"` (Apache-2.0) for native cross-platform screen capture, and `image = "0.25.10"` (MIT OR Apache-2.0) for standard PNG encoding and pixel buffer operations.
@@ -206,8 +206,8 @@ Instead of 17 synthetic bytes, `snapdown-capture` encodes RGBA pixel buffers int
 ## Verification
 
 **Commands:**
-- `cargo fmt --all -- --check` — Clean formatting across all workspace crates.
-- `cargo clippy --workspace --all-targets -- -D warnings` — 0 compiler or linter warnings.
-- `cargo test -p snapdown-core --test test_no_io` — Confirms `snapdown-core` maintains zero I/O.
-- `cargo test -p snapdown-capture` — All 4 capture tests pass.
-- `cargo test --workspace` — Full workspace test suite passes.
+- `cargo fmt --all -- --check` â€” Clean formatting across all workspace crates.
+- `cargo clippy --workspace --all-targets -- -D warnings` â€” 0 compiler or linter warnings.
+- `cargo test -p snapdown-core --test test_no_io` â€” Confirms `snapdown-core` maintains zero I/O.
+- `cargo test -p snapdown-capture` â€” All 4 capture tests pass.
+- `cargo test --workspace` â€” Full workspace test suite passes.

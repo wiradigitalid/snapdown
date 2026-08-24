@@ -4,6 +4,7 @@ members = [
     "crates/snapdown-core",
     "crates/snapdown-store",
     "crates/snapdown-bridge",
+    "crates/snapdown-capture",
     "apps/desktop/src-tauri",
 ]
 
@@ -32,3 +33,5 @@ tauri-plugin-single-instance = { version = "2.0" }
 tauri-plugin-global-shortcut = { version = "2.0" }
 tauri-plugin-autostart = { version = "2.0" }
 winreg = "0.52"
+xcap = "0.9.8"
+image = { version = "0.25.10", default-features = false, features = ["png"] }

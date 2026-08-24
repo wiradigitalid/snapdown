@@ -1,0 +1,16 @@
+[package]
+name = "snapdown-capture"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+snapdown-core = { path = "../snapdown-core" }
+xcap = { workspace = true }
+image = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+image = { workspace = true, features = ["png"] }
