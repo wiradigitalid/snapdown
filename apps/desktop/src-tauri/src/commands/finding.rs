@@ -179,8 +179,11 @@ pub fn get_burned_image_base64(
         .map_err(|e| format!("Failed to read image blob: {e}"))?;
 
     // Burn markers if any exist
+    let dims = ImageDimensions::new(detail.finding.image_width, detail.finding.image_height)
+        .map_err(|e| e.to_string())?;
+
     let final_bytes = if !detail.markers.is_empty() {
-        MarkerBurner::burn_markers(&raw_bytes, &detail.markers)
+        MarkerBurner::burn_markers(&raw_bytes, &dims, &detail.markers)
             .map_err(|e| format!("Failed to burn markers: {e}"))?
     } else {
         raw_bytes
