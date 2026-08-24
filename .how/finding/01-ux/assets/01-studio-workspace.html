@@ -134,16 +134,28 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 var(--space-3);
+      padding: 0 0 0 var(--space-3);
       font-size: 0.75rem;
       user-select: none;
     }
-    .window-title-left { display: flex; align-items: center; gap: 10px; }
+    .window-title-left { display: flex; align-items: center; gap: 10px; flex: 1; height: 100%; cursor: default; }
     .window-logo {
       width: 20px; height: 20px;
       background: linear-gradient(135deg, #0284c7, #2563eb);
       color: white; font-weight: 800; border-radius: 4px;
       display: flex; align-items: center; justify-content: center; font-size: 11px;
+    }
+    .win-control-btn {
+      width: 44px; height: 34px; background: transparent; border: none;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--color-text-secondary); font-size: 0.72rem; cursor: pointer;
+      transition: background var(--trans-fast), color var(--trans-fast);
+    }
+    .win-control-btn:hover {
+      background: var(--color-surface-sunken); color: var(--color-text);
+    }
+    .win-control-btn.btn-close:hover {
+      background: #dc2626; color: #ffffff;
     }
 
     /* Split Container */
@@ -298,19 +310,21 @@
 </head>
 <body>
 
-  <!-- Window Titlebar -->
+  <!-- Window Titlebar (Frameless Custom Chrome) -->
   <div class="window-titlebar">
-    <div class="window-title-left">
+    <div class="window-title-left" data-tauri-drag-region>
       <div class="window-logo">⚡</div>
       <span style="font-weight: 800;">Snapdown Studio</span>
       <span style="color: var(--color-border-strong);">|</span>
       <span style="color: var(--color-text-muted);">2026-08-24_19-45-12.snapx — (Active Finding: WDI-Flow)</span>
     </div>
-    <div style="display: flex; align-items: center; gap: 10px;">
-      <button class="tool-icon-btn" style="width: auto; height: 24px; padding: 0 10px; font-size: 0.7rem; font-weight: 700;">📚 Bundles History</button>
-      <button class="tool-icon-btn" style="width: auto; height: 24px; padding: 0 10px; font-size: 0.7rem; font-weight: 700;">⚙️ Settings</button>
-      <span style="background: var(--color-success-bg); color: var(--color-success-text); padding: 2px 8px; border-radius: 4px; font-weight: 800; font-size: 0.65rem;">● Ctrl+Shift+S</span>
-      <span style="color: var(--color-text-muted); cursor: pointer;">🗕 🗖 ✕</span>
+    <div style="display: flex; align-items: center; height: 100%;">
+      <button class="tool-icon-btn" style="width: auto; height: 24px; padding: 0 10px; font-size: 0.7rem; font-weight: 700; margin-right: 8px;">📚 Bundles History</button>
+      <button class="tool-icon-btn" style="width: auto; height: 24px; padding: 0 10px; font-size: 0.7rem; font-weight: 700; margin-right: 8px;">⚙️ Settings</button>
+      <span style="background: var(--color-success-bg); color: var(--color-success-text); padding: 2px 8px; border-radius: 4px; font-weight: 800; font-size: 0.65rem; margin-right: 8px;">● Ctrl+Shift+S</span>
+      <button class="win-control-btn" title="Minimize">🗕</button>
+      <button class="win-control-btn" title="Maximize">🗖</button>
+      <button class="win-control-btn btn-close" title="Close">✕</button>
     </div>
   </div>
 

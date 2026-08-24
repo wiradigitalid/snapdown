@@ -356,7 +356,7 @@ body {
   border-right: 1px solid var(--snagit-ribbon-border);
 }
 
-/* Window Titlebar */
+/* Window Titlebar (Frameless Custom Chrome) */
 .window-titlebar {
   background: var(--snagit-ribbon-bg);
   border-bottom: 1px solid var(--snagit-ribbon-border);
@@ -364,7 +364,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--space-3);
+  padding: 0 0 0 var(--space-3);
   font-size: 0.75rem;
   user-select: none;
 }
@@ -373,6 +373,33 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 1;
+  height: 100%;
+  cursor: default;
+}
+
+.win-control-btn {
+  width: 44px;
+  height: 34px;
+  background: transparent;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: background var(--trans-fast), color var(--trans-fast);
+}
+
+.win-control-btn:hover {
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}
+
+.win-control-btn.btn-close:hover {
+  background: #dc2626;
+  color: #ffffff;
 }
 
 .window-logo {

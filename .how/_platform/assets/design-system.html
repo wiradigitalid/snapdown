@@ -478,9 +478,31 @@ body {
   width: 100%; height: 100%; gap: 1px; background: rgba(255,255,255,0.08);
 }
 .ds-loupe-pixel { background: #334155; }
-.ds-loupe-reticle {
-  position: absolute; width: 14px; height: 14px;
-  border: 1.5px solid #38bdf8; pointer-events: none;
+/* Frameless Desktop Chrome & Window Controls (Tauri v2 Desktop) */
+.ds-titlebar-mock {
+  height: 34px; background: var(--snagit-ribbon-bg);
+  border: 1px solid var(--snagit-ribbon-border); border-bottom: 1px solid var(--color-border);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 0 0 var(--space-3); font-size: var(--text-xs); user-select: none;
+}
+.ds-drag-region {
+  flex: 1; height: 100%; display: flex; align-items: center; gap: 10px; cursor: default;
+}
+.ds-window-controls {
+  display: flex; height: 100%; align-items: center;
+}
+.ds-win-btn {
+  width: 44px; height: 100%; background: transparent; border: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--color-text-secondary); font-size: 0.72rem; cursor: pointer;
+  transition: background var(--trans-fast), color var(--trans-fast);
+}
+.ds-win-btn:hover {
+  background: var(--color-surface-sunken); color: var(--color-text);
+}
+.ds-win-btn.btn-close:hover {
+  background: #dc2626; color: #ffffff;
 }
 </style>
 
@@ -499,6 +521,7 @@ body {
     <a href="#typography" class="ds-nav-link">Typography &amp; Fonts</a>
     <a href="#icons" class="ds-nav-link">Icons System</a>
     <a href="#tokens" class="ds-nav-link">Tokens</a>
+    <a href="#frameless" class="ds-nav-link">Frameless Chrome</a>
     <a href="#atoms" class="ds-nav-link">Atoms</a>
     <a href="#molecules" class="ds-nav-link">Molecules</a>
     <a href="#future" class="ds-nav-link">Roadmap (W9–W13)</a>
@@ -710,11 +733,65 @@ body {
 
 
   <!-- =========================================================================
-       SECTION 3: COMPONENT ATOMS (ELEMENTS)
+       SECTION 5: FRAMELESS DESKTOP ARCHITECTURE & WINDOW CONTROLS
+       ========================================================================= -->
+  <section class="ds-section" id="frameless">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">5. Frameless Desktop Architecture &amp; Custom Chrome</h2>
+      <span class="ds-section-badge">TAURI V2 · FRAMELESS APIS &amp; DRAG REGIONS</span>
+    </div>
+    <p class="ds-section-lead">
+      Aplikasi Snapdown berjalan dalam mode <strong>Frameless / Custom Titlebar</strong> (tanpa baris header OS default). Seluruh interaksi window dragging, minimizing, maximizing, dan closing dikontrol langsung melalui token dan komponen chrome internal:
+    </p>
+
+    <div class="ds-grid-cards">
+      <div class="ds-card">
+        <div class="ds-card-title">🪟 1. Custom Drag Region (data-tauri-drag-region)</div>
+        <div class="ds-card-desc">
+          Area titlebar mengusung atribut <code>data-tauri-drag-region</code> yang memungkinkan reviewer memindahkan posisi window secara mulus. Elemen interaktif (tombol/input) di dalamnya wajib memiliki <code>pointer-events: auto</code> agar tetap dapat diklik.
+        </div>
+      </div>
+      <div class="ds-card">
+        <div class="ds-card-title">🖱️ 2. Windows 11 Native Control Micro-interactions</div>
+        <div class="ds-card-desc">
+          Tombol minimize (<code>🗕</code>), maximize/restore (<code>🗖</code>), dan close (<code>✕</code>) memiliki lebar presisi 44px dengan efek hover semantik (Close button berubah merah <code>#dc2626</code> dengan teks putih).
+        </div>
+      </div>
+      <div class="ds-card">
+        <div class="ds-card-title">📐 3. App Window Border &amp; Elevation</div>
+        <div class="ds-card-desc">
+          Pada window frameless, batas luar diberikan garis border halus <code>1px solid var(--color-border)</code> dengan <code>border-radius: var(--radius-sm)</code> dan bayangan elevasi <code>var(--shadow-xl)</code> agar tegas di atas window lain.
+        </div>
+      </div>
+    </div>
+
+    <!-- Frameless Titlebar Live Component Demo -->
+    <div class="ds-demo-box" style="padding: 0; overflow: hidden;">
+      <div class="ds-titlebar-mock">
+        <div class="ds-drag-region" data-tauri-drag-region>
+          <div style="width: 18px; height: 18px; background: linear-gradient(135deg, #0284c7, #2563eb); color: white; font-weight: 800; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 10px;">⚡</div>
+          <span style="font-weight: 800;">Snapdown Studio</span>
+          <span style="color: var(--color-border-strong);">|</span>
+          <span style="color: var(--color-text-muted); font-size: 0.72rem;">2026-08-24_19-45-12.snapx — (data-tauri-drag-region active)</span>
+        </div>
+        <div class="ds-window-controls">
+          <button class="tool-icon-btn" style="width: auto; height: 24px; padding: 0 8px; font-size: 0.68rem; font-weight: 700; margin-right: 8px;">📚 History</button>
+          <button class="tool-icon-btn" style="width: auto; height: 24px; padding: 0 8px; font-size: 0.68rem; font-weight: 700; margin-right: 8px;">⚙️ Settings</button>
+          <button class="ds-win-btn" title="Minimize (Win+Down)">🗕</button>
+          <button class="ds-win-btn" title="Maximize / Restore">🗖</button>
+          <button class="ds-win-btn btn-close" title="Close to Tray (Esc / Alt+F4)">✕</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- =========================================================================
+       SECTION 6: COMPONENT ATOMS (ELEMENTS)
        ========================================================================= -->
   <section class="ds-section" id="atoms">
     <div class="ds-section-header">
-      <h2 class="ds-section-title">3. Component Atoms (Elements)</h2>
+      <h2 class="ds-section-title">6. Component Atoms (Elements)</h2>
       <span class="ds-section-badge">PRIMITIVE BUILDING BLOCKS</span>
     </div>
 
@@ -793,11 +870,11 @@ body {
 
 
   <!-- =========================================================================
-       SECTION 4: COMPONENT MOLECULES (PATTERNS)
+       SECTION 7: COMPONENT MOLECULES (PATTERNS)
        ========================================================================= -->
   <section class="ds-section" id="molecules">
     <div class="ds-section-header">
-      <h2 class="ds-section-title">4. Component Molecules (UI Patterns)</h2>
+      <h2 class="ds-section-title">7. Component Molecules (UI Patterns)</h2>
       <span class="ds-section-badge">REUSABLE DESKTOP PATTERNS</span>
     </div>
 
