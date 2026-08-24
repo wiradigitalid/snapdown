@@ -85,3 +85,10 @@ decisions:
       - .what/business-rules.md
       - .what/settings/04-usecases/EXPERIENCE.md
     created: "2026-08-23"
+  - id: DEC-006
+    title: Every stored image Snapdown writes is PNG
+    status: draft
+    file: .control/decisions/DEC-006-stored-image-format-is-png.md
+    serves: [CAP-4]
+    touches: []
+    created: "2026-08-24"

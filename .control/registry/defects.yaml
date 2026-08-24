@@ -1138,3 +1138,97 @@ defects:
     related: BUG-19
     scheduled: W8-S6
     status: open
+
+  - id: BUG-21
+    title: "The composed Markdown references the Finding's clean image, not the Bundle's burned copy"
+    found: "2026-08-24"
+    found_by: W8-S6 planner, tracing FR-8 end to end rather than to the file write
+    component: bundle
+    severity: high
+    contradicts: [FR-8, "AD-4"]
+    evidence: |
+      crates/snapdown-core/src/domain/markdown.rs:30:
+
+        let img_rel = format!("./{}", item.finding.image_path.trim_start_matches('/'));
+        out.push_str(&format!("![Finding {}]({})\n\n", position, img_rel));
+
+      `item.finding.image_path` is the FINDING's stored image. `BundleItem.image_path` - the Bundle's
+      own burned copy, which data-model.md:63 calls "The Bundle's own copy, relative to the Vault
+      root. Not the Finding's" - is never read here.
+    impact: |
+      FR-8 promises a handed-over Bundle carries its Markers ON THE IMAGE. BUG-19 stops the burned
+      file from being written at all; this stops it from being REFERENCED even once it is. Fixing
+      BUG-19 alone leaves FR-8 unmet, because a reader following the Markdown still lands on the
+      clean image.
+
+      The two defects are one promise broken in two places, which is why W8-S6 carries both. Closing
+      BUG-19 and calling FR-8 restored would be the exact error this wave exists to end: a green test
+      beside an unmet requirement.
+    why_undetected: |
+      Sixth instance of this repository's signature failure - every piece correct, the join absent.
+      It survived W8-S5's test-surface conversion because the golden asserts the Markdown is
+      byte-exact against a literal, and the literal was regenerated from the same wrong path. A
+      golden pins whatever it is shown; it cannot know the path it pins is the wrong one.
+    fix: |
+      Read BundleItem.image_path for the image reference. The serializer currently takes
+      &[FindingDetail] and has no BundleItem in hand, so the signature has to carry it - that is the
+      real work, and it is why this is not a one-line change.
+
+      TWO GOLDENS W8-S5 JUST PINNED WILL MOVE. That is correct and expected: they were pinned against
+      the wrong reference. Regenerate them deliberately, and RE-RUN THE MUTATION so the moved golden
+      is proven to still fail when it should.
+    related: BUG-19
+    scheduled: W8-S6
+    status: open
+
+  - id: BUG-22
+    title: "Bundle composition silently skips a Finding id it cannot resolve"
+    found: "2026-08-24"
+    found_by: W8-S6 planner
+    component: bundle
+    severity: medium
+    contradicts: ["UC-9"]
+    evidence: |
+      apps/desktop/src-tauri/src/commands/bundle.rs:34-38 - `if let Some(detail) = ... get_finding(fid)`
+      with no else branch. A finding_id that resolves to None is skipped and composition continues.
+    impact: |
+      UC-9 is an all-or-nothing flow. A Reviewer who selects five Findings and whose library has lost
+      one gets a four-Finding Bundle that reports success, with nothing naming what is missing. The
+      positions renumber silently around the gap.
+    why_undetected: |
+      Same shape as BUG-19's concealment: the permissive branch reads as deliberate tolerance. No
+      test composes a Bundle against a missing id, because every test seeds the ids it then asks for.
+    fix: |
+      Refuse the composition and name the unresolvable id, per UC-9. Confirm against UC-9's own text
+      before choosing between refusing outright and reporting a partial - this is a promise question,
+      not a code-style one.
+    status: open
+
+  - id: BUG-23
+    title: "Publishing swallows a failed image read and puts the Publication live without it"
+    found: "2026-08-24"
+    found_by: W8-S6 planner
+    component: sharing
+    severity: high
+    contradicts: [FR-8, "BR-5"]
+    evidence: |
+      apps/desktop/src-tauri/src/commands/sharing.rs:116:
+
+        if let Ok(bytes) = vault_store.read_blob(&item.image_path) {
+
+      A read failure takes the else path, which does not exist. The item is dropped from
+      file_payloads and the publish proceeds.
+    impact: |
+      A Publication goes live on the internet missing images, and reports success. Combined with
+      BUG-19 - where item.image_path names a file that has never existed - this is not a rare
+      failure: it is the CURRENT behaviour for every publish, and the swallow is what makes it
+      silent.
+    why_undetected: |
+      Precisely the `let _ =` class already recorded in AGENTS.md, wearing an `if let Ok` instead. It
+      reads as deliberate, clippy ignores it, and every store test uses a writable temp directory
+      where the read always succeeds.
+    fix: |
+      Fail the publish and name the file that could not be read. DEC-005 freezes `sharing` but
+      permits a fix - it forbids new work, in its own words - so this is not blocked by the freeze.
+    related: BUG-19
+    status: open
