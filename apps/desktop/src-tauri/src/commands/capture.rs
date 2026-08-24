@@ -155,12 +155,23 @@ pub fn capture_screen_region(
         return Err("Region must be at least 8x8 pixels".to_string());
     }
 
+    // Hide overlay window before taking the screen grab so overlay UI is not in the screenshot
+    if let Some(overlay_win) = app.get_webview_window("overlay") {
+        let _ = overlay_win.hide();
+    }
+
     let core_region = Region::new(region.x, region.y, region.width, region.height);
 
     // Real screen capture of requested region encoded as PNG (CAP-1, LC-002)
     let captured_png_bytes =
-        RegionCapturer::capture_region(&core_region, region.source_monitor.as_deref())
-            .map_err(|e| e.to_string())?;
+        RegionCapturer::capture_region(&core_region, region.source_monitor.as_deref()).map_err(
+            |e| {
+                if let Some(overlay_win) = app.get_webview_window("overlay") {
+                    let _ = overlay_win.close();
+                }
+                e.to_string()
+            },
+        )?;
 
     let result = capture_screen_region_impl(&region, &captured_png_bytes, &state)?;
 
@@ -182,7 +193,7 @@ pub fn trigger_overlay(app: AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let _overlay_window = WebviewWindowBuilder::new(
+    let overlay_window = WebviewWindowBuilder::new(
         &app,
         "overlay",
         WebviewUrl::App("index.html?overlay=true".into()),
@@ -194,6 +205,8 @@ pub fn trigger_overlay(app: AppHandle) -> Result<(), String> {
     .fullscreen(true)
     .build()
     .map_err(|e| format!("Failed to create overlay window: {e}"))?;
+
+    let _ = overlay_window.set_focus();
 
     Ok(())
 }

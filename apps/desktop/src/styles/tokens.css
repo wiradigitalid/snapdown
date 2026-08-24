@@ -14,6 +14,16 @@ body,
   box-sizing: border-box;
 }
 
+html.overlay-mode,
+body.overlay-mode,
+body.overlay-mode #root,
+html:has([data-testid="capture-overlay"]),
+body:has([data-testid="capture-overlay"]),
+#root:has([data-testid="capture-overlay"]) {
+  background: transparent;
+  background-color: transparent;
+}
+
 *,
 *::before,
 *::after {

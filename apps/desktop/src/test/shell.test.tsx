@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+﻿import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { App } from '../App';
 import * as settingsService from '../services/settings';
@@ -53,7 +53,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
       latest_finding_size: null,
     });
 
-    render(<App />);
+    render(<App initialTab="settings" />);
 
     expect(screen.getByTestId('app-shell')).toBeInTheDocument();
     expect(screen.getByText('Snapdown')).toBeInTheDocument();
@@ -88,7 +88,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
       latest_finding_size: null,
     });
 
-    render(<App />);
+    render(<App initialTab="settings" />);
 
     await waitFor(() => {
       const sizeIndicator = screen.getByTestId('latest-finding-size');
@@ -113,7 +113,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
       },
     });
 
-    render(<App />);
+    render(<App initialTab="settings" />);
 
     await waitFor(() => {
       const sizeIndicator = screen.getByTestId('latest-finding-size');
@@ -132,7 +132,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
       latest_finding_size: null,
     });
 
-    render(<App />);
+    render(<App initialTab="settings" />);
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('C:/Users/test/Vault')).toBeInTheDocument();
@@ -193,7 +193,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     });
     vi.mocked(settingsService.openVaultFolder).mockResolvedValue();
 
-    render(<App />);
+    render(<App initialTab="settings" />);
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('C:/Users/test/Vault')).toBeInTheDocument();
@@ -217,7 +217,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     });
     vi.mocked(settingsService.setVaultPath).mockResolvedValue('D:/NewVault');
 
-    render(<App />);
+    render(<App initialTab="settings" />);
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('C:/Users/test/Vault')).toBeInTheDocument();
@@ -253,7 +253,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     });
     vi.mocked(settingsService.setVaultPath).mockResolvedValue('D:/NewVault');
 
-    render(<App />);
+    render(<App initialTab="settings" />);
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('C:/Users/test/Vault')).toBeInTheDocument();
@@ -288,7 +288,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
       new Error('Directory is not writable: access denied')
     );
 
-    render(<App />);
+    render(<App initialTab="settings" />);
 
     await waitFor(() => {
       expect(screen.getByDisplayValue('C:/Users/test/Vault')).toBeInTheDocument();
@@ -342,7 +342,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
         startup_warnings: [],
       });
 
-    render(<App />);
+    render(<App initialTab="settings" />);
 
     await waitFor(() => {
       expect(screen.getByText('CommandOrControl+Shift+S')).toBeInTheDocument();
@@ -392,7 +392,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
         startup_warnings: [],
       });
 
-    render(<App />);
+    render(<App initialTab="settings" />);
 
     await waitFor(() => {
       expect(screen.getByText('CommandOrControl+Shift+S')).toBeInTheDocument();
@@ -421,7 +421,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
       new Error('Another Snapdown action already uses this combination')
     );
 
-    render(<App />);
+    render(<App initialTab="settings" />);
 
     await waitFor(() => {
       expect(screen.getByText('CommandOrControl+Shift+E')).toBeInTheDocument();
@@ -471,7 +471,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
       ],
     });
 
-    render(<App />);
+    render(<App initialTab="settings" />);
 
     await waitFor(() => {
       expect(screen.getByTestId('startup-error-capture')).toBeInTheDocument();
@@ -495,7 +495,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
     vi.mocked(settingsService.getStartupStatus).mockResolvedValue({ enabled: true });
     vi.mocked(settingsService.setStartupStatus).mockResolvedValue({ enabled: false });
 
-    render(<App />);
+    render(<App initialTab="settings" />);
 
     await waitFor(() => {
       const toggle = screen.getByTestId('startup-toggle');
@@ -528,7 +528,7 @@ describe('Desktop Settings Screen (Screen 12)', () => {
       new Error('OS access denied')
     );
 
-    render(<App />);
+    render(<App initialTab="settings" />);
 
     await waitFor(() => {
       const toggle = screen.getByTestId('startup-toggle');

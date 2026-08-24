@@ -1,4 +1,4 @@
-use snapdown_core::domain::setting::HotkeyAction;
+﻿use snapdown_core::domain::setting::HotkeyAction;
 use snapdown_core::ports::Clock;
 use snapdown_store::error::StoreError;
 use snapdown_store::sqlite::{
@@ -164,12 +164,19 @@ pub fn report_startup_error(err: &StartupError, app_data_dir: &Path) {
     show_native_message_dialog("Snapdown - Database Error", &msg);
 }
 
-fn show_settings_window(app: &AppHandle) {
+fn show_main_window(app: &AppHandle, tab: Option<&str>) {
     if let Some(window) = app.get_webview_window("main") {
+        if let Some(t) = tab {
+            let _ = window.emit("switch-tab", t);
+        }
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
+}
+
+fn show_settings_window(app: &AppHandle) {
+    show_main_window(app, None);
 }
 
 fn check_is_first_run(store: &SqliteSettingsStore) -> bool {
@@ -213,6 +220,14 @@ pub fn run() {
                 )
                 .build(),
         )
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .setup(|app| {
             let handle = app.handle().clone();
 
@@ -267,16 +282,42 @@ pub fn run() {
             });
 
             // Setup Tray Menu
+            let open_item =
+                MenuItem::with_id(app, "open_app", "Open Snapdown", true, None::<&str>)?;
+            let capture_item =
+                MenuItem::with_id(app, "capture", "Capture Region", true, None::<&str>)?;
+            let separator = tauri::menu::PredefinedMenuItem::separator(app)?;
             let settings_item = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&settings_item, &quit_item])?;
+            let menu = Menu::with_items(
+                app,
+                &[
+                    &open_item,
+                    &capture_item,
+                    &separator,
+                    &settings_item,
+                    &quit_item,
+                ],
+            )?;
 
-            let _tray = TrayIconBuilder::new()
-                .menu(&menu)
+            let mut tray_builder = TrayIconBuilder::new().menu(&menu).tooltip("Snapdown");
+
+            if let Some(icon) = app.default_window_icon() {
+                tray_builder = tray_builder.icon(icon.clone());
+            }
+
+            let _tray = tray_builder
                 .show_menu_on_left_click(false)
                 .on_menu_event(move |app, event| match event.id.as_ref() {
+                    "open_app" => {
+                        show_main_window(app, None);
+                    }
+                    "capture" => {
+                        let _ = app.emit("capture-requested", ());
+                        let _ = trigger_overlay(app.clone());
+                    }
                     "settings" => {
-                        show_settings_window(app);
+                        show_main_window(app, Some("settings"));
                     }
                     "quit" => {
                         app.exit(0);
@@ -291,7 +332,7 @@ pub fn run() {
                     } = event
                     {
                         let app = tray.app_handle();
-                        show_settings_window(app);
+                        show_main_window(app, None);
                     }
                 })
                 .build(app)?;

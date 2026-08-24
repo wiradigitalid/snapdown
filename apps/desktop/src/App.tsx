@@ -1,4 +1,5 @@
 ﻿import React, { useEffect, useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { Toast } from '@snapdown/ui';
 import { EditorShell, NavigationTab } from './components/EditorShell';
 import { SettingsView } from './components/SettingsView';
@@ -26,7 +27,7 @@ import {
   StartupState,
 } from './types/settings';
 
-export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'settings' }) => {
+export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'findings' }) => {
   const [activeTab, setActiveTab] = useState<NavigationTab>(initialTab);
   const [settings, setSettings] = useState<Settings>({
     vault_path: '',
@@ -60,6 +61,29 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'se
   const [startupStatus, setStartupStatus] = useState<StartupState>('unknown');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    try {
+      listen<string>('switch-tab', (event) => {
+        if (['findings', 'bundles', 'agent-access', 'settings'].includes(event.payload)) {
+          setActiveTab(event.payload as NavigationTab);
+        }
+      })
+        .then((fn) => {
+          unlisten = fn;
+        })
+        .catch(() => {
+          // Ignored when outside Tauri environment
+        });
+    } catch {
+      // Ignored outside Tauri
+    }
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
