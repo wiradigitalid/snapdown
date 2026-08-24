@@ -284,7 +284,19 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
       }
     }
 
-    await fetchFindingsData();
+    // Local state update first so selectedId and active finding stay completely stable
+    setFindings((prev) =>
+      prev.map((f) =>
+        f.finding.id === findingId
+          ? {
+              ...f,
+              markers: f.markers
+                .filter((m) => m.id !== markerId)
+                .map((m, idx) => ({ ...m, ordinal: idx + 1 })),
+            }
+          : f
+      )
+    );
   };
 
   const handleCaptureClick = async () => {

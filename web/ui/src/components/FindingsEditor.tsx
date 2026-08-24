@@ -189,16 +189,17 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
       }
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedMarkerId && onDeleteMarker && selectedFinding) {
+        if (selectedMarkerId) {
           e.preventDefault();
-          onDeleteMarker(selectedFinding.finding.id, selectedMarkerId);
+          e.stopPropagation();
+          if (onDeleteMarker && selectedFinding) {
+            onDeleteMarker(selectedFinding.finding.id, selectedMarkerId);
+          }
           setSelectedMarkerId(null);
         } else if (checkedFindingIds.size > 0) {
           e.preventDefault();
+          e.stopPropagation();
           promptDeleteFinding(Array.from(checkedFindingIds));
-        } else if (selectedFinding) {
-          e.preventDefault();
-          promptDeleteFinding([selectedFinding.finding.id]);
         }
       }
     };

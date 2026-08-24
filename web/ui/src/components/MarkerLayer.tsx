@@ -83,9 +83,11 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
     if (disabled) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
+      e.stopPropagation();
       onSelectMarker?.(marker.id);
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault();
+      e.stopPropagation();
       onDeleteMarker?.(marker.id);
     }
   };
