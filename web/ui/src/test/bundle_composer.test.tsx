@@ -46,7 +46,7 @@ describe('BundleComposer Component', () => {
     vi.clearAllMocks();
   });
 
-  it('renders selected findings with visual preview and triggers onCreateBundle', async () => {
+  it('renders markdown document preview with embedded screenshots and triggers onCreateBundle', async () => {
     const onCreateBundle = vi.fn().mockResolvedValue(undefined);
 
     render(
@@ -56,16 +56,13 @@ describe('BundleComposer Component', () => {
       />
     );
 
-    const titleInput = screen.getByLabelText('Bundle Title');
+    const titleInput = screen.getByLabelText('Title:');
     fireEvent.change(titleInput, { target: { value: 'Alpha Release Review' } });
 
-    // Verify row items are listed
-    expect(screen.getByTestId('bundle-finding-row-f1')).toBeInTheDocument();
-    expect(screen.getByTestId('bundle-finding-row-f2')).toBeInTheDocument();
-
-    // Verify preview modes
-    expect(screen.getByTestId('preview-mode-visual-btn')).toBeInTheDocument();
-    expect(screen.getByTestId('preview-mode-md-btn')).toBeInTheDocument();
+    // Verify rendered document preview container
+    expect(screen.getByTestId('bundle-markdown-document-preview')).toBeInTheDocument();
+    expect(screen.getByTestId('bundle-finding-section-f1')).toBeInTheDocument();
+    expect(screen.getByTestId('bundle-finding-section-f2')).toBeInTheDocument();
 
     const submitBtn = screen.getByRole('button', { name: 'Create Bundle' });
     fireEvent.click(submitBtn);

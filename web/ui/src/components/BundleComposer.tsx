@@ -17,8 +17,6 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
   onCancel,
 }) => {
   const [bundleName, setBundleName] = useState('Sprint Review & Defect Report');
-  const [activePreviewIndex, setActivePreviewIndex] = useState<number>(0);
-  const [previewMode, setPreviewMode] = useState<'visual' | 'markdown'>('visual');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedChannel, setCopiedChannel] = useState<string | null>(null);
@@ -91,7 +89,7 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
       data-testid="bundle-composer"
       style={{
         width: '100%',
-        maxWidth: '1180px',
+        maxWidth: '1100px',
         backgroundColor: 'var(--color-surface)',
         border: '1px solid var(--color-border)',
         borderRadius: 'var(--radius-lg)',
@@ -103,7 +101,7 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
         maxHeight: '90vh',
       }}
     >
-      {/* Modal Header */}
+      {/* Modal Top Bar: Title, Input & Actions */}
       <div
         style={{
           padding: 'var(--space-3) var(--space-4)',
@@ -112,20 +110,41 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           backgroundColor: 'var(--color-surface)',
+          gap: 'var(--space-4)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <span style={{ fontSize: '1.1rem' }}>📦</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexShrink: 0 }}>
+          <span style={{ fontSize: '1.2rem' }}>📦</span>
           <h2
             style={{
               margin: 0,
               fontSize: 'var(--text-base)',
-              fontWeight: 700,
+              fontWeight: 800,
               color: 'var(--color-text)',
             }}
           >
             Review & Assemble Bundle
           </h2>
+        </div>
+
+        {/* Global Bundle Title Input spanning across top */}
+        <div style={{ flex: 1, maxWidth: '440px', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+          <label
+            htmlFor="bundle-title-input"
+            style={{ fontSize: 'var(--text-xs)', fontWeight: 700, whiteSpace: 'nowrap', color: 'var(--color-text-muted)' }}
+          >
+            Title:
+          </label>
+          <TextField
+            id="bundle-title-input"
+            value={bundleName}
+            onChange={(e) => setBundleName(e.target.value)}
+            placeholder="e.g. Sprint Review & Defect Report"
+            style={{ height: '32px' }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexShrink: 0 }}>
           <span
             data-testid="bundle-token-badge"
             style={{
@@ -133,357 +152,195 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
               fontFamily: 'var(--font-mono)',
               backgroundColor: 'var(--color-info-bg)',
               color: 'var(--color-info-text)',
-              padding: '2px 8px',
+              padding: '3px 10px',
               borderRadius: 'var(--radius-sm)',
               fontWeight: 700,
             }}
           >
             Est. Total: ~{totalTokens.toLocaleString()} tk
           </span>
-        </div>
 
-        {onCancel && (
-          <button
-            type="button"
-            data-testid="close-bundle-modal-btn"
-            onClick={onCancel}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '1rem',
-              color: 'var(--color-text-muted)',
-              cursor: 'pointer',
-              padding: 'var(--space-1)',
-            }}
-          >
-            ✕
-          </button>
-        )}
+          {onCancel && (
+            <button
+              type="button"
+              data-testid="close-bundle-modal-btn"
+              onClick={onCancel}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '1.1rem',
+                color: 'var(--color-text-muted)',
+                cursor: 'pointer',
+                padding: 'var(--space-1)',
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* 3-Column Modal Grid (SPEC-05 / State 4) */}
+      {/* 2-Column Main Workspace: Left = Rendered Markdown Preview, Right = Handoff Sidebar */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'row',
           flex: 1,
           overflow: 'hidden',
-          minHeight: '480px',
+          minHeight: '520px',
         }}
       >
-        {/* COLUMN 1: Bundle Contents List (280px) */}
+        {/* MAIN COLUMN: Rich Markdown Document Preview with Embedded Screenshots */}
         <div
-          data-testid="bundle-col-1-contents"
-          style={{
-            width: '280px',
-            minWidth: '280px',
-            borderRight: '1px solid var(--color-border)',
-            padding: 'var(--space-4)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 'var(--space-3)',
-            backgroundColor: 'var(--color-surface-sunken)',
-            overflowY: 'auto',
-          }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
-            <label
-              htmlFor="bundle-title-input"
-              style={{ fontSize: 'var(--text-2xs)', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)' }}
-            >
-              Bundle Title
-            </label>
-            <TextField
-              id="bundle-title-input"
-              value={bundleName}
-              onChange={(e) => setBundleName(e.target.value)}
-              placeholder="e.g. Sprint Review & Defect Report"
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-            <span style={{ fontSize: 'var(--text-2xs)', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
-              Included Findings ({findings.length})
-            </span>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              {findings.map((f, idx) => {
-                const isActive = activePreviewIndex === idx;
-
-                return (
-                  <div
-                    key={f.finding.id}
-                    data-testid={`bundle-finding-row-${f.finding.id}`}
-                    onClick={() => setActivePreviewIndex(idx)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 'var(--space-2)',
-                      padding: 'var(--space-2)',
-                      backgroundColor: isActive ? 'var(--color-surface)' : 'transparent',
-                      border: isActive ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
-                      borderRadius: 'var(--radius-sm)',
-                      cursor: 'pointer',
-                      boxShadow: isActive ? 'var(--shadow-sm)' : 'none',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '48px',
-                        height: '34px',
-                        borderRadius: 'var(--radius-xs)',
-                        backgroundColor: 'var(--color-surface-sunken)',
-                        overflow: 'hidden',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {f.imageSrc ? (
-                        <img src={f.imageSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      ) : (
-                        <span style={{ fontSize: '0.6rem' }}>🖼️</span>
-                      )}
-                    </div>
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: 'var(--text-xs)',
-                          fontWeight: 700,
-                          color: isActive ? 'var(--color-accent)' : 'var(--color-text)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {idx + 1}. {f.note.body ? f.note.body.slice(0, 24) : `Finding #${idx + 1}`}
-                      </div>
-                      <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
-                        🟡 {f.markers.length} markers · {f.finding.image_width}×{f.finding.image_height}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* COLUMN 2: Visual & Markdown Preview Area (Flex Center) */}
-        <div
-          data-testid="bundle-col-2-preview"
+          data-testid="bundle-markdown-document-preview"
           style={{
             flex: 1,
             backgroundColor: 'var(--color-surface)',
+            padding: 'var(--space-6) var(--space-8)',
+            overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',
-            overflow: 'hidden',
-            minWidth: 0,
+            gap: 'var(--space-4)',
+            fontFamily: 'var(--font-ui)',
+            color: 'var(--color-text)',
+            lineHeight: 1.6,
           }}
         >
-          {/* View Mode Toggle Header */}
-          <div
-            style={{
-              padding: 'var(--space-2) var(--space-4)',
-              borderBottom: '1px solid var(--color-border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              backgroundColor: 'var(--color-surface)',
-            }}
-          >
-            <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--color-surface-sunken)', padding: '2px', borderRadius: 'var(--radius-sm)' }}>
-              <button
-                type="button"
-                data-testid="preview-mode-visual-btn"
-                onClick={() => setPreviewMode('visual')}
-                style={{
-                  padding: '3px 10px',
-                  borderRadius: 'var(--radius-xs)',
-                  border: 'none',
-                  backgroundColor: previewMode === 'visual' ? 'var(--color-surface)' : 'transparent',
-                  color: previewMode === 'visual' ? 'var(--color-text)' : 'var(--color-text-muted)',
-                  fontSize: 'var(--text-xs)',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  boxShadow: previewMode === 'visual' ? 'var(--shadow-sm)' : 'none',
-                }}
-              >
-                👁️ Visual Preview
-              </button>
-              <button
-                type="button"
-                data-testid="preview-mode-md-btn"
-                onClick={() => setPreviewMode('markdown')}
-                style={{
-                  padding: '3px 10px',
-                  borderRadius: 'var(--radius-xs)',
-                  border: 'none',
-                  backgroundColor: previewMode === 'markdown' ? 'var(--color-surface)' : 'transparent',
-                  color: previewMode === 'markdown' ? 'var(--color-text)' : 'var(--color-text-muted)',
-                  fontSize: 'var(--text-xs)',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  boxShadow: previewMode === 'markdown' ? 'var(--shadow-sm)' : 'none',
-                }}
-              >
-                📝 Markdown Code
-              </button>
-            </div>
-
-            <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--color-text-muted)' }}>
-              Viewing finding {activePreviewIndex + 1} of {findings.length}
-            </span>
-          </div>
-
-          {/* Visual Document Preview Mode */}
-          {previewMode === 'visual' ? (
-            <div
-              data-testid="bundle-visual-preview"
+          {/* Document Header in Markdown format */}
+          <div>
+            <h1
               style={{
-                flex: 1,
-                overflowY: 'auto',
-                padding: 'var(--space-4)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 'var(--space-5)',
+                margin: '0 0 var(--space-1) 0',
+                fontSize: 'var(--text-2xl)',
+                fontWeight: 800,
+                color: 'var(--color-text)',
+                letterSpacing: '-0.02em',
               }}
             >
-              {findings[activePreviewIndex] ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                  {/* Large Screenshot Image Preview */}
-                  <div
+              # {bundleName || 'Untitled Bundle'}
+            </h1>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 'var(--text-xs)',
+                color: 'var(--color-text-muted)',
+                fontStyle: 'italic',
+              }}
+            >
+              Generated by Snapdown Studio · {findings.length} findings · ~{totalTokens.toLocaleString()} tokens
+            </p>
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)', margin: 'var(--space-2) 0' }} />
+
+          {/* Rendered Findings as Markdown Sections with Embedded Images */}
+          {findings.map((f, idx) => (
+            <div
+              key={f.finding.id}
+              data-testid={`bundle-finding-section-${f.finding.id}`}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--space-3)',
+                paddingBottom: 'var(--space-5)',
+                borderBottom: idx < findings.length - 1 ? '1px dashed var(--color-border)' : 'none',
+              }}
+            >
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: 'var(--text-lg)',
+                  fontWeight: 700,
+                  color: 'var(--color-text)',
+                }}
+              >
+                ## {idx + 1}. Finding {f.finding.id.slice(0, 8)}
+              </h2>
+
+              {/* Embedded Screenshot Image In-Flow */}
+              <div
+                style={{
+                  width: '100%',
+                  maxHeight: '380px',
+                  backgroundColor: 'var(--color-surface-sunken)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                {f.imageSrc ? (
+                  <img
+                    src={f.imageSrc}
+                    alt={`Screenshot Finding ${idx + 1}`}
                     style={{
-                      width: '100%',
-                      backgroundColor: 'var(--color-surface-sunken)',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: 'var(--radius-md)',
-                      overflow: 'hidden',
+                      maxWidth: '100%',
+                      maxHeight: '380px',
+                      objectFit: 'contain',
+                      display: 'block',
+                    }}
+                  />
+                ) : (
+                  <div style={{ padding: 'var(--space-4)', color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)' }}>
+                    [Screenshot: {f.finding.image_width} × {f.finding.image_height} px]
+                  </div>
+                )}
+              </div>
+
+              {/* Rendered Blockquote for Summary */}
+              <blockquote
+                style={{
+                  margin: 'var(--space-1) 0',
+                  padding: 'var(--space-2) var(--space-3)',
+                  backgroundColor: 'var(--color-surface-sunken)',
+                  borderLeft: '4px solid var(--color-border-strong)',
+                  borderRadius: '0 var(--radius-xs) var(--radius-xs) 0',
+                  fontSize: 'var(--text-sm)',
+                  color: 'var(--color-text)',
+                }}
+              >
+                <strong>Summary</strong>: {f.note.body || 'No summary text provided.'}
+              </blockquote>
+
+              {/* Observations list */}
+              {f.markers.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+                  <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-text)' }}>
+                    Observations:
+                  </span>
+                  <ul
+                    style={{
+                      margin: 0,
+                      paddingLeft: 'var(--space-4)',
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      maxHeight: '360px',
-                      boxShadow: 'var(--shadow-raised)',
+                      flexDirection: 'column',
+                      gap: '4px',
+                      fontSize: 'var(--text-xs)',
+                      color: 'var(--color-text-secondary)',
                     }}
                   >
-                    {findings[activePreviewIndex].imageSrc ? (
-                      <img
-                        src={findings[activePreviewIndex].imageSrc}
-                        alt={`Finding ${activePreviewIndex + 1}`}
-                        style={{
-                          maxWidth: '100%',
-                          maxHeight: '360px',
-                          objectFit: 'contain',
-                          display: 'block',
-                        }}
-                      />
-                    ) : (
-                      <div style={{ padding: 'var(--space-6)', color: 'var(--color-text-muted)' }}>
-                        Screenshot Image ({findings[activePreviewIndex].finding.image_width} × {findings[activePreviewIndex].finding.image_height} px)
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Summary Callout Box */}
-                  <div
-                    style={{
-                      padding: 'var(--space-3)',
-                      backgroundColor: 'var(--color-info-bg)',
-                      borderLeft: '4px solid var(--color-accent)',
-                      borderRadius: 'var(--radius-xs)',
-                    }}
-                  >
-                    <div style={{ fontSize: 'var(--text-2xs)', fontWeight: 800, color: 'var(--color-info-text)', textTransform: 'uppercase', marginBottom: '2px' }}>
-                      Observation Summary
-                    </div>
-                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text)', lineHeight: 1.5 }}>
-                      {findings[activePreviewIndex].note.body || 'No summary text provided.'}
-                    </div>
-                  </div>
-
-                  {/* Step Marker Observations List */}
-                  {findings[activePreviewIndex].markers.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                      <span style={{ fontSize: 'var(--text-2xs)', fontWeight: 800, textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
-                        Step Marker Observations
-                      </span>
-                      {findings[activePreviewIndex].markers
-                        .slice()
-                        .sort((a, b) => a.ordinal - b.ordinal)
-                        .map((m) => (
-                          <div
-                            key={m.id}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 'var(--space-2)',
-                              padding: 'var(--space-2) var(--space-3)',
-                              backgroundColor: 'var(--color-surface-sunken)',
-                              borderRadius: 'var(--radius-sm)',
-                              border: '1px solid var(--color-border)',
-                              fontSize: 'var(--text-xs)',
-                            }}
-                          >
-                            <span
-                              style={{
-                                backgroundColor: 'var(--color-marker)',
-                                color: 'var(--color-marker-text)',
-                                width: '20px',
-                                height: '20px',
-                                borderRadius: 'var(--radius-full)',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: 800,
-                                fontSize: '0.7rem',
-                                flexShrink: 0,
-                              }}
-                            >
-                              {m.ordinal}
-                            </span>
-                            <span style={{ color: 'var(--color-text)', lineHeight: 1.4 }}>
-                              {m.comment || `Observation for Step ${m.ordinal}`}
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: 'var(--space-6)' }}>
-                  No finding selected.
+                    {f.markers
+                      .slice()
+                      .sort((a, b) => a.ordinal - b.ordinal)
+                      .map((m) => (
+                        <li key={m.id} style={{ lineHeight: 1.5 }}>
+                          <strong style={{ color: 'var(--color-accent)' }}>[{m.ordinal}]</strong>{' '}
+                          {m.comment || `Marker observation for Step #${m.ordinal}`}
+                        </li>
+                      ))}
+                  </ul>
                 </div>
               )}
             </div>
-          ) : (
-            /* Markdown Code Mode */
-            <div
-              data-testid="bundle-col-2-markdown"
-              style={{
-                flex: 1,
-                backgroundColor: 'var(--color-surface)',
-                padding: 'var(--space-4)',
-                overflowY: 'auto',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 'var(--text-xs)',
-                lineHeight: 1.6,
-                color: 'var(--color-text)',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                userSelect: 'text',
-              }}
-            >
-              {generatedMarkdown}
-            </div>
-          )}
+          ))}
         </div>
 
-        {/* COLUMN 3: Handoff Channels & Atomic Assembly (300px) */}
+        {/* SIDEBAR COLUMN: Handoff Channels & Atomic Assembly (300px) */}
         <div
-          data-testid="bundle-col-3-handoff"
+          data-testid="bundle-col-sidebar"
           style={{
             width: '300px',
             minWidth: '300px',
