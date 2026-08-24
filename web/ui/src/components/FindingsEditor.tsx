@@ -54,6 +54,7 @@ export interface FindingsEditorProps {
   onSelectFinding: (id: string) => void;
   onSaveNote: (findingId: string, noteBody: string) => Promise<void> | void;
   onDeleteFinding?: (findingId: string) => Promise<void> | void;
+  onDeleteSelectedFindings?: (findingIds: string[]) => Promise<void> | void;
   onAddMarker?: (findingId: string, x: number, y: number) => Promise<void> | void;
   onUpdateMarkerPosition?: (findingId: string, markerId: string, x: number, y: number) => Promise<void> | void;
   onUpdateMarkerComment?: (findingId: string, markerId: string, comment: string) => Promise<void> | void;
@@ -82,6 +83,7 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
   onSelectFinding,
   onSaveNote,
   onDeleteFinding,
+  onDeleteSelectedFindings,
   onAddMarker,
   onUpdateMarkerPosition,
   onUpdateMarkerComment,
@@ -101,6 +103,7 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
   const [checkedFindingIds, setCheckedFindingIds] = useState<Set<string>>(new Set());
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [imageLoadError, setImageLoadError] = useState(false);
   const [isMarkerMode, setIsMarkerMode] = useState(true);
@@ -151,6 +154,41 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
     });
   };
 
+  // Prompt delete single finding or batch checked
+  const promptDeleteFinding = (ids: string[]) => {
+    if (ids.length === 0) return;
+    setDeleteTargetIds(ids);
+    setIsDeleteDialogOpen(true);
+  };
+
+  // Global Keyboard Delete Handler for Active Finding & Selected Marker
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is actively typing inside an input/textarea
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedMarkerId && onDeleteMarker && selectedFinding) {
+          e.preventDefault();
+          onDeleteMarker(selectedFinding.finding.id, selectedMarkerId);
+          setSelectedMarkerId(null);
+        } else if (checkedFindingIds.size > 0) {
+          e.preventDefault();
+          promptDeleteFinding(Array.from(checkedFindingIds));
+        } else if (selectedFinding) {
+          e.preventDefault();
+          promptDeleteFinding([selectedFinding.finding.id]);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [selectedMarkerId, selectedFinding, checkedFindingIds, onDeleteMarker]);
+
   // Handle Add Marker
   const handleAddMarker = (x: number, y: number) => {
     if (!selectedFinding || !onAddMarker) return;
@@ -181,10 +219,19 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
 
   // Handle Confirm Delete Finding
   const handleConfirmDelete = async () => {
-    if (!selectedFinding || !onDeleteFinding) return;
     setIsDeleting(true);
     try {
-      await onDeleteFinding(selectedFinding.finding.id);
+      if (deleteTargetIds.length > 1 && onDeleteSelectedFindings) {
+        await onDeleteSelectedFindings(deleteTargetIds);
+        setCheckedFindingIds(new Set());
+      } else if (deleteTargetIds.length === 1 && onDeleteFinding) {
+        await onDeleteFinding(deleteTargetIds[0]);
+        setCheckedFindingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(deleteTargetIds[0]);
+          return next;
+        });
+      }
       setIsDeleteDialogOpen(false);
     } finally {
       setIsDeleting(false);
@@ -562,7 +609,13 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
               onUpdateMarkerComment(selectedFinding.finding.id, markerId, comment);
             }
           }}
-          onDeleteFinding={() => setIsDeleteDialogOpen(true)}
+          onDeleteFinding={() => {
+            if (checkedFindingIds.size > 0) {
+              promptDeleteFinding(Array.from(checkedFindingIds));
+            } else if (selectedFinding) {
+              promptDeleteFinding([selectedFinding.finding.id]);
+            }
+          }}
         />
       </div>
 
@@ -624,9 +677,13 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
       {/* Confirm Deletion Dialog */}
       <ConfirmDialog
         isOpen={isDeleteDialogOpen}
-        title="Delete Finding"
-        message="Are you sure you want to delete this finding? The screenshot image and its notes will be permanently removed."
-        confirmLabel="Delete Finding"
+        title={deleteTargetIds.length > 1 ? `Delete ${deleteTargetIds.length} Screenshots` : 'Delete Screenshot'}
+        message={
+          deleteTargetIds.length > 1
+            ? `Are you sure you want to delete ${deleteTargetIds.length} selected screenshots and all attached notes from queue?`
+            : 'Are you sure you want to delete this screenshot and its observation notes from queue?'
+        }
+        confirmLabel={deleteTargetIds.length > 1 ? `Delete ${deleteTargetIds.length} Items` : 'Delete'}
         cancelLabel="Cancel"
         loading={isDeleting}
         onConfirm={handleConfirmDelete}

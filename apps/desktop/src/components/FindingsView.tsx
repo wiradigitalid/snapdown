@@ -188,6 +188,13 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
     await fetchFindingsData();
   };
 
+  const handleDeleteSelectedFindings = async (findingIds: string[]) => {
+    for (const id of findingIds) {
+      await deleteFinding(id);
+    }
+    await fetchFindingsData();
+  };
+
   const handleAddMarker = async (findingId: string, x: number, y: number) => {
     const finding = findings.find((f) => f.finding.id === findingId);
     const existingMarkers = finding?.markers || [];
@@ -357,6 +364,7 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
         onSelectFinding={(id) => setSelectedId(id)}
         onSaveNote={handleSaveNote}
         onDeleteFinding={handleDeleteFinding}
+        onDeleteSelectedFindings={handleDeleteSelectedFindings}
         onAddMarker={handleAddMarker}
         onUpdateMarkerPosition={handleUpdateMarkerPosition}
         onUpdateMarkerComment={handleUpdateMarkerComment}
