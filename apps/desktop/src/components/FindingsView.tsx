@@ -62,9 +62,13 @@ function renumberNoteAfterMarkerDelete(noteBody: string, deletedOrdinal: number)
 
 export interface FindingsViewProps {
   onCompose?: (selectedFindingIds: string[]) => void;
+  onActiveFindingChange?: (finding: FindingDetailDto | null) => void;
 }
 
-export const FindingsView: React.FC<FindingsViewProps> = ({ onCompose }) => {
+export const FindingsView: React.FC<FindingsViewProps> = ({
+  onCompose,
+  onActiveFindingChange,
+}) => {
   const [findings, setFindings] = useState<FindingDetailDto[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [vaultPath, setVaultPath] = useState<string>('');
@@ -129,6 +133,14 @@ export const FindingsView: React.FC<FindingsViewProps> = ({ onCompose }) => {
       }
     };
   }, [fetchFindingsData]);
+
+  // Sync active finding with parent shell for titlebar display
+  useEffect(() => {
+    if (onActiveFindingChange) {
+      const active = findings.find((f) => f.finding.id === selectedId) || null;
+      onActiveFindingChange(active);
+    }
+  }, [selectedId, findings, onActiveFindingChange]);
 
   // Map findings to UI format with converted file src URLs
   const uiFindings: FindingDetailItemDto[] = useMemo(() => {

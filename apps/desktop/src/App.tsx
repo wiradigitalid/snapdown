@@ -25,7 +25,7 @@ import {
 } from './services/settings';
 import { triggerOverlay } from './services/capture';
 import { listBundles, createBundle, deleteBundle } from './services/bundle';
-import { listFindings } from './services/finding';
+import { listFindings, FindingDetailDto } from './services/finding';
 import {
   HotkeyAction,
   HotkeySettingsDto,
@@ -42,6 +42,7 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
   const [isComposerModalOpen, setIsComposerModalOpen] = useState(false);
   const [allFindings, setAllFindings] = useState<FindingDetailItemDto[]>([]);
   const [savedBundles, setSavedBundles] = useState<BundleDetailDto[]>([]);
+  const [activeFinding, setActiveFinding] = useState<FindingDetailDto | null>(null);
 
   const [settings, setSettings] = useState<Settings>({
     vault_path: '',
@@ -263,6 +264,10 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
     setToastMessage('Bundle deleted successfully');
   };
 
+  const activeFileName = activeFinding?.finding?.image_path
+    ? activeFinding.finding.image_path.split(/[/\\\\]/).pop() || activeFinding.finding.image_path
+    : 'No finding selected';
+
   return (
     <div data-testid="app-shell" style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <EditorShell
@@ -274,8 +279,14 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
           setIsHistoryDrawerOpen(true);
         }}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
+        activeFindingTitle={activeFileName}
       >
-        {activeTab === 'findings' && <FindingsView onCompose={handleComposeModal} />}
+        {activeTab === 'findings' && (
+          <FindingsView
+            onCompose={handleComposeModal}
+            onActiveFindingChange={setActiveFinding}
+          />
+        )}
         {activeTab === 'bundles' && <BundleView />}
         {activeTab === 'agent-access' && (
           <div style={{ padding: 'var(--space-5)', maxWidth: '56rem', margin: '0 auto' }}>

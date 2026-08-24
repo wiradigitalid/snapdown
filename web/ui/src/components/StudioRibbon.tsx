@@ -53,7 +53,7 @@ export const StudioRibbon: React.FC<StudioRibbonProps> = ({
         ...style,
       }}
     >
-      {/* LEFT ZONE: Input Actions */}
+      {/* LEFT ZONE: Input Actions (38x38 Icon Buttons) */}
       <div
         data-testid="ribbon-left-zone"
         style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
@@ -127,7 +127,7 @@ export const StudioRibbon: React.FC<StudioRibbonProps> = ({
         </button>
       </div>
 
-      {/* CENTER ZONE: Annotation & Editing Tools */}
+      {/* CENTER ZONE: Annotation Tools (Icon-only 38x38 Buttons) */}
       <div
         data-testid="ribbon-center-zone"
         style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
@@ -138,22 +138,20 @@ export const StudioRibbon: React.FC<StudioRibbonProps> = ({
           data-tooltip="Insert Step Marker (1, 2, 3...)"
           onClick={onToggleMarker}
           style={{
+            width: '38px',
             height: '38px',
-            padding: '0 var(--space-3)',
             backgroundColor: isMarkerActive ? 'var(--color-accent-subtle)' : 'var(--color-surface)',
             color: isMarkerActive ? 'var(--color-accent)' : 'var(--color-text)',
             border: isMarkerActive ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
             borderRadius: 'var(--radius-sm)',
-            fontWeight: 600,
-            fontSize: 'var(--text-xs)',
+            fontSize: '1rem',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 'var(--space-1)',
+            justifyContent: 'center',
             cursor: 'pointer',
           }}
         >
-          <span>🔢</span>
-          <span>Insert Marker</span>
+          🔢
         </button>
 
         <button
@@ -186,22 +184,20 @@ export const StudioRibbon: React.FC<StudioRibbonProps> = ({
           data-tooltip="Crop Image (C)"
           onClick={onToggleCrop}
           style={{
+            width: '38px',
             height: '38px',
-            padding: '0 var(--space-3)',
             backgroundColor: isCropActive ? 'var(--color-accent-subtle)' : 'var(--color-surface)',
             color: isCropActive ? 'var(--color-accent)' : 'var(--color-text)',
             border: isCropActive ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
             borderRadius: 'var(--radius-sm)',
-            fontWeight: 600,
-            fontSize: 'var(--text-xs)',
+            fontSize: '1rem',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 'var(--space-1)',
+            justifyContent: 'center',
             cursor: 'pointer',
           }}
         >
-          <span>✂️</span>
-          <span>Crop</span>
+          ✂️
         </button>
       </div>
 

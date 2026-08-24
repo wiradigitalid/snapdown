@@ -31,7 +31,7 @@ export const EditorShell: React.FC<EditorShellProps> = ({
   onCaptureClick,
   onOpenHistory,
   onOpenSettings,
-  activeFindingTitle = 'Studio Workspace',
+  activeFindingTitle = 'No finding selected',
   children,
 }) => {
   const handleMinimize = async () => {
@@ -93,7 +93,7 @@ export const EditorShell: React.FC<EditorShellProps> = ({
           flexShrink: 0,
         }}
       >
-        {/* Left Drag Region: Logo, Brand & Active Finding Pill */}
+        {/* Left Drag Region: Logo, Brand & Active Finding File Name */}
         <div
           data-tauri-drag-region="true"
           style={{
@@ -106,18 +106,21 @@ export const EditorShell: React.FC<EditorShellProps> = ({
             overflow: 'hidden',
           }}
         >
+          {/* Snapdown Studio Brand Icon */}
           <div
             style={{
-              width: '18px',
-              height: '18px',
+              width: '20px',
+              height: '20px',
               borderRadius: 'var(--radius-xs)',
               backgroundColor: 'var(--color-accent)',
+              border: '1px solid var(--color-border-strong)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: 'var(--color-accent-text)',
               fontWeight: 800,
-              fontSize: '0.65rem',
+              fontSize: '0.7rem',
+              boxShadow: 'var(--shadow-sm)',
             }}
           >
             ⚡
@@ -131,6 +134,7 @@ export const EditorShell: React.FC<EditorShellProps> = ({
             style={{
               color: 'var(--color-text-muted)',
               fontSize: 'var(--text-2xs)',
+              fontFamily: 'var(--font-mono)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -140,18 +144,19 @@ export const EditorShell: React.FC<EditorShellProps> = ({
           </span>
         </div>
 
-        {/* Right Action Buttons & Window Controls */}
+        {/* Right Action Buttons (Icon Only) & Window Controls */}
         <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
           {onOpenHistory && (
             <button
               type="button"
               data-testid="titlebar-history-btn"
+              data-tooltip="Bundles History (Ctrl+H)"
               onClick={onOpenHistory}
               style={{
+                width: '28px',
                 height: '24px',
-                padding: '0 var(--space-2)',
-                fontSize: 'var(--text-2xs)',
-                fontWeight: 700,
+                padding: 0,
+                fontSize: '0.85rem',
                 backgroundColor: 'transparent',
                 border: '1px solid var(--color-border)',
                 borderRadius: 'var(--radius-xs)',
@@ -160,11 +165,10 @@ export const EditorShell: React.FC<EditorShellProps> = ({
                 marginRight: 'var(--space-2)',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
+                justifyContent: 'center',
               }}
             >
-              <span>📚</span>
-              <span>Bundles</span>
+              📚
             </button>
           )}
 
@@ -172,12 +176,13 @@ export const EditorShell: React.FC<EditorShellProps> = ({
             <button
               type="button"
               data-testid="titlebar-settings-btn"
+              data-tooltip="Settings (Ctrl+,)"
               onClick={onOpenSettings}
               style={{
+                width: '28px',
                 height: '24px',
-                padding: '0 var(--space-2)',
-                fontSize: 'var(--text-2xs)',
-                fontWeight: 700,
+                padding: 0,
+                fontSize: '0.85rem',
                 backgroundColor: 'transparent',
                 border: '1px solid var(--color-border)',
                 borderRadius: 'var(--radius-xs)',
@@ -186,11 +191,10 @@ export const EditorShell: React.FC<EditorShellProps> = ({
                 marginRight: 'var(--space-2)',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
+                justifyContent: 'center',
               }}
             >
-              <span>⚙️</span>
-              <span>Settings</span>
+              ⚙️
             </button>
           )}
 
