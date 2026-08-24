@@ -567,7 +567,9 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
                 </span>
                 <span>·</span>
                 <span>
-                  💾 {selectedFinding.finding.file_size_bytes ? `${Math.round(selectedFinding.finding.file_size_bytes / 1024)} KB` : '184 KB'}
+                  💾 {selectedFinding.finding.file_size_bytes
+                    ? `${(selectedFinding.finding.file_size_bytes / 1024).toFixed(1)} KB`
+                    : `${Math.round((selectedFinding.finding.image_width * selectedFinding.finding.image_height * 0.25) / 1024)} KB`}
                 </span>
               </div>
             )}

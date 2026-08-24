@@ -146,6 +146,34 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
   }, [selectedId, findings, onActiveFindingChange]);
 
   // Map findings to UI format with converted file src URLs
+  const [imageSizes, setImageSizes] = useState<Record<string, number>>({});
+
+  // Asynchronously fetch accurate blob file size via HEAD request to asset URL
+  useEffect(() => {
+    findings.forEach((f) => {
+      const src = resolveImagePath(f.finding.image_path, vaultPath);
+      if (src && imageSizes[f.finding.id] === undefined) {
+        fetch(src)
+          .then((res) => {
+            const len = res.headers.get('content-length');
+            if (len) {
+              const bytes = parseInt(len, 10);
+              if (!isNaN(bytes) && bytes > 0) {
+                setImageSizes((prev) => ({ ...prev, [f.finding.id]: bytes }));
+                return;
+              }
+            }
+            return res.blob().then((b) => {
+              if (b.size > 0) {
+                setImageSizes((prev) => ({ ...prev, [f.finding.id]: b.size }));
+              }
+            });
+          })
+          .catch(() => {});
+      }
+    });
+  }, [findings, vaultPath, imageSizes]);
+
   const uiFindings: FindingDetailItemDto[] = useMemo(() => {
     return findings.map((f) => ({
       finding: {
@@ -156,6 +184,7 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
         captured_at: f.finding.captured_at,
         source_monitor: f.finding.source_monitor,
         region: f.finding.region,
+        file_size_bytes: imageSizes[f.finding.id] || null,
       },
       note: {
         id: f.note.id,
@@ -173,7 +202,7 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
       })),
       imageSrc: resolveImagePath(f.finding.image_path, vaultPath),
     }));
-  }, [findings, vaultPath]);
+  }, [findings, vaultPath, imageSizes]);
 
   const handleSaveNote = async (findingId: string, noteBody: string) => {
     await saveNote(findingId, noteBody);
