@@ -1,3 +1,4 @@
+use snapdown_core::domain::bundle::BundleItem;
 use snapdown_core::domain::finding::{Finding, FindingDetail, Marker, Note};
 use snapdown_core::domain::markdown::MarkdownSerializer;
 
@@ -6,7 +7,7 @@ fn the_markdown_serializer_renders_two_findings_byte_exactly() {
     let f1 = FindingDetail {
         finding: Finding {
             id: "f1".into(),
-            image_path: "findings/f1.webp".into(),
+            image_path: "findings/f1.png".into(),
             image_width: 1920,
             image_height: 1080,
             captured_at: "2026-08-23T10:00:00Z".into(),
@@ -36,7 +37,7 @@ fn the_markdown_serializer_renders_two_findings_byte_exactly() {
     let f2 = FindingDetail {
         finding: Finding {
             id: "f2".into(),
-            image_path: "findings/f2.webp".into(),
+            image_path: "findings/f2.png".into(),
             image_width: 800,
             image_height: 600,
             captured_at: "2026-08-23T11:00:00Z".into(),
@@ -55,13 +56,32 @@ fn the_markdown_serializer_renders_two_findings_byte_exactly() {
         markers: vec![],
     };
 
-    let doc = MarkdownSerializer::serialize_bundle("Sprint 42 Bug Batch", &[f1, f2]);
+    let item1 = BundleItem {
+        id: "bi1".into(),
+        bundle_id: "b1".into(),
+        finding_id: "f1".into(),
+        position: 1,
+        image_path: "bundles/b1/finding_1_burned.png".into(),
+    };
+
+    let item2 = BundleItem {
+        id: "bi2".into(),
+        bundle_id: "b1".into(),
+        finding_id: "f2".into(),
+        position: 2,
+        image_path: "bundles/b1/finding_2_burned.png".into(),
+    };
+
+    let doc = MarkdownSerializer::serialize_bundle(
+        "Sprint 42 Bug Batch",
+        &[(&item1, &f1), (&item2, &f2)],
+    );
 
     let expected = "# Sprint 42 Bug Batch\n\
 \n\
 ## Finding 1\n\
 \n\
-![Finding 1](./findings/f1.webp)\n\
+![Finding 1](./bundles/b1/finding_1_burned.png)\n\
 \n\
 - **Captured:** 2026-08-23T10:00:00Z\n\
 - **Resolution:** 1920 \u{00D7} 1080 px\n\
@@ -75,7 +95,7 @@ First defect observed\n\
 \n\
 ## Finding 2\n\
 \n\
-![Finding 2](./findings/f2.webp)\n\
+![Finding 2](./bundles/b1/finding_2_burned.png)\n\
 \n\
 - **Captured:** 2026-08-23T11:00:00Z\n\
 - **Resolution:** 800 \u{00D7} 600 px\n\

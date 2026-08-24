@@ -32,7 +32,7 @@ impl MarkerBurner {
     ///
     /// Invariants:
     /// - AD-4: Operates on already-reduced bytes and preserves dimensions without re-scaling.
-    /// - AD-9: Returns original bytes unchanged if no eligible markers are present.
+    /// - AD-9: Validates decodability and dimensions, then returns original input bytes unchanged if no eligible markers are present.
     /// - AD-10: Marker colors are theme-invariant (#f59e0b fill, #ffffff ring, #000000 text).
     /// - SCN-04: Markers with empty/whitespace-only comments are not drawn.
     pub fn burn_markers(
@@ -40,15 +40,6 @@ impl MarkerBurner {
         dimensions: &ImageDimensions,
         markers: &[Marker],
     ) -> Result<Vec<u8>, CoreError> {
-        let active_markers: Vec<&Marker> = markers
-            .iter()
-            .filter(|m| !m.comment.trim().is_empty())
-            .collect();
-
-        if active_markers.is_empty() {
-            return Ok(input_bytes.to_vec());
-        }
-
         let decoded = image::load_from_memory(input_bytes).map_err(|e| {
             CoreError::Validation(format!("Failed to decode image for burning: {e}"))
         })?;
@@ -61,6 +52,15 @@ impl MarkerBurner {
                 decoded.width(),
                 decoded.height()
             )));
+        }
+
+        let active_markers: Vec<&Marker> = markers
+            .iter()
+            .filter(|m| !m.comment.trim().is_empty())
+            .collect();
+
+        if active_markers.is_empty() {
+            return Ok(input_bytes.to_vec());
         }
 
         let mut image_rgba: RgbaImage = decoded.to_rgba8();

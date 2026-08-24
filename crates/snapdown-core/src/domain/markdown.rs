@@ -1,15 +1,17 @@
+use crate::domain::bundle::BundleItem;
 use crate::domain::finding::FindingDetail;
 
 #[derive(Debug, Clone)]
 pub struct MarkdownSerializer;
 
 impl MarkdownSerializer {
-    /// Composes a single CommonMark document from bundle title and list of findings with notes and markers.
+    /// Composes a single CommonMark document from bundle title and list of bundle items paired with their finding details.
     /// Invariants:
     /// - AD-1: Marker ordinal matches line number.
+    /// - AD-4: Composed markdown references the bundle's burned copy (BundleItem.image_path).
     /// - AD-9: Byte-identical composition across all platforms.
     /// - Relative image references without absolute paths.
-    pub fn serialize_bundle(bundle_name: &str, findings: &[FindingDetail]) -> String {
+    pub fn serialize_bundle(bundle_name: &str, items: &[(&BundleItem, &FindingDetail)]) -> String {
         let mut out = String::new();
 
         // Title
@@ -17,38 +19,38 @@ impl MarkdownSerializer {
         out.push_str(bundle_name.trim());
         out.push_str("\n\n");
 
-        if findings.is_empty() {
+        if items.is_empty() {
             out.push_str("_No findings included in this bundle._\n");
             return out;
         }
 
-        for (idx, item) in findings.iter().enumerate() {
-            let position = idx + 1;
+        for (item, detail) in items {
+            let position = item.position;
             out.push_str(&format!("## Finding {}\n\n", position));
 
-            // Image markdown reference
-            let img_rel = format!("./{}", item.finding.image_path.trim_start_matches('/'));
+            // Image markdown reference pointing to bundle's burned copy
+            let img_rel = format!("./{}", item.image_path.trim_start_matches('/'));
             out.push_str(&format!("![Finding {}]({})\n\n", position, img_rel));
 
             // Metadata summary
             out.push_str(&format!(
                 "- **Captured:** {}\n- **Resolution:** {} × {} px\n- **Monitor:** {}\n\n",
-                item.finding.captured_at,
-                item.finding.image_width,
-                item.finding.image_height,
-                item.finding.source_monitor
+                detail.finding.captured_at,
+                detail.finding.image_width,
+                detail.finding.image_height,
+                detail.finding.source_monitor
             ));
 
             // Note body
-            if !item.note.body.trim().is_empty() {
-                out.push_str(item.note.body.trim());
+            if !detail.note.body.trim().is_empty() {
+                out.push_str(detail.note.body.trim());
                 out.push_str("\n\n");
             }
 
             // Marker annotations list
-            if !item.markers.is_empty() {
+            if !detail.markers.is_empty() {
                 out.push_str("### Annotations\n\n");
-                for marker in &item.markers {
+                for marker in &detail.markers {
                     let comment = if marker.comment.trim().is_empty() {
                         "*(No annotation text)*"
                     } else {
@@ -114,11 +116,19 @@ mod tests {
             markers: vec![m1, m2],
         };
 
-        let md = MarkdownSerializer::serialize_bundle("Login Review", &[detail]);
+        let item = BundleItem {
+            id: "bi-1".into(),
+            bundle_id: "b-1".into(),
+            finding_id: fid.into(),
+            position: 1,
+            image_path: "bundles/b-1/finding_1_burned.png".into(),
+        };
+
+        let md = MarkdownSerializer::serialize_bundle("Login Review", &[(&item, &detail)]);
 
         assert!(md.contains("# Login Review"));
         assert!(md.contains("## Finding 1"));
-        assert!(md.contains("![Finding 1](./findings/img1.webp)"));
+        assert!(md.contains("![Finding 1](./bundles/b-1/finding_1_burned.png)"));
         assert!(md.contains("Found layout misalignment on login card."));
         assert!(md.contains("### Annotations"));
         assert!(md.contains("1. Button overlapping text field"));

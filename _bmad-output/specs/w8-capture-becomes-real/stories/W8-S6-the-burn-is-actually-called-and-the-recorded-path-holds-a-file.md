@@ -3,7 +3,7 @@ id: W8-S6
 title: "W8-S6: The burn is actually called, and the recorded path holds a file"
 type: 'bug'
 wave: W8
-status: ready-for-dev
+status: done
 created: '2026-08-24'
 review_loop_iteration: 0
 followup_review_recommended: true
@@ -506,3 +506,15 @@ reads as a permissions problem.
 **Mutation:** each of the eight rows, applied one at a time under `cargo test --workspace
 --no-fail-fast`, red observed, then restored and the suite confirmed green. Row 4 — restoring the early
 return above the decode — is the acceptance criterion for `BUG-20` specifically.
+
+### 2026-08-24 — Step 2: Build Complete
+
+- **`BUG-19` resolved**: `create_bundle_impl` in `apps/desktop/src-tauri/src/commands/bundle.rs` calls `MarkerBurner::burn_markers` for each finding and transactionally writes `bundles/{bundle_id}/finding_{pos}_burned.png` to the vault.
+- **`BUG-20` resolved**: `MarkerBurner::burn_markers` in `crates/snapdown-store/src/image/burner.rs` hoists `image::load_from_memory` and dimension validation above the `active_markers.is_empty()` check. Corrupt source images are rejected on all paths.
+- **`BUG-21` resolved**: `MarkdownSerializer::serialize_bundle` in `crates/snapdown-core/src/domain/markdown.rs` updated to accept `&[(&BundleItem, &FindingDetail)]` and reference `BundleItem.image_path` (the bundle's burned copy) rather than `Finding.image_path`. Goldens and unit tests updated and verified.
+- **`test_bundle_export.rs` implemented**: All 5 tests from `waves.yaml` (`a_bundle_item_image_path_holds_a_file_that_decodes`, `an_exported_bundle_image_carries_the_markers_of_its_finding`, `a_bundle_export_does_not_re_reduce_the_stored_image`, `a_corrupt_source_is_refused_even_when_no_marker_is_drawn`, `the_composed_markdown_references_the_bundles_burned_copy`) passing.
+- **Reach grep verified**:
+  `apps/desktop/src-tauri/src/commands/bundle.rs:7:use snapdown_store::image::MarkerBurner;`
+  `apps/desktop/src-tauri/src/commands/bundle.rs:110:let burned_bytes = MarkerBurner::burn_markers(...)`
+- **Mutations verified under `--no-fail-fast`**: All mutations observed RED and restored to GREEN.
+- **Full verification suite passed**: `cargo fmt`, `cargo clippy`, `cargo test --workspace`, `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build`, `go test`.

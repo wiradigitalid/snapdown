@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use snapdown_core::domain::bundle::{Bundle, BundleDetail, BundleItem};
+use snapdown_core::domain::finding::FindingDetail;
+use snapdown_core::domain::image::ImageDimensions;
 use snapdown_core::domain::markdown::MarkdownSerializer;
 use snapdown_core::ports::{BlobStore, BundleStore, FindingStore, PublicationStore, SettingsStore};
+use snapdown_store::image::MarkerBurner;
 use snapdown_store::vault::VaultBlobStore;
 use std::path::PathBuf;
 use tauri::State;
@@ -13,6 +16,27 @@ use crate::state::AppState;
 pub struct CreateBundleInput {
     pub name: String,
     pub finding_ids: Vec<String>,
+}
+
+fn rollback_written_blobs(
+    vault_store: &VaultBlobStore,
+    written: &[String],
+    original_err: &str,
+) -> String {
+    let mut cleanup_failures = Vec::new();
+    for path in written {
+        if let Err(e) = vault_store.delete_blob(path) {
+            cleanup_failures.push(format!("{path} ({e})"));
+        }
+    }
+    if cleanup_failures.is_empty() {
+        original_err.to_string()
+    } else {
+        format!(
+            "{original_err}; additionally failed to clean up files during rollback: {}",
+            cleanup_failures.join(", ")
+        )
+    }
 }
 
 pub fn create_bundle_impl(
@@ -27,35 +51,7 @@ pub fn create_bundle_impl(
     let composed_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
     let md_filename = format!("bundles/{bundle_id}.md");
 
-    // Gather findings in requested order
-    let mut finding_details = Vec::new();
-    let mut bundle_items = Vec::new();
-
-    for (idx, fid) in input.finding_ids.iter().enumerate() {
-        if let Some(detail) = state
-            .finding_store
-            .get_finding(fid)
-            .map_err(|e| e.to_string())?
-        {
-            let pos = (idx + 1) as u32;
-            let burned_path = format!("bundles/{bundle_id}/finding_{pos}_burned.webp");
-
-            bundle_items.push(BundleItem {
-                id: format!("bi-{bundle_id}-{pos}"),
-                bundle_id: bundle_id.clone(),
-                finding_id: fid.clone(),
-                position: pos,
-                image_path: burned_path,
-            });
-
-            finding_details.push(detail);
-        }
-    }
-
-    // Generate markdown content
-    let markdown_content = MarkdownSerializer::serialize_bundle(&input.name, &finding_details);
-
-    // Save markdown file in vault
+    // Resolve the vault path and open VaultBlobStore before reading or writing
     let vault_path = match state
         .settings_store
         .get(&snapdown_core::domain::setting::SettingKey::VaultPath)
@@ -71,21 +67,94 @@ pub fn create_bundle_impl(
     let vault_store = VaultBlobStore::new(&vault_path)
         .map_err(|e| format!("Failed to open vault at {vault_path}: {e}"))?;
 
-    vault_store
-        .write_blob(&md_filename, markdown_content.as_bytes())
-        .map_err(|e| format!("Failed to write bundle markdown file: {e}"))?;
+    // Gather findings and prepare burned image copies in memory
+    let mut finding_details = Vec::new();
+    let mut bundle_items = Vec::new();
+    let mut pending_writes: Vec<(String, Vec<u8>)> = Vec::new();
+
+    for (idx, fid) in input.finding_ids.iter().enumerate() {
+        if let Some(detail) = state
+            .finding_store
+            .get_finding(fid)
+            .map_err(|e| e.to_string())?
+        {
+            let pos = (idx + 1) as u32;
+            let burned_path = format!("bundles/{bundle_id}/finding_{pos}_burned.png");
+
+            // Refuse if finding image is absent from vault (BR-13, UC-9 failure flow 1)
+            if !vault_store
+                .blob_exists(&detail.finding.image_path)
+                .map_err(|e| e.to_string())?
+            {
+                return Err(format!(
+                    "Finding {} image file is missing from vault: {}",
+                    detail.finding.id, detail.finding.image_path
+                ));
+            }
+
+            let stored_bytes = vault_store
+                .read_blob(&detail.finding.image_path)
+                .map_err(|e| {
+                    format!(
+                        "Failed to read image for finding {}: {e}",
+                        detail.finding.id
+                    )
+                })?;
+
+            let dims =
+                ImageDimensions::new(detail.finding.image_width, detail.finding.image_height)
+                    .map_err(|e| e.to_string())?;
+
+            let burned_bytes = MarkerBurner::burn_markers(&stored_bytes, &dims, &detail.markers)
+                .map_err(|e| e.to_string())?;
+
+            pending_writes.push((burned_path.clone(), burned_bytes));
+
+            bundle_items.push(BundleItem {
+                id: format!("bi-{bundle_id}-{pos}"),
+                bundle_id: bundle_id.clone(),
+                finding_id: fid.clone(),
+                position: pos,
+                image_path: burned_path,
+            });
+
+            finding_details.push(detail);
+        }
+    }
+
+    // Generate markdown content referencing the bundle items' burned copies (BUG-21, FR-8)
+    let items_for_ser: Vec<(&BundleItem, &FindingDetail)> =
+        bundle_items.iter().zip(finding_details.iter()).collect();
+    let markdown_content = MarkdownSerializer::serialize_bundle(&input.name, &items_for_ser);
+
+    // Write all pending image blobs and markdown with transactional cleanup (AD-2, UC-9)
+    let mut written: Vec<String> = Vec::new();
+
+    for (path, bytes) in pending_writes {
+        if let Err(e) = vault_store.write_blob(&path, &bytes) {
+            let err_msg = format!("Failed to write burned image file {path}: {e}");
+            return Err(rollback_written_blobs(&vault_store, &written, &err_msg));
+        }
+        written.push(path);
+    }
+
+    if let Err(e) = vault_store.write_blob(&md_filename, markdown_content.as_bytes()) {
+        let err_msg = format!("Failed to write bundle markdown file: {e}");
+        return Err(rollback_written_blobs(&vault_store, &written, &err_msg));
+    }
+    written.push(md_filename.clone());
 
     let bundle = Bundle {
         id: bundle_id,
         name: input.name,
         markdown: markdown_content,
-        markdown_path: md_filename.clone(),
+        markdown_path: md_filename,
         composed_at,
     };
 
     if let Err(e) = state.bundle_store.create_bundle(&bundle, &bundle_items) {
-        let _ = vault_store.delete_blob(&md_filename);
-        return Err(e.to_string());
+        let err_msg = e.to_string();
+        return Err(rollback_written_blobs(&vault_store, &written, &err_msg));
     }
 
     Ok(BundleDetail {

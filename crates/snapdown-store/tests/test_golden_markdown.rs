@@ -1,5 +1,6 @@
 use image::codecs::png::PngEncoder;
 use image::{ExtendedColorType, ImageEncoder, Rgba, RgbaImage};
+use snapdown_core::domain::bundle::BundleItem;
 use snapdown_core::domain::finding::{Finding, FindingDetail, Marker, Note};
 use snapdown_core::domain::image::ImageDimensions;
 use snapdown_core::domain::markdown::MarkdownSerializer;
@@ -98,14 +99,23 @@ fn the_golden_bundle_markdown_is_regenerated_from_real_image_output() {
         ],
     };
 
-    // 5. Serialize bundle and compare byte-for-byte with inline golden reference
-    let doc = MarkdownSerializer::serialize_bundle("Release Quality Gate Assessment", &[f1]);
+    let item1 = BundleItem {
+        id: "bi-golden-1".into(),
+        bundle_id: "b-golden".into(),
+        finding_id: fid.into(),
+        position: 1,
+        image_path: "bundles/b-golden/finding_1_burned.png".into(),
+    };
+
+    // 5. Serialize bundle and compare byte-for-byte with inline golden reference (AD-4, AD-9, BUG-21)
+    let doc =
+        MarkdownSerializer::serialize_bundle("Release Quality Gate Assessment", &[(&item1, &f1)]);
 
     let expected_golden = "# Release Quality Gate Assessment\n\
 \n\
 ## Finding 1\n\
 \n\
-![Finding 1](./findings/capture_login.png)\n\
+![Finding 1](./bundles/b-golden/finding_1_burned.png)\n\
 \n\
 - **Captured:** 2026-08-23T10:00:00Z\n\
 - **Resolution:** 1920 \u{00D7} 1080 px\n\
