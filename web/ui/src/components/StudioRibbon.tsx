@@ -64,24 +64,24 @@ export const StudioRibbon: React.FC<StudioRibbonProps> = ({
           data-tooltip="Capture Region (Ctrl+Shift+S)"
           onClick={onCaptureClick}
           style={{
+            width: '38px',
             height: '38px',
-            padding: '0 var(--space-3)',
+            padding: 0,
             backgroundColor: 'var(--color-snagit-red)',
             color: 'var(--color-accent-text)',
             border: 'none',
             borderRadius: 'var(--radius-sm)',
             fontWeight: 700,
-            fontSize: 'var(--text-xs)',
+            fontSize: '1.1rem',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 'var(--space-1)',
+            justifyContent: 'center',
             cursor: 'pointer',
             boxShadow: 'var(--shadow-sm)',
             transition: 'background-color 0.15s ease',
           }}
         >
-          <span style={{ fontSize: '1rem', lineHeight: 1 }}>🔴</span>
-          <span>Capture</span>
+          🔴
         </button>
 
         <button

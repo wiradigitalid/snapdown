@@ -7,6 +7,7 @@ import {
   deleteFinding,
   deleteMarker,
   FindingDetailDto,
+  importImageData,
   listFindings,
   saveNote,
   updateMarker,
@@ -248,6 +249,59 @@ export const FindingsView: React.FC<FindingsViewProps> = ({ onCompose }) => {
     }
   };
 
+  const handleOpenFileClick = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/webp';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const resultStr = reader.result as string;
+        const base64Data = resultStr.split(',')[1] || resultStr;
+        try {
+          const created = await importImageData(base64Data, '', file.name);
+          await fetchFindingsData();
+          setSelectedId(created.finding.id);
+        } catch (err) {
+          console.error('Failed to import image file:', err);
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
+  const handlePasteClick = async () => {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find((t) => t.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const resultStr = reader.result as string;
+            const base64Data = resultStr.split(',')[1] || resultStr;
+            try {
+              const created = await importImageData(base64Data, 'Pasted screenshot from clipboard', 'Clipboard');
+              await fetchFindingsData();
+              setSelectedId(created.finding.id);
+            } catch (err) {
+              console.error('Failed to import clipboard image:', err);
+            }
+          };
+          reader.readAsDataURL(blob);
+          break;
+        }
+      }
+    } catch (err) {
+      console.error('Failed to read image from clipboard:', err);
+    }
+  };
+
   if (viewMode === 'orphan-report') {
     return (
       <div data-testid="findings-view" style={{ width: '100%', height: '100%' }}>
@@ -273,6 +327,8 @@ export const FindingsView: React.FC<FindingsViewProps> = ({ onCompose }) => {
         onOpenOrphanReport={() => setViewMode('orphan-report')}
         onCompose={onCompose}
         onCaptureClick={handleCaptureClick}
+        onOpenFileClick={handleOpenFileClick}
+        onPasteClick={handlePasteClick}
         onRetry={() => fetchFindingsData(false)}
       />
     </div>

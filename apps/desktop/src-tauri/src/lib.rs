@@ -32,8 +32,8 @@ use commands::bundle::{
 };
 use commands::capture::{capture_screen_region, dismiss_overlay, trigger_overlay};
 use commands::finding::{
-    add_marker, clean_orphans, delete_finding, delete_marker, get_finding_detail, list_findings,
-    save_note, scan_orphans, update_marker,
+    add_marker, clean_orphans, delete_finding, delete_marker, get_finding_detail,
+    import_image_data, list_findings, save_note, scan_orphans, update_marker,
 };
 use commands::hotkey::{clear_hotkey, get_hotkeys, set_hotkey};
 use commands::settings::{
@@ -373,6 +373,7 @@ pub fn run() {
             add_marker,
             update_marker,
             delete_marker,
+            import_image_data,
             create_bundle,
             list_bundles,
             get_bundle_detail,

@@ -1,6 +1,9 @@
-use snapdown_core::domain::finding::{FindingDetail, Marker};
-use snapdown_core::domain::setting::{Setting, SettingKey, SettingValue};
-use snapdown_core::ports::{BlobStore, FindingStore, SettingsStore};
+use snapdown_core::domain::finding::{Finding, FindingDetail, Marker, Note};
+use snapdown_core::domain::image::ImageDimensions;
+use snapdown_core::domain::setting::{QualityBudget, Setting, SettingKey, SettingValue};
+use snapdown_core::ports::{BlobStore, Clock, EntropySource, FindingStore, SettingsStore};
+use snapdown_store::image::ImageReducer;
+use snapdown_store::system::{SystemClock, SystemEntropySource};
 use snapdown_store::vault::{OrphanScanReport, OrphanSweeper, VaultBlobStore};
 use std::path::PathBuf;
 use tauri::State;
@@ -144,6 +147,104 @@ pub fn delete_marker(
         .finding_store
         .delete_marker(&finding_id, &marker_id)
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn import_image_data(
+    image_bytes_base64: String,
+    note: Option<String>,
+    source_name: Option<String>,
+    state: State<AppState>,
+) -> Result<FindingDetail, String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(image_bytes_base64)
+        .map_err(|e| format!("Invalid base64 image data: {e}"))?;
+
+    // Decode image to check dimensions and validity
+    let img = image::load_from_memory(&bytes)
+        .map_err(|e| format!("Failed to decode imported image: {e}"))?;
+    let (width, height) = (img.width(), img.height());
+
+    let vault_path = match state
+        .settings_store
+        .get(&SettingKey::VaultPath)
+        .map_err(|e| e.to_string())?
+    {
+        Some(Setting {
+            value: SettingValue::String(s),
+            ..
+        }) => s,
+        _ => dirs_or_default_vault().to_string_lossy().to_string(),
+    };
+
+    let vault_store = VaultBlobStore::new(&vault_path).map_err(|e| e.to_string())?;
+
+    let qb = match state
+        .settings_store
+        .get(&SettingKey::QualityBudget)
+        .map_err(|e| e.to_string())?
+    {
+        Some(Setting {
+            value: SettingValue::QualityBudget(budget),
+            ..
+        }) => budget,
+        _ => QualityBudget::default(),
+    };
+
+    let long_edge = width.max(height);
+    let resolved = qb.resolve(long_edge);
+    let budget_name = qb.named.display_name().to_string();
+
+    let orig_dims = ImageDimensions::new(width, height).map_err(|e| e.to_string())?;
+    let reduced_result = ImageReducer::reduce_image(&bytes, orig_dims, &resolved, false)
+        .map_err(|e| e.to_string())?;
+
+    let timestamp_str = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+    let filename = format!("findings/import_{timestamp_str}.png");
+
+    vault_store
+        .write_blob(&filename, &reduced_result.bytes)
+        .map_err(|e| e.to_string())?;
+
+    let clock = SystemClock::new();
+    let entropy = SystemEntropySource::new();
+    let finding_id =
+        snapdown_core::util::id::id_from_parts(clock.now_unix_millis(), entropy.random_bytes_10());
+    let captured_at = clock.now_rfc3339();
+
+    let source = source_name.unwrap_or_else(|| "Imported Image".to_string());
+
+    let finding = Finding {
+        id: finding_id.clone(),
+        image_path: filename,
+        image_width: reduced_result.dimensions.width,
+        image_height: reduced_result.dimensions.height,
+        captured_at: captured_at.clone(),
+        source_monitor: source,
+        region: format!("0,0,{width},{height}"),
+        resolved_long_edge: Some(resolved.max_long_edge),
+        resolved_encoder_quality: Some(resolved.encoder_quality),
+        budget_name: Some(budget_name),
+    };
+
+    let note = Note {
+        id: format!("note-{finding_id}"),
+        finding_id: finding_id.clone(),
+        body: note.unwrap_or_default(),
+        updated_at: captured_at,
+    };
+
+    state
+        .finding_store
+        .create_finding(&finding, &note, &[])
+        .map_err(|e| e.to_string())?;
+
+    Ok(FindingDetail {
+        finding,
+        note,
+        markers: vec![],
+    })
 }
 
 fn dirs_or_default_vault() -> PathBuf {

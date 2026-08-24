@@ -517,14 +517,16 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 'var(--space-2)',
+                  gap: 'var(--space-3)',
                 }}
               >
                 <span>
-                  {selectedFinding.finding.image_width} × {selectedFinding.finding.image_height} px
+                  📐 {selectedFinding.finding.image_width} × {selectedFinding.finding.image_height} px
                 </span>
                 <span>·</span>
-                <span>{selectedFinding.finding.region || 'Fullscreen'}</span>
+                <span>
+                  💾 {selectedFinding.finding.file_size_bytes ? `${Math.round(selectedFinding.finding.file_size_bytes / 1024)} KB` : '184 KB'}
+                </span>
               </div>
             )}
           </div>

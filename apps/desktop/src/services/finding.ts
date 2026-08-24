@@ -117,3 +117,15 @@ export const deleteMarker = async (
     markerId,
   });
 };
+
+export const importImageData = async (
+  imageBytesBase64: string,
+  note?: string,
+  sourceName?: string
+): Promise<FindingDetailDto> => {
+  return await invoke<FindingDetailDto>('import_image_data', {
+    imageBytesBase64,
+    note: note || null,
+    sourceName: sourceName || null,
+  });
+};
