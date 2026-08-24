@@ -896,3 +896,210 @@ waves:
               - cargo::a_failed_error_body_read_never_yields_an_empty_message
               - cargo::the_status_code_survives_a_failed_error_body_read
               - cargo::a_readable_error_envelope_is_still_parsed_as_before
+
+  - id: W8
+    title: Capture becomes real
+    status: open
+    release: r3
+    prd: [capture-to-markdown]
+    fr: [FR-1, FR-2, FR-4, FR-8]
+    components: [finding]
+    size: L
+    depends_on: [W7]
+    spec_folder: _bmad-output/specs/w8-capture-becomes-real/
+    opened: "2026-08-24"
+    scope: >-
+      BUG-14, critical: Snapdown does not take screenshots. Three separate functions write a
+      seventeen-byte fake PNG header and call it an image, and a fourth promise - the Note at capture
+      time - was never built at all.
+
+      THIS IS NOT A DESIGN GAP. ARCHITECTURE-SPINE.md:245 already lays out a `snapdown-capture` crate
+      and assigns CAP-1 and CAP-2 to it; components.yaml already registers LC-002 region-capturer,
+      LC-003 image-reducer, LC-012 marker-burner and LC-029 capture-note-field. Every one of those is
+      a design that was written and never built. The crate does not exist; `crates/` holds only
+      snapdown-bridge, snapdown-core and snapdown-store. The wave builds what the architecture
+      already decided, where it already said to put it.
+
+      WHY IT SURVIVED FIVE WAVES AND THREE AUDITS: nothing ever decoded an image. Every test in this
+      repository asserts DIMENSIONS, and a fake header carries correct dimensions. That is also why
+      the expensive half of this wave is the test surface rather than the three implementations -
+      writing a real capture path is ordinary work; converting a suite that measures dimensions into
+      one that measures images, without landing on assertions that cannot fail, is the part that
+      needs care. This project has landed that mistake three times, most recently in W7 where one
+      test still passed with its own defect reinstated.
+
+      THE DIMENSION ARITHMETIC ALREADY WRITTEN IS CORRECT AND MUST BE KEPT.
+      compute_reduced_dimensions_for_pair, the Auto resolution W6-S4 built, and the fixed presets are
+      right. They are the only part of this that works, and they are what the new code plugs into.
+    known_gaps:
+      - "This wave adds the first third-party dependencies since the workspace was created - a screen
+         capture crate and an image codec. Both are unavoidable: neither capability can be written
+         from scratch responsibly. The choice of crate is a decision the first story makes and
+         records, not one this registry pre-empts."
+      - "NFR-1 (overlay visible within 200 ms with three monitors attached) and NFR-2 (saving returns
+         focus within 500 ms, reduction not blocking) become measurable for the first time once
+         capture is real. Neither is scheduled here: they need an instrument this project does not
+         have, and OQ-24 records that its UI verification has failed four times out of four. Named so
+         the absence is a decision."
+    epics:
+      - id: EP-capture
+        component: finding
+        title: The picture becomes a picture
+        stories:
+          - id: W8-S1
+            title: The snapdown-capture crate, and a real grab of the requested region
+            component: finding
+            satisfies: [UC-2]
+            depends_on: []
+            touches: [capture-pipeline, image-encoding]
+            spec_folder: _bmad-output/specs/w8-capture-becomes-real/
+            why: |
+              First, because the other two implementations are useless without it - there is nothing
+              to scale and nothing to draw on until a real grab exists.
+
+              apps/desktop/src-tauri/src/commands/capture.rs:197 generate_placeholder_image writes
+              SEVENTEEN BYTES: the PNG signature, the width, the height, and the encoder quality. No
+              IHDR, no IDAT, no IEND. It is not a PNG; it is a label that says PNG.
+
+              The crate goes where the spine already put it. ARCHITECTURE-SPINE.md:245 -
+              `snapdown-capture/  # screen capture, overlay geometry, image reduction` - with CAP-1
+              and CAP-2 assigned to it. Building it there costs nothing extra and closes the gap
+              between the document and the tree. LC-002 region-capturer is already registered against
+              area capture-pipeline with no implementation.
+
+              THE CRATE CHOICE IS THIS STORY'S DECISION AND MUST BE RECORDED. It is the first
+              third-party dependency added since the workspace was created.
+            tests:
+              - cargo::a_captured_region_decodes_as_a_real_image
+              - cargo::a_captured_region_has_the_dimensions_that_were_requested
+              - cargo::a_captured_image_is_not_uniformly_one_colour
+              - cargo::a_region_larger_than_the_monitor_is_refused_not_clamped_silently
+          - id: W8-S2
+            title: A real decode, scale and encode, keeping the arithmetic that already works
+            component: finding
+            satisfies: []
+            depends_on: [W8-S1]
+            touches: [image-encoding]
+            spec_folder: _bmad-output/specs/w8-capture-becomes-real/
+            why: |
+              crates/snapdown-store/src/image/pipeline.rs:26-37. reduce_image writes the same fake
+              header and then copies input_bytes[16..] through unchanged. Its own comment says
+              "downscaled payload simulation" - it was never meant to be mistaken for real, and it
+              was.
+
+              So NO IMAGE HAS EVER BEEN REDUCED. FR-4 promises every captured image is reduced
+              automatically and NFR-3 promises every stored image fits the Quality Budget's long
+              edge. Both have been reported as met since W2 on the strength of a number in a fake
+              header.
+
+              KEEP compute_reduced_dimensions_for_pair, the Auto resolution from W6-S4, and the fixed
+              presets exactly as they are. They are correct. This story replaces the bytes between
+              them, not the arithmetic.
+
+              The thumbnail path is the same lie twice: it writes a second fake header with thumbnail
+              dimensions.
+            tests:
+              - cargo::a_reduced_image_decodes_and_its_pixels_are_the_scaled_source
+              - cargo::a_reduced_image_honours_the_resolved_long_edge
+              - cargo::an_image_already_under_the_long_edge_is_not_upscaled
+              - cargo::a_thumbnail_decodes_and_is_smaller_than_its_source
+              - cargo::the_resolved_pair_arithmetic_is_unchanged_by_this_story
+          - id: W8-S3
+            title: Markers drawn onto the image, not described beside it
+            component: bundle
+            satisfies: []
+            depends_on: [W8-S2]
+            touches: [image-encoding, marker-canvas]
+            spec_folder: _bmad-output/specs/w8-capture-becomes-real/
+            why: |
+              crates/snapdown-store/src/image/burner.rs:20. burn_markers writes the same fake header,
+              appends marker ordinals and pixel coordinates as raw bytes, and NEVER DRAWS ANYTHING.
+              Its test asserts only that the first eight bytes are a PNG signature and that the
+              dimensions are preserved.
+
+              This is the third simulation and it was found while writing the assessment, not when
+              BUG-14 was registered - which is itself the lesson: nobody had decoded an image, so
+              nobody found the third one either.
+
+              FR-8's promise is that a handed-over Bundle carries its Markers ON THE IMAGE. AD-4
+              governs the burn - an image is reduced exactly once, at capture, and no original is
+              kept - so the burn happens on the already-reduced bytes and MUST NOT re-reduce them.
+
+              SCN-04's asymmetry binds what gets drawn: a Marker with no Note line is reported in the
+              note pane and NEVER annotated on the image. An app-only state must not be burned into an
+              artifact that is read on another machine under another theme.
+            tests:
+              - cargo::a_burned_image_decodes_and_differs_from_its_source_in_pixels
+              - cargo::a_burned_marker_changes_pixels_at_its_own_coordinates
+              - cargo::a_burned_image_keeps_the_dimensions_of_its_source
+              - cargo::a_marker_with_no_note_line_is_never_drawn_on_the_image
+              - cargo::burning_no_markers_returns_the_source_bytes_unchanged
+          - id: W8-S4
+            title: The Note at capture time — the second half of UC-1
+            component: finding
+            satisfies: [UC-1]
+            depends_on: [W8-S3]
+            touches: [capture-pipeline, editor-ui]
+            spec_folder: _bmad-output/specs/w8-capture-becomes-real/
+            why: |
+              BUG-18, registered 2026-08-24 while surveying the capture path for this wave.
+
+              CaptureOverlay.tsx:76-100 measures the region on mouse-up and calls captureScreenRegion
+              IMMEDIATELY. A grep for `note` across that file returns ZERO hits, and
+              CaptureRegionInput in capture.rs:13-19 has no `note` field, so the command could not
+              receive one even if the overlay asked.
+
+              FR-2 - "Write the Note at capture time" - is entirely unmet, and UC-1 reads "I press a
+              key, box the thing that is wrong, AND SAY WHAT IS WRONG WITH IT". The second half does
+              not exist. LC-029 capture-note-field is registered with no implementation and
+              inventory.py has been reporting it UNREAD.
+
+              It matters more than a missing input usually would: BG-1, the goal the product is built
+              on, is that a note is unambiguously attached to the image it describes. A Finding with
+              no Note is an image with nothing said about it.
+
+              W6 saw this and deferred it correctly as a known_gap - "the capture path is not in this
+              wave's scope". It belongs to this wave, which is that path.
+            tests:
+              - vitest::the_overlay_asks_for_a_note_before_it_writes_a_finding
+              - vitest::enter_saves_the_note_with_the_finding
+              - vitest::esc_cancels_the_capture_and_writes_no_finding
+              - cargo::a_capture_carries_its_note_through_to_the_stored_finding
+          - id: W8-S5
+            title: The golden test stops proving byte-identity of a fabrication
+            component: bundle
+            satisfies: []
+            depends_on: [W8-S4]
+            touches: [image-encoding, bundle-render]
+            spec_folder: _bmad-output/specs/w8-capture-becomes-real/
+            why: |
+              THE EXPENSIVE HALF OF THIS WAVE, and the reason it is a story rather than a chore
+              folded into the other four.
+
+              Every test in this repository asserts DIMENSIONS, never pixels, so a fake PNG passes
+              all of them. When real bytes arrive a large number of assertions become wrong or
+              meaningless - and the dangerous outcome is not that they fail. It is that they KEEP
+              PASSING while proving nothing.
+
+              test_golden_markdown.rs is the sharpest case. AD-9 promises a Bundle copies the SAME
+              BYTES, and a golden test over fabricated bytes proves byte-identity of a fabrication.
+              The golden file has to be regenerated from real output and the test has to be shown to
+              fail when the bytes change.
+
+              Files asserting on image bytes or dimensions today, all of which need reading:
+                core/src/domain/{finding,image,markdown,setting}.rs
+                core/tests/test_markdown_serializer.rs
+                store/src/image/{burner,pipeline}.rs
+                store/src/sqlite/{finding_store,migrations,settings_store}.rs
+                store/src/vault/sweeper.rs
+                store/tests/{test_bundle_deletion,test_golden_markdown,test_image_reduction,
+                             test_orphan_sweeper}.rs
+
+              MUTATION IS THE ACCEPTANCE CRITERION HERE, not a nicety. W7 proved why: a test that
+              read correctly and asserted the right-sounding thing still passed with its own defect
+              reinstated, and only mutation revealed it.
+            tests:
+              - cargo::the_golden_bundle_markdown_is_regenerated_from_real_image_output
+              - cargo::a_bundle_copies_the_same_bytes_as_the_finding_it_came_from
+              - cargo::changing_one_pixel_of_a_source_image_changes_the_bundle_copy
+              - cargo::no_image_test_asserts_only_a_signature_and_a_dimension

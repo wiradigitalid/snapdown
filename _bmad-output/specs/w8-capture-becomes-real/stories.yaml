@@ -1,0 +1,85 @@
+- id: "W8-S1"
+  title: The snapdown-capture crate, and a real grab of the requested region
+  description: >-
+    Create crates/snapdown-capture where ARCHITECTURE-SPINE.md:245 already put it, and replace
+    generate_placeholder_image in apps/desktop/src-tauri/src/commands/capture.rs:197 with a real grab
+    of the requested region encoded as a real image. Implements LC-002 region-capturer, which is
+    registered and has no implementation. See SPEC.md CAP-1 and defects.yaml BUG-14.
+  invoke_dev_with: >-
+    THIS STORY MAKES THE DEPENDENCY DECISION FOR THE WHOLE WAVE and must record it: a screen-capture
+    crate and an image codec, the first third-party dependencies added since the workspace was
+    created. Pin both, say in the story why each was chosen, and check the licence is compatible with
+    a public repository. The crate goes at crates/snapdown-capture because the spine already assigned
+    CAP-1 and CAP-2 to that path - this is executing a G3 decision, not making a new one. Keep
+    snapdown-core free of IO: there is a test, snapdown_core_has_no_io_dependency, that enforces it,
+    and the capture crate must not be pulled in there. NEVER COMMIT A CAPTURED SCREENSHOT OR A
+    FIXTURE DERIVED FROM ONE - the repository is public and the brief forbids it; synthesise fixtures
+    programmatically in the test instead. Test on a machine that may have no display: say explicitly
+    what the tests do when no monitor is available, and do not let that case silently pass.
+
+- id: "W8-S2"
+  title: A real decode, scale and encode, keeping the arithmetic that already works
+  description: >-
+    crates/snapdown-store/src/image/pipeline.rs:26-37 writes a fake header and copies
+    input_bytes[16..] through; its own comment says "downscaled payload simulation". Replace it with
+    a real decode-scale-encode, and do the same for the thumbnail path, which is the same lie twice.
+    See SPEC.md CAP-2 and defects.yaml BUG-14.
+  invoke_dev_with: >-
+    KEEP compute_reduced_dimensions_for_pair, the Auto resolution from W6-S4, and the fixed presets
+    EXACTLY AS THEY ARE. They are correct and they are the only part of this that works; this story
+    replaces the bytes between them, not the arithmetic. There is a test named
+    the_resolved_pair_arithmetic_is_unchanged_by_this_story for precisely that reason. FR-4 and NFR-3
+    have been reported as met since W2 on the strength of a number in a fake header, so treat every
+    existing green assertion in this area as unproven until you have decoded the output yourself. An
+    image already under the resolved long edge MUST NOT be upscaled.
+
+- id: "W8-S3"
+  title: Markers drawn onto the image, not described beside it
+  description: >-
+    crates/snapdown-store/src/image/burner.rs:20 writes a fake header, appends marker ordinals and
+    coordinates as raw bytes, and never draws anything. Draw numbered badges onto the image. See
+    SPEC.md CAP-3, defects.yaml BUG-14, and SCN-04.
+  invoke_dev_with: >-
+    AD-4 governs this: an image is reduced exactly once, at capture, and no original is kept - so the
+    burn operates on the ALREADY-REDUCED bytes and MUST NOT re-reduce them. Re-encoding on every burn
+    would also break AD-9's byte-identity promise. SCN-04 binds what is drawn and it is easy to get
+    wrong: a Marker with NO NOTE LINE is reported in the note pane and is NEVER annotated on the
+    image, because an app-only state must not be burned into an artifact read on another machine
+    under another theme. Marker colours are theme-invariant ON PURPOSE - --color-marker* is one of
+    the four deliberately theme-invariant token groups under AD-10, for exactly this reason - so the
+    burn must not consult the running theme. Burning zero markers must return the source bytes
+    unchanged, which is what keeps AD-9 true for an unmarked Finding.
+
+- id: "W8-S4"
+  title: The Note at capture time — the second half of UC-1
+  description: >-
+    CaptureOverlay.tsx:76-100 captures on mouse-up and never asks for a Note; CaptureRegionInput has
+    no `note` field. Build LC-029 capture-note-field as .how/finding/01-ux/DESIGN.md specifies, and
+    carry the Note through to the stored Finding. See SPEC.md CAP-1 and defects.yaml BUG-18.
+  invoke_dev_with: >-
+    UC-1 reads "I press a key, box the thing that is wrong, AND SAY WHAT IS WRONG WITH IT" - this
+    story is the second half. BG-1, the goal the product is built on, is that a note is unambiguously
+    attached to the image it describes, so a Finding with no Note is the thing Snapdown exists to
+    prevent. Esc must cancel the WHOLE capture and leave NO Finding - not save an empty one. The note
+    field is anchored to the selected region per DESIGN.md, not fixed to a screen corner. GREP FOR
+    <CaptureNoteField ACROSS apps/desktop/src AND web/ui/src BEFORE YOU CLOSE: this repository has
+    shipped four components that were built, unit-tested and mounted nowhere, and there is still no
+    composition test class (OQ-23). A green unit test does not mean the component is reachable.
+
+- id: "W8-S5"
+  title: The golden test stops proving byte-identity of a fabrication
+  description: >-
+    Convert the test surface from measuring dimensions to measuring images, and regenerate
+    test_golden_markdown.rs from real output. AD-9 promises a Bundle copies the same bytes, and a
+    golden over fabricated bytes proves byte-identity of a fabrication. See SPEC.md and the file list
+    in waves.yaml W8-S5.
+  invoke_dev_with: >-
+    THIS IS THE EXPENSIVE HALF OF THE WAVE and the dangerous outcome is not that assertions fail - it
+    is that they KEEP PASSING while proving nothing. Read every file named in waves.yaml W8-S5's
+    `why`. MUTATION IS THE ACCEPTANCE CRITERION, not a nicety: for each converted test, break the
+    thing it claims to cover, watch it go red, and put it back. W7 proved why this is not optional -
+    a_failed_open_leaves_no_wal_or_shm_file_beside_the_database read correctly, asserted a plausible
+    thing, and still passed with its own defect reinstated. Where a test turns out to have been
+    asserting nothing all along, REPORT IT as a finding rather than quietly rewriting it; that is
+    information about how this repository got here. Never commit a fixture derived from real capture
+    output - synthesise it.

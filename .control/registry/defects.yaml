@@ -994,3 +994,48 @@ defects:
       three times. It stays a MANUAL check, and OQ-24 records that this project has no working way to
       run one.
     status: resolved
+
+  - id: BUG-18
+    title: "The capture overlay never asks for a Note, so half of UC-1 does not exist"
+    found: "2026-08-24"
+    found_by: coordinator, surveying the capture path before opening the BUG-14 wave
+    component: finding
+    severity: high
+    contradicts: [FR-2, UC-1, "LC-029"]
+    evidence: |
+      apps/desktop/src/components/CaptureOverlay.tsx:76-100 - handleMouseUp measures the region and
+      calls captureScreenRegion IMMEDIATELY. There is no Note field anywhere in the file: a grep for
+      `note` across it returns ZERO hits.
+
+      apps/desktop/src-tauri/src/commands/capture.rs:13-19 - CaptureRegionInput carries x, y, width,
+      height and source_monitor. There is no `note` field, so the command could not receive one even
+      if the overlay asked.
+
+      LC-029 `capture-note-field` is registered in components.yaml with area capture-pipeline and
+      has no implementation. inventory.py reports it as UNREAD - "no component at
+      apps\desktop\src\components\CaptureNoteField.tsx".
+    impact: |
+      FR-2 is "Write the Note at capture time" and it is entirely unmet. UC-1 reads "I press a key,
+      box the thing that is wrong, AND SAY WHAT IS WRONG WITH IT" - the second half does not exist.
+      The Reviewer boxes a region and it is saved with no Note at all.
+
+      This matters more than a missing field usually would, because BG-1 - the goal the whole product
+      is built on - is that a note is unambiguously attached to the image it describes. A Finding with
+      no Note is an image with nothing said about it, which is the thing Snapdown exists to prevent.
+    why_undetected: |
+      Same shape as BUG-4, BUG-5 and BUG-6: the surrounding parts are all present and green. The
+      overlay mounts (BUG-4 fixed that), the capture command works, the Finding is stored, and the
+      Note column exists in the schema and is written from the Editor later. Nothing in the chain is
+      broken - one step is simply absent, and no test asserts that the overlay collects a Note
+      because no test drives the overlay at all.
+
+      W6 recorded LC-029 as a known_gap when the wave closed ("no W6 story creates it: the capture
+      path is not in this wave's scope"), so it was seen and correctly deferred. It was never
+      registered as a defect, so it did not appear in any defect count.
+    fix: |
+      Build LC-029 as the design already specifies: a note field anchored to the selected region,
+      shown after the drag and before the Finding is written. Enter saves, Esc cancels the whole
+      capture leaving no Finding. Add `note` to CaptureRegionInput and write it with the Finding.
+    scheduled: W8-S4
+    related: BUG-14
+    status: open
