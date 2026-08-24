@@ -4,13 +4,6 @@ export interface StudioRibbonProps {
   onCaptureClick?: () => void;
   onOpenFileClick?: () => void;
   onPasteClick?: () => void;
-  isMarkerActive?: boolean;
-  onToggleMarker?: () => void;
-  onDeleteActiveTarget?: () => void;
-  canDelete?: boolean;
-  deleteTooltip?: string;
-  isCropActive?: boolean;
-  onToggleCrop?: () => void;
   onAssembleBundle?: () => void;
   onCopyImage?: () => void;
   onShareBundle?: () => void;
@@ -23,13 +16,6 @@ export const StudioRibbon: React.FC<StudioRibbonProps> = ({
   onCaptureClick,
   onOpenFileClick,
   onPasteClick,
-  isMarkerActive = false,
-  onToggleMarker,
-  onDeleteActiveTarget,
-  canDelete = false,
-  deleteTooltip = 'Delete (Del)',
-  isCropActive = false,
-  onToggleCrop,
   onAssembleBundle,
   onCopyImage,
   onShareBundle,
@@ -126,80 +112,6 @@ export const StudioRibbon: React.FC<StudioRibbonProps> = ({
           }}
         >
           📥
-        </button>
-      </div>
-
-      {/* CENTER ZONE: Annotation Tools (Icon-only 38x38 Buttons) */}
-      <div
-        data-testid="ribbon-center-zone"
-        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
-      >
-        <button
-          type="button"
-          data-testid="ribbon-marker-btn"
-          data-tooltip="Insert Step Marker (1, 2, 3...)"
-          onClick={onToggleMarker}
-          style={{
-            width: '38px',
-            height: '38px',
-            backgroundColor: isMarkerActive ? 'var(--color-accent-subtle)' : 'var(--color-surface)',
-            color: isMarkerActive ? 'var(--color-accent)' : 'var(--color-text)',
-            border: isMarkerActive ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: '1rem',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-          }}
-        >
-          🔢
-        </button>
-
-        <button
-          type="button"
-          data-testid="ribbon-delete-marker-btn"
-          data-tooltip={deleteTooltip}
-          onClick={onDeleteActiveTarget}
-          disabled={!canDelete}
-          style={{
-            width: '38px',
-            height: '38px',
-            backgroundColor: 'var(--color-surface)',
-            color: canDelete ? 'var(--color-danger)' : 'var(--color-text-dim)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: '1rem',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: canDelete ? 'pointer' : 'not-allowed',
-            opacity: canDelete ? 1 : 0.5,
-          }}
-        >
-          🗑️
-        </button>
-
-        <button
-          type="button"
-          data-testid="ribbon-crop-btn"
-          data-tooltip="Crop Image (C)"
-          onClick={onToggleCrop}
-          style={{
-            width: '38px',
-            height: '38px',
-            backgroundColor: isCropActive ? 'var(--color-accent-subtle)' : 'var(--color-surface)',
-            color: isCropActive ? 'var(--color-accent)' : 'var(--color-text)',
-            border: isCropActive ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: '1rem',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-          }}
-        >
-          ✂️
         </button>
       </div>
 

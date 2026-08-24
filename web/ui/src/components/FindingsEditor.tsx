@@ -8,7 +8,6 @@ import { MarkerLayer, MarkerItem } from './MarkerLayer';
 import { StudioRibbon } from './StudioRibbon';
 import { FilmstripTray } from './FilmstripTray';
 import { PropertiesPanel } from './PropertiesPanel';
-import { CropOverlay, CropRect } from './CropOverlay';
 
 export interface FindingItemDto {
   id: string;
@@ -107,8 +106,6 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [imageLoadError, setImageLoadError] = useState(false);
-  const [isMarkerMode, setIsMarkerMode] = useState(true);
-  const [isCropMode, setIsCropMode] = useState(false);
 
   // Sync note text when selection changes
   useEffect(() => {
@@ -229,27 +226,6 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
     }
   };
 
-  // Context-aware delete action (Marker if selected, otherwise Selected Filmstrip Findings / Active Finding)
-  const handleDeleteActiveTarget = () => {
-    if (selectedMarkerId && onDeleteMarker && selectedFinding) {
-      onDeleteMarker(selectedFinding.finding.id, selectedMarkerId);
-      setSelectedMarkerId(null);
-    } else if (checkedFindingIds.size > 0) {
-      promptDeleteFinding(Array.from(checkedFindingIds));
-    } else if (selectedFinding) {
-      promptDeleteFinding([selectedFinding.finding.id]);
-    }
-  };
-
-  const canDeleteActiveTarget = Boolean(selectedMarkerId || checkedFindingIds.size > 0 || selectedFinding);
-  const deleteTooltip = selectedMarkerId
-    ? 'Delete Selected Marker (Del)'
-    : checkedFindingIds.size > 1
-    ? `Delete ${checkedFindingIds.size} Selected Screenshots (Del)`
-    : selectedFinding
-    ? 'Delete Screenshot from Queue (Del)'
-    : 'Nothing to delete';
-
   // Handle Confirm Delete Finding
   const handleConfirmDelete = async () => {
     setIsDeleting(true);
@@ -355,18 +331,11 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
         overflow: 'hidden',
       }}
     >
-      {/* TOP: 3-Zone Balanced Studio Ribbon */}
+      {/* TOP: Studio Ribbon */}
       <StudioRibbon
         onCaptureClick={onCaptureClick}
         onOpenFileClick={onOpenFileClick}
         onPasteClick={onPasteClick}
-        isMarkerActive={isMarkerMode}
-        onToggleMarker={() => setIsMarkerMode((v) => !v)}
-        canDelete={canDeleteActiveTarget}
-        deleteTooltip={deleteTooltip}
-        onDeleteActiveTarget={handleDeleteActiveTarget}
-        isCropActive={isCropMode}
-        onToggleCrop={() => setIsCropMode((v) => !v)}
         onAssembleBundle={() => {
           const ids = checkedFindingIds.size > 0 ? Array.from(checkedFindingIds) : (selectedFinding ? [selectedFinding.finding.id] : []);
           onCompose?.(ids);
@@ -518,21 +487,7 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
                       onSelectMarker={setSelectedMarkerId}
                       onHoverMarker={setHoveredMarkerId}
                       onDeleteMarker={handleDeleteMarker}
-                      disabled={isCropMode || !isMarkerMode}
                     />
-
-                    {/* Crop Overlay when active */}
-                    {isCropMode && (
-                      <CropOverlay
-                        imageWidth={selectedFinding.finding.image_width}
-                        imageHeight={selectedFinding.finding.image_height}
-                        onApplyCrop={(rect: CropRect) => {
-                          console.log('Applied crop:', rect);
-                          setIsCropMode(false);
-                        }}
-                        onCancelCrop={() => setIsCropMode(false)}
-                      />
-                    )}
                   </div>
                 </div>
               )
