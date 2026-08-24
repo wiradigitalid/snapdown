@@ -153,12 +153,77 @@ impl LocalApiClient {
 }
 
 fn parse_error_response(_code: u16, resp: ureq::Response) -> String {
+    parse_error_response_reader(_code, resp.into_reader())
+}
+
+pub fn parse_error_response_reader<R: Read>(code: u16, mut reader: R) -> String {
     let mut body = String::new();
-    let _ = resp.into_reader().read_to_string(&mut body);
+    if let Err(e) = reader.read_to_string(&mut body) {
+        return format!("internal: HTTP {code} (failed to read error response: {e})");
+    }
 
     if let Ok(env) = serde_json::from_str::<ApiErrorEnvelope>(&body) {
         format!("{}: {}", env.error.code, env.error.message)
+    } else if body.trim().is_empty() {
+        format!("internal: HTTP {code} (empty error response)")
     } else {
         body
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io;
+
+    struct FailingReader;
+    impl io::Read for FailingReader {
+        fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+            Err(io::Error::new(
+                io::ErrorKind::ConnectionReset,
+                "connection reset",
+            ))
+        }
+    }
+
+    #[test]
+    fn a_failed_error_body_read_never_yields_an_empty_message() {
+        let err_msg = parse_error_response_reader(502, FailingReader);
+        assert!(!err_msg.is_empty());
+        assert!(!err_msg.trim().is_empty());
+
+        let invalid_utf8_bytes: &[u8] = &[0xFF, 0xFE, 0xFD];
+        let invalid_utf8_err = parse_error_response_reader(500, invalid_utf8_bytes);
+        assert!(!invalid_utf8_err.is_empty());
+
+        let empty_reader: &[u8] = b"";
+        let empty_body_err = parse_error_response_reader(404, empty_reader);
+        assert!(!empty_body_err.is_empty());
+    }
+
+    #[test]
+    fn the_status_code_survives_a_failed_error_body_read() {
+        let err_msg = parse_error_response_reader(502, FailingReader);
+        assert!(err_msg.contains("502"));
+        assert!(err_msg.contains("internal:"));
+
+        let invalid_utf8_bytes: &[u8] = &[0xFF, 0xFE];
+        let invalid_utf8_err = parse_error_response_reader(500, invalid_utf8_bytes);
+        assert!(invalid_utf8_err.contains("500"));
+
+        let empty_reader: &[u8] = b"";
+        let empty_body_err = parse_error_response_reader(404, empty_reader);
+        assert!(empty_body_err.contains("404"));
+    }
+
+    #[test]
+    fn a_readable_error_envelope_is_still_parsed_as_before() {
+        let json_body = br#"{"error":{"code":"key_required","message":"Key required","detail":null,"request_id":"req-1"}}"#;
+        let err_msg = parse_error_response_reader(401, &json_body[..]);
+        assert_eq!(err_msg, "key_required: Key required");
+
+        let plain_body = b"Service Unavailable";
+        let plain_err = parse_error_response_reader(503, &plain_body[..]);
+        assert_eq!(plain_err, "Service Unavailable");
     }
 }
