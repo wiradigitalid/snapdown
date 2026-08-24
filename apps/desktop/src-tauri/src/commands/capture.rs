@@ -180,6 +180,13 @@ pub fn capture_screen_region(
         let _ = overlay_win.hide();
     }
 
+    // Restore main studio window after capture
+    if let Some(main_win) = app.get_webview_window("main") {
+        let _ = main_win.show();
+        let _ = main_win.unminimize();
+        let _ = main_win.set_focus();
+    }
+
     let _ = app.emit("capture-completed", ());
 
     Ok(result)
@@ -188,6 +195,11 @@ pub fn capture_screen_region(
 #[tauri::command]
 pub fn trigger_overlay(app: AppHandle) -> Result<(), String> {
     let _ = app.emit("overlay-reset", ());
+
+    // Hide main studio window so it does not block or appear in the screenshot
+    if let Some(main_win) = app.get_webview_window("main") {
+        let _ = main_win.hide();
+    }
 
     if let Some(existing) = app.get_webview_window("overlay") {
         let _ = existing.show();
@@ -215,6 +227,14 @@ pub fn dismiss_overlay(app: AppHandle) -> Result<(), String> {
     if let Some(overlay_win) = app.get_webview_window("overlay") {
         let _ = overlay_win.hide();
     }
+
+    // Restore main studio window when capture overlay is cancelled/dismissed
+    if let Some(main_win) = app.get_webview_window("main") {
+        let _ = main_win.show();
+        let _ = main_win.unminimize();
+        let _ = main_win.set_focus();
+    }
+
     Ok(())
 }
 
