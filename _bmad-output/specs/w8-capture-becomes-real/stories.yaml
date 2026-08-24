@@ -83,3 +83,38 @@
     asserting nothing all along, REPORT IT as a finding rather than quietly rewriting it; that is
     information about how this repository got here. Never commit a fixture derived from real capture
     output - synthesise it.
+
+- id: "W8-S6"
+  title: The burn is actually called, and the recorded path holds a file
+  description: >-
+    apps/desktop/src-tauri/src/commands/bundle.rs:41-48 records
+    `bundles/{bundle_id}/finding_{pos}_burned.webp` as BundleItem.image_path for every item, and
+    nothing ever writes that file. A repo-wide grep for MarkerBurner outside its own file and tests
+    returns two hits and both are re-exports, so the burn W8-S3 built is unreachable from the running
+    application. Call it during composition and write the result to the recorded path. This is a
+    DEFECT FIX restoring a promise that already exists - it adds no behaviour. See SPEC.md CAP-4,
+    defects.yaml BUG-19, SDD-bundle.md:36 and data-model.md:63.
+  invoke_dev_with: >-
+    THE CORPUS ALREADY SAYS WHAT TO BUILD - do not design anything. SDD-bundle.md:36 - "Markers are
+    burned at compose time, into a copy" - and data-model.md:63 - image_path is "the Bundle's own
+    copy, relative to the Vault root. Not the Finding's". LC-010 bundle-composer owns "read the
+    Findings, burn the images, render the Markdown, write the rows and files" as ONE transaction, and
+    LC-012 converts normalised coordinates to pixels there and nowhere else. AD-2 binds the unit of
+    work: the bundle_item row MUST NOT be committed before its file exists, and UC-9's failure flows
+    are explicit - a failed burn abandons the whole composition, no rows and no files (BR-5), and a
+    store write that fails after the files are written removes them again. AD-4 and BR-8 still govern:
+    the burn takes the ALREADY-REDUCED bytes and MUST NOT re-reduce or re-scale them. A Finding with
+    NO Markers still gets its own image copy with nothing drawn on it (UC-9 alternate flow 1) -
+    "burning no markers returns the source bytes unchanged" is what makes that copy byte-identical,
+    not a reason to skip writing it. ASSERT ON THE FILE, NEVER ON THE PATH STRING: this is the fifth
+    time a unit has been built, unit-tested and mounted nowhere here (BUG-4, BUG-5, BUG-6, the
+    EmptyState sweep), and there is still no composition test class (OQ-23). THE EXTENSION DISAGREEMENT
+    IS AN OPEN QUESTION, NOT YOURS TO SETTLE QUIETLY: the recorded path says .webp and the burner emits
+    PNG, and OQ-26 records that the corpus names NO image format anywhere. Read OQ-26 before you touch
+    the extension; if you pick one, record a DEC- and say so - do not amend .what/ or .how/. Do not
+    touch BUG-1's finding_id cascade; it is a non-goal here. THE THREE TESTS, carried verbatim from
+    waves.yaml: cargo::a_bundle_item_image_path_holds_a_file_that_decodes ;
+    cargo::an_exported_bundle_image_carries_the_markers_of_its_finding ;
+    cargo::a_bundle_export_does_not_re_reduce_the_stored_image . MUTATION IS THE ACCEPTANCE CRITERION,
+    as everywhere in this wave: for each of the three, break the thing it claims to cover, watch it go
+    red, and put it back.
