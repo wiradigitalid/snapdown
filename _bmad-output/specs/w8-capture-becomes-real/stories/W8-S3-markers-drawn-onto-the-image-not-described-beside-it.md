@@ -3,7 +3,7 @@ id: W8-S3
 title: "W8-S3: Markers drawn onto the image, not described beside it"
 type: 'feature'
 wave: W8
-status: ready-for-dev
+status: done
 created: '2026-08-24'
 review_loop_iteration: 0
 followup_review_recommended: false
