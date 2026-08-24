@@ -78,6 +78,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         flexDirection: 'row',
         flexWrap: 'wrap',
         alignItems: 'flex-start',
+        alignContent: 'flex-start',
         gap: 'var(--settings-group-gap)',
         boxSizing: 'border-box',
         width: '100%',
@@ -95,7 +96,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           justifyContent: 'space-between',
           borderBottom: '1px solid var(--color-border)',
           paddingBottom: 'var(--space-3)',
-          marginBottom: 'var(--space-2)',
+          marginBottom: 'var(--space-1)',
           flexShrink: 0,
           gap: 'var(--space-2)',
         }}
@@ -237,7 +238,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </>
       )}
 
-      {/* TAB 2: Local Agent Bridge & Token Management */}
+      {/* TAB 2: Local Agent Bridge & Token Management (Top-Aligned Full Region) */}
       {activeTab === 'agent-bridge' && (
         <div
           id="settings-tabpanel-agent-bridge"
@@ -247,10 +248,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           style={{
             display: 'flex',
             flexDirection: 'column',
+            justifyContent: 'flex-start',
+            alignItems: 'stretch',
             gap: 'var(--space-4)',
             width: '100%',
+            boxSizing: 'border-box',
           }}
         >
+          {/* Bridge Status Summary Card */}
           <div
             style={{
               padding: 'var(--space-4)',
@@ -260,6 +265,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               display: 'flex',
               flexDirection: 'column',
               gap: 'var(--space-2)',
+              width: '100%',
+              boxSizing: 'border-box',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -283,11 +290,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               Provides stdio & HTTP bridge for Claude Code, Codex, and OpenCode AI agents to observe and capture UI states.
             </p>
           </div>
-          {agentAccessContent}
+
+          {/* Access Key Management Panel */}
+          <div style={{ width: '100%', boxSizing: 'border-box' }}>
+            {agentAccessContent}
+          </div>
         </div>
       )}
 
-      {/* TAB 3: About Snapdown & Architecture */}
+      {/* TAB 3: About Snapdown & Architecture (Full Height Region, Equal Margins) */}
       {activeTab === 'about' && (
         <div
           id="settings-tabpanel-about"
@@ -296,7 +307,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           data-testid="settings-tabpanel-about"
           style={{
             width: '100%',
-            minHeight: '440px',
+            minHeight: '480px',
+            flex: '1 1 100%',
             padding: 'var(--space-8) var(--space-6)',
             backgroundColor: 'var(--color-surface)',
             border: '1px solid var(--color-border)',

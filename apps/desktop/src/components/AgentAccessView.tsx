@@ -39,7 +39,7 @@ export const AgentAccessView: React.FC = () => {
   };
 
   return (
-    <div data-testid="desktop-agent-access-view" style={{ padding: 0 }}>
+    <div data-testid="desktop-agent-access-view" style={{ padding: 0, width: '100%', boxSizing: 'border-box' }}>
       <SharedAgentAccessView
         hasActiveKey={status.has_active_key}
         keyId={status.key_id}
