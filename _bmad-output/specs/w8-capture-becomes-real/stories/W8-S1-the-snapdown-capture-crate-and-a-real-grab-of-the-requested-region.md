@@ -1,4 +1,4 @@
-﻿---
+---
 id: W8-S1
 title: "W8-S1: The snapdown-capture crate, and a real grab of the requested region"
 type: 'feature'
