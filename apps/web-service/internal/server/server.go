@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/http"
 	"strings"
 
@@ -145,15 +146,17 @@ func (s *Server) handleGetBundle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Default HTML render wrapper
-	html := fmt.Sprintf(`<!DOCTYPE html>
+	escapedSlug := html.EscapeString(slug)
+	escapedMarkdown := html.EscapeString(b.Markdown)
+	htmlContent := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><title>Snapdown Review - %s</title></head>
 <body><pre>%s</pre></body>
-</html>`, slug, b.Markdown)
+</html>`, escapedSlug, escapedMarkdown)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(html))
+	_, _ = w.Write([]byte(htmlContent))
 }
 
 func (s *Server) handleGetRawMarkdown(w http.ResponseWriter, r *http.Request) {
