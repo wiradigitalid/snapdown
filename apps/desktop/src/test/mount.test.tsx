@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { Root } from '../main';
+
+vi.mock('@tauri-apps/api/webviewWindow', () => ({
+  getCurrentWebviewWindow: vi.fn(),
+}));
 
 vi.mock('../services/settings', () => ({
   getSettings: vi.fn().mockResolvedValue({
@@ -23,6 +28,9 @@ describe('Root Mount Decision (BUG-4)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getCurrentWebviewWindow).mockImplementation(() => {
+      throw new Error('Not running inside Tauri window');
+    });
   });
 
   afterEach(() => {
@@ -30,6 +38,26 @@ describe('Root Mount Decision (BUG-4)', () => {
       writable: true,
       value: originalLocation,
     });
+  });
+
+  it('mounts CaptureOverlay when Tauri window label is overlay', async () => {
+    vi.mocked(getCurrentWebviewWindow).mockReturnValue({
+      label: 'overlay',
+    } as unknown as WebviewWindow);
+
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: {
+        ...originalLocation,
+        search: '',
+      },
+    });
+
+    render(<Root />);
+
+    expect(screen.getByTestId('capture-overlay')).toBeInTheDocument();
+    expect(screen.queryByTestId('editor-shell')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
   });
 
   it('mounts CaptureOverlay when URL query has overlay=true', async () => {
@@ -48,7 +76,11 @@ describe('Root Mount Decision (BUG-4)', () => {
     expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
   });
 
-  it('mounts App (Editor shell) when URL query is empty', async () => {
+  it('mounts App (Editor shell) when URL query is empty and window is main', async () => {
+    vi.mocked(getCurrentWebviewWindow).mockReturnValue({
+      label: 'main',
+    } as unknown as WebviewWindow);
+
     Object.defineProperty(window, 'location', {
       writable: true,
       value: {

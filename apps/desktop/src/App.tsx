@@ -73,9 +73,11 @@ export const App: React.FC<{ initialTab?: NavigationTab }> = ({ initialTab = 'fi
         .then((fn) => {
           unlisten = fn;
         })
-        .catch(() => {
-          // Ignored when outside Tauri environment
-        });
+        .catch(() => {});
+
+      listen('capture-completed', () => {
+        setActiveTab('findings');
+      }).catch(() => {});
     } catch {
       // Ignored outside Tauri
     }

@@ -5,6 +5,7 @@
   "windows": ["main", "overlay"],
   "permissions": [
     "core:default",
+    "core:event:default",
     "autostart:default"
   ]
 }

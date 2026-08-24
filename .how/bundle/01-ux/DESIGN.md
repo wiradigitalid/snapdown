@@ -8,7 +8,11 @@ updated: "2026-08-23"
 
 # DESIGN — Bundle
 
-Tokens, elements, and both themes are in `.how/_platform/design-system.md`.
+Tokens, elements, and both themes are in [`.how/_platform/design-system.md`](../../_platform/design-system.md) and demonstrated live in [`.how/_platform/assets/design-system.html`](../../_platform/assets/design-system.html).
+
+### Living Design Assets (.how Layer)
+- **3-Column Bundle Review & Assembly Modal**: [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](assets/04-bundle-assembly-modal.html)
+- **Saved Review Bundles Drawer**: [`.how/bundle/01-ux/assets/05-saved-bundles-drawer.html`](assets/05-saved-bundles-drawer.html)
 
 ## Tokens
 

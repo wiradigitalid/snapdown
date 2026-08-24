@@ -167,7 +167,7 @@ pub fn capture_screen_region(
         RegionCapturer::capture_region(&core_region, region.source_monitor.as_deref()).map_err(
             |e| {
                 if let Some(overlay_win) = app.get_webview_window("overlay") {
-                    let _ = overlay_win.close();
+                    let _ = overlay_win.hide();
                 }
                 e.to_string()
             },
@@ -177,7 +177,7 @@ pub fn capture_screen_region(
 
     // Close capture overlay window if present
     if let Some(overlay_win) = app.get_webview_window("overlay") {
-        let _ = overlay_win.close();
+        let _ = overlay_win.hide();
     }
 
     let _ = app.emit("capture-completed", ());
@@ -187,24 +187,23 @@ pub fn capture_screen_region(
 
 #[tauri::command]
 pub fn trigger_overlay(app: AppHandle) -> Result<(), String> {
+    let _ = app.emit("overlay-reset", ());
+
     if let Some(existing) = app.get_webview_window("overlay") {
         let _ = existing.show();
         let _ = existing.set_focus();
         return Ok(());
     }
 
-    let overlay_window = WebviewWindowBuilder::new(
-        &app,
-        "overlay",
-        WebviewUrl::App("index.html?overlay=true".into()),
-    )
-    .title("Snapdown Capture Overlay")
-    .transparent(true)
-    .decorations(false)
-    .always_on_top(true)
-    .fullscreen(true)
-    .build()
-    .map_err(|e| format!("Failed to create overlay window: {e}"))?;
+    let overlay_window =
+        WebviewWindowBuilder::new(&app, "overlay", WebviewUrl::App("index.html".into()))
+            .title("Snapdown Capture Overlay")
+            .transparent(true)
+            .decorations(false)
+            .always_on_top(true)
+            .fullscreen(true)
+            .build()
+            .map_err(|e| format!("Failed to create overlay window: {e}"))?;
 
     let _ = overlay_window.set_focus();
 
@@ -214,7 +213,7 @@ pub fn trigger_overlay(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn dismiss_overlay(app: AppHandle) -> Result<(), String> {
     if let Some(overlay_win) = app.get_webview_window("overlay") {
-        let _ = overlay_win.close();
+        let _ = overlay_win.hide();
     }
     Ok(())
 }

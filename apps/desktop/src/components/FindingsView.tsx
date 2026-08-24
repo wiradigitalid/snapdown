@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { FindingsEditor, FindingDetailItemDto } from '@snapdown/ui';
 import {
   addMarker,
@@ -66,7 +67,7 @@ export const FindingsView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'findings' | 'orphan-report'>('findings');
 
-  const fetchFindingsData = useCallback(async () => {
+  const fetchFindingsData = useCallback(async (autoSelectFirst = false) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -86,7 +87,7 @@ export const FindingsView: React.FC = () => {
 
       setSelectedId((current) => {
         if (findingsList.length > 0) {
-          if (!current || !findingsList.some((f) => f.finding.id === current)) {
+          if (autoSelectFirst || !current || !findingsList.some((f) => f.finding.id === current)) {
             return findingsList[0].finding.id;
           }
           return current;
@@ -103,6 +104,24 @@ export const FindingsView: React.FC = () => {
 
   useEffect(() => {
     fetchFindingsData();
+
+    let unlistenFn: (() => void) | undefined;
+    try {
+      const promise = listen('capture-completed', () => {
+        fetchFindingsData(true);
+      });
+      promise.then((fn) => {
+        unlistenFn = fn;
+      }).catch(() => {});
+    } catch {
+      // Non-Tauri fallback
+    }
+
+    return () => {
+      if (unlistenFn) {
+        unlistenFn();
+      }
+    };
   }, [fetchFindingsData]);
 
   // Map findings to UI format with converted file src URLs
@@ -239,7 +258,7 @@ export const FindingsView: React.FC = () => {
         onUpdateMarkerPosition={handleUpdateMarkerPosition}
         onDeleteMarker={handleDeleteMarker}
         onOpenOrphanReport={() => setViewMode('orphan-report')}
-        onRetry={fetchFindingsData}
+        onRetry={() => fetchFindingsData(false)}
       />
     </div>
   );

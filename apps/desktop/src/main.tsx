@@ -1,11 +1,30 @@
 import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { App } from './App';
 import { CaptureOverlay } from './components/CaptureOverlay';
 import './styles/tokens.css';
 
+function isOverlayMode(): boolean {
+  try {
+    const currentWindow = getCurrentWebviewWindow();
+    if (currentWindow && currentWindow.label === 'overlay') {
+      return true;
+    }
+  } catch {
+    // Non-Tauri environment / test fallback
+  }
+  if (typeof window !== 'undefined') {
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get('overlay') === 'true') {
+      return true;
+    }
+  }
+  return false;
+}
+
 export const Root: React.FC = () => {
-  const isOverlay = new URLSearchParams(window.location.search).get('overlay') === 'true';
+  const isOverlay = isOverlayMode();
 
   useEffect(() => {
     if (isOverlay) {
@@ -28,4 +47,3 @@ if (rootElement) {
     </React.StrictMode>
   );
 }
-

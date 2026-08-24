@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snapdown Studio — State 6A: Settings - General & Quality</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --color-surface: #ffffff;
+      --color-surface-sunken: #f1f5f9;
+      --color-border: #cbd5e1;
+      --color-accent: #0284c7;
+      --color-success-bg: #dcfce7;
+      --color-success-text: #166534;
+      --font-ui: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+      --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: rgba(15, 23, 42, 0.85);
+      color: #0f172a;
+      font-family: var(--font-ui);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .settings-window {
+      background: #ffffff;
+      border: 1px solid var(--color-border);
+      border-radius: 14px;
+      width: 100%;
+      max-width: 860px;
+      box-shadow: var(--shadow-modal);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      padding: 8px 16px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      background: #ffffff;
+      border: 1px solid var(--color-border);
+      border-bottom: none;
+      border-radius: 6px 6px 0 0;
+      font-weight: 800;
+      color: var(--color-accent);
+    }
+    .segmented-btn {
+      background: transparent;
+      border: none;
+      padding: 6px 0;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #64748b;
+      cursor: pointer;
+    }
+    .segmented-btn.active {
+      background: var(--color-accent);
+      color: white;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="settings-window">
+    <!-- Header -->
+    <div style="background: #ffffff; border-bottom: 1px solid var(--color-border); padding: 14px 22px; display: flex; justify-content: space-between; align-items: center;">
+      <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 1rem;">
+        <span>⚙️</span>
+        <span>Snapdown Preferences &amp; Agent Access</span>
+      </div>
+      <span style="cursor: pointer; font-weight: 800; color: #64748b; font-size: 1.1rem;">✕</span>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display: flex; gap: 4px; padding: 10px 22px 0 22px; background: var(--color-surface-sunken); border-bottom: 1px solid var(--color-border);">
+      <button class="tab-btn active"><span>⚙️</span> General &amp; Quality</button>
+      <button class="tab-btn"><span>⌨️</span> Hotkeys</button>
+      <button class="tab-btn"><span>🤖</span> Local Agent Bridge</button>
+      <button class="tab-btn"><span>ℹ️</span> About</button>
+    </div>
+
+    <!-- 2-Column Packed Body -->
+    <div style="padding: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px;">
+      <!-- Left Column -->
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="background: var(--color-surface-sunken); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-weight: 800; font-size: 0.78rem;">SYSTEM STARTUP (FR-18)</div>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 0.78rem; cursor: pointer; font-weight: 600;">
+            <input type="checkbox" checked style="accent-color: var(--color-accent); width: 14px; height: 14px;">
+            <span>Run Snapdown at Windows Startup</span>
+          </label>
+          <div style="font-size: 0.7rem; color: #64748b; line-height: 1.4;">
+            Starts minimized in system tray on login for instant background capture.
+          </div>
+        </div>
+
+        <div style="background: var(--color-surface-sunken); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-weight: 800; font-size: 0.78rem;">VAULT STORAGE FOLDER</div>
+          <input type="text" value="C:\Users\User\SnapdownVault" readonly style="background: #ffffff; border: 1px solid var(--color-border); border-radius: 4px; padding: 8px 10px; font-family: var(--font-mono); font-size: 0.72rem;">
+          <div style="display: flex; gap: 6px;">
+            <button style="height: 28px; padding: 0 12px; font-size: 0.72rem; font-weight: 700; background: white; border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">Browse Folder</button>
+            <button style="height: 28px; padding: 0 12px; font-size: 0.72rem; font-weight: 700; background: white; border: 1px solid var(--color-border); border-radius: 4px; cursor: pointer;">Open Explorer</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column -->
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="background: var(--color-surface-sunken); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-weight: 800; font-size: 0.78rem;">MULTIMODAL QUALITY BUDGET</div>
+            <span style="font-size: 0.65rem; background: var(--color-success-bg); color: var(--color-success-text); padding: 2px 6px; border-radius: 4px; font-weight: 800;">DEC-004</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); background: #ffffff; border: 1px solid var(--color-border); border-radius: 6px; padding: 2px; gap: 2px;">
+            <button class="segmented-btn active">Auto</button>
+            <button class="segmented-btn">Sharp</button>
+            <button class="segmented-btn">Balanced</button>
+            <button class="segmented-btn">Small</button>
+          </div>
+
+          <div style="font-size: 0.7rem; color: #64748b; line-height: 1.4;">
+            <strong>Auto:</strong> Skenario adaptif cerdas. Menyesuaikan resolusi berdasarkan luas area tangkapan (~120 KB / ~400-800 tokens).
+          </div>
+
+          <div style="font-size: 0.7rem; color: #0f172a; font-family: var(--font-mono); background: #ffffff; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--color-border);">
+            Latest capture: 184 KB · 1408 px · Auto
+          </div>
+
+          <div style="border-top: 1px dashed var(--color-border); padding-top: 6px; font-size: 0.7rem; color: var(--color-accent); font-weight: 700; cursor: pointer;">
+            <span>▸ Advanced Compression Settings (Dimensions &amp; Quality)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="background: #ffffff; border-top: 1px solid var(--color-border); padding: 14px 22px; display: flex; justify-content: space-between; align-items: center;">
+      <span style="font-size: 0.72rem; color: #64748b;">Preferensi tersimpan otomatis ke SQLite database.</span>
+      <button style="height: 34px; padding: 0 18px; font-size: 0.78rem; font-weight: 700; background: var(--color-accent); color: white; border: none; border-radius: 6px; cursor: pointer;">Done &amp; Close</button>
+    </div>
+  </div>
+
+</body>
+</html>

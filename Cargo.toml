@@ -27,7 +27,7 @@ tempfile = "3.10"
 tiny_http = "0.12"
 ureq = "2.9"
 base64 = "0.22"
-tauri = { version = "2.0", features = ["tray-icon"] }
+tauri = { version = "2.0", features = ["tray-icon", "protocol-asset"] }
 tauri-build = { version = "2.0" }
 tauri-plugin-single-instance = { version = "2.0" }
 tauri-plugin-global-shortcut = { version = "2.0" }

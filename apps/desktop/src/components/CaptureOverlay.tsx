@@ -1,4 +1,5 @@
-﻿import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { captureScreenRegion, dismissOverlay, CaptureResultDto } from '../services/capture';
 import { CaptureNoteField } from './CaptureNoteField';
 
@@ -40,16 +41,31 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
   });
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const resetState = useCallback(() => {
+    setPhase('armed');
+    setNote('');
+    setPendingRegion(null);
+    setErrorMsg(null);
+    setDrag({
+      startX: 0,
+      startY: 0,
+      currentX: 0,
+      currentY: 0,
+      isDragging: false,
+    });
+  }, []);
+
   const handleCancel = useCallback(async () => {
     try {
       await dismissOverlay();
     } catch {
       // ignore
     }
+    resetState();
     if (onDismiss) {
       onDismiss();
     }
-  }, [onDismiss]);
+  }, [onDismiss, resetState]);
 
   const handleKeyDown = useCallback(
     async (e: KeyboardEvent) => {
@@ -65,6 +81,26 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  useEffect(() => {
+    let unlistenFn: (() => void) | undefined;
+    try {
+      const promise = listen('overlay-reset', () => {
+        resetState();
+      });
+      promise.then((fn) => {
+        unlistenFn = fn;
+      }).catch(() => {});
+    } catch {
+      // Non-Tauri fallback
+    }
+
+    return () => {
+      if (unlistenFn) {
+        unlistenFn();
+      }
+    };
+  }, [resetState]);
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0) return; // Left mouse button only
@@ -124,6 +160,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
         ...pendingRegion,
         note,
       });
+      resetState();
       if (onCaptureComplete) {
         onCaptureComplete(res);
       }

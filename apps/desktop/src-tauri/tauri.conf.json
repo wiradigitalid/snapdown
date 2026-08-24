@@ -22,10 +22,24 @@
         "resizable": true,
         "fullscreen": false,
         "visible": false
+      },
+      {
+        "title": "Snapdown Capture Overlay",
+        "label": "overlay",
+        "url": "index.html",
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "fullscreen": true,
+        "visible": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
     }
   },
   "bundle": {

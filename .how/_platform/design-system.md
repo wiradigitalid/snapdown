@@ -8,6 +8,11 @@ updated: "2026-08-23"
 
 # Design System — Snapdown
 
+## Living Specification & Interactive Catalog
+The complete visual catalog and interactive design system artifact is permanently housed in the `.how/` platform layer:
+👉 [`.how/_platform/assets/design-system.html`](assets/design-system.html)
+👉 Complete Flow Machine: [`.how/_platform/assets/ui-ux-complete-flow.html`](assets/ui-ux-complete-flow.html)
+
 ## Where the values actually live
 
 | Source of truth | Path | Holds |
@@ -95,6 +100,21 @@ spine wins. Corrected 2026-08-23.
 Unchanged from `tokens.css` and not restated here: `--space-1`..`--space-6`, `--radius-sm|md`,
 `--font-ui`, `--font-mono`, `--text-xs`..`--text-xl`, `--shadow-raised`, `--z-overlay|toast|modal`.
 
+### Typography & Font Stacks
+- **Primary UI**: `Plus Jakarta Sans`, `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
+- **Monospace Telemetry**: `JetBrains Mono`, `ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
+
+### Standardized Iconography System
+Zero-dependency, high-contrast visual glyphs:
+- `🔴` Capture Region Scrim (`Ctrl+Shift+S`)
+- `🔢` Insert Step Marker Stamp
+- `✂️` Crop Image Mode
+- `🗑️` Delete Action (Marker & Bundle)
+- `📦` Assemble Bundle Action
+- `📋` Copy Markdown to Clipboard
+- `🤖` Local MCP Agent Bridge (`port:3849`)
+- `⚙️` Settings & Preferences Modal
+
 One addition the density work needs:
 
 | Token | For | Resolves in |
@@ -102,7 +122,7 @@ One addition the density work needs:
 | `--space-0` | `2px` — the gap inside a badge or between a label and its own control | to add |
 | `--radius-full` | A pill: a badge, a segmented-control thumb | to add |
 
-## Base elements
+## Base elements & Component Inventory
 
 Registered as `LC` of type `ui-element` in `components.yaml`. Each row's **States it MUST support** is
 what `NFR-16` is checked against — every state is a state something is readable in, or it is a defect.
@@ -110,15 +130,24 @@ what `NFR-16` is checked against — every state is a state something is readabl
 | Element | States it MUST support | Implementation |
 |---|---|---|
 | `Button` | default · hover · active · focus-visible · disabled · busy | `web/ui` |
-| `SegmentedControl` | **New.** each option unselected · selected · focus-visible · disabled | `web/ui` |
+| `TextField` | default · focus-visible · invalid · disabled · read-only | `web/ui` |
+| `TextArea` | default · focus-visible · invalid · disabled · read-only | `web/ui` |
+| `Checkbox` | checked · unchecked · indeterminate · disabled | `web/ui` |
+| `SegmentedControl` | each option unselected · selected · focus-visible · disabled | `web/ui` |
 | `Toggle` | on · off · **indeterminate** · focus-visible · disabled | `web/ui` |
-| `TextInput` | default · focus-visible · invalid · disabled · read-only | `web/ui` |
-| `Badge` | success · warning · neutral · danger | `web/ui` |
-| `HotkeyChip` | **New.** bound · listening · unbound · conflicted | `web/ui` |
+| `Badge` | success · warning · neutral · danger · info | `web/ui` |
+| `MarkerBadge` | ordinal number · focused · dragged · theme-invariant | `web/ui` |
+| `MarkerLayer` | idle · inserting · dragging · delete-key-bound | `web/ui` |
+| `HotkeyChip` | bound · listening · unbound · conflicted | `web/ui` |
 | `Disclosure` | collapsed · expanded · focus-visible | `web/ui` |
-| `EmptyState` | **New.** an illustration slot, a sentence, one action | `web/ui` |
-| `ErrorState` | **New.** what failed, in the Reviewer's terms, and what they can do | `web/ui` |
+| `Modal` / `ConfirmDialog`| mounted · backdrop-blur · keydown-esc · confirm · cancel | `web/ui` |
+| `EmptyState` | an illustration slot, a sentence, one action | `web/ui` |
+| `ErrorState` | what failed, in the Reviewer's terms, and what they can do | `web/ui` |
 | `Toast` | info · success · danger, auto-dismiss and manual | `web/ui` |
+| `TokenEstimator` | calculated image + text sum · live telemetry | `web/ui` |
+| `LoupeViewport` *(W10)* | 6x pixel grid · center reticle · hex/rgb inspector | `web/ui` |
+| `AxisGuides` *(W9)* | crosshair horizontal/vertical axes · edge-flipped HUD | `web/ui` |
+| `SnappingHighlight` *(W11)*| magnetic boundary box · 8px threshold · alt-disable | `web/ui` |
 
 `Toggle`'s **indeterminate** state is not decoration. `FR-18` requires the startup control to reflect
 the real OS registration and never an intended one, and reading that state is asynchronous. Without a

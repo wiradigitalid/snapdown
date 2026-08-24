@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snapdown Studio — State 2: Capture Overlay & Note Prompt</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --color-surface: #ffffff;
+      --color-surface-sunken: #f1f5f9;
+      --color-border: #cbd5e1;
+      --color-accent: #0284c7;
+      --color-overlay-scrim: rgba(15, 23, 42, 0.75);
+      --font-ui: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+      --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0b0f19;
+      color: #ffffff;
+      font-family: var(--font-ui);
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+      -webkit-font-smoothing: antialiased;
+    }
+    .overlay-backdrop {
+      position: absolute;
+      inset: 0;
+      background: var(--color-overlay-scrim);
+      backdrop-filter: blur(2px);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 24px;
+    }
+    .hud-instruction {
+      align-self: center;
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: white;
+      padding: 8px 24px;
+      border-radius: 9999px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+    .selection-box {
+      position: absolute;
+      top: 140px;
+      left: 180px;
+      width: 520px;
+      height: 320px;
+      border: 2px solid #0284c7;
+      background: rgba(2, 132, 199, 0.15);
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+    }
+    .dimension-badge {
+      position: absolute;
+      bottom: -28px;
+      left: 0;
+      background: #0284c7;
+      color: white;
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+    .floating-note-popup {
+      position: absolute;
+      top: 16px;
+      right: -320px;
+      width: 300px;
+      background: #ffffff;
+      color: #0f172a;
+      border: 1px solid var(--color-border);
+      border-radius: 10px;
+      padding: 14px;
+      box-shadow: var(--shadow-modal);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .btn-action {
+      height: 30px;
+      padding: 0 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="overlay-backdrop">
+    <div class="hud-instruction">
+      📸 Drag region on screen to capture. Press <strong>Esc</strong> to cancel.
+    </div>
+
+    <!-- Selected Screen Region -->
+    <div class="selection-box">
+      <div class="dimension-badge">520 × 320 px (WebP ~460 tokens)</div>
+
+      <!-- Quick Note Floating Dialog (FR-2, UC-1) -->
+      <div class="floating-note-popup">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; font-weight: 800;">
+          <span>⚡ Finding Note at Capture</span>
+          <span style="font-size: 0.65rem; color: #16a34a; font-family: var(--font-mono); font-weight: 700;">~460 tkn</span>
+        </div>
+        <textarea style="width: 100%; height: 74px; font-family: var(--font-ui); font-size: 0.78rem; border: 1px solid var(--color-border); border-radius: 4px; padding: 8px; resize: none; color: #0f172a; line-height: 1.4;" placeholder="Ketik apa yang salah dengan UI ini... (Enter untuk simpan)"></textarea>
+        <div style="display: flex; justify-content: flex-end; gap: 6px;">
+          <button class="btn-action" style="background: #f1f5f9; border: 1px solid var(--color-border); color: #475569;">Cancel (Esc)</button>
+          <button class="btn-action" style="background: #0284c7; border: none; color: white;">Save &amp; Open Studio</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

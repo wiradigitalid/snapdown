@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snapdown Studio — State 1: Default Workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --color-bg: #f8fafc;
+      --color-surface: #ffffff;
+      --color-surface-raised: #ffffff;
+      --color-surface-sunken: #f1f5f9;
+      --color-surface-glass: rgba(255, 255, 255, 0.92);
+      --color-text: #0f172a;
+      --color-text-secondary: #334155;
+      --color-text-muted: #64748b;
+      --color-text-dim: #94a3b8;
+      --color-border: #e2e8f0;
+      --color-border-subtle: #f1f5f9;
+      --color-border-strong: #cbd5e1;
+      --color-accent: #0284c7;
+      --color-accent-hover: #0369a1;
+      --color-accent-subtle: #e0f2fe;
+      --color-accent-text: #ffffff;
+      --color-success-bg: #dcfce7;
+      --color-success-text: #166534;
+      --color-warning-bg: #fef3c7;
+      --color-warning-text: #854d0e;
+      --color-danger: #dc2626;
+      --color-danger-bg: #fee2e2;
+      --color-danger-text: #ffffff;
+      --color-info-bg: #eff6ff;
+      --color-info-text: #1e40af;
+      --color-marker: #f59e0b;
+      --color-marker-text: #000000;
+      --color-marker-ring: #ffffff;
+      --snagit-ribbon-bg: #ffffff;
+      --snagit-ribbon-border: #cbd5e1;
+      --snagit-tray-bg: #f8fafc;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --radius-xs: 4px;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-full: 9999px;
+      --font-ui: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+      --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
+      --trans-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --color-bg: #0b0f19;
+        --color-surface: #131b2e;
+        --color-surface-raised: #1e293b;
+        --color-surface-sunken: #090d16;
+        --color-surface-glass: rgba(19, 27, 46, 0.92);
+        --color-text: #f8fafc;
+        --color-text-secondary: #cbd5e1;
+        --color-text-muted: #94a3b8;
+        --color-text-dim: #64748b;
+        --color-border: #1e293b;
+        --color-border-subtle: #172033;
+        --color-border-strong: #334155;
+        --color-accent: #38bdf8;
+        --color-accent-hover: #7dd3fc;
+        --color-accent-subtle: #082f49;
+        --color-accent-text: #082f49;
+        --color-success-bg: #052e16;
+        --color-success-text: #4ade80;
+        --color-warning-bg: #451a03;
+        --color-warning-text: #fef08a;
+        --color-danger: #ef4444;
+        --color-danger-bg: #450a0a;
+        --snagit-ribbon-bg: #111827;
+        --snagit-ribbon-border: #1e293b;
+        --snagit-tray-bg: #0f172a;
+      }
+    }
+    :root[data-theme="dark"] {
+      --color-bg: #0b0f19;
+      --color-surface: #131b2e;
+      --color-surface-raised: #1e293b;
+      --color-surface-sunken: #090d16;
+      --color-surface-glass: rgba(19, 27, 46, 0.92);
+      --color-text: #f8fafc;
+      --color-text-secondary: #cbd5e1;
+      --color-text-muted: #94a3b8;
+      --color-text-dim: #64748b;
+      --color-border: #1e293b;
+      --color-border-subtle: #172033;
+      --color-border-strong: #334155;
+      --color-accent: #38bdf8;
+      --color-accent-hover: #7dd3fc;
+      --color-accent-subtle: #082f49;
+      --color-accent-text: #082f49;
+      --color-success-bg: #052e16;
+      --color-success-text: #4ade80;
+      --color-warning-bg: #451a03;
+      --color-warning-text: #fef08a;
+      --color-danger: #ef4444;
+      --color-danger-bg: #450a0a;
+      --snagit-ribbon-bg: #111827;
+      --snagit-ribbon-border: #1e293b;
+      --snagit-tray-bg: #0f172a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--color-bg);
+      color: var(--color-text);
+      font-family: var(--font-ui);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Window Titlebar */
+    .window-titlebar {
+      background: var(--snagit-ribbon-bg);
+      border-bottom: 1px solid var(--snagit-ribbon-border);
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 var(--space-3);
+      font-size: 0.75rem;
+      user-select: none;
+    }
+    .window-title-left { display: flex; align-items: center; gap: 10px; }
+    .window-logo {
+      width: 20px; height: 20px;
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      color: white; font-weight: 800; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center; font-size: 11px;
+    }
+
+    /* Split Container */
+    .app-split-container { display: flex; flex: 1; overflow: hidden; }
+    .app-left-core { flex: 1; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--snagit-ribbon-border); }
+
+    /* 3-Zone Balanced Ribbon */
+    .ribbon-bar {
+      background: var(--snagit-ribbon-bg);
+      border-bottom: 1px solid var(--snagit-ribbon-border);
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 var(--space-4);
+    }
+    .ribbon-zone { display: flex; align-items: center; gap: 6px; }
+
+    .tool-icon-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--color-surface); border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm); width: 40px; height: 40px;
+      color: var(--color-text-secondary); font-size: 1.15rem; box-shadow: var(--shadow-sm);
+      cursor: pointer; transition: all var(--trans-fast);
+    }
+    .tool-icon-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+    .tool-icon-btn.active {
+      background: var(--color-accent-subtle); border-color: var(--color-accent);
+      color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent);
+    }
+
+    .capture-red-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #ef4444, #dc2626); color: #ffffff;
+      border: none; border-radius: var(--radius-sm); width: 40px; height: 40px;
+      font-size: 1.2rem; box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
+      cursor: pointer; transition: transform var(--trans-fast);
+    }
+    .capture-red-btn:hover { transform: scale(1.04); }
+
+    .bundle-ribbon-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--color-surface); border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm); padding: 0 14px; height: 40px;
+      color: var(--color-text); font-size: 0.78rem; font-weight: 700; cursor: pointer;
+    }
+    .bundle-ribbon-btn:hover { border-color: var(--color-accent); }
+
+    .share-split-group {
+      display: flex; align-items: center; background: #0284c7; color: white;
+      border-radius: var(--radius-sm); overflow: hidden; height: 40px;
+    }
+    .share-btn-main { background: transparent; border: none; color: white; padding: 0 12px; height: 100%; font-size: 0.75rem; font-weight: 800; cursor: pointer; }
+    .share-btn-arrow { background: rgba(0, 0, 0, 0.18); border: none; color: white; padding: 0 8px; height: 100%; font-size: 0.7rem; cursor: pointer; }
+
+    /* Canvas Area */
+    .canvas-area {
+      flex: 1; background: #ffffff; position: relative; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .canvas-content-box {
+      width: 80%; max-width: 720px; background: #f8fafc; border: 2px dashed var(--color-border-strong);
+      border-radius: var(--radius-md); padding: 24px; display: flex; flex-direction: column; gap: 14px;
+      position: relative;
+    }
+    .canvas-node-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; font-weight: 700; }
+    .canvas-node-pill { background: #0284c7; color: white; padding: 6px 14px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .canvas-card-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .canvas-card-item { background: white; border: 1px solid var(--color-border); border-radius: 4px; padding: 10px; font-size: 0.7rem; font-weight: 600; text-align: center; color: #334155; }
+
+    /* Step Markers (AD-10 Invariant) */
+    .ds-step-marker {
+      position: absolute; width: 28px; height: 28px;
+      background: var(--color-marker); color: var(--color-marker-text);
+      border: 2px solid var(--color-marker-ring); border-radius: 50%;
+      font-weight: 800; font-size: 0.85rem; display: flex;
+      align-items: center; justify-content: center;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25); cursor: grab;
+      user-select: none;
+    }
+    .ds-step-marker.focused {
+      box-shadow: 0 0 0 3px #0284c7, 0 4px 12px rgba(2, 132, 199, 0.4);
+    }
+
+    /* Status Bar */
+    .bottom-status-bar {
+      height: 28px; background: var(--snagit-ribbon-bg); border-top: 1px solid var(--snagit-ribbon-border);
+      display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-4);
+      font-size: 0.7rem; color: var(--color-text-muted);
+    }
+
+    /* Filmstrip Tray */
+    .filmstrip-tray {
+      height: 106px; background: var(--snagit-tray-bg); border-top: 1px solid var(--snagit-ribbon-border);
+      display: flex; align-items: center; padding: 0 var(--space-3); gap: 10px; overflow-x: auto;
+    }
+    .tray-batcher-banner {
+      background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+      height: 82px; width: 116px; flex-shrink: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 4px; padding: 6px; text-align: center;
+    }
+    .tray-batcher-btn {
+      background: var(--color-accent); color: white; border: none; border-radius: 4px;
+      font-size: 0.68rem; font-weight: 800; padding: 4px 10px; cursor: pointer;
+    }
+    .tray-thumb {
+      background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+      height: 82px; width: 124px; flex-shrink: 0; padding: 6px; display: flex; flex-direction: column;
+      justify-content: space-between; position: relative; cursor: pointer;
+    }
+    .tray-thumb.active { border: 2px solid var(--color-accent); }
+    .editing-tag {
+      position: absolute; top: -8px; left: 8px; background: var(--color-accent); color: white;
+      font-size: 0.55rem; font-weight: 800; padding: 1px 6px; border-radius: var(--radius-full);
+    }
+
+    /* Right Properties Panel (440px Full-Height) */
+    .properties-full-panel {
+      width: 440px; background: var(--color-surface); display: flex; flex-direction: column;
+      border-left: 1px solid var(--color-border);
+    }
+    .panel-header-bar {
+      height: 40px; border-bottom: 1px solid var(--color-border); display: flex;
+      align-items: center; justify-content: space-between; padding: 0 var(--space-4);
+      font-weight: 800; font-size: 0.85rem;
+    }
+    .panel-body-content {
+      flex: 1; padding: var(--space-4); display: flex; flex-direction: column;
+      gap: 14px; overflow-y: auto;
+    }
+    .note-box-container {
+      background: var(--color-surface-sunken); border: 1px solid var(--color-border);
+      border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .note-box-title-row {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 0.75rem; font-weight: 800; color: var(--color-text);
+    }
+    .note-row-item {
+      background: var(--color-surface); border: 1px solid var(--color-border);
+      border-radius: var(--radius-xs); padding: 8px; display: flex; gap: 8px; align-items: flex-start;
+    }
+    .note-row-item.highlighted {
+      border-color: var(--color-accent); background: var(--color-accent-subtle);
+    }
+    .token-breakdown-card {
+      background: var(--color-surface-sunken); border: 1px solid var(--color-border);
+      border-radius: var(--radius-md); padding: 12px; display: flex;
+      justify-content: space-between; align-items: center; font-size: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Window Titlebar -->
+  <div class="window-titlebar">
+    <div class="window-title-left">
+      <div class="window-logo">⚡</div>
+      <span style="font-weight: 800;">Snapdown Studio</span>
+      <span style="color: var(--color-border-strong);">|</span>
+      <span style="color: var(--color-text-muted);">2026-08-24_19-45-12.snapx — (Active Finding: WDI-Flow)</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <button class="tool-icon-btn" style="width: auto; height: 24px; padding: 0 10px; font-size: 0.7rem; font-weight: 700;">📚 Bundles History</button>
+      <button class="tool-icon-btn" style="width: auto; height: 24px; padding: 0 10px; font-size: 0.7rem; font-weight: 700;">⚙️ Settings</button>
+      <span style="background: var(--color-success-bg); color: var(--color-success-text); padding: 2px 8px; border-radius: 4px; font-weight: 800; font-size: 0.65rem;">● Ctrl+Shift+S</span>
+      <span style="color: var(--color-text-muted); cursor: pointer;">🗕 🗖 ✕</span>
+    </div>
+  </div>
+
+  <div class="app-split-container">
+    <div class="app-left-core">
+      <!-- 3-Zone Balanced Ribbon -->
+      <div class="ribbon-bar">
+        <div class="ribbon-zone">
+          <button class="capture-red-btn" title="Global Capture Scrim (Ctrl+Shift+S)">🔴</button>
+          <button class="tool-icon-btn" title="Open File">📂</button>
+          <button class="tool-icon-btn" title="Paste Image from Clipboard (Ctrl+V)">📥</button>
+        </div>
+        <div class="ribbon-zone">
+          <button class="tool-icon-btn active" title="Insert Step Marker Tool (M)">🔢</button>
+          <button class="tool-icon-btn" title="Crop Image Mode (C)">✂️</button>
+          <button class="tool-icon-btn" style="color: var(--color-danger);" title="Delete Focused Marker (Del)">🗑️</button>
+        </div>
+        <div class="ribbon-zone">
+          <button class="bundle-ribbon-btn">
+            <span>📦 Assemble Bundle</span>
+            <span style="background: var(--color-marker); padding: 1px 6px; border-radius: 99px; font-size: 0.65rem; color: #000; font-weight: 800;">2</span>
+          </button>
+          <button class="tool-icon-btn" title="Copy Active Image">📋</button>
+          <div class="share-split-group">
+            <button class="share-btn-main">Share Bundle</button>
+            <button class="share-btn-arrow">▼</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Canvas Artboard -->
+      <div class="canvas-area">
+        <div class="canvas-content-box">
+          <div style="font-size: 0.75rem; font-weight: 800; color: var(--color-text-muted);">BMAD Architecture Flowchart (Finding #FND-001)</div>
+          <div class="canvas-node-row">
+            <div class="canvas-node-pill">Discovery</div>
+            <span>➔</span>
+            <div class="canvas-node-pill">Planning</div>
+            <span>➔</span>
+            <div class="canvas-node-pill">Design</div>
+            <span>➔</span>
+            <div class="canvas-node-pill" style="background: #2563eb;">Implementation</div>
+          </div>
+          <div class="canvas-card-grid">
+            <div class="canvas-card-item">Brainstorming</div>
+            <div class="canvas-card-item">PRD Spec</div>
+            <div class="canvas-card-item">Architecture</div>
+            <div class="canvas-card-item" style="border-color: #ef4444; color: #dc2626;">Spec / Stories</div>
+          </div>
+        </div>
+
+        <!-- Numbered Badges (AD-10 Invariant) -->
+        <div class="ds-step-marker focused" style="top: 30%; left: 32%;">1</div>
+        <div class="ds-step-marker" style="top: 44%; left: 78%;">2</div>
+        <div class="ds-step-marker" style="top: 70%; left: 65%;">3</div>
+      </div>
+
+      <!-- Status Bar -->
+      <div class="bottom-status-bar">
+        <div>⏱️ Auto-Saved to Vault &nbsp;•&nbsp; ☑️ 2 Findings Selected</div>
+        <div style="font-family: var(--font-mono);">📐 780 × 480 px &nbsp;•&nbsp; <strong style="color: var(--color-accent);">⚡ 42 KB (~640 tokens)</strong> &nbsp;•&nbsp; <span style="color: var(--color-success-text);">● Ready</span></div>
+      </div>
+
+      <!-- Filmstrip Tray -->
+      <div class="filmstrip-tray">
+        <div class="tray-batcher-banner">
+          <div style="font-size: 0.7rem; font-weight: 800;">📦 Batcher</div>
+          <div style="color: #10b981; font-weight: 800; font-size: 0.65rem;">2 selected</div>
+          <button class="tray-batcher-btn">Assemble ➔</button>
+        </div>
+
+        <div class="tray-thumb active">
+          <span class="editing-tag">● Editing</span>
+          <input type="checkbox" checked style="accent-color: #10b981; width: 12px; height: 12px;">
+          <div style="font-size: 0.75rem; text-align: center; color: var(--color-text-dim);">📊 Diagram</div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.55rem; font-family: var(--font-mono);">
+            <span style="color: var(--color-accent); font-weight: 700;">WDI-Flow</span>
+            <span style="background: var(--color-marker); color: #000; padding: 0 4px; border-radius: 2px; font-weight: 800;">3 markers</span>
+          </div>
+        </div>
+
+        <div class="tray-thumb">
+          <input type="checkbox" checked style="accent-color: #10b981; width: 12px; height: 12px;">
+          <div style="font-size: 0.75rem; text-align: center; color: var(--color-text-dim);">🧭 Sidebar</div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.55rem; font-family: var(--font-mono);">
+            <span>Nav-Clip</span>
+            <span style="background: var(--color-marker); color: #000; padding: 0 4px; border-radius: 2px; font-weight: 800;">1 marker</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Properties Panel (440px) -->
+    <aside class="properties-full-panel">
+      <div class="panel-header-bar">
+        <span>📝 Notes &amp; Marker</span>
+        <div style="font-size: 0.68rem; font-family: var(--font-mono); background: var(--color-surface-sunken); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--color-border);">
+          <span style="color: var(--color-text-muted);">Text: </span><strong style="color: #10b981;">~120 tkn</strong>
+        </div>
+      </div>
+
+      <div class="panel-body-content">
+        <div class="note-box-container">
+          <div class="note-box-title-row">
+            <span>Observation Summary</span>
+            <span style="font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--color-text-muted);">~45 tkn</span>
+          </div>
+          <textarea style="width: 100%; min-height: 90px; padding: 8px; font-family: var(--font-ui); font-size: 0.78rem; border: 1px solid var(--color-border); border-radius: 4px; line-height: 1.5; resize: vertical;" readonly>WDI Method G4 Component transition state error observed on desktop view. The component lifecycle does not transition smoothly into the release gate without prior blueprint sign-off.</textarea>
+        </div>
+
+        <div class="note-box-container" style="flex: 1;">
+          <div class="note-box-title-row">
+            <span>Marker Notes (1:1 with Canvas)</span>
+            <span style="font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--color-text-muted);">~75 tkn (3 pts)</span>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div class="note-row-item highlighted">
+              <div style="width: 20px; height: 20px; border-radius: 50%; background: var(--color-marker); color: black; font-size: 0.75rem; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">1</div>
+              <div style="font-size: 0.75rem; line-height: 1.4;">Discovery and Planning blocks lack explicit exit gate criteria before moving to Design.</div>
+            </div>
+
+            <div class="note-row-item">
+              <div style="width: 20px; height: 20px; border-radius: 50%; background: var(--color-marker); color: black; font-size: 0.75rem; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">2</div>
+              <div style="font-size: 0.75rem; line-height: 1.4;">Spec story box is highlighted red without explanation note in the side legend.</div>
+            </div>
+
+            <div class="note-row-item">
+              <div style="width: 20px; height: 20px; border-radius: 50%; background: var(--color-marker); color: black; font-size: 0.75rem; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">3</div>
+              <div style="font-size: 0.75rem; line-height: 1.4;">G4 Component needs LC contract inventory references to prevent silent breakage.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="token-breakdown-card">
+          <div>
+            <div style="font-weight: 800; font-size: 0.75rem;">Total Finding Cost</div>
+            <div style="font-size: 0.65rem; color: var(--color-text-muted); font-family: var(--font-mono);">Image: 520 tkn + Notes: 120 tkn</div>
+          </div>
+          <strong style="color: var(--color-accent); font-family: var(--font-mono); font-size: 0.9rem;">~640 tokens</strong>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+</body>
+</html>

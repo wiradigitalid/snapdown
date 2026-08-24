@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snapdown Studio — State 5: Saved Bundles Drawer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --color-surface: #ffffff;
+      --color-surface-sunken: #f1f5f9;
+      --color-border: #cbd5e1;
+      --color-accent: #0284c7;
+      --color-danger: #dc2626;
+      --font-ui: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+      --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: rgba(15, 23, 42, 0.75);
+      color: #0f172a;
+      font-family: var(--font-ui);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .drawer-card-window {
+      background: #ffffff;
+      border: 1px solid var(--color-border);
+      border-radius: 14px;
+      width: 100%;
+      max-width: 660px;
+      padding: 20px;
+      box-shadow: var(--shadow-modal);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .bundle-history-row {
+      background: var(--color-surface-sunken);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .icon-action-btn {
+      width: 34px;
+      height: 34px;
+      background: white;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.15s ease;
+    }
+    .icon-action-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+  </style>
+</head>
+<body>
+
+  <div class="drawer-card-window">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--color-border); padding-bottom: 12px;">
+      <div>
+        <div style="font-weight: 800; font-size: 1.05rem;">📚 Saved Review Bundles History</div>
+        <div style="font-size: 0.72rem; color: #64748b;">Riwayat bundle permanen yang tersimpan di Vault SQLite lokal.</div>
+      </div>
+      <span style="cursor: pointer; font-weight: 800; color: #64748b; font-size: 1.1rem;">✕</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <!-- Bundle 1 -->
+      <div class="bundle-history-row">
+        <div>
+          <div style="font-weight: 800; font-size: 0.85rem;">📦 W8-S6-Checkout-Bugfixes</div>
+          <div style="font-size: 0.7rem; color: #64748b;">2 findings • 4 markers • <strong style="color: var(--color-accent); font-family: var(--font-mono);">~1,150 tokens</strong></div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="icon-action-btn" title="Copy Markdown">📋</button>
+          <button class="icon-action-btn" title="View / Re-share">👁️</button>
+          <button class="icon-action-btn" style="color: var(--color-danger);" title="Delete Bundle">🗑️</button>
+        </div>
+      </div>
+
+      <!-- Bundle 2 -->
+      <div class="bundle-history-row">
+        <div>
+          <div style="font-weight: 800; font-size: 0.85rem;">📦 Navigation-Theme-Polish</div>
+          <div style="font-size: 0.7rem; color: #64748b;">1 finding • 1 marker • <strong style="color: var(--color-accent); font-family: var(--font-mono);">~510 tokens</strong></div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="icon-action-btn" title="Copy Markdown">📋</button>
+          <button class="icon-action-btn" title="View / Re-share">👁️</button>
+          <button class="icon-action-btn" style="color: var(--color-danger);" title="Delete Bundle">🗑️</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; border-top: 1px solid var(--color-border); padding-top: 12px;">
+      <button style="height: 32px; padding: 0 16px; background: #f1f5f9; border: 1px solid var(--color-border); border-radius: 6px; font-size: 0.75rem; font-weight: 700; cursor: pointer;">Tutup (Esc)</button>
+    </div>
+  </div>
+
+</body>
+</html>

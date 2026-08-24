@@ -8,8 +8,13 @@ updated: "2026-08-23"
 
 # DESIGN — Settings
 
-Tokens, elements, and both themes are in `.how/_platform/design-system.md`. Nothing here restates a
-value; this document is layout and the component-specific delta.
+Tokens, elements, and both themes are in [`.how/_platform/design-system.md`](../../_platform/design-system.md) and demonstrated live in [`.how/_platform/assets/design-system.html`](../../_platform/assets/design-system.html).
+
+### Living Design Assets (.how Layer)
+- **General & Quality Budget Tab**: [`.how/settings/01-ux/assets/06a-settings-general.html`](assets/06a-settings-general.html)
+- **Shortcuts & Hotkey Recorder Tab**: [`.how/settings/01-ux/assets/06b-settings-hotkeys.html`](assets/06b-settings-hotkeys.html)
+- **Local Agent Bridge MCP Tab**: [`.how/settings/01-ux/assets/06c-settings-agent-bridge.html`](assets/06c-settings-agent-bridge.html)
+- **About & System Info Tab**: [`.how/settings/01-ux/assets/06d-settings-about.html`](assets/06d-settings-about.html)
 
 ## Tokens
 

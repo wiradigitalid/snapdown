@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snapdown Studio — State 6B: Settings - Shortcuts & Hotkeys</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --color-surface: #ffffff;
+      --color-surface-sunken: #f1f5f9;
+      --color-border: #cbd5e1;
+      --color-accent: #0284c7;
+      --color-info-bg: #eff6ff;
+      --color-danger: #dc2626;
+      --color-danger-bg: #fee2e2;
+      --color-danger-text-dark: #991b1b;
+      --color-warning-bg: #fef3c7;
+      --color-warning-text: #854d0e;
+      --color-success-bg: #dcfce7;
+      --color-success-text: #166534;
+      --font-ui: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+      --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: rgba(15, 23, 42, 0.85);
+      color: #0f172a;
+      font-family: var(--font-ui);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .settings-window {
+      background: #ffffff;
+      border: 1px solid var(--color-border);
+      border-radius: 14px;
+      width: 100%;
+      max-width: 860px;
+      box-shadow: var(--shadow-modal);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      padding: 8px 16px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      background: #ffffff;
+      border: 1px solid var(--color-border);
+      border-bottom: none;
+      border-radius: 6px 6px 0 0;
+      font-weight: 800;
+      color: var(--color-accent);
+    }
+    .hotkey-row {
+      background: var(--color-surface-sunken);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .hotkey-chip {
+      font-family: var(--font-mono);
+      background: #ffffff;
+      border: 1px solid var(--color-border);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-weight: 800;
+      font-size: 0.78rem;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="settings-window">
+    <div style="background: #ffffff; border-bottom: 1px solid var(--color-border); padding: 14px 22px; display: flex; justify-content: space-between; align-items: center;">
+      <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 1rem;">
+        <span>⚙️</span>
+        <span>Snapdown Preferences &amp; Agent Access</span>
+      </div>
+      <span style="cursor: pointer; font-weight: 800; color: #64748b; font-size: 1.1rem;">✕</span>
+    </div>
+
+    <!-- Tabs (Tab 2 Active) -->
+    <div style="display: flex; gap: 4px; padding: 10px 22px 0 22px; background: var(--color-surface-sunken); border-bottom: 1px solid var(--color-border);">
+      <button class="tab-btn"><span>⚙️</span> General &amp; Quality</button>
+      <button class="tab-btn active"><span>⌨️</span> Hotkeys</button>
+      <button class="tab-btn"><span>🤖</span> Local Agent Bridge</button>
+      <button class="tab-btn"><span>ℹ️</span> About</button>
+    </div>
+
+    <div style="padding: 22px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 2px;">
+        Klik pada chip shortcut untuk merekam kombinasi tombol keyboard fisik secara langsung.
+      </div>
+
+      <!-- Hotkey 1: Active -->
+      <div class="hotkey-row">
+        <div>
+          <div style="font-weight: 800; font-size: 0.8rem;">Global Capture Region Scrim</div>
+          <div style="font-size: 0.7rem; color: #64748b;">Membuka overlay capture transparan pada layar aktif.</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 0.65rem; background: var(--color-success-bg); color: var(--color-success-text); padding: 2px 8px; border-radius: 4px; font-weight: 800;">● Active</span>
+          <span class="hotkey-chip">Ctrl+Shift+S</span>
+        </div>
+      </div>
+
+      <!-- Hotkey 2: Listening State -->
+      <div class="hotkey-row" style="background: var(--color-info-bg); border: 1.5px solid var(--color-accent);">
+        <div>
+          <div style="font-weight: 800; font-size: 0.8rem; color: var(--color-accent);">Toggle Snapdown Studio Window</div>
+          <div style="font-size: 0.7rem; color: #64748b;">Menampilkan atau meminimalkan window utama Snapdown Studio.</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 0.65rem; background: var(--color-warning-bg); color: var(--color-warning-text); padding: 2px 8px; border-radius: 4px; font-weight: 800;">Listening...</span>
+          <span class="hotkey-chip" style="border-color: var(--color-accent); color: var(--color-accent); box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);">Press keys… (Esc)</span>
+        </div>
+      </div>
+
+      <!-- Hotkey 3: Active -->
+      <div class="hotkey-row">
+        <div>
+          <div style="font-weight: 800; font-size: 0.8rem;">Copy Current Active Finding</div>
+          <div style="font-size: 0.7rem; color: #64748b;">Menyalin gambar aktif beserta marker yang telah di-burn ke clipboard.</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 0.65rem; background: var(--color-success-bg); color: var(--color-success-text); padding: 2px 8px; border-radius: 4px; font-weight: 800;">● Active</span>
+          <span class="hotkey-chip">Ctrl+Shift+C</span>
+        </div>
+      </div>
+
+      <!-- Hotkey 4: Conflict Warning Guard -->
+      <div class="hotkey-row" style="background: var(--color-danger-bg); border-color: var(--color-danger);">
+        <div>
+          <div style="font-weight: 800; font-size: 0.8rem; color: var(--color-danger);">Quick Fullscreen Screenshot</div>
+          <div style="font-size: 0.7rem; color: var(--color-danger-text-dark);">⚠️ <strong>Konflik OS:</strong> Kombinasi <code>PrintScreen</code> digunakan oleh Snipping Tool Windows.</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 0.65rem; background: var(--color-danger); color: white; padding: 2px 8px; border-radius: 4px; font-weight: 800;">Conflict</span>
+          <span class="hotkey-chip" style="border-color: var(--color-danger); color: var(--color-danger);">PrintScreen</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="background: #ffffff; border-top: 1px solid var(--color-border); padding: 14px 22px; display: flex; justify-content: space-between; align-items: center;">
+      <span style="font-size: 0.72rem; color: #64748b;">Konflik shortcut dicegah otomatis dengan registrasi Win32 API.</span>
+      <button style="height: 34px; padding: 0 18px; font-size: 0.78rem; font-weight: 700; background: var(--color-accent); color: white; border: none; border-radius: 6px; cursor: pointer;">Done &amp; Close</button>
+    </div>
+  </div>
+
+</body>
+</html>

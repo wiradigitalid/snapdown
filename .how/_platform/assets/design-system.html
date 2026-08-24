@@ -1,0 +1,940 @@
+<title>Snapdown Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+/* ==========================================================================
+   SNAPDOWN UNIFIED DESIGN TOKENS (LIGHT + DARK + THEME INVARIANTS)
+   ========================================================================== */
+:root {
+  /* Ground & Surfaces */
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #f1f5f9;
+  --color-surface-glass: rgba(255, 255, 255, 0.92);
+
+  /* Text & Content */
+  --color-text: #0f172a;
+  --color-text-secondary: #334155;
+  --color-text-muted: #64748b;
+  --color-text-dim: #94a3b8;
+
+  /* Borders & Dividers */
+  --color-border: #e2e8f0;
+  --color-border-subtle: #f1f5f9;
+  --color-border-strong: #cbd5e1;
+
+  /* Primary Accent */
+  --color-accent: #0284c7;
+  --color-accent-hover: #0369a1;
+  --color-accent-subtle: #e0f2fe;
+  --color-accent-text: #ffffff;
+
+  /* Semantic Meaning Pairs (WCAG AA Compliant) */
+  --color-success-bg: #dcfce7;
+  --color-success-text: #166534;
+  --color-warning-bg: #fef3c7;
+  --color-warning-text: #854d0e;
+  --color-danger: #dc2626;
+  --color-danger-bg: #fee2e2;
+  --color-danger-text: #ffffff;
+  --color-danger-text-dark: #991b1b;
+  --color-info-bg: #eff6ff;
+  --color-info-text: #1e40af;
+  --color-neutral-bg: #f1f5f9;
+  --color-neutral-text: #334155;
+
+  /* Theme-Invariant Tokens (AD-10 - Uniform across themes) */
+  --color-marker: #f59e0b;
+  --color-marker-text: #000000;
+  --color-marker-ring: #ffffff;
+  --color-overlay-scrim: rgba(15, 23, 42, 0.75);
+  --color-overlay-ring: #0284c7;
+  --color-overlay-selection-bg: rgba(2, 132, 199, 0.18);
+  --canvas-checker: #e2e8f0;
+
+  /* Chrome Tokens */
+  --snagit-ribbon-bg: #ffffff;
+  --snagit-ribbon-border: #cbd5e1;
+  --snagit-tray-bg: #f8fafc;
+
+  /* Spatial Scale (4px Baseline Grid) */
+  --space-0: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* Corner Radius */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-full: 9999px;
+
+  /* Typography */
+  --font-ui: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text-2xs: 0.65rem;  /* 10.5px */
+  --text-xs: 0.75rem;   /* 12px */
+  --text-sm: 0.875rem;  /* 14px */
+  --text-base: 1rem;    /* 16px */
+  --text-lg: 1.125rem;  /* 18px */
+  --text-xl: 1.25rem;   /* 20px */
+  --text-2xl: 1.5rem;   /* 24px */
+  --text-3xl: 1.875rem; /* 30px */
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
+  --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+
+  /* Layout Constants */
+  --ribbon-height: 56px;
+  --titlebar-height: 34px;
+  --properties-panel-width: 440px;
+  --filmstrip-tray-height: 110px;
+  --settings-column-min: 380px;
+
+  /* Transitions */
+  --trans-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --trans-smooth: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg: #0b0f19;
+    --color-surface: #131b2e;
+    --color-surface-raised: #1e293b;
+    --color-surface-sunken: #090d16;
+    --color-surface-glass: rgba(19, 27, 46, 0.92);
+
+    --color-text: #f8fafc;
+    --color-text-secondary: #cbd5e1;
+    --color-text-muted: #94a3b8;
+    --color-text-dim: #64748b;
+
+    --color-border: #1e293b;
+    --color-border-subtle: #172033;
+    --color-border-strong: #334155;
+
+    --color-accent: #38bdf8;
+    --color-accent-hover: #7dd3fc;
+    --color-accent-subtle: #082f49;
+    --color-accent-text: #082f49;
+
+    --color-success-bg: #052e16;
+    --color-success-text: #4ade80;
+    --color-warning-bg: #451a03;
+    --color-warning-text: #fef08a;
+    --color-danger: #ef4444;
+    --color-danger-bg: #450a0a;
+    --color-danger-text: #ffffff;
+    --color-danger-text-dark: #fca5a5;
+    --color-info-bg: #172554;
+    --color-info-text: #93c5fd;
+    --color-neutral-bg: #1e293b;
+    --color-neutral-text: #e2e8f0;
+
+    --snagit-ribbon-bg: #111827;
+    --snagit-ribbon-border: #1e293b;
+    --snagit-tray-bg: #0f172a;
+
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.7);
+    --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.85);
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-bg: #0b0f19;
+  --color-surface: #131b2e;
+  --color-surface-raised: #1e293b;
+  --color-surface-sunken: #090d16;
+  --color-surface-glass: rgba(19, 27, 46, 0.92);
+
+  --color-text: #f8fafc;
+  --color-text-secondary: #cbd5e1;
+  --color-text-muted: #94a3b8;
+  --color-text-dim: #64748b;
+
+  --color-border: #1e293b;
+  --color-border-subtle: #172033;
+  --color-border-strong: #334155;
+
+  --color-accent: #38bdf8;
+  --color-accent-hover: #7dd3fc;
+  --color-accent-subtle: #082f49;
+  --color-accent-text: #082f49;
+
+  --color-success-bg: #052e16;
+  --color-success-text: #4ade80;
+  --color-warning-bg: #451a03;
+  --color-warning-text: #fef08a;
+  --color-danger: #ef4444;
+  --color-danger-bg: #450a0a;
+  --color-danger-text: #ffffff;
+  --color-danger-text-dark: #fca5a5;
+  --color-info-bg: #172554;
+  --color-info-text: #93c5fd;
+  --color-neutral-bg: #1e293b;
+  --color-neutral-text: #e2e8f0;
+
+  --snagit-ribbon-bg: #111827;
+  --snagit-ribbon-border: #1e293b;
+  --snagit-tray-bg: #0f172a;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.7);
+  --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.85);
+}
+
+/* Base Reset */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Header */
+.ds-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(16px);
+  background: var(--color-surface-glass);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-3) var(--space-6);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.ds-brand { display: flex; align-items: center; gap: 12px; }
+.ds-brand-logo {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, #0284c7, #2563eb);
+  color: white; font-weight: 800; font-size: 18px;
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+}
+.ds-brand-title { font-size: 1.1rem; font-weight: 800; letter-spacing: -0.02em; }
+.ds-nav-links { display: flex; gap: 18px; font-size: var(--text-xs); font-weight: 700; }
+.ds-nav-link { color: var(--color-text-secondary); text-decoration: none; transition: color var(--trans-fast); }
+.ds-nav-link:hover { color: var(--color-accent); }
+
+.ds-theme-toggle {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--trans-fast);
+}
+.ds-theme-toggle:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+/* Layout Container */
+.ds-layout {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6) 120px var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: 64px;
+}
+
+/* Section Structures */
+.ds-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  scroll-margin-top: 80px;
+}
+.ds-section-header {
+  border-bottom: 2px solid var(--color-border);
+  padding-bottom: var(--space-2);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.ds-section-title { font-size: var(--text-2xl); font-weight: 800; letter-spacing: -0.02em; }
+.ds-section-badge { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-text-muted); font-weight: 700; }
+.ds-section-lead { font-size: var(--text-sm); color: var(--color-text-muted); max-width: 950px; line-height: 1.6; }
+
+/* Grid Cards */
+.ds-grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+.ds-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ds-card-title { font-size: var(--text-base); font-weight: 800; display: flex; align-items: center; gap: 8px; }
+.ds-card-desc { font-size: var(--text-xs); color: var(--color-text-muted); line-height: 1.5; }
+
+/* Swatch Grid */
+.ds-swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+}
+.ds-swatch {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.ds-swatch-color { height: 56px; width: 100%; position: relative; }
+.ds-swatch-info { padding: 10px; display: flex; flex-direction: column; gap: 2px; }
+.ds-swatch-name { font-weight: 700; font-size: var(--text-xs); font-family: var(--font-mono); }
+.ds-swatch-val { font-size: var(--text-2xs); color: var(--color-text-muted); font-family: var(--font-mono); }
+
+/* Component Demo Box */
+.ds-demo-box {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.ds-demo-title { font-weight: 800; font-size: var(--text-sm); display: flex; justify-content: space-between; align-items: center; }
+.ds-demo-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+
+/* Interactive Component Atoms */
+.btn-primary {
+  background: var(--color-accent); color: var(--color-accent-text);
+  border: none; border-radius: var(--radius-sm); padding: 8px 16px;
+  font-size: var(--text-xs); font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; box-shadow: var(--shadow-sm);
+  transition: background var(--trans-fast);
+}
+.btn-primary:hover { background: var(--color-accent-hover); }
+
+.btn-secondary {
+  background: var(--color-surface); color: var(--color-text);
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 8px 16px;
+  font-size: var(--text-xs); font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+
+.btn-danger {
+  background: var(--color-danger); color: var(--color-danger-text);
+  border: none; border-radius: var(--radius-sm); padding: 8px 16px;
+  font-size: var(--text-xs); font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+
+.btn-tool-icon {
+  width: 40px; height: 40px; background: var(--color-surface);
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  color: var(--color-text-secondary); font-size: 1.15rem; display: inline-flex;
+  align-items: center; justify-content: center; cursor: pointer;
+  box-shadow: var(--shadow-sm); transition: all var(--trans-fast);
+}
+.btn-tool-icon.active {
+  background: var(--color-accent-subtle); border-color: var(--color-accent);
+  color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.btn-capture-red {
+  width: 40px; height: 40px; background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white; border: none; border-radius: var(--radius-sm); font-size: 1.2rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35); cursor: pointer;
+}
+
+/* Numbered Step Marker (Theme-Invariant Invariant AD-10) */
+.ds-step-marker {
+  width: 28px; height: 28px; background: var(--color-marker);
+  color: var(--color-marker-text); border: 2px solid var(--color-marker-ring);
+  border-radius: 50%; font-family: var(--font-ui); font-weight: 800;
+  font-size: 0.85rem; display: inline-flex; align-items: center;
+  justify-content: center; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  cursor: grab;
+}
+.ds-step-marker.focused {
+  box-shadow: 0 0 0 3px #0284c7, 0 4px 12px rgba(2, 132, 199, 0.4);
+}
+
+/* Segmented Control */
+.ds-segmented {
+  display: inline-flex; background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  padding: 2px; gap: 2px;
+}
+.ds-segmented-btn {
+  background: transparent; border: none; padding: 6px 14px;
+  font-size: var(--text-xs); font-weight: 600; color: var(--color-text-muted);
+  border-radius: var(--radius-xs); cursor: pointer; transition: all var(--trans-fast);
+}
+.ds-segmented-btn.active {
+  background: var(--color-accent); color: white; font-weight: 700;
+}
+
+/* Status Chips & Badges */
+.ds-badge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+  border-radius: var(--radius-full); font-size: var(--text-2xs);
+  font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.badge-active { background: var(--color-success-bg); color: var(--color-success-text); }
+.badge-warning { background: var(--color-warning-bg); color: var(--color-warning-text); }
+.badge-danger { background: var(--color-danger-bg); color: var(--color-danger-text-dark); }
+.badge-info { background: var(--color-info-bg); color: var(--color-info-text); }
+.badge-neutral { background: var(--color-neutral-bg); color: var(--color-neutral-text); }
+
+/* Form Controls */
+.ds-input {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs); padding: 8px 12px; font-family: var(--font-ui);
+  font-size: var(--text-xs); color: var(--color-text); width: 100%;
+}
+.ds-input:focus { outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
+
+.ds-textarea {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs); padding: 8px 12px; font-family: var(--font-ui);
+  font-size: var(--text-xs); color: var(--color-text); width: 100%;
+  min-height: 80px; resize: vertical; line-height: 1.5;
+}
+
+/* 3-State Toggle */
+.ds-toggle {
+  display: inline-flex; align-items: center; gap: 10px; cursor: pointer;
+  font-size: var(--text-xs); font-weight: 600;
+}
+.toggle-track {
+  width: 36px; height: 20px; background: var(--color-border-strong);
+  border-radius: 9999px; position: relative; transition: background var(--trans-fast);
+}
+.toggle-track.on { background: var(--color-accent); }
+.toggle-track.indeterminate { background: var(--color-border); opacity: 0.6; }
+.toggle-thumb {
+  width: 16px; height: 16px; background: white; border-radius: 50%;
+  position: absolute; top: 2px; left: 2px; transition: transform var(--trans-fast);
+}
+.toggle-track.on .toggle-thumb { transform: translateX(16px); }
+.toggle-track.indeterminate .toggle-thumb { transform: translateX(8px); opacity: 0.7; }
+
+/* Hotkey Chips */
+.hotkey-chip {
+  font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 800;
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  padding: 4px 10px; border-radius: 4px; display: inline-flex; align-items: center;
+}
+.hotkey-chip.listening {
+  background: var(--color-info-bg); border: 2px solid var(--color-accent);
+  color: var(--color-accent); box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
+}
+.hotkey-chip.conflict {
+  background: var(--color-danger-bg); border: 1.5px solid var(--color-danger);
+  color: var(--color-danger-text-dark);
+}
+
+/* Loupe Magnifier Atom (SPEC-W10) */
+.ds-loupe-viewport {
+  width: 128px; height: 128px; border-radius: var(--radius-md);
+  border: 2px solid var(--color-accent); background: #0f172a;
+  box-shadow: var(--shadow-xl); overflow: hidden; position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+.ds-loupe-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  width: 100%; height: 100%; gap: 1px; background: rgba(255,255,255,0.08);
+}
+.ds-loupe-pixel { background: #334155; }
+.ds-loupe-reticle {
+  position: absolute; width: 14px; height: 14px;
+  border: 1.5px solid #38bdf8; pointer-events: none;
+}
+</style>
+
+<!-- Top Header Navigation -->
+<header class="ds-header">
+  <div class="ds-brand">
+    <div class="ds-brand-logo">⚡</div>
+    <div>
+      <div class="ds-brand-title">Snapdown Comprehensive Design System</div>
+      <div style="font-size: var(--text-2xs); color: var(--color-text-muted); font-family: var(--font-mono);">WDI Method · 24 Living Desktop Components &amp; Invariants</div>
+    </div>
+  </div>
+
+  <nav class="ds-nav-links">
+    <a href="#principles" class="ds-nav-link">Principles</a>
+    <a href="#typography" class="ds-nav-link">Typography &amp; Fonts</a>
+    <a href="#icons" class="ds-nav-link">Icons System</a>
+    <a href="#tokens" class="ds-nav-link">Tokens</a>
+    <a href="#atoms" class="ds-nav-link">Atoms</a>
+    <a href="#molecules" class="ds-nav-link">Molecules</a>
+    <a href="#future" class="ds-nav-link">Roadmap (W9–W13)</a>
+  </nav>
+
+  <button class="ds-theme-toggle" onclick="toggleTheme()">
+    <span id="themeIcon">🌙</span> <span id="themeLabel">Dark Theme</span>
+  </button>
+</header>
+
+<main class="ds-layout">
+
+  <!-- =========================================================================
+       SECTION 1: CORE ARCHITECTURAL PRINCIPLES
+       ========================================================================= -->
+  <section class="ds-section" id="principles">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">1. Core Desktop Principles</h2>
+      <span class="ds-section-badge">WDI-METHOD · ARCHITECTURE CONTRACT</span>
+    </div>
+    <p class="ds-section-lead">
+      Fondasi desain desktop Snapdown dibangun secara presisi untuk efisiensi coding agent. Mengeliminasi kebisingan visual dan menyediakan bahasa interaksi deterministik untuk pengembangan masa depan.
+    </p>
+
+    <div class="ds-grid-cards">
+      <div class="ds-card">
+        <div class="ds-card-title">🤖 1. AI-Agent Primitives Only</div>
+        <div class="ds-card-desc">
+          Menghilangkan coretan manual manusia (freehand, panah, kurva acak). Fokus penuh pada <strong>Numbered Step Marker (1, 2, 3)</strong> yang terikat 1:1 dengan catatan temuan (`AD-1`) untuk konsumsi agent.
+        </div>
+      </div>
+      <div class="ds-card">
+        <div class="ds-card-title">⚡ 2. Single Color Authority (AD-10)</div>
+        <div class="ds-card-desc">
+          100% nilai warna wajib terdaftar pada <code>tokens.css</code>. Penulisan hex literal di dalam kode komponen dilarang oleh lint rule demi konsistensi Light &amp; Dark Windows.
+        </div>
+      </div>
+      <div class="ds-card">
+        <div class="ds-card-title">📐 3. Height-Packed &amp; Zero Thrash</div>
+        <div class="ds-card-desc">
+          Mengikuti aturan UX <code>FR-29</code>: tinggi kontainer menyesuaikan isi sebenarnya (<em>packed by content height</em>), mencegah ruang kosong buatan atau scrollbar yang tidak perlu.
+        </div>
+      </div>
+      <div class="ds-card">
+        <div class="ds-card-title">🎯 4. Fractional Coordinates (AD-3)</div>
+        <div class="ds-card-desc">
+          Koordinat marker dan crop area disimpan sebagai persentase fraksional <code>(0.0..1.0)</code> dari gambar, kebal terhadap DPI scaling dan perubahan ukuran window.
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- =========================================================================
+       SECTION 2: TYPOGRAPHY & FONT SYSTEM
+       ========================================================================= -->
+  <section class="ds-section" id="typography">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">2. Typography &amp; Font Stack Architecture</h2>
+      <span class="ds-section-badge">TYPE HIERARCHY · ZERO LAYOUT SHIFT</span>
+    </div>
+    <p class="ds-section-lead">
+      Menggunakan 2 keluarga font primer yang di-bundle secara performan dengan fallbacks sistem OS lokal (Windows Segoe UI &amp; Cascadia Code/Consolas):
+    </p>
+
+    <div class="ds-grid-cards">
+      <div class="ds-card">
+        <div class="ds-card-title">🔤 Primary UI Font: Plus Jakarta Sans</div>
+        <div style="font-family: var(--font-ui); font-size: 1.1rem; font-weight: 800; color: var(--color-accent);">
+          The quick brown fox jumps over the lazy dog.
+        </div>
+        <div class="ds-card-desc">
+          <strong>Usage:</strong> Seluruh chrome UI, window titlebars, tabs, dialogs, button labels, dan teks observasi.<br>
+          <strong>Fallback Stack:</strong> <code>"Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif</code>
+        </div>
+      </div>
+
+      <div class="ds-card">
+        <div class="ds-card-title">🔢 Monospace Telemetry: JetBrains Mono</div>
+        <div style="font-family: var(--font-mono); font-size: 1.0rem; font-weight: 700; color: var(--color-success-text); background: var(--color-surface-sunken); padding: 8px; border-radius: 4px;">
+          X: 1280 Y: 720 · ~640 tk · port:3849
+        </div>
+        <div class="ds-card-desc">
+          <strong>Usage:</strong> Token counts, pixel dimensions, shortcut chips, hex colors, MCP json snippets, dan markdown preview.<br>
+          <strong>Fallback Stack:</strong> <code>"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace</code>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- =========================================================================
+       SECTION 3: ICONOGRAPHY SYSTEM & GLYPH REGISTRY
+       ========================================================================= -->
+  <section class="ds-section" id="icons">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">3. Iconography &amp; Standardized Glyph Registry</h2>
+      <span class="ds-section-badge">CRISP ZERO-DEPENDENCY VECTOR GLYPHS</span>
+    </div>
+    <p class="ds-section-lead">
+      Daftar baku simbol &amp; glyph universal yang dipakai di seluruh ribbon toolbar, status badge, tombol aksi, dan drawer. Memastikan konsistensi 100% tanpa library icon berat eksternal:
+    </p>
+
+    <div class="ds-swatch-grid">
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: var(--color-surface-sunken); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">🔴</div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">Capture Scrim</span><span class="ds-swatch-val">Global Hotkey / Overlay</span></div>
+      </div>
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: var(--color-surface-sunken); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">🔢</div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">Insert Marker</span><span class="ds-swatch-val">Numbered Step Stamp</span></div>
+      </div>
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: var(--color-surface-sunken); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">✂️</div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">Crop Image</span><span class="ds-swatch-val">Bounding Box Crop Mode</span></div>
+      </div>
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: var(--color-surface-sunken); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">🗑️</div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">Delete Action</span><span class="ds-swatch-val">Marker &amp; Bundle Remove</span></div>
+      </div>
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: var(--color-surface-sunken); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">📦</div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">Bundle Assemble</span><span class="ds-swatch-val">Markdown Composition</span></div>
+      </div>
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: var(--color-surface-sunken); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">📋</div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">Copy Markdown</span><span class="ds-swatch-val">OS Clipboard Handoff</span></div>
+      </div>
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: var(--color-surface-sunken); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">🤖</div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">MCP Agent Bridge</span><span class="ds-swatch-val">Loopback stdio/HTTP :3849</span></div>
+      </div>
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: var(--color-surface-sunken); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">⚙️</div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">Settings Modal</span><span class="ds-swatch-val">Preferences &amp; Hotkeys</span></div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- =========================================================================
+       SECTION 4: COMPLETE TOKEN PALETTE
+       ========================================================================= -->
+  <section class="ds-section" id="tokens">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">4. Complete Token Palette &amp; Meaning Pairs</h2>
+      <span class="ds-section-badge">TOKENS.CSS · WCAG AA COMPLIANT</span>
+    </div>
+    <p class="ds-section-lead">
+      Setiap token berpasangan dengan teks yang telah teruji kontrasnya (rasio &ge; 4.5:1), serta token theme-invariant yang konsisten pada semua tema.
+    </p>
+
+    <div style="font-weight: 800; font-size: var(--text-sm);">A. Ground, Surface &amp; Accent Tokens</div>
+    <div class="ds-swatch-grid">
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: var(--color-bg); border-bottom: 1px solid var(--color-border);"></div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">--color-bg</span><span class="ds-swatch-val">Window Ground</span></div>
+      </div>
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: var(--color-surface); border-bottom: 1px solid var(--color-border);"></div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">--color-surface</span><span class="ds-swatch-val">Card / Panel Ground</span></div>
+      </div>
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: var(--color-surface-sunken); border-bottom: 1px solid var(--color-border);"></div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">--color-surface-sunken</span><span class="ds-swatch-val">Inset Wells / Inputs</span></div>
+      </div>
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: var(--color-accent);"></div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">--color-accent</span><span class="ds-swatch-val">Primary Action (#0284c7)</span></div>
+      </div>
+    </div>
+
+    <div style="font-weight: 800; font-size: var(--text-sm); margin-top: 14px;">B. Paired Meaning Tokens (Foreground + Background)</div>
+    <div class="ds-swatch-grid">
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: var(--color-success-bg); color: var(--color-success-text); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: var(--text-xs);">● Active Status</div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">--color-success-*</span><span class="ds-swatch-val">Registered Hotkeys / Ready</span></div>
+      </div>
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: var(--color-warning-bg); color: var(--color-warning-text); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: var(--text-xs);">⚠️ Listening / Note</div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">--color-warning-*</span><span class="ds-swatch-val">Recording Chips / Notices</span></div>
+      </div>
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: var(--color-danger-bg); color: var(--color-danger-text-dark); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: var(--text-xs);">✕ OS Conflict</div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">--color-danger-*</span><span class="ds-swatch-val">Shortcut Conflicts / Deletion</span></div>
+      </div>
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: var(--color-info-bg); color: var(--color-info-text); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: var(--text-xs);">🤖 MCP Port 3849</div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">--color-info-*</span><span class="ds-swatch-val">Bridge Telemetry / Links</span></div>
+      </div>
+    </div>
+
+    <div style="font-weight: 800; font-size: var(--text-sm); margin-top: 14px;">C. Theme-Invariant Tokens (AD-10 — Static across themes)</div>
+    <div class="ds-swatch-grid">
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: #f59e0b; color: black; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.2rem;">1</div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">--color-marker (#f59e0b)</span><span class="ds-swatch-val">Exported Burned Badges</span></div>
+      </div>
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: rgba(15, 23, 42, 0.75); color: white; display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 700;">Dark Scrim</div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">--color-overlay-scrim</span><span class="ds-swatch-val">Desktop Mask Overlay</span></div>
+      </div>
+      <div class="ds-swatch">
+        <div class="ds-swatch-color" style="background: #0284c7; color: white; display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 700;">Selection Ring</div>
+        <div class="ds-swatch-info"><span class="ds-swatch-name">--color-overlay-ring</span><span class="ds-swatch-val">Drag &amp; Crop Boundary</span></div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- =========================================================================
+       SECTION 3: COMPONENT ATOMS (ELEMENTS)
+       ========================================================================= -->
+  <section class="ds-section" id="atoms">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">3. Component Atoms (Elements)</h2>
+      <span class="ds-section-badge">PRIMITIVE BUILDING BLOCKS</span>
+    </div>
+
+    <!-- Buttons & Ribbon Icons -->
+    <div class="ds-demo-box">
+      <div class="ds-demo-title"><span>A. Buttons &amp; Tool Ribbon Icons</span><span class="ds-section-badge">Button.tsx</span></div>
+      <div class="ds-demo-row">
+        <button class="btn-capture-red" title="Capture Scrim">🔴</button>
+        <button class="btn-tool-icon active" title="Step Marker Tool">🔢</button>
+        <button class="btn-tool-icon" title="Crop Tool">✂️</button>
+        <button class="btn-tool-icon" style="color: var(--color-danger);" title="Delete Marker">🗑️</button>
+        <button class="btn-primary"><span>📦</span> Assemble Bundle</button>
+        <button class="btn-secondary">Browse Folder</button>
+        <button class="btn-danger"><span>🗑️</span> Hard Delete</button>
+      </div>
+    </div>
+
+    <!-- Numbered Step Markers -->
+    <div class="ds-demo-box">
+      <div class="ds-demo-title"><span>B. Numbered Step Markers (Theme-Invariant AD-10)</span><span class="ds-section-badge">MarkerBadge.tsx / MarkerLayer.tsx</span></div>
+      <div class="ds-demo-row">
+        <div class="ds-step-marker">1</div>
+        <div class="ds-step-marker focused">2</div>
+        <div class="ds-step-marker">3</div>
+        <span style="font-size: var(--text-xs); color: var(--color-text-muted);">
+          Bulat 28&times;28px Amber (<code>#f59e0b</code>). Efek ring biru menyala (<code>0 0 0 3px #0284c7</code>) saat fokus aktif.
+        </span>
+      </div>
+    </div>
+
+    <!-- Inputs & Textareas -->
+    <div class="ds-demo-box">
+      <div class="ds-demo-title"><span>C. Text Fields &amp; Observation Textareas</span><span class="ds-section-badge">TextField.tsx / TextArea.tsx</span></div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <input type="text" class="ds-input" value="C:\Users\User\SnapdownVault" readonly>
+        <textarea class="ds-textarea" placeholder="Observation summary... (Height auto-packs without layout thrash)"></textarea>
+      </div>
+    </div>
+
+    <!-- 3-State Toggle & Segmented Control -->
+    <div class="ds-demo-box">
+      <div class="ds-demo-title"><span>D. 3-State Toggle (FR-18) &amp; Segmented Quality Presets (DEC-004)</span><span class="ds-section-badge">Toggle.tsx / SegmentedControl.tsx</span></div>
+      <div class="ds-demo-row" style="gap: 32px;">
+        <div class="ds-segmented">
+          <button class="ds-segmented-btn active">Auto</button>
+          <button class="ds-segmented-btn">Sharp</button>
+          <button class="ds-segmented-btn">Balanced</button>
+          <button class="ds-segmented-btn">Small</button>
+        </div>
+
+        <div style="display: flex; gap: 20px;">
+          <label class="ds-toggle"><div class="toggle-track on"><div class="toggle-thumb"></div></div><span>On (Registered)</span></label>
+          <label class="ds-toggle"><div class="toggle-track"><div class="toggle-thumb"></div></div><span>Off</span></label>
+          <label class="ds-toggle"><div class="toggle-track indeterminate"><div class="toggle-thumb"></div></div><span>Reading OS...</span></label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hotkey Chips & Status Badges -->
+    <div class="ds-demo-box">
+      <div class="ds-demo-title"><span>E. Hotkey Recording Chips &amp; Status Badges</span><span class="ds-section-badge">HotkeyChip.tsx / Badge.tsx</span></div>
+      <div class="ds-demo-row">
+        <span class="ds-badge badge-active">● Active</span>
+        <span class="ds-badge badge-warning">⚠️ Listening</span>
+        <span class="ds-badge badge-danger">✕ Conflict</span>
+        <span class="ds-badge badge-info">🤖 MCP Bridge</span>
+        <span class="ds-badge badge-neutral">Disabled</span>
+      </div>
+      <div class="ds-demo-row">
+        <span class="hotkey-chip">Ctrl+Shift+S</span>
+        <span class="hotkey-chip listening">Press keys… (Esc)</span>
+        <span class="hotkey-chip conflict">PrintScreen (Conflict)</span>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- =========================================================================
+       SECTION 4: COMPONENT MOLECULES (PATTERNS)
+       ========================================================================= -->
+  <section class="ds-section" id="molecules">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">4. Component Molecules (UI Patterns)</h2>
+      <span class="ds-section-badge">REUSABLE DESKTOP PATTERNS</span>
+    </div>
+
+    <!-- Molecule 1: Filmstrip Thumbnail Card -->
+    <div class="ds-demo-box">
+      <div class="ds-demo-title"><span>A. Filmstrip Tray Thumbnail Card</span><span class="ds-section-badge">FilmstripCard</span></div>
+      <div class="ds-demo-row">
+        <div style="background: var(--color-surface); border: 2px solid var(--color-accent); border-radius: var(--radius-sm); height: 80px; width: 120px; padding: 6px; display: flex; flex-direction: column; justify-content: space-between; position: relative;">
+          <span style="position: absolute; top: -8px; left: 8px; background: var(--color-accent); color: white; font-size: 0.55rem; font-weight: 800; padding: 1px 6px; border-radius: var(--radius-full);">● Editing</span>
+          <input type="checkbox" checked style="accent-color: #10b981; width: 12px; height: 12px;">
+          <div style="font-size: 0.75rem; text-align: center; color: var(--color-text-dim);">📊 Diagram</div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.55rem; font-family: var(--font-mono);">
+            <span style="color: var(--color-accent); font-weight: 700;">WDI-Flow</span>
+            <span style="background: var(--color-marker); color: #000; padding: 0 4px; border-radius: 2px; font-weight: 800;">3 markers</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Molecule 2: Token Breakdown Telemetry Box -->
+    <div class="ds-demo-box">
+      <div class="ds-demo-title"><span>B. Multimodal Token Estimator Card</span><span class="ds-section-badge">TokenEstimator.tsx</span></div>
+      <div style="background: var(--color-surface-sunken); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; max-width: 500px;">
+        <div>
+          <div style="font-weight: 800; font-size: var(--text-xs);">Total Finding Cost</div>
+          <div style="font-size: var(--text-2xs); color: var(--color-text-muted); font-family: var(--font-mono);">Image: 520 tkn (1280&times;720) + Notes: 120 tkn</div>
+        </div>
+        <strong style="color: var(--color-accent); font-family: var(--font-mono); font-size: var(--text-base);">~640 tokens</strong>
+      </div>
+    </div>
+
+    <!-- Molecule 3: Empty State & Error State Elements -->
+    <div class="ds-demo-box">
+      <div class="ds-demo-title"><span>C. Standardized Empty &amp; Error States</span><span class="ds-section-badge">EmptyState.tsx / ErrorState.tsx</span></div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div style="background: var(--color-surface-sunken); border: 1px dashed var(--color-border); border-radius: var(--radius-md); padding: 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+          <div style="font-size: 1.5rem;">📸</div>
+          <div style="font-weight: 800; font-size: var(--text-xs);">No Screenshots in Filmstrip</div>
+          <div style="font-size: var(--text-2xs); color: var(--color-text-muted);">Tekan <code>Ctrl+Shift+S</code> untuk menangkap area layar pertama Anda.</div>
+          <button class="btn-primary" style="margin-top: 4px;">Capture Screen</button>
+        </div>
+
+        <div style="background: var(--color-danger-bg); border: 1px solid var(--color-danger); border-radius: var(--radius-md); padding: 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+          <div style="font-size: 1.5rem;">⚠️</div>
+          <div style="font-weight: 800; font-size: var(--text-xs); color: var(--color-danger-text-dark);">Vault Database Locked</div>
+          <div style="font-size: var(--text-2xs); color: var(--color-danger-text-dark);">Proses lain sedang menggunakan <code>library.db</code>. Coba muat ulang koneksi.</div>
+          <button class="btn-secondary" style="margin-top: 4px; border-color: var(--color-danger);">Retry Connection</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- =========================================================================
+       SECTION 5: FUTURE ROADMAP COMPONENTS (W9 - W13 PREPAREDNESS)
+       ========================================================================= -->
+  <section class="ds-section" id="future">
+    <div class="ds-section-header">
+      <h2 class="ds-section-title">5. Future Roadmap Extensions (W9 – W13 Preparedness)</h2>
+      <span class="ds-section-badge">FORWARD COMPATIBILITY</span>
+    </div>
+    <p class="ds-section-lead">
+      Desain sistem telah memetakan komponen visual tingkat lanjut untuk gelombang fitur capture masa depan (W9 Crosshair, W10 Loupe Magnifier, W11 Smart Snapping, W12 Panoramic, dan W13 Preferences).
+    </p>
+
+    <div class="ds-grid-cards">
+      <!-- W9: Crosshair Axis Guides -->
+      <div class="ds-card">
+        <div class="ds-card-title">🎯 W9: Precision Crosshairs &amp; HUD</div>
+        <div class="ds-card-desc">
+          Garis panduan sumbu penuh (<code>1px solid var(--color-overlay-ring)</code>) dan badge koordinat live yang membalik posisi di sudut layar untuk pixel alignment sempurna.
+        </div>
+        <div style="background: #0f172a; padding: 12px; border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: var(--text-2xs); color: #38bdf8;">
+          X: 1240 px &nbsp; Y: 680 px &nbsp; (16:9 Aspect)
+        </div>
+      </div>
+
+      <!-- W10: Loupe Magnifier -->
+      <div class="ds-card">
+        <div class="ds-card-title">🔍 W10: Loupe Pixel Zoom &amp; Color Lens</div>
+        <div class="ds-card-desc">
+          Lensa pembesar 6&times; dengan grid 21&times;21 pixel dan color inspector (HEX/RGB) untuk pemotongan presisi UI mikro.
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="ds-loupe-viewport">
+            <div class="ds-loupe-grid">
+              <div class="ds-loupe-pixel"></div><div class="ds-loupe-pixel"></div><div class="ds-loupe-pixel"></div><div class="ds-loupe-pixel"></div><div class="ds-loupe-pixel"></div><div class="ds-loupe-pixel"></div><div class="ds-loupe-pixel"></div>
+              <div class="ds-loupe-pixel"></div><div class="ds-loupe-pixel"></div><div class="ds-loupe-pixel"></div><div class="ds-loupe-pixel"></div><div class="ds-loupe-pixel"></div><div class="ds-loupe-pixel"></div><div class="ds-loupe-pixel"></div>
+              <div class="ds-loupe-pixel"></div><div class="ds-loupe-pixel"></div><div class="ds-loupe-pixel" style="background:#0284c7;"></div><div class="ds-loupe-pixel" style="background:#0284c7;"></div><div class="ds-loupe-pixel" style="background:#0284c7;"></div><div class="ds-loupe-pixel"></div><div class="ds-loupe-pixel"></div>
+            </div>
+            <div class="ds-loupe-reticle"></div>
+          </div>
+          <div style="font-family: var(--font-mono); font-size: var(--text-2xs);">
+            <strong>#0284C7</strong><br>
+            rgb(2, 132, 199)<br>
+            <span style="color: var(--color-success);">● 6x Zoom</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- W11: Smart Snapping -->
+      <div class="ds-card">
+        <div class="ds-card-title">🧲 W11: Magnetic Snapping &amp; UIA Bounds</div>
+        <div class="ds-card-desc">
+          Deteksi otomatis batas window Win32 DWM dan elemen child UIA dengan threshold 8px snapping untuk tangkapan 1-klik instan.
+        </div>
+        <div style="background: var(--color-surface-sunken); border: 1.5px solid var(--color-accent); border-radius: var(--radius-xs); padding: 8px; font-size: var(--text-2xs); font-weight: 700; color: var(--color-accent);">
+          [ Window: Visual Studio Code ] (Snapped)
+        </div>
+      </div>
+
+      <!-- W12: Panoramic Scroll Stitcher -->
+      <div class="ds-card">
+        <div class="ds-card-title">📜 W12: Panoramic Scrolling Stitcher</div>
+        <div class="ds-card-desc">
+          Capture halaman panjang bertingkat dengan progress meter live dan auto-scroll stitching tanpa distorsi visual.
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+
+  const icon = document.getElementById('themeIcon');
+  const label = document.getElementById('themeLabel');
+  if (next === 'dark') {
+    icon.textContent = '☀️';
+    label.textContent = 'Light Theme';
+  } else {
+    icon.textContent = '🌙';
+    label.textContent = 'Dark Theme';
+  }
+}
+</script>

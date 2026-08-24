@@ -1,0 +1,1725 @@
+<title>Snapdown UI/UX Spec — Complete Lifecycle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+
+<style>
+/* ==========================================================================
+   SNAPDOWN DESIGN SYSTEM TOKENS (Light + Dark + System Support)
+   ========================================================================== */
+:root {
+  --color-bg: #f1f5f9;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-sunken: #e2e8f0;
+  --color-surface-glass: rgba(255, 255, 255, 0.92);
+
+  --color-text: #0f172a;
+  --color-text-secondary: #334155;
+  --color-text-muted: #64748b;
+  --color-text-dim: #94a3b8;
+
+  --color-border: #cbd5e1;
+  --color-border-subtle: #e2e8f0;
+  --color-border-strong: #94a3b8;
+
+  --color-accent: #0284c7;
+  --color-accent-hover: #0369a1;
+  --color-accent-subtle: #e0f2fe;
+  --color-accent-text: #ffffff;
+
+  --color-snagit-red: #dc2626;
+  --color-snagit-red-hover: #b91c1c;
+
+  --color-danger: #dc2626;
+  --color-danger-subtle: #fee2e2;
+  --color-danger-text: #ffffff;
+
+  --color-success: #16a34a;
+  --color-success-subtle: #dcfce7;
+  --color-success-text: #14532d;
+
+  --color-warning: #d97706;
+  --color-warning-subtle: #fef3c7;
+  --color-warning-text: #78350f;
+
+  --color-info: #0284c7;
+  --color-info-subtle: #e0f2fe;
+  --color-info-text: #0369a1;
+
+  /* Theme-invariant tokens (AD-10) */
+  --color-marker: #f59e0b;
+  --color-marker-text: #000000;
+  --color-marker-ring: #ffffff;
+
+  --color-overlay-scrim: rgba(15, 23, 42, 0.7);
+  --color-overlay-ring: #0284c7;
+  --color-overlay-selection-bg: rgba(2, 132, 199, 0.18);
+
+  --snagit-ribbon-bg: #ffffff;
+  --snagit-ribbon-border: #cbd5e1;
+  --snagit-tray-bg: #f8fafc;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-full: 9999px;
+
+  --font-ui: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
+  --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+
+  --trans-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --trans-smooth: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg: #0b0f19;
+    --color-surface: #131b2e;
+    --color-surface-raised: #1e293b;
+    --color-surface-sunken: #090d16;
+    --color-surface-glass: rgba(19, 27, 46, 0.92);
+
+    --color-text: #f8fafc;
+    --color-text-secondary: #cbd5e1;
+    --color-text-muted: #94a3b8;
+    --color-text-dim: #64748b;
+
+    --color-border: #1e293b;
+    --color-border-subtle: #172033;
+    --color-border-strong: #334155;
+
+    --color-accent: #38bdf8;
+    --color-accent-hover: #7dd3fc;
+    --color-accent-subtle: #082f49;
+    --color-accent-text: #082f49;
+
+    --color-danger: #ef4444;
+    --color-danger-subtle: #450a0a;
+    --color-danger-text: #ffffff;
+
+    --color-success: #22c55e;
+    --color-success-subtle: #052e16;
+    --color-success-text: #86efac;
+
+    --color-warning: #f59e0b;
+    --color-warning-subtle: #451a03;
+    --color-warning-text: #fde047;
+
+    --color-info: #38bdf8;
+    --color-info-subtle: #082f49;
+    --color-info-text: #7dd3fc;
+
+    --snagit-ribbon-bg: #111827;
+    --snagit-ribbon-border: #1e293b;
+    --snagit-tray-bg: #0f172a;
+
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.7);
+    --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.85);
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-bg: #0b0f19;
+  --color-surface: #131b2e;
+  --color-surface-raised: #1e293b;
+  --color-surface-sunken: #090d16;
+  --color-surface-glass: rgba(19, 27, 46, 0.92);
+
+  --color-text: #f8fafc;
+  --color-text-secondary: #cbd5e1;
+  --color-text-muted: #94a3b8;
+  --color-text-dim: #64748b;
+
+  --color-border: #1e293b;
+  --color-border-subtle: #172033;
+  --color-border-strong: #334155;
+
+  --color-accent: #38bdf8;
+  --color-accent-hover: #7dd3fc;
+  --color-accent-subtle: #082f49;
+  --color-accent-text: #082f49;
+
+  --color-danger: #ef4444;
+  --color-danger-subtle: #450a0a;
+  --color-danger-text: #ffffff;
+
+  --color-success: #22c55e;
+  --color-success-subtle: #052e16;
+  --color-success-text: #86efac;
+
+  --color-warning: #f59e0b;
+  --color-warning-subtle: #451a03;
+  --color-warning-text: #fde047;
+
+  --color-info: #38bdf8;
+  --color-info-subtle: #082f49;
+  --color-info-text: #7dd3fc;
+
+  --snagit-ribbon-bg: #111827;
+  --snagit-ribbon-border: #1e293b;
+  --snagit-tray-bg: #0f172a;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.7);
+  --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.85);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Header Navbar */
+.spec-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(16px);
+  background: var(--color-surface-glass);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-3) var(--space-6);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.spec-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.spec-brand-icon {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #0284c7, #2563eb);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 16px;
+  box-shadow: 0 4px 10px rgba(2, 132, 199, 0.35);
+}
+
+.spec-brand-title {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.spec-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.theme-toggle-btn {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Main Spec Document Layout (Vertical Linear State Feed) */
+.spec-container {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-6) 120px var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: 64px;
+}
+
+/* State Block Container */
+.state-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  scroll-margin-top: 80px;
+}
+
+.state-meta-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid var(--color-border);
+  padding-bottom: var(--space-2);
+}
+
+.state-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.state-number-pill {
+  background: #0284c7;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+}
+
+.state-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.state-trigger-badge {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  background: var(--color-surface-sunken);
+  padding: 4px 10px;
+  border-radius: var(--radius-xs);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+
+.state-description {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+/* App Mockup Windows */
+.mockup-window {
+  background: var(--snagit-ribbon-bg);
+  border: 1px solid var(--snagit-ribbon-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-xl);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* App Split Container */
+.app-split-container {
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+.app-left-core {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--snagit-ribbon-border);
+}
+
+/* Window Titlebar */
+.window-titlebar {
+  background: var(--snagit-ribbon-bg);
+  border-bottom: 1px solid var(--snagit-ribbon-border);
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-3);
+  font-size: 0.75rem;
+  user-select: none;
+}
+
+.window-title-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.window-logo {
+  width: 18px;
+  height: 18px;
+  background: #0284c7;
+  color: white;
+  font-weight: 800;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+}
+
+/* 3-Zone Balanced Ribbon Toolbar */
+.ribbon-bar {
+  background: var(--snagit-ribbon-bg);
+  border-bottom: 1px solid var(--snagit-ribbon-border);
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4);
+}
+
+.ribbon-zone {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tool-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  width: 40px;
+  height: 40px;
+  color: var(--color-text-secondary);
+  font-size: 1.15rem;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+}
+
+.tool-icon-btn.active {
+  background: var(--color-accent-subtle);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.capture-red-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-sm);
+  width: 40px;
+  height: 40px;
+  font-size: 1.2rem;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
+}
+
+.bundle-ribbon-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0 12px;
+  height: 40px;
+  color: var(--color-text);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.share-split-group {
+  display: flex;
+  align-items: center;
+  background: #0284c7;
+  color: white;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  height: 40px;
+}
+
+.share-btn-main {
+  background: transparent;
+  border: none;
+  color: white;
+  padding: 0 12px;
+  height: 100%;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.share-btn-arrow {
+  background: rgba(0, 0, 0, 0.18);
+  border: none;
+  color: white;
+  padding: 0 8px;
+  height: 100%;
+  font-size: 0.7rem;
+}
+
+/* Canvas Viewport */
+.canvas-area {
+  height: 380px;
+  background: #ffffff;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.diagram-mock-content {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+}
+
+.swimlane-box {
+  border: 1px dashed #94a3b8;
+  background: rgba(248, 250, 252, 0.95);
+  border-radius: 6px;
+  padding: 10px;
+  position: relative;
+}
+
+.swimlane-label {
+  position: absolute;
+  top: -8px;
+  left: 10px;
+  background: #334155;
+  color: white;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.node-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.node-pill {
+  background: #0284c7;
+  color: white;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+.card-grid-mock {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.card-mock-item {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  padding: 6px;
+  font-size: 0.55rem;
+  color: #991b1b;
+  min-height: 50px;
+}
+
+/* Numbered Markers */
+.stamp-badge {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--color-marker);
+  color: var(--color-marker-text);
+  border: 2px solid var(--color-marker-ring);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.8rem;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  transform: translate(-50%, -50%);
+  z-index: 20;
+}
+
+.stamp-badge.focused {
+  transform: translate(-50%, -50%) scale(1.25);
+  box-shadow: 0 0 0 3px #0284c7, 0 0 0 6px rgba(2, 132, 199, 0.4), 0 6px 12px rgba(0,0,0,0.5);
+  z-index: 30;
+}
+
+/* Crop Selection Mask */
+.crop-mask-overlay {
+  position: absolute;
+  top: 10%;
+  left: 12%;
+  right: 12%;
+  bottom: 15%;
+  border: 2px solid #0284c7;
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.65);
+  z-index: 40;
+}
+
+.crop-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #ffffff;
+  border: 2px solid #0284c7;
+}
+.c-tl { top: -5px; left: -5px; }
+.c-tr { top: -5px; right: -5px; }
+.c-bl { bottom: -5px; left: -5px; }
+.c-br { bottom: -5px; right: -5px; }
+
+.crop-hud-pill {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0f172a;
+  color: #ffffff;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  z-index: 50;
+  box-shadow: var(--shadow-lg);
+}
+
+/* Bottom Status Bar */
+.bottom-status-bar {
+  background: var(--snagit-ribbon-bg);
+  border-top: 1px solid var(--snagit-ribbon-border);
+  border-bottom: 1px solid var(--snagit-ribbon-border);
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4);
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+}
+
+/* Bottom Filmstrip Tray */
+.filmstrip-tray {
+  background: var(--snagit-tray-bg);
+  height: 94px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-4);
+  gap: var(--space-3);
+}
+
+.tray-batcher-banner {
+  background: #0f172a;
+  color: #ffffff;
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  height: 72px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  flex-shrink: 0;
+  border-right: 2px solid #10b981;
+}
+
+.tray-batcher-btn {
+  background: #10b981;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.tray-thumb {
+  width: 110px;
+  height: 72px;
+  background: #ffffff;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.tray-thumb.active {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.35);
+  transform: translateY(-2px);
+  background: var(--color-accent-subtle);
+}
+
+.tray-thumb.selected-bundle {
+  border-color: #10b981;
+}
+
+.editing-tag {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: #0284c7;
+  color: white;
+  font-size: 0.5rem;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+/* Full-Height Right Properties Panel */
+.properties-full-panel {
+  width: 420px;
+  background: var(--snagit-ribbon-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header-bar {
+  height: 56px;
+  border-bottom: 1px solid var(--snagit-ribbon-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4);
+  font-size: 0.85rem;
+  font-weight: 800;
+  background: var(--color-surface-sunken);
+}
+
+.panel-body-content {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  overflow-y: auto;
+}
+
+.note-box-container {
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.note-box-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.note-row-item {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  padding: 6px 8px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.note-row-item.highlighted {
+  border-color: var(--color-marker);
+  background: var(--color-warning-subtle);
+  box-shadow: 0 0 0 1px var(--color-marker);
+}
+
+.token-breakdown-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72rem;
+}
+
+/* Modals Embedded as Concrete Visual States */
+.embedded-modal-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  z-index: 80;
+}
+
+.modal-window-3col {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+  width: 1060px;
+  height: 560px;
+  display: grid;
+  grid-template-columns: 310px 1fr 280px;
+  overflow: hidden;
+}
+
+.modal-col {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.toast-floating {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #0f172a;
+  color: #ffffff;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  font-size: 0.8rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-xl);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 999;
+  transform: translateY(100px);
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toast-floating.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+</style>
+
+<!-- HEADER -->
+<header class="spec-header">
+  <div class="spec-brand">
+    <div class="spec-brand-icon">⚡</div>
+    <div>
+      <div class="spec-brand-title">Snapdown Studio — UI/UX Specification Flow</div>
+      <div style="font-size: 0.7rem; color: var(--color-text-muted);">End-to-End Visual State Machine &amp; Screen Transitions</div>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <span class="spec-tag">Spec Verified</span>
+    <button class="theme-toggle-btn" onclick="toggleTheme()">
+      <span id="themeIcon">🌙</span> <span id="themeLabel">Dark Theme</span>
+    </button>
+  </div>
+</header>
+
+<main class="spec-container">
+
+  <!-- =========================================================================
+       STATE 1: DEFAULT WORKSPACE (HOTKEY READY)
+       ========================================================================= -->
+  <section class="state-section" id="state-1">
+    <div class="state-meta-header">
+      <div class="state-badge-row">
+        <span class="state-number-pill">STATE 1</span>
+        <h2 class="state-title">Default Workspace &amp; Finding Inspection</h2>
+      </div>
+      <span class="state-trigger-badge">Trigger: App Launch or Selection from Tray</span>
+    </div>
+    <p class="state-description">
+      Antarmuka utama saat aplikasi dibuka. Menampilkan gambar aktif secara <em>full-screen edge-to-edge</em> di kanvas tengah, bilah ribbon 3-zona (Rata Kiri: Input, Rata Tengah: Anotasi, Rata Kanan: Export), baki <em>filmstrip</em> bawah untuk beralih gambar, dan panel vertikal penuh <strong>Notes &amp; Marker</strong> di sisi kanan dengan kalkulasi token transparan (Gambar vs Catatan).
+    </p>
+
+    <!-- MOCKUP WINDOW STATE 1 -->
+    <div class="mockup-window">
+      <div class="window-titlebar">
+        <div class="window-title-left">
+          <div class="window-logo">⚡</div>
+          <span style="font-weight: 800;">Snapdown Editor</span>
+          <span style="color: var(--color-border-strong);">|</span>
+          <span style="color: var(--color-text-muted);">2026-08-24_19-45-12.snapx — (Active Finding: WDI-Flow)</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="background: var(--color-success-subtle); color: var(--color-success-text); padding: 1px 8px; border-radius: 3px; font-weight: 700; font-size: 0.68rem;">● Hotkey Ready (Ctrl+Shift+S)</span>
+          <span style="color: var(--color-text-muted);">🗕 🗖 ✕</span>
+        </div>
+      </div>
+
+      <div class="app-split-container">
+        <div class="app-left-core">
+          <!-- Ribbon -->
+          <div class="ribbon-bar">
+            <div class="ribbon-zone">
+              <button class="capture-red-btn" title="Capture Region (Ctrl+Shift+S)">🔴</button>
+              <button class="tool-icon-btn" title="Open File">📂</button>
+              <button class="tool-icon-btn" title="Paste Image (Ctrl+V)">📥</button>
+            </div>
+            <div class="ribbon-zone">
+              <button class="tool-icon-btn active" title="Step / Marker Tool">🔢</button>
+              <button class="tool-icon-btn" title="Crop Image">✂️</button>
+              <button class="tool-icon-btn" style="color: var(--color-danger);" title="Delete Marker">🗑️</button>
+            </div>
+            <div class="ribbon-zone">
+              <button class="bundle-ribbon-btn">📦 Assemble Bundle <span style="background: var(--color-marker); padding: 1px 6px; border-radius: 99px; font-size: 0.65rem; color: #000;">2</span></button>
+              <button class="tool-icon-btn" title="Copy Canvas Image">📋</button>
+              <div class="share-split-group">
+                <button class="share-btn-main">Share Bundle</button>
+                <button class="share-btn-arrow">▼</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Canvas -->
+          <div class="canvas-area">
+            <div class="diagram-mock-content">
+              <div class="swimlane-box">
+                <span class="swimlane-label">BMAD Core</span>
+                <div class="node-row">
+                  <div class="node-pill">Discovery</div>
+                  <span>➔</span>
+                  <div class="node-pill">Planning</div>
+                  <span>➔</span>
+                  <div class="node-pill">Design</div>
+                  <span>➔</span>
+                  <div class="node-pill" style="background: #2563eb;">Implementation</div>
+                </div>
+                <div class="card-grid-mock">
+                  <div class="card-mock-item">Brainstorming</div>
+                  <div class="card-mock-item">PRD Spec</div>
+                  <div class="card-mock-item">Architecture</div>
+                  <div class="card-mock-item" style="border-color: #ef4444;">Spec / Stories</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Numbered Markers on Image -->
+            <div class="stamp-badge focused" style="top: 28%; left: 32%;">1</div>
+            <div class="stamp-badge" style="top: 42%; left: 88%;">2</div>
+            <div class="stamp-badge" style="top: 76%; left: 68%;">3</div>
+          </div>
+
+          <!-- Status Bar -->
+          <div class="bottom-status-bar">
+            <div>⏱️ Hide Recent &nbsp;&nbsp;•&nbsp;&nbsp; ☑️ Select All to Bundle</div>
+            <div style="font-family: var(--font-mono);">📐 780 × 480 px &nbsp;•&nbsp; <strong style="color: var(--color-accent);">⚡ 42 KB (~640 tokens)</strong> &nbsp;•&nbsp; <span style="color: var(--color-success);">● Auto-Fitted (1:1 Note Space)</span></div>
+          </div>
+
+          <!-- Filmstrip Tray -->
+          <div class="filmstrip-tray">
+            <div class="tray-batcher-banner">
+              <div style="font-size: 0.7rem; font-weight: 700;">📦 Bundle Batcher</div>
+              <div style="color: #10b981; font-weight: 800; font-size: 0.65rem;">2 selected</div>
+              <button class="tray-batcher-btn">Assemble ➔</button>
+            </div>
+
+            <div class="tray-thumb active selected-bundle">
+              <span class="editing-tag">● Editing</span>
+              <input type="checkbox" checked style="accent-color: #10b981; width: 12px; height: 12px;">
+              <div style="font-size: 0.75rem; text-align: center; color: #94a3b8;">📊 Diagram</div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.55rem; font-family: var(--font-mono);">
+                <span style="color: var(--color-accent); font-weight: 700;">WDI-Flow</span>
+                <span style="background: var(--color-marker); color: #000; padding: 0 4px; border-radius: 2px; font-weight: 800;">3 markers</span>
+              </div>
+            </div>
+
+            <div class="tray-thumb selected-bundle">
+              <input type="checkbox" checked style="accent-color: #10b981; width: 12px; height: 12px;">
+              <div style="font-size: 0.75rem; text-align: center; color: #94a3b8;">🧭 Sidebar</div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.55rem; font-family: var(--font-mono);">
+                <span>Nav-Clip</span>
+                <span style="background: var(--color-marker); color: #000; padding: 0 4px; border-radius: 2px; font-weight: 800;">1 marker</span>
+              </div>
+            </div>
+
+            <div class="tray-thumb">
+              <input type="checkbox" style="width: 12px; height: 12px;">
+              <div style="font-size: 0.75rem; text-align: center; color: #94a3b8;">⚠️ Modal</div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.55rem; font-family: var(--font-mono);">
+                <span>Btn-Overflow</span>
+                <span style="background: var(--color-marker); color: #000; padding: 0 4px; border-radius: 2px; font-weight: 800;">2 markers</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Full-Height Right Panel: Notes & Marker -->
+        <aside class="properties-full-panel">
+          <div class="panel-header-bar">
+            <span>Notes &amp; Marker</span>
+            <div style="font-size: 0.68rem; font-family: var(--font-mono); background: var(--color-surface); padding: 2px 6px; border-radius: 3px; border: 1px solid var(--color-border);">
+              <span style="color: var(--color-text-muted);">Text: </span><strong style="color: #10b981;">~120 tkn</strong>
+            </div>
+          </div>
+
+          <div class="panel-body-content">
+            <div class="note-box-container">
+              <div class="note-box-title-row">
+                <span>Observation Summary</span>
+                <span style="font-family: var(--font-mono);">~45 tkn</span>
+              </div>
+              <textarea style="width: 100%; min-height: 100px; padding: 8px; font-family: var(--font-ui); font-size: 0.78rem; border: 1px solid var(--color-border); border-radius: 4px; line-height: 1.5; resize: vertical;" readonly>WDI Method G4 Component transition state error observed on desktop view. The component lifecycle does not transition smoothly into the release gate without prior blueprint sign-off.</textarea>
+            </div>
+
+            <div class="note-box-container" style="flex: 1;">
+              <div class="note-box-title-row">
+                <span>Marker Notes</span>
+                <span style="font-family: var(--font-mono);">~75 tkn (3 pts)</span>
+              </div>
+
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <div class="note-row-item highlighted">
+                  <div style="width: 18px; height: 18px; border-radius: 50%; background: var(--color-marker); color: black; font-size: 0.7rem; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">1</div>
+                  <div style="font-size: 0.75rem; line-height: 1.4;">Discovery and Planning blocks lack explicit exit gate criteria before moving to Design.</div>
+                </div>
+
+                <div class="note-row-item">
+                  <div style="width: 18px; height: 18px; border-radius: 50%; background: var(--color-marker); color: black; font-size: 0.7rem; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">2</div>
+                  <div style="font-size: 0.75rem; line-height: 1.4;">Spec story box is highlighted red without explanation note in the side legend.</div>
+                </div>
+
+                <div class="note-row-item">
+                  <div style="width: 18px; height: 18px; border-radius: 50%; background: var(--color-marker); color: black; font-size: 0.7rem; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">3</div>
+                  <div style="font-size: 0.75rem; line-height: 1.4;">G4 Component needs LC contract inventory references to prevent silent breakage.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="token-breakdown-card">
+              <div>
+                <div style="font-weight: 700;">Total Finding Estimation</div>
+                <div style="font-size: 0.65rem; color: var(--color-text-muted); font-family: var(--font-mono);">Image: 520 tkn + Notes: 120 tkn</div>
+              </div>
+              <strong style="color: var(--color-accent); font-family: var(--font-mono); font-size: 0.85rem;">~640 tokens</strong>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- =========================================================================
+       STATE 2: GLOBAL SCREEN REGION CAPTURE OVERLAY
+       ========================================================================= -->
+  <section class="state-section" id="state-2">
+    <div class="state-meta-header">
+      <div class="state-badge-row">
+        <span class="state-number-pill">STATE 2</span>
+        <h2 class="state-title">Global Hotkey Screen Region Capture</h2>
+      </div>
+      <span class="state-trigger-badge">Trigger: User presses Ctrl+Shift+S (or clicks 🔴 Capture)</span>
+    </div>
+    <p class="state-description">
+      Layar desktop meredup seketika (<em>dimmed scrim</em>). Pengguna men-drag region kotak seleksi di atas UI yang rusak. Saat mouse dilepas, floating note box muncul tepat di lokasi seleksi untuk mengetik ringkasan masalah secara cepat tanpa membuka window aplikasi.
+    </p>
+
+    <!-- MOCKUP WINDOW STATE 2 -->
+    <div class="mockup-window" style="height: 480px; background: #0f172a; position: relative;">
+      <!-- Dimmed Scrim and Grid Background -->
+      <div style="position: absolute; inset: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(2px); display: flex; flex-direction: column; justify-content: space-between; padding: 20px;">
+
+        <div style="align-self: center; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 6px 18px; border-radius: var(--radius-full); font-size: 0.78rem; font-weight: 700; display: flex; align-items: center; gap: 10px;">
+          <span>📸 Drag region on screen to capture. Press <strong>Esc</strong> to cancel.</span>
+        </div>
+
+        <!-- Selected Region Box -->
+        <div style="position: absolute; top: 110px; left: 160px; width: 440px; height: 260px; border: 2px solid #0284c7; background: rgba(2, 132, 199, 0.15); box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);">
+          <span style="position: absolute; bottom: -24px; left: 0; background: #0284c7; color: white; font-size: 0.65rem; font-family: var(--font-mono); font-weight: 700; padding: 2px 6px; border-radius: 2px;">440 × 260 px (WebP ~420 tokens)</span>
+
+          <!-- Quick Note Floating Popup -->
+          <div style="position: absolute; top: 12px; right: -300px; width: 280px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 12px; box-shadow: var(--shadow-modal); display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; font-weight: 800;">
+              <span>⚡ New Finding Observation</span>
+              <span style="font-size: 0.6rem; color: #10b981; font-family: var(--font-mono);">~420 tkn</span>
+            </div>
+            <textarea style="width: 100%; height: 64px; font-family: var(--font-ui); font-size: 0.75rem; border: 1px solid var(--color-border); border-radius: 4px; padding: 6px; resize: none;" placeholder="Ketik apa yang salah dengan UI ini... (Tekan Enter untuk simpan)"></textarea>
+            <div style="display: flex; justify-content: flex-end; gap: 6px;">
+              <button class="tool-icon-btn" style="width: auto; height: 26px; padding: 0 8px; font-size: 0.7rem;">Cancel (Esc)</button>
+              <button class="tool-icon-btn" style="width: auto; height: 26px; padding: 0 10px; font-size: 0.7rem; background: #0284c7; color: white; border: none; font-weight: 700;">Save Finding (Enter)</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+
+  <!-- =========================================================================
+       STATE 3: INTERACTIVE CROP MODE
+       ========================================================================= -->
+  <section class="state-section" id="state-3">
+    <div class="state-meta-header">
+      <div class="state-badge-row">
+        <span class="state-number-pill">STATE 3</span>
+        <h2 class="state-title">Interactive Crop Mode &amp; Dimension Reduction</h2>
+      </div>
+      <span class="state-trigger-badge">Trigger: User clicks ✂️ Crop Image</span>
+    </div>
+    <p class="state-description">
+      Jika screenshot awal terlalu lebar, pengguna mengklik <strong>✂️ Crop Image</strong>. Muncul 8 titik handle resize di sekeliling gambar dan area buangan meredup gelap. Pengguna men-drag handle ke dalam lalu mengklik <strong>Apply Crop (Enter)</strong> untuk memangkas resolusi dan menghemat konsumsi token LLM.
+    </p>
+
+    <!-- MOCKUP WINDOW STATE 3 -->
+    <div class="mockup-window">
+      <div class="window-titlebar">
+        <div class="window-title-left">
+          <div class="window-logo">⚡</div>
+          <span style="font-weight: 800;">Snapdown Editor — [Crop Mode Active]</span>
+        </div>
+        <span style="color: var(--color-warning); font-size: 0.7rem; font-weight: 700;">✂️ Drag handles to define new crop boundaries</span>
+      </div>
+
+      <div class="app-split-container">
+        <div class="app-left-core">
+          <div class="canvas-area" style="height: 380px;">
+            <div class="diagram-mock-content">
+              <div class="swimlane-box">
+                <span class="swimlane-label">BMAD Core</span>
+                <div class="node-row">
+                  <div class="node-pill">Discovery</div>
+                  <span>➔</span>
+                  <div class="node-pill">Planning</div>
+                  <span>➔</span>
+                  <div class="node-pill">Design</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Active Crop Mask and Handles -->
+            <div class="crop-mask-overlay">
+              <div class="crop-handle c-tl"></div>
+              <div class="crop-handle c-tr"></div>
+              <div class="crop-handle c-bl"></div>
+              <div class="crop-handle c-br"></div>
+            </div>
+
+            <!-- Floating Action HUD -->
+            <div class="crop-hud-pill">
+              <span>✂️ Area baru: 560 × 320 px (~420 tokens)</span>
+              <button class="tool-icon-btn" style="width: auto; height: 24px; padding: 0 8px; font-size: 0.68rem; background: var(--color-surface); color: var(--color-text);">Cancel (Esc)</button>
+              <button class="tool-icon-btn" style="width: auto; height: 24px; padding: 0 10px; font-size: 0.68rem; background: #10b981; color: white; border: none;">Apply Crop (Enter)</button>
+            </div>
+          </div>
+
+          <div class="bottom-status-bar">
+            <span>📐 Resizing Canvas Crop...</span>
+            <span style="color: var(--color-accent); font-weight: 700;">Reduced from 640 tkn ➔ ~420 tkn</span>
+          </div>
+        </div>
+
+        <aside class="properties-full-panel" style="opacity: 0.6; pointer-events: none;">
+          <div class="panel-header-bar"><span>Notes &amp; Marker (Locked during Crop)</span></div>
+          <div class="panel-body-content" style="align-items: center; justify-content: center; color: var(--color-text-muted); font-size: 0.8rem;">
+            Selesaikan pemotongan gambar terlebih dahulu.
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- =========================================================================
+       STATE 4: BUNDLE ASSEMBLY & DIRECT AGENT HANDOFF
+       ========================================================================= -->
+  <section class="state-section" id="state-4">
+    <div class="state-meta-header">
+      <div class="state-badge-row">
+        <span class="state-number-pill">STATE 4</span>
+        <h2 class="state-title">Bundle Assembly &amp; Direct Agent Handoff</h2>
+      </div>
+      <span class="state-trigger-badge">Trigger: User clicks "Assemble Bundle ➔" (Tray) or "📦 Assemble Bundle" (Ribbon)</span>
+    </div>
+    <div class="state-description">
+      <strong>Alur Lengkap &amp; Detail Interaksi State 4:</strong>
+      <ul style="margin-top: 6px; padding-left: 18px; display: flex; flex-direction: column; gap: 4px;">
+        <li>• <strong>Kolom 1 (Bundle Contents)</strong>: Menampilkan daftar temuan yang dipilih lengkap dengan thumbnail gambar. <em>Ketika baris/thumbnail diklik</em>, Kolom 2 otomatis <strong>Auto-Scroll &amp; Highlight</strong> ke temuan terkait, dan memicu <strong>Quick Lightbox Preview</strong> (melihat gambar utuh + burned markers).</li>
+        <li>• <strong>Tombol ✕ (Exclude)</strong>: Jika reviewer membatalkan sebuah temuan, klik <code>✕</code> untuk mengeluarkannya dari bundle dan mengembalikannya ke filmstrip antrean aktif (tanpa menghapus file aslinya).</li>
+        <li>• <strong>Kolom 2 (Live Generated Markdown)</strong>: Dokumen CommonMark terstruktur yang dihasilkan secara otomatis dan siap disalin/dibaca oleh model LLM.</li>
+        <li>• <strong>Kolom 3 (Handoff Channels &amp; Auto-Cleanup)</strong>: 3 opsi ekspor (Copy MD, Local MCP Key, Unlisted URL). Begitu tombol <strong>📦 Assemble &amp; Save Bundle</strong> diklik, seluruh screenshot mentah yang dipilih otomatis dikompilasi menjadi dokumen Bundle permanen dan langsung dibersihkan dari antrean filmstrip bawah (auto-cleanup).</li>
+      </ul>
+    </div>
+
+    <!-- MOCKUP WINDOW STATE 4 (MODAL VIEW) -->
+    <div class="mockup-window" style="height: 540px; background: rgba(15, 23, 42, 0.75); padding: 20px; display: flex; align-items: center; justify-content: center;">
+      <div class="modal-window-3col" style="height: 500px;">
+        <!-- Col 1: Included Items with Visible Thumbnail Previews & Click Actions -->
+        <div class="modal-col" style="background: var(--color-surface-sunken); border-right: 1px solid var(--color-border);">
+          <div style="font-size: 0.85rem; font-weight: 800; display: flex; justify-content: space-between;">
+            <span>📦 Bundle Contents</span>
+            <span style="background: #10b981; color: white; font-size: 0.6rem; font-weight: 800; padding: 1px 6px; border-radius: 99px;">2 items</span>
+          </div>
+          <div style="margin-top: 2px;">
+            <label style="font-size: 0.65rem; font-weight: 700; color: var(--color-text-muted);">BUNDLE NAME</label>
+            <input type="text" value="W8-S6-Checkout-Bugfixes" style="width: 100%; padding: 5px; font-size: 0.75rem; border: 1px solid var(--color-border); border-radius: 4px;">
+          </div>
+          <div style="font-size: 0.65rem; font-weight: 700; color: var(--color-text-muted); margin-top: 2px;">KLIK ITEM UNTUK JUMP KE MARKDOWN:</div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px; overflow-y: auto;">
+            <!-- Finding 1 with Image Thumbnail & Jump Action -->
+            <div style="background: var(--color-surface); padding: 8px; border-radius: 6px; border: 2px solid var(--color-accent); display: flex; gap: 8px; align-items: center; cursor: pointer; box-shadow: var(--shadow-sm);" title="Klik untuk jump & preview gambar Finding 1">
+              <div style="width: 54px; height: 40px; background: #1e293b; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; color: #94a3b8; flex-shrink: 0; position: relative; border: 1px solid var(--color-accent);">
+                <span>📊</span>
+                <span style="position: absolute; bottom: 1px; right: 1px; background: var(--color-marker); color: black; font-size: 0.55rem; font-weight: 800; padding: 0 3px; border-radius: 2px;">3 pts</span>
+              </div>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-weight: 800; font-size: 0.72rem; color: var(--color-accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">1. WDI Method G4 Component error</div>
+                <div style="color: var(--color-text-muted); font-size: 0.65rem; font-family: var(--font-mono); margin-top: 1px;">780x480 • ~640 tokens</div>
+              </div>
+              <span style="color: var(--color-text-dim); font-size: 0.75rem; cursor: pointer;" title="Keluarkan dari bundle (kembali ke filmstrip)">✕</span>
+            </div>
+
+            <!-- Finding 2 with Image Thumbnail & Jump Action -->
+            <div style="background: var(--color-surface); padding: 8px; border-radius: 6px; border: 1px solid var(--color-border); display: flex; gap: 8px; align-items: center; cursor: pointer;" title="Klik untuk jump & preview gambar Finding 2">
+              <div style="width: 54px; height: 40px; background: #1e293b; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; color: #94a3b8; flex-shrink: 0; position: relative;">
+                <span>🧭</span>
+                <span style="position: absolute; bottom: 1px; right: 1px; background: var(--color-marker); color: black; font-size: 0.55rem; font-weight: 800; padding: 0 3px; border-radius: 2px;">1 pt</span>
+              </div>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-weight: 800; font-size: 0.72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">2. Sidebar nav icon clipping</div>
+                <div style="color: var(--color-text-muted); font-size: 0.65rem; font-family: var(--font-mono); margin-top: 1px;">420x280 • ~510 tokens</div>
+              </div>
+              <span style="color: var(--color-text-dim); font-size: 0.75rem; cursor: pointer;" title="Keluarkan dari bundle (kembali ke filmstrip)">✕</span>
+            </div>
+          </div>
+
+          <div style="margin-top: auto; border-top: 1px solid var(--color-border); padding-top: 6px; display: flex; justify-content: space-between; font-size: 0.72rem;">
+            <span>Total Bundle Tokens:</span>
+            <strong style="color: var(--color-accent); font-family: var(--font-mono);">~1,150 tokens</strong>
+          </div>
+        </div>
+
+        <!-- Col 2: Live Generated Markdown Document (Clean CommonMark) -->
+        <div class="modal-col" style="border-right: 1px solid var(--color-border);">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.8rem; font-weight: 800;">📄 Generated Markdown Contract</span>
+            <span style="font-size: 0.68rem; font-family: var(--font-mono); color: var(--color-success); background: var(--color-success-subtle); padding: 2px 6px; border-radius: 3px;">● Ready for Agent</span>
+          </div>
+          <div class="bundle-md-paper" style="flex: 1; font-family: var(--font-mono); font-size: 0.7rem; line-height: 1.5; padding: 10px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg); color: var(--color-text); overflow-y: auto;">
+            <p># Visual Review: W8-S6-Checkout-Bugfixes</p>
+            <p style="color: var(--color-text-muted);">Generated via Snapdown. Machine-readable review with burned markers.</p>
+            <br>
+            <p>---</p>
+            <p>## Finding 1: WDI Method G4 Component error</p>
+            <p>Image: `_vault/blobs/img_8491.webp` (780x480, Burned Markers 1, 2, 3)</p>
+            <p><strong>Marker Annotations:</strong></p>
+            <p>1. Discovery and Planning blocks lack explicit exit gate criteria.</p>
+            <p>2. Spec story box is highlighted red without explanation note.</p>
+            <p>3. G4 Component needs LC contract inventory references.</p>
+            <br>
+            <p>---</p>
+            <p>## Finding 2: Sidebar nav icon clipping</p>
+            <p>Image: `_vault/blobs/img_8492.webp` (420x280, Burned Marker 1)</p>
+            <p><strong>Marker Annotations:</strong></p>
+            <p>1. Collapse chevron icon is clipped by 4px on the right border.</p>
+          </div>
+        </div>
+
+        <!-- Col 3: Handoff Channels & Assemble Action -->
+        <div class="modal-col">
+          <span style="font-size: 0.8rem; font-weight: 800;">Handoff Channels</span>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="background: var(--color-surface-sunken); padding: 8px; border-radius: 4px; border: 1px solid var(--color-border);">
+              <div style="font-weight: 700; font-size: 0.72rem;">📋 Copy Markdown</div>
+              <div style="font-size: 0.65rem; color: var(--color-text-muted); margin-bottom: 6px;">Paste langsung ke prompt Claude/Codex.</div>
+              <button class="tool-icon-btn" style="width: 100%; height: 26px; font-size: 0.7rem;">Copy Full MD</button>
+            </div>
+            <div style="background: var(--color-surface-sunken); padding: 8px; border-radius: 4px; border: 1px solid var(--color-border);">
+              <div style="font-weight: 700; font-size: 0.72rem;">⚡ Local MCP Server (Port 3849)</div>
+              <div style="font-size: 0.65rem; color: var(--color-text-muted); margin-bottom: 6px;">Key: <code>sk-snap-849204810</code></div>
+              <button class="tool-icon-btn" style="width: 100%; height: 26px; font-size: 0.7rem;">Copy MCP Key</button>
+            </div>
+          </div>
+
+          <div style="margin-top: auto; border-top: 1px solid var(--color-border); padding-top: 10px; display: flex; flex-direction: column; gap: 6px;">
+            <button class="tool-icon-btn" style="width: 100%; height: 38px; background: #10b981; color: white; border: none; font-weight: 800; font-size: 0.78rem; box-shadow: var(--shadow-md);">
+              📦 Assemble &amp; Save Bundle
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- =========================================================================
+       STATE 5: SAVED REVIEW BUNDLES DRAWER (HISTORY & RE-SHARE)
+       ========================================================================= -->
+  <section class="state-section" id="state-5">
+    <div class="state-meta-header">
+      <div class="state-badge-row">
+        <span class="state-number-pill">STATE 5</span>
+        <h2 class="state-title">Saved Review Bundles Drawer (History, Re-Share &amp; Delete)</h2>
+      </div>
+      <span class="state-trigger-badge">Trigger: User clicks "📚 Bundles History" in Titlebar</span>
+    </div>
+    <p class="state-description">
+      Daftar riwayat bundle permanen yang tersimpan di database Vault lokal. Setiap item bundle dilengkapi deretan aksi <strong>Icon-Only yang bersih</strong>: <code>📋</code> (Salin Markdown), <code>👁️</code> (Buka modal re-share), dan <code>🗑️</code> (Hapus bundle dari disk dengan dialog konfirmasi).
+    </p>
+
+    <!-- MOCKUP WINDOW STATE 5 -->
+    <div class="mockup-window" style="height: 440px; background: rgba(15, 23, 42, 0.75); padding: 20px; display: flex; align-items: center; justify-content: center;">
+      <div style="background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); width: 620px; padding: 18px; box-shadow: var(--shadow-modal); display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--color-border); padding-bottom: 8px;">
+          <div>
+            <div style="font-weight: 800; font-size: 0.95rem;">📚 Saved Review Bundles</div>
+            <div style="font-size: 0.7rem; color: var(--color-text-muted);">Riwayat bundle aktif yang tersimpan di Vault lokal.</div>
+          </div>
+          <span style="cursor: pointer; font-weight: 800;">✕</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- Item 1 -->
+          <div style="background: var(--color-surface-sunken); border: 1px solid var(--color-border); border-radius: 4px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 800; font-size: 0.8rem;">📦 W8-S6-Checkout-Bugfixes</div>
+              <div style="font-size: 0.68rem; color: var(--color-text-muted);">2 findings • 4 markers • <strong style="color: var(--color-accent); font-family: var(--font-mono);">~1,150 tokens</strong></div>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button class="tool-icon-btn" style="width: 32px; height: 32px; font-size: 0.85rem;" title="Copy Markdown">📋</button>
+              <button class="tool-icon-btn" style="width: 32px; height: 32px; font-size: 0.85rem;" title="View / Re-share">👁️</button>
+              <button class="tool-icon-btn" style="width: 32px; height: 32px; font-size: 0.85rem; color: var(--color-danger);" title="Delete Bundle">🗑️</button>
+            </div>
+          </div>
+
+          <!-- Item 2 -->
+          <div style="background: var(--color-surface-sunken); border: 1px solid var(--color-border); border-radius: 4px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 800; font-size: 0.8rem;">📦 Navigation-Theme-Polish</div>
+              <div style="font-size: 0.68rem; color: var(--color-text-muted);">1 finding • 1 marker • <strong style="color: var(--color-accent); font-family: var(--font-mono);">~510 tokens</strong></div>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button class="tool-icon-btn" style="width: 32px; height: 32px; font-size: 0.85rem;" title="Copy Markdown">📋</button>
+              <button class="tool-icon-btn" style="width: 32px; height: 32px; font-size: 0.85rem;" title="View / Re-share">👁️</button>
+              <button class="tool-icon-btn" style="width: 32px; height: 32px; font-size: 0.85rem; color: var(--color-danger);" title="Delete Bundle">🗑️</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; border-top: 1px solid var(--color-border); padding-top: 8px;">
+          <button class="tool-icon-btn" style="width: auto; height: 28px; padding: 0 12px; font-size: 0.72rem;">Tutup (Esc)</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       STATE 6: SETTINGS & PREFERENCES (4 TABS COMPLETE MOCKUPS)
+       ========================================================================= -->
+  <section class="state-section" id="state6">
+    <div class="state-meta-header">
+      <div class="state-badge-row">
+        <span class="state-number-pill">STATE 6</span>
+        <h2 class="state-title">Settings &amp; Agent Preferences (4 Tabs Lengkap)</h2>
+      </div>
+      <span class="state-trigger-badge">Trigger: User clicks "⚙️ Settings" in Titlebar / Ribbon or presses Ctrl + ,</span>
+    </div>
+    <div style="background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 14px 18px; font-size: 0.82rem; line-height: 1.6; display: flex; flex-direction: column; gap: 8px;">
+      <strong>Struktur Lengkap Seluruh Tab Settings &amp; Agent Preferences (Modal View):</strong>
+      <p style="color: var(--color-text-muted);">
+        Berikut adalah visualisasi rinci dari <strong>keempat tab</strong> pada modal pengaturan Snapdown Studio, memastikan setiap opsi memiliki blueprint UI/UX yang presisi untuk agent implementasi.
+      </p>
+    </div>
+
+    <!-- -----------------------------------------------------------------------
+         TAB 1: GENERAL & QUALITY PREFERENCES
+         ----------------------------------------------------------------------- -->
+    <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="spec-tag" style="background: var(--color-accent-subtle); color: var(--color-accent);">TAB 1</span>
+        <h3 style="font-size: 1.05rem; font-weight: 800;">General &amp; Quality Budget (DEC-004, FR-5, FR-18)</h3>
+      </div>
+      <div class="mockup-window" style="background: rgba(15, 23, 42, 0.75); padding: 20px; display: flex; align-items: center; justify-content: center;">
+        <div style="background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); width: 840px; box-shadow: var(--shadow-modal); display: flex; flex-direction: column; overflow: hidden;">
+          <!-- Modal Header -->
+          <div style="background: var(--snagit-ribbon-bg); border-bottom: 1px solid var(--color-border); padding: 12px 18px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 1.1rem;">⚙️</span>
+              <span style="font-weight: 800; font-size: 0.95rem;">Snapdown Preferences &amp; Agent Access</span>
+            </div>
+            <span style="cursor: pointer; font-weight: 800; color: var(--color-text-muted);">✕</span>
+          </div>
+          <!-- Tabs Row (Tab 1 Active) -->
+          <div style="display: flex; gap: 4px; padding: 10px 18px 0 18px; background: var(--color-surface-sunken); border-bottom: 1px solid var(--color-border);">
+            <button style="background: var(--color-surface); border: 1px solid var(--color-border); border-bottom: none; border-radius: var(--radius-sm) var(--radius-sm) 0 0; padding: 6px 14px; font-size: 0.75rem; font-weight: 800; color: var(--color-accent); display: flex; align-items: center; gap: 6px;">
+              <span>⚙️</span> General &amp; Quality
+            </button>
+            <button style="background: transparent; border: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); display: flex; align-items: center; gap: 6px;">
+              <span>⌨️</span> Hotkeys
+            </button>
+            <button style="background: transparent; border: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); display: flex; align-items: center; gap: 6px;">
+              <span>🤖</span> Local Agent Bridge
+            </button>
+            <button style="background: transparent; border: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); display: flex; align-items: center; gap: 6px;">
+              <span>ℹ️</span> About
+            </button>
+          </div>
+          <!-- Body 2-Column Grid -->
+          <div style="padding: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <!-- Left Column -->
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+              <div style="background: var(--color-surface-sunken); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="font-weight: 800; font-size: 0.75rem;">SYSTEM STARTUP (FR-18)</div>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; cursor: pointer;">
+                  <input type="checkbox" checked style="accent-color: var(--color-accent);">
+                  <span>Run Snapdown at Windows Startup</span>
+                </label>
+                <div style="font-size: 0.68rem; color: var(--color-text-muted); line-height: 1.4;">
+                  Starts minimized in system tray on login for instant background capture.
+                </div>
+              </div>
+              <div style="background: var(--color-surface-sunken); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="font-weight: 800; font-size: 0.75rem;">VAULT STORAGE FOLDER</div>
+                <input type="text" value="C:\Users\User\SnapdownVault" readonly style="background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-xs); padding: 6px 8px; font-family: var(--font-mono); font-size: 0.7rem;">
+                <div style="display: flex; gap: 6px;">
+                  <button class="tool-icon-btn" style="width: auto; height: 26px; padding: 0 10px; font-size: 0.7rem; font-weight: 600;">Browse Folder</button>
+                  <button class="tool-icon-btn" style="width: auto; height: 26px; padding: 0 10px; font-size: 0.7rem; font-weight: 600;">Open Explorer</button>
+                </div>
+              </div>
+            </div>
+            <!-- Right Column -->
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+              <div style="background: var(--color-surface-sunken); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div style="font-weight: 800; font-size: 0.75rem;">MULTIMODAL QUALITY BUDGET</div>
+                  <span style="font-size: 0.65rem; background: var(--color-success-subtle); color: var(--color-success-text); padding: 2px 6px; border-radius: 4px; font-weight: 700;">DEC-004</span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 2px; gap: 2px;">
+                  <button style="background: var(--color-accent); color: white; border: none; border-radius: 3px; padding: 4px 0; font-size: 0.7rem; font-weight: 700;">Auto</button>
+                  <button style="background: transparent; border: none; padding: 4px 0; font-size: 0.7rem; font-weight: 600; color: var(--color-text-muted);">Sharp</button>
+                  <button style="background: transparent; border: none; padding: 4px 0; font-size: 0.7rem; font-weight: 600; color: var(--color-text-muted);">Balanced</button>
+                  <button style="background: transparent; border: none; padding: 4px 0; font-size: 0.7rem; font-weight: 600; color: var(--color-text-muted);">Small</button>
+                </div>
+                <div style="font-size: 0.68rem; color: var(--color-text-muted); line-height: 1.4;">
+                  <strong>Auto:</strong> Skenario adaptif cerdas. Menyesuaikan resolusi berdasarkan luas area tangkapan (~120 KB / ~400-800 tokens).
+                </div>
+                <div style="font-size: 0.68rem; color: var(--color-text); font-family: var(--font-mono); background: var(--color-surface); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--color-border);">
+                  Latest capture: 184 KB · 1408 px · Auto
+                </div>
+                <div style="border-top: 1px dashed var(--color-border); padding-top: 6px; font-size: 0.68rem; color: var(--color-accent); cursor: pointer;">
+                  <span>▸ Advanced Compression Settings (Dimensions &amp; Quality)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Modal Footer -->
+          <div style="background: var(--snagit-ribbon-bg); border-top: 1px solid var(--color-border); padding: 10px 18px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.7rem; color: var(--color-text-muted);">Preferensi tersimpan otomatis secara live ke SQLite.</span>
+            <button class="tool-icon-btn" style="width: auto; height: 32px; padding: 0 16px; font-size: 0.75rem; font-weight: 700; background: var(--color-accent); color: white; border: none;">Done &amp; Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- -----------------------------------------------------------------------
+         TAB 2: KEYBOARD HOTKEYS & OS RECORDER
+         ----------------------------------------------------------------------- -->
+    <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="spec-tag" style="background: var(--color-accent-subtle); color: var(--color-accent);">TAB 2</span>
+        <h3 style="font-size: 1.05rem; font-weight: 800;">Shortcuts &amp; Global Hotkey Recorder (FR-16, UC-15)</h3>
+      </div>
+      <div class="mockup-window" style="background: rgba(15, 23, 42, 0.75); padding: 20px; display: flex; align-items: center; justify-content: center;">
+        <div style="background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); width: 840px; box-shadow: var(--shadow-modal); display: flex; flex-direction: column; overflow: hidden;">
+          <!-- Modal Header -->
+          <div style="background: var(--snagit-ribbon-bg); border-bottom: 1px solid var(--color-border); padding: 12px 18px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 1.1rem;">⚙️</span>
+              <span style="font-weight: 800; font-size: 0.95rem;">Snapdown Preferences &amp; Agent Access</span>
+            </div>
+            <span style="cursor: pointer; font-weight: 800; color: var(--color-text-muted);">✕</span>
+          </div>
+          <!-- Tabs Row (Tab 2 Active) -->
+          <div style="display: flex; gap: 4px; padding: 10px 18px 0 18px; background: var(--color-surface-sunken); border-bottom: 1px solid var(--color-border);">
+            <button style="background: transparent; border: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); display: flex; align-items: center; gap: 6px;">
+              <span>⚙️</span> General &amp; Quality
+            </button>
+            <button style="background: var(--color-surface); border: 1px solid var(--color-border); border-bottom: none; border-radius: var(--radius-sm) var(--radius-sm) 0 0; padding: 6px 14px; font-size: 0.75rem; font-weight: 800; color: var(--color-accent); display: flex; align-items: center; gap: 6px;">
+              <span>⌨️</span> Hotkeys
+            </button>
+            <button style="background: transparent; border: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); display: flex; align-items: center; gap: 6px;">
+              <span>🤖</span> Local Agent Bridge
+            </button>
+            <button style="background: transparent; border: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); display: flex; align-items: center; gap: 6px;">
+              <span>ℹ️</span> About
+            </button>
+          </div>
+          <!-- Hotkeys List Body -->
+          <div style="padding: 18px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="font-size: 0.75rem; color: var(--color-text-muted); margin-bottom: 4px;">
+              Klik pada chip shortcut untuk merekam kombinasi tombol keyboard secara langsung.
+            </div>
+            <!-- Hotkey Row 1: Active -->
+            <div style="background: var(--color-surface-sunken); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 800; font-size: 0.78rem;">Global Capture Region Scrim</div>
+                <div style="font-size: 0.68rem; color: var(--color-text-muted);">Membuka overlay capture transparan pada layar aktif.</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 0.65rem; background: var(--color-success-subtle); color: var(--color-success-text); padding: 2px 6px; border-radius: 4px; font-weight: 700;">Active</span>
+                <span style="font-family: var(--font-mono); background: var(--color-surface); border: 1px solid var(--color-border); padding: 4px 10px; border-radius: 4px; font-weight: 800; font-size: 0.75rem; cursor: pointer;">Ctrl+Shift+S</span>
+              </div>
+            </div>
+            <!-- Hotkey Row 2: Listening State -->
+            <div style="background: var(--color-info-subtle); border: 1.5px solid var(--color-accent); border-radius: var(--radius-md); padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 800; font-size: 0.78rem; color: var(--color-accent);">Toggle Snapdown Studio Window</div>
+                <div style="font-size: 0.68rem; color: var(--color-text-muted);">Menampilkan atau meminimalkan window utama Snapdown Studio.</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 0.65rem; background: var(--color-warning-subtle); color: var(--color-warning-text); padding: 2px 6px; border-radius: 4px; font-weight: 700;">Listening...</span>
+                <span style="font-family: var(--font-mono); background: var(--color-surface); border: 2px solid var(--color-accent); color: var(--color-accent); padding: 4px 12px; border-radius: 4px; font-weight: 800; font-size: 0.75rem; box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);">Press keys… (Esc to cancel)</span>
+              </div>
+            </div>
+            <!-- Hotkey Row 3: Bound -->
+            <div style="background: var(--color-surface-sunken); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 800; font-size: 0.78rem;">Copy Current Active Finding</div>
+                <div style="font-size: 0.68rem; color: var(--color-text-muted);">Menyalin gambar aktif beserta marker yang telah di-burn ke clipboard.</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 0.65rem; background: var(--color-success-subtle); color: var(--color-success-text); padding: 2px 6px; border-radius: 4px; font-weight: 700;">Active</span>
+                <span style="font-family: var(--font-mono); background: var(--color-surface); border: 1px solid var(--color-border); padding: 4px 10px; border-radius: 4px; font-weight: 800; font-size: 0.75rem; cursor: pointer;">Ctrl+Shift+C</span>
+              </div>
+            </div>
+            <!-- Hotkey Row 4: Conflict Warning Guard -->
+            <div style="background: var(--color-danger-subtle); border: 1px solid var(--color-danger); border-radius: var(--radius-md); padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 800; font-size: 0.78rem; color: var(--color-danger);">Quick Fullscreen Screenshot</div>
+                <div style="font-size: 0.68rem; color: var(--color-danger); line-height: 1.3;">⚠️ <strong>Konflik OS:</strong> Kombinasi <code>PrintScreen</code> saat ini digunakan oleh Snipping Tool Windows.</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 0.65rem; background: var(--color-danger); color: white; padding: 2px 6px; border-radius: 4px; font-weight: 700;">Conflict</span>
+                <span style="font-family: var(--font-mono); background: var(--color-surface); border: 1px solid var(--color-danger); color: var(--color-danger); padding: 4px 10px; border-radius: 4px; font-weight: 800; font-size: 0.75rem; cursor: pointer;">PrintScreen</span>
+              </div>
+            </div>
+          </div>
+          <!-- Modal Footer -->
+          <div style="background: var(--snagit-ribbon-bg); border-top: 1px solid var(--color-border); padding: 10px 18px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.7rem; color: var(--color-text-muted);">Konflik shortcut dicegah otomatis dengan registrasi Win32 API.</span>
+            <button class="tool-icon-btn" style="width: auto; height: 32px; padding: 0 16px; font-size: 0.75rem; font-weight: 700; background: var(--color-accent); color: white; border: none;">Done &amp; Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- -----------------------------------------------------------------------
+         TAB 3: LOCAL AGENT BRIDGE (MCP & API ACCESS)
+         ----------------------------------------------------------------------- -->
+    <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="spec-tag" style="background: var(--color-accent-subtle); color: var(--color-accent);">TAB 3</span>
+        <h3 style="font-size: 1.05rem; font-weight: 800;">Local Agent Bridge &amp; MCP Integration (FR-19, FR-20, FR-21)</h3>
+      </div>
+      <div class="mockup-window" style="background: rgba(15, 23, 42, 0.75); padding: 20px; display: flex; align-items: center; justify-content: center;">
+        <div style="background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); width: 840px; box-shadow: var(--shadow-modal); display: flex; flex-direction: column; overflow: hidden;">
+          <!-- Modal Header -->
+          <div style="background: var(--snagit-ribbon-bg); border-bottom: 1px solid var(--color-border); padding: 12px 18px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 1.1rem;">⚙️</span>
+              <span style="font-weight: 800; font-size: 0.95rem;">Snapdown Preferences &amp; Agent Access</span>
+            </div>
+            <span style="cursor: pointer; font-weight: 800; color: var(--color-text-muted);">✕</span>
+          </div>
+          <!-- Tabs Row (Tab 3 Active) -->
+          <div style="display: flex; gap: 4px; padding: 10px 18px 0 18px; background: var(--color-surface-sunken); border-bottom: 1px solid var(--color-border);">
+            <button style="background: transparent; border: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); display: flex; align-items: center; gap: 6px;">
+              <span>⚙️</span> General &amp; Quality
+            </button>
+            <button style="background: transparent; border: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); display: flex; align-items: center; gap: 6px;">
+              <span>⌨️</span> Hotkeys
+            </button>
+            <button style="background: var(--color-surface); border: 1px solid var(--color-border); border-bottom: none; border-radius: var(--radius-sm) var(--radius-sm) 0 0; padding: 6px 14px; font-size: 0.75rem; font-weight: 800; color: var(--color-accent); display: flex; align-items: center; gap: 6px;">
+              <span>🤖</span> Local Agent Bridge
+            </button>
+            <button style="background: transparent; border: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); display: flex; align-items: center; gap: 6px;">
+              <span>ℹ️</span> About
+            </button>
+          </div>
+          <!-- Local Agent Bridge Body -->
+          <div style="padding: 18px; display: flex; flex-direction: column; gap: 14px;">
+            <!-- Server Status Banner -->
+            <div style="background: var(--color-surface-sunken); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 12px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-weight: 800; font-size: 0.78rem;">LOCAL LOOPBACK BRIDGE STATUS</div>
+                <div style="font-size: 0.68rem; color: var(--color-text-muted);">Menyediakan akses instan bagi Claude Code, OpenCode, dan Codex agent via stdio/HTTP.</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="width: 8px; height: 8px; background: var(--color-success); border-radius: 50%;"></span>
+                <span style="font-size: 0.72rem; font-weight: 800; color: var(--color-success);">Active on 127.0.0.1:3849</span>
+              </div>
+            </div>
+
+            <!-- Access Key Management -->
+            <div style="background: var(--color-surface-sunken); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+              <div style="font-weight: 800; font-size: 0.75rem;">AUTHENTICATION ACCESS KEY (AD-7)</div>
+              <div style="display: flex; gap: 8px;">
+                <input type="password" value="snapdown_sec_9f83a8109bf847291a82" readonly style="flex: 1; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-xs); padding: 6px 10px; font-family: var(--font-mono); font-size: 0.75rem;">
+                <button class="tool-icon-btn" style="width: auto; height: 32px; padding: 0 12px; font-size: 0.75rem; font-weight: 700;">📋 Copy Key</button>
+                <button class="tool-icon-btn" style="width: auto; height: 32px; padding: 0 12px; font-size: 0.75rem; font-weight: 700; color: var(--color-danger);">🔄 Regenerate</button>
+              </div>
+            </div>
+
+            <!-- MCP Configuration Snippet -->
+            <div style="background: var(--color-surface-sunken); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-weight: 800; font-size: 0.75rem;">CLAUDE DESKTOP &amp; CLI MCP CONFIGURATION</div>
+              <pre style="background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 4px; padding: 10px; font-family: var(--font-mono); font-size: 0.68rem; line-height: 1.4; overflow-x: auto;"><code>{
+  "mcpServers": {
+    "snapdown": {
+      "command": "snapdown-bridge",
+      "args": ["--port", "3849", "--key", "snapdown_sec_..."]
+    }
+  }
+}</code></pre>
+            </div>
+          </div>
+          <!-- Modal Footer -->
+          <div style="background: var(--snagit-ribbon-bg); border-top: 1px solid var(--color-border); padding: 10px 18px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.7rem; color: var(--color-text-muted);">Loopback bridge hanya mendengarkan koneksi lokal (127.0.0.1).</span>
+            <button class="tool-icon-btn" style="width: auto; height: 32px; padding: 0 16px; font-size: 0.75rem; font-weight: 700; background: var(--color-accent); color: white; border: none;">Done &amp; Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- -----------------------------------------------------------------------
+         TAB 4: ABOUT & SYSTEM INFORMATION
+         ----------------------------------------------------------------------- -->
+    <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="spec-tag" style="background: var(--color-accent-subtle); color: var(--color-accent);">TAB 4</span>
+        <h3 style="font-size: 1.05rem; font-weight: 800;">About &amp; System Information (FR-27, NFR-16)</h3>
+      </div>
+      <div class="mockup-window" style="background: rgba(15, 23, 42, 0.75); padding: 20px; display: flex; align-items: center; justify-content: center;">
+        <div style="background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); width: 840px; box-shadow: var(--shadow-modal); display: flex; flex-direction: column; overflow: hidden;">
+          <!-- Modal Header -->
+          <div style="background: var(--snagit-ribbon-bg); border-bottom: 1px solid var(--color-border); padding: 12px 18px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 1.1rem;">⚙️</span>
+              <span style="font-weight: 800; font-size: 0.95rem;">Snapdown Preferences &amp; Agent Access</span>
+            </div>
+            <span style="cursor: pointer; font-weight: 800; color: var(--color-text-muted);">✕</span>
+          </div>
+          <!-- Tabs Row (Tab 4 Active) -->
+          <div style="display: flex; gap: 4px; padding: 10px 18px 0 18px; background: var(--color-surface-sunken); border-bottom: 1px solid var(--color-border);">
+            <button style="background: transparent; border: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); display: flex; align-items: center; gap: 6px;">
+              <span>⚙️</span> General &amp; Quality
+            </button>
+            <button style="background: transparent; border: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); display: flex; align-items: center; gap: 6px;">
+              <span>⌨️</span> Hotkeys
+            </button>
+            <button style="background: transparent; border: none; padding: 6px 14px; font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); display: flex; align-items: center; gap: 6px;">
+              <span>🤖</span> Local Agent Bridge
+            </button>
+            <button style="background: var(--color-surface); border: 1px solid var(--color-border); border-bottom: none; border-radius: var(--radius-sm) var(--radius-sm) 0 0; padding: 6px 14px; font-size: 0.75rem; font-weight: 800; color: var(--color-accent); display: flex; align-items: center; gap: 6px;">
+              <span>ℹ️</span> About
+            </button>
+          </div>
+          <!-- About Body -->
+          <div style="padding: 24px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px;">
+            <div class="spec-brand-icon" style="width: 48px; height: 48px; font-size: 24px; border-radius: var(--radius-md);">⚡</div>
+            <div>
+              <div style="font-weight: 800; font-size: 1.1rem;">Snapdown Studio</div>
+              <div style="font-size: 0.75rem; color: var(--color-text-muted); font-family: var(--font-mono);">Version 1.4.0 (Tauri v2 · x64 Windows 11)</div>
+            </div>
+            <p style="font-size: 0.78rem; color: var(--color-text-secondary); max-width: 500px; line-height: 1.5;">
+              Visual UI/UX Observation &amp; Multimodal Handoff Tool built for AI Coding Agents. Developed under WDI Method by Wira Digital Indonesia.
+            </p>
+            <div style="display: flex; gap: 12px; margin-top: 4px;">
+              <div style="background: var(--color-surface-sunken); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 8px 16px; text-align: left;">
+                <div style="font-size: 0.65rem; color: var(--color-text-muted);">VAULT STATS</div>
+                <div style="font-weight: 800; font-size: 0.8rem; font-family: var(--font-mono);">48.2 MB · 128 Findings</div>
+              </div>
+              <div style="background: var(--color-surface-sunken); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 8px 16px; text-align: left;">
+                <div style="font-size: 0.65rem; color: var(--color-text-muted);">ENGINE</div>
+                <div style="font-weight: 800; font-size: 0.8rem; font-family: var(--font-mono);">Rust Core + WebP Codec</div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 6px;">
+              <button class="tool-icon-btn" style="width: auto; height: 28px; padding: 0 12px; font-size: 0.72rem; font-weight: 600;">Check for Updates</button>
+              <button class="tool-icon-btn" style="width: auto; height: 28px; padding: 0 12px; font-size: 0.72rem; font-weight: 600;">Documentation</button>
+              <button class="tool-icon-btn" style="width: auto; height: 28px; padding: 0 12px; font-size: 0.72rem; font-weight: 600;">GitHub Repository</button>
+            </div>
+          </div>
+          <!-- Modal Footer -->
+          <div style="background: var(--snagit-ribbon-bg); border-top: 1px solid var(--color-border); padding: 10px 18px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.7rem; color: var(--color-text-muted);">© 2026 Wira Digital Indonesia. All rights reserved.</span>
+            <button class="tool-icon-btn" style="width: auto; height: 32px; padding: 0 16px; font-size: 0.75rem; font-weight: 700; background: var(--color-accent); color: white; border: none;">Done &amp; Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast" class="toast-floating">
+  <span>Notification message</span>
+</div>
+
+<script>
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+
+  const icon = document.getElementById('themeIcon');
+  const label = document.getElementById('themeLabel');
+  if (next === 'dark') {
+    icon.textContent = '☀️';
+    label.textContent = 'Light Theme';
+  } else {
+    icon.textContent = '🌙';
+    label.textContent = 'Dark Theme';
+  }
+}
+</script>

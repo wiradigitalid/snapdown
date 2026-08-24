@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snapdown Studio — State 4: 3-Column Bundle Review & Assembly</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --color-surface: #ffffff;
+      --color-surface-sunken: #f1f5f9;
+      --color-border: #cbd5e1;
+      --color-accent: #0284c7;
+      --color-accent-hover: #0369a1;
+      --color-marker: #f59e0b;
+      --font-ui: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+      --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: rgba(15, 23, 42, 0.85);
+      color: #0f172a;
+      font-family: var(--font-ui);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .modal-3col-window {
+      background: #ffffff;
+      border: 1px solid var(--color-border);
+      border-radius: 14px;
+      width: 100%;
+      max-width: 1160px;
+      box-shadow: var(--shadow-modal);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-header {
+      background: #ffffff;
+      border-bottom: 1px solid var(--color-border);
+      padding: 14px 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-3col-body {
+      display: grid;
+      grid-template-columns: 290px 1fr 290px;
+      height: 540px;
+    }
+    .col-pane {
+      display: flex;
+      flex-direction: column;
+      padding: 18px;
+      overflow-y: auto;
+      gap: 12px;
+    }
+    .col-left { border-right: 1px solid var(--color-border); background: #f8fafc; }
+    .col-center { border-right: 1px solid var(--color-border); background: #ffffff; }
+    .col-right { background: #f8fafc; }
+    .thumb-item {
+      background: #ffffff;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .thumb-item.active { border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
+    .code-preview {
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      line-height: 1.55;
+      padding: 16px;
+      border-radius: 8px;
+      flex: 1;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .channel-btn {
+      background: #ffffff;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: border-color 0.15s ease;
+    }
+    .channel-btn:hover { border-color: var(--color-accent); }
+    .assemble-btn {
+      background: var(--color-accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 0.85rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      margin-top: auto;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+    }
+    .assemble-btn:hover { background: var(--color-accent-hover); }
+  </style>
+</head>
+<body>
+
+  <div class="modal-3col-window">
+    <div class="modal-header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 1.2rem;">📦</span>
+        <span style="font-weight: 800; font-size: 1rem;">Assemble &amp; Direct Agent Handoff</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <span style="font-family: var(--font-mono); font-size: 0.78rem; color: var(--color-accent); font-weight: 800;">Total Bundle Cost: ~1,150 tokens</span>
+        <span style="cursor: pointer; font-weight: 800; color: #64748b; font-size: 1.1rem;">✕</span>
+      </div>
+    </div>
+
+    <div class="modal-3col-body">
+      <!-- Col 1: Bundle Contents -->
+      <div class="col-pane col-left">
+        <div style="font-weight: 800; font-size: 0.75rem; color: #475569;">BUNDLE CONTENTS (2 ITEMS)</div>
+        <div class="thumb-item active">
+          <div style="width: 40px; height: 40px; background: #e2e8f0; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">📊</div>
+          <div style="flex: 1;">
+            <div style="font-weight: 800; font-size: 0.78rem;">WDI-Flow</div>
+            <div style="font-size: 0.68rem; color: #64748b;">3 markers (~640 tk)</div>
+          </div>
+          <span style="color: #94a3b8; font-weight: 800; font-size: 0.75rem; padding: 4px;">✕</span>
+        </div>
+        <div class="thumb-item">
+          <div style="width: 40px; height: 40px; background: #e2e8f0; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">🧭</div>
+          <div style="flex: 1;">
+            <div style="font-weight: 800; font-size: 0.78rem;">Nav-Clip</div>
+            <div style="font-size: 0.68rem; color: #64748b;">1 marker (~510 tk)</div>
+          </div>
+          <span style="color: #94a3b8; font-weight: 800; font-size: 0.75rem; padding: 4px;">✕</span>
+        </div>
+      </div>
+
+      <!-- Col 2: Generated CommonMark -->
+      <div class="col-pane col-center">
+        <div style="font-weight: 800; font-size: 0.75rem; color: #475569;">GENERATED COMMONMARK MARKDOWN (AD-9)</div>
+        <div class="code-preview"># Snapdown Review Bundle: WDI-Flow Bugfixes
+
+## 1. WDI Architecture Component Transition
+![Screenshot](bundles/item_1_burned.webp)
+
+> **Summary**: Component transition state error observed on desktop view.
+
+**Marker Observations**:
+- **[1]** Discovery and Planning blocks lack explicit exit gate criteria.
+- **[2]** Spec story box is highlighted red without explanation.
+- **[3]** G4 Component needs LC contract inventory references.
+
+---
+*Generated by Snapdown Studio*</div>
+      </div>
+
+      <!-- Col 3: Handoff & Assemble -->
+      <div class="col-pane col-right">
+        <div style="font-weight: 800; font-size: 0.75rem; color: #475569;">DIRECT AGENT HANDOFF</div>
+        <button class="channel-btn">
+          <span style="font-size: 1.1rem;">📋</span>
+          <div style="text-align: left;">
+            <div>Copy Markdown</div>
+            <div style="font-size: 0.65rem; color: #64748b; font-weight: 400;">Ready for Claude / ChatGPT</div>
+          </div>
+        </button>
+        <button class="channel-btn">
+          <span style="font-size: 1.1rem;">🤖</span>
+          <div style="text-align: left;">
+            <div>Local MCP Bridge</div>
+            <div style="font-size: 0.65rem; color: #64748b; font-weight: 400;">snapdown-bridge on :3849</div>
+          </div>
+        </button>
+        <button class="channel-btn">
+          <span style="font-size: 1.1rem;">🌐</span>
+          <div style="text-align: left;">
+            <div>Publish Unlisted URL</div>
+            <div style="font-size: 0.65rem; color: #64748b; font-weight: 400;">Edge-cached web reader</div>
+          </div>
+        </button>
+
+        <button class="assemble-btn">
+          <span style="font-size: 1.1rem;">📦</span>
+          <span>Assemble &amp; Save Bundle</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

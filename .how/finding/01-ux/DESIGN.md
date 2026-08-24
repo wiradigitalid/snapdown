@@ -8,7 +8,12 @@ updated: "2026-08-23"
 
 # DESIGN — Finding
 
-Tokens, elements, and both themes are in `.how/_platform/design-system.md`.
+Tokens, elements, iconography, and both themes are in [`.how/_platform/design-system.md`](../../_platform/design-system.md) and demonstrated live in [`.how/_platform/assets/design-system.html`](../../_platform/assets/design-system.html).
+
+### Living Design Assets (.how Layer)
+- **Finding Studio Workspace**: [`.how/finding/01-ux/assets/01-studio-workspace.html`](assets/01-studio-workspace.html)
+- **Capture Scrim & Note HUD**: [`.how/finding/01-ux/assets/02-capture-overlay.html`](assets/02-capture-overlay.html)
+- **Crop Mode Overlay**: [`.how/finding/01-ux/assets/03-crop-mode.html`](assets/03-crop-mode.html)
 
 ## Tokens
 
