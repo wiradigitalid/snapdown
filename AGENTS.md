@@ -303,6 +303,40 @@ through it. Delete that ref, `git reflog expire --expire=now --all`, then `git g
 with `git log --all --oneline -- <path>` returning nothing. This was missed once, on 2026-08-23, and
 found only because the tag cleanup prompted a second look.
 
+**A defect register entry is a claim about code at a moment, and it goes stale silently.** `BUG-12`
+read `status: open` for a day after `W6-S5` had already fixed it — that story was not scoped to the
+defect and closed it as a side effect of needing a fallible startup path. Wave `W7` was opened
+against it, a planner was dispatched, and it wrote a complete implementation plan for code that
+already existed. Nothing caught it until a review read the code instead of the register. **Before
+planning against a defect row, grep for the symbols its `fix:` describes.** The same read found the
+opposite failure too: `BUG-3` and `BUG-10` carried `blocked_by: DEC-005` when that decision says in
+its own words *"This decision does not forbid a fix. It forbids new work"* — so a public,
+unauthenticated HTML-injection path sat unfixed because a register field misquoted a decision.
+
+**A sweep's exclusions expire when the code they reasoned about changes.** `BUG-12` deliberately left
+`lib.rs:347` unregistered because *"if that fails there is nothing left to report with"* — true while
+every store open panicked before reaching it. `W6-S5` made it the **routine** exit path and the
+premise quietly stopped holding, which is now `BUG-16`. Second time this has happened. When you
+change a path, re-read what was excused on the strength of it.
+
+**A writing pragma is a write.** All five SQLite stores ran `journal_mode = WAL` before
+`PRAGMA quick_check`, which mutates page 1 and creates `-wal`/`-shm` — so a corrupt store *was*
+written to while the Reviewer was shown a dialog promising it had not been (`BUG-15`). Check
+integrity on a read-only connection first.
+
+**Prove a corrupt-file fixture actually reaches the code you think it does.** Every corrupt-database
+test here used garbage bytes, which SQLite rejects at `Connection::open` before a single pragma runs
+— so the byte-identity assertion passed without ever executing the defect. A valid header with
+corrupt pages is what reaches it. And note the subtler result from the same story:
+`a_failed_open_leaves_no_wal_or_shm_file_beside_the_database` **still passes with the bug present**,
+because SQLite removes those files on a clean close. It is accurate to its name and insensitive to
+the defect — belt-and-braces, not a guard. **Mutation is the only way to tell those apart.**
+
+**A test fixture must be legal on Windows, and CI will not tell you.** A `sharing` fixture used a
+slug of `test<slug>&42`; `store.go` joins the slug into a filesystem path and Windows refuses `<`
+and `>`. The Go job runs on `ubuntu-latest`, so it would have been green in CI and red on every
+developer machine here.
+
 **Stale binaries mislead.** Renaming the product left `desktop.exe` beside `Snapdown.exe` in
 `target/release/`, the owner ran the old one, and reported four defects that did not exist. `FR-27`
 now makes a second desktop executable a build failure.

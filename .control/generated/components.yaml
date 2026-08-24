@@ -45,6 +45,7 @@ product_components:
   - LC-025
   - LC-026
   - LC-028
+  - LC-032
 - id: sharing
   name: null
   containers:
@@ -213,4 +214,9 @@ logical_components:
   type: null
   component: bundle
   area: editor-ui
+  owner: null
+- id: LC-032
+  type: null
+  component: settings
+  area: build-tooling
   owner: null

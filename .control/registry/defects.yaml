@@ -119,7 +119,34 @@ defects:
       invisible. A `web-service` job was added to desktop-ci.yml the same day - go build, go vet,
       go test. That is regression protection, not a fix; the escaping is still open.
       A frozen component is one nobody is watching, which makes CI on it MORE important, not less.
-    status: open
+    resolved_by: W7-S2, commit c6a7e4e
+    resolution: |
+      RESOLVED 2026-08-24. html.EscapeString is applied to BOTH b.Markdown and the slug before they
+      reach the HTML wrapper in handleGetBundle. The RAW paths are deliberately untouched and still
+      serve verbatim bytes - GET /b/{slug}/raw.md, and GET /b/{slug} under Accept: text/markdown or
+      text/plain - because the primary consumer is an agent that needs pristine Markdown. That
+      distinction came from the story planner, not from the brief.
+
+      Verified by the coordinator ON WINDOWS - go build, go vet and go test ./... all exit 0 - and by
+      MUTATION: dropping html.EscapeString from the Markdown turns
+      a_note_that_closes_the_pre_block_cannot_reach_the_browser_as_markup red, with the live script
+      tag visible in the failure output. The tests are live, not literal asserts.
+
+      NFR-15 is pinned rather than assumed: an_unknown_slug_still_returns_the_identical_refusal is
+      now a test.
+
+      TWO REVIEW FINDINGS SHAPED THE FIX. M6: the first plan's slug fixture was `test<slug>&42`,
+      which store.go joins into a filesystem path and Windows refuses, while the Go CI job runs on
+      ubuntu - it would have been green in CI and red on the developer machine. The fixture is now
+      hostile to HTML but legal as a path segment. M10: the four registry test names are not legal Go
+      identifiers, so they are mapped to t.Run subtests and `go test -run` matches the registry name.
+
+      FOLLOW-UP, not a defect: the four names are implemented TWICE, once as subtests and once as
+      standalone Test_<name> functions. Same assertions run twice, and two copies drift.
+
+      NOT FIXED, and named so it is not lost: store.go joins the slug into a filesystem path
+      unfiltered, which is a path-traversal seam. Recorded as a non-goal in the W7 SPEC.
+    status: resolved
   - id: BUG-4
     title: The capture overlay is never mounted; pressing the capture hotkey shows the Settings shell
     found: "2026-08-23"
@@ -483,7 +510,25 @@ defects:
     scheduled: W7-S3
     note_on_the_freeze: |
       NOT blocked, for the same reason as BUG-3: DEC-005 permits a fix and forbids new work.
-    status: open
+    resolved_by: W7-S3, commit 362bfad
+    resolution: |
+      RESOLVED 2026-08-24. parse_error_response now delegates to parse_error_response_reader, which
+      takes any std::io::Read, and NO path returns the empty string.
+
+      THREE empty-message paths are closed, not the one BUG-10 named. The story found a second - a
+      body that READS SUCCESSFULLY and is empty also produced "" - and a third, a non-UTF-8 body.
+
+      THE REVIEW CHANGED THE REMEDY (finding M8). The first plan returned free-form strings such as
+      "HTTP 502: (failed to read error response)". cross-cutting.md forbids exactly that: "The MCP
+      Bridge does not invent its own errors. It maps a Local API envelope onto an MCP tool error,
+      preserving code and message verbatim." A message with no catalogue code satisfies the letter of
+      "not empty" while missing what AD-7 is for - its own rule is that a refusal is distinguishable
+      from an empty result BY ITS CODE. The implementation now synthesises `internal`, the catalogue
+      code for something the producer did not anticipate.
+
+      Verified by the coordinator: 3 unit + 3 integration tests pass, and by MUTATION - replacing the
+      synthesised message with String::new() turns two of the three unit tests red.
+    status: resolved
   - id: BUG-11
     title: "There is no reproducible way to build the desktop application"
     found: "2026-08-23"
@@ -849,7 +894,32 @@ defects:
       SQLITE_OPEN_CREATE is NOT the defect and MUST stay: creating a store that is absent is first
       run, and BR-118 forbids creating one OVER a corrupt file, which the CREATE flag does not do.
     scheduled: W7-S1
-    status: open
+    resolved_by: W7-S1, commit ffb5a60
+    resolution: |
+      RESOLVED 2026-08-24. quick_check now runs on a READ-ONLY connection, opened only if the file
+      exists, BEFORE any read-write open or modifying pragma. All five stores carry the same shape.
+      SQLITE_OPEN_CREATE is unchanged and deliberately so: creating a store that is ABSENT is first
+      run, and BR-118 forbids creating one OVER a corrupt file, which that flag does not do.
+
+      rusqlite is added as a DEV-dependency only, to build the fixture. It does not reach the
+      production dependency.
+
+      VERIFIED BY MUTATION, and this is the point of the story. Disabling the read-only pre-check so
+      the old ordering returns turns three tests red:
+        a_valid_header_with_corrupt_pages_is_not_written_to_before_it_is_checked
+        a_corrupt_store_is_never_recreated_beside_itself
+        valid_header_with_corrupt_pages_refuses_to_open_and_leaves_file_byte_identical
+      The old garbage-bytes fixture could never reach the defect; a valid header with corrupt pages
+      does.
+
+      ONE TEST IS WEAKER THAN ITS NAME AND IS RECORDED AS SUCH.
+      a_failed_open_leaves_no_wal_or_shm_file_beside_the_database STILL PASSES under that mutation.
+      It is accurate to its name and insensitive to the bug: SQLite removes -wal/-shm on a clean
+      connection close, so with the defect present the files are created transiently and are gone by
+      the time the assertion runs. It is belt-and-braces, NOT a guard. The invariant it appears to
+      cover is held by the two tests above. Counting it as protection would be the literal-assert
+      mistake wearing a different hat.
+    status: resolved
 
   - id: BUG-16
     title: "A store failure exits by panic through the very `.expect()` BUG-12 excused from its sweep"
@@ -879,7 +949,12 @@ defects:
       Replace the `.expect()` with a matched exit that reports and returns a non-zero status.
     related: BUG-12
     scheduled: W7-S1
-    status: open
+    resolved_by: W7-S1, commit ffb5a60
+    resolution: |
+      RESOLVED 2026-08-24. The .expect() at lib.rs:347 is replaced by a matched exit, so a store
+      failure reports and then exits rather than panicking. Covered by
+      a_store_failure_exits_without_panicking.
+    status: resolved
 
   - id: BUG-17
     title: "The startup error dialog has no owner and no foreground flag, so it can open behind other windows"
@@ -909,4 +984,13 @@ defects:
       and MUST NOT be claimed by a cargo test.
     related: BUG-12
     scheduled: W7-S1
-    status: open
+    resolved_by: W7-S1, commit ffb5a60
+    resolution: |
+      RESOLVED 2026-08-24. The startup dialog is raised with MB_SETFOREGROUND | MB_TOPMOST.
+
+      NO AUTOMATED TEST CLAIMS THIS, on purpose. Whether a native dialog actually reaches the
+      foreground cannot be observed from cargo test, and asserting that the flag constants were
+      passed would test a copy of the input - the literal-assert failure this repository has landed
+      three times. It stays a MANUAL check, and OQ-24 records that this project has no working way to
+      run one.
+    status: resolved

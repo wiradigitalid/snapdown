@@ -34,18 +34,21 @@ work_progress:
   stories_done: 11
   stories_total: 11
   work_progress: 100%
-gate_readiness: 88%
+- wave: W7
+  status: closed
+  stories_done: 3
+  stories_total: 3
+  work_progress: 100%
+gate_readiness: 96%
 validators_red:
-- V12
-- V24
 - V3
 validators_skipped:
-  V19: only the RTR- line item is checked mechanically; the rest of the distillation is guarded by wdi-build
+  V19: 'advisory — wave S/M closed without an RTR-: W7'
   V27: the `.constitution/project/` room is empty, and that is a valid state — a generic rule MUST NOT
     be moved here just to give the room content
 open_questions:
   blocking: 0
-  assumptions: 21
+  assumptions: 22
   external: 3
   answered: 0
   blocking_budget: 15

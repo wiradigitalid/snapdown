@@ -650,7 +650,7 @@ waves:
 
   - id: W7
     title: The panic surface, and the two fixes the freeze allows
-    status: open
+    status: closed
     release: r3
     prd: [capture-to-markdown, agent-handoff]
     # No FR. Every story here is a DEFECT FIX against a promise that already exists, and this wave
@@ -712,6 +712,53 @@ waves:
       # a live BR-118 violation in all five stores that no existing test can reach. Every high and
       # every medium was upheld; findings were resolved into the SPEC, this registry, three new
       # defect rows, and OQ-25 before this trace was written.
+    closed: "2026-08-24"
+    close_record: |
+      PHASE 4, walked in order.
+
+      1. REGISTRY CATCH-UP. Every `touches` value resolves to a registered `area` -
+         local-db, settings-store, web-service, mcp-bridge. No new LC was created: all three stories
+         changed existing components rather than adding boundaries. V12 green.
+
+      2. INVENTORIES REFRESHED FROM CODE. inventory.py reports 4 plan-versus-code gaps in
+         inventory-screen, and ALL FOUR ARE ALREADY REGISTERED - three are BUG-2's `sharing` screens
+         (PublishDialog, PublishedBundleReader, PublicationNotFound), one is the capture note field
+         under BUG-14/LC-029. Reported, not patched: the gap is a finding routed to the skill that
+         owns its side.
+
+      3. STRUCTURE MAPS. Not re-derived, and that is correct rather than skipped: no base folder was
+         born or removed and no key file moved. Three source files and two test files changed inside
+         folders the maps already describe.
+
+      4. DISTILLATION. Nothing durable is left in the spec folder. The review's findings left it as
+         they were resolved - three new defect rows (BUG-15/16/17), BUG-12 corrected to resolved,
+         OQ-25 filed, and the SPEC and story files amended in place. review-W7-spec.md stays in the
+         spec folder as the working record of a run, which is what _bmad-output is for.
+
+      5. RETROSPECTIVE. SKIPPED, and stated rather than silent, as V19 requires: this is a wave `M`,
+         where the retrospective is advisory. The wave's one durable lesson is already recorded where
+         it will be read - BUG-12's resolution block, and a new pitfall in AGENTS.md: a register entry
+         is a claim about code at a moment, and it goes stale silently.
+
+      6. RTM. No FR is claimed by this wave (`fr: []`) and no UC is scheduled, so there is no
+         traceability row to turn green. That is the correct shape for a wave of defect fixes and it
+         is why V3 stays red here - see known_gaps.
+
+      7. VERIFICATION RUN BY THE COORDINATOR on the merged branch, not taken from any worker report:
+           cargo fmt --all -- --check                                   exit 0
+           cargo clippy --workspace --all-targets -- -D warnings        exit 0
+           cargo test --workspace                                       exit 0, 31 suites
+           go build ./... && go vet ./... && go test ./...  (Windows)    exit 0
+           web/ui   typecheck + lint + test                             exit 0, 69 tests
+           apps/desktop typecheck + lint + test + build                 exit 0
+         All three fixes were additionally verified BY MUTATION; one test was found insensitive to
+         the defect it names and is recorded as belt-and-braces rather than counted as protection.
+         See BUG-15's resolution.
+
+      ONE TRANSIENT FAILURE, recorded so it is not mistaken for a defect next time: the first
+      `cargo test --workspace` died with LNK1201 writing test_no_io's PDB. 176 GB free, so not disk
+      space - a stale locked PDB. Deleting it and re-running was clean. Infrastructure, retried once,
+      not patched around.
     epics:
       - id: EP-startup
         component: settings

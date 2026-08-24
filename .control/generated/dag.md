@@ -40,4 +40,12 @@ dag:
     - W6-S6
   - parallel:
     - W6-S8
+- wave: W7
+  order:
+  - parallel:
+    - W7-S1
+  - parallel:
+    - W7-S2
+  - parallel:
+    - W7-S3
 ```
