@@ -3,7 +3,7 @@ id: W7-S1
 title: "W7-S1: Close the three defects W6-S5's startup path left open, and name the tests"
 type: 'bug'
 wave: W7
-status: ready-for-dev
+status: done
 created: '2026-08-24'
 review_loop_iteration: 0
 followup_review_recommended: false

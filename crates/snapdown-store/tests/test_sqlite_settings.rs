@@ -141,3 +141,57 @@ fn an_advanced_value_outside_its_range_is_refused_and_does_not_enter_custom() {
     let above_max_quality = ResolvedPair::new(1920, MAX_ENCODER_QUALITY + 1);
     assert!(above_max_quality.is_err());
 }
+
+#[test]
+fn valid_header_with_corrupt_pages_refuses_to_open_and_leaves_file_byte_identical() {
+    let tmp = NamedTempFile::new().unwrap();
+    let db_path = tmp.path().to_path_buf();
+
+    // Create a real SQLite database with schema and data spanning multiple pages in rollback journal mode
+    {
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute(
+            "CREATE TABLE sample (id INTEGER PRIMARY KEY, note TEXT);",
+            [],
+        )
+        .unwrap();
+        for i in 0..200 {
+            conn.execute(
+                "INSERT INTO sample (note) VALUES (?1);",
+                [format!("padding data row {i}")],
+            )
+            .unwrap();
+        }
+    }
+
+    let mut bytes = std::fs::read(&db_path).unwrap();
+    assert!(bytes.len() >= 8192, "Database must span multiple pages");
+    assert_eq!(&bytes[0..16], b"SQLite format 3\0");
+
+    // Corrupt internal B-tree page 2 bytes and beyond (4096..)
+    for b in &mut bytes[4096..] {
+        *b = 0xBB;
+    }
+    std::fs::write(&db_path, &bytes).unwrap();
+
+    let open_res = SqliteSettingsStore::open(&db_path);
+    assert!(open_res.is_err(), "Store open on corrupt pages must fail");
+
+    // Verify file is byte-identical and no -wal / -shm were created
+    let read_back = std::fs::read(&db_path).unwrap();
+    assert_eq!(
+        read_back, bytes,
+        "Corrupt file bytes must remain completely unmodified"
+    );
+
+    let wal_path = db_path.with_file_name(format!(
+        "{}-wal",
+        db_path.file_name().unwrap().to_str().unwrap()
+    ));
+    let shm_path = db_path.with_file_name(format!(
+        "{}-shm",
+        db_path.file_name().unwrap().to_str().unwrap()
+    ));
+    assert!(!wal_path.exists());
+    assert!(!shm_path.exists());
+}
