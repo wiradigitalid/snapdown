@@ -14,17 +14,8 @@ describe('CaptureOverlay Component (Screen 1 & 2)', () => {
     vi.clearAllMocks();
   });
 
-  it('capture_overlay_draws_selection_and_dimensions', async () => {
-    const onCaptureComplete = vi.fn();
-    vi.mocked(captureService.captureScreenRegion).mockResolvedValue({
-      image_path: 'findings/capture_test.png',
-      image_width: 200,
-      image_height: 150,
-      source_monitor: 'DISPLAY1',
-      region: '50,50,200,150',
-    });
-
-    render(<CaptureOverlay onCaptureComplete={onCaptureComplete} />);
+  it('the_overlay_asks_for_a_note_before_it_writes_a_finding', async () => {
+    render(<CaptureOverlay />);
 
     const overlay = screen.getByTestId('capture-overlay');
     expect(overlay).toBeInTheDocument();
@@ -45,15 +36,54 @@ describe('CaptureOverlay Component (Screen 1 & 2)', () => {
     const readout = screen.getByTestId('dimensions-readout');
     expect(readout).toHaveTextContent('200 × 150 px');
 
-    // Mouse up commits selection
+    // Mouse up commits selection and enters Narrating
     fireEvent.mouseUp(overlay);
 
+    expect(captureService.captureScreenRegion).not.toHaveBeenCalled();
+
+    const noteField = screen.getByTestId('capture-note-field');
+    expect(noteField).toBeInTheDocument();
+    expect(noteField).toHaveFocus();
+
+    const hint = screen.getByTestId('capture-note-hint');
+    expect(hint).toHaveTextContent('Enter to save · Esc to cancel');
+  });
+
+  it('enter_saves_the_note_with_the_finding', async () => {
+    const onCaptureComplete = vi.fn();
+    vi.mocked(captureService.captureScreenRegion).mockResolvedValue({
+      image_path: 'findings/capture_test.png',
+      image_width: 200,
+      image_height: 150,
+      source_monitor: 'DISPLAY1',
+      region: '50,50,200,150',
+    });
+
+    render(<CaptureOverlay onCaptureComplete={onCaptureComplete} />);
+
+    const overlay = screen.getByTestId('capture-overlay');
+    fireEvent.mouseDown(overlay, { clientX: 50, clientY: 50, button: 0 });
+    fireEvent.mouseMove(overlay, { clientX: 250, clientY: 200 });
+    fireEvent.mouseUp(overlay);
+
+    const noteField = screen.getByTestId('capture-note-field');
+    fireEvent.change(noteField, { target: { value: 'the CTA is unreadable' } });
+
+    // Shift+Enter inserts newline without saving
+    fireEvent.keyDown(noteField, { key: 'Enter', shiftKey: true });
+    expect(captureService.captureScreenRegion).not.toHaveBeenCalled();
+
+    // Enter saves
+    fireEvent.keyDown(noteField, { key: 'Enter', shiftKey: false });
+
     await waitFor(() => {
+      expect(captureService.captureScreenRegion).toHaveBeenCalledTimes(1);
       expect(captureService.captureScreenRegion).toHaveBeenCalledWith({
         x: 50,
         y: 50,
         width: 200,
         height: 150,
+        note: 'the CTA is unreadable',
       });
       expect(onCaptureComplete).toHaveBeenCalledWith({
         image_path: 'findings/capture_test.png',
@@ -63,6 +93,30 @@ describe('CaptureOverlay Component (Screen 1 & 2)', () => {
         region: '50,50,200,150',
       });
     });
+  });
+
+  it('esc_cancels_the_capture_and_writes_no_finding', async () => {
+    const onDismiss = vi.fn();
+    vi.mocked(captureService.dismissOverlay).mockResolvedValue();
+
+    render(<CaptureOverlay onDismiss={onDismiss} />);
+
+    const overlay = screen.getByTestId('capture-overlay');
+    fireEvent.mouseDown(overlay, { clientX: 50, clientY: 50, button: 0 });
+    fireEvent.mouseMove(overlay, { clientX: 250, clientY: 200 });
+    fireEvent.mouseUp(overlay);
+
+    const noteField = screen.getByTestId('capture-note-field');
+    fireEvent.change(noteField, { target: { value: 'some note' } });
+
+    fireEvent.keyDown(noteField, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(captureService.dismissOverlay).toHaveBeenCalledTimes(1);
+      expect(onDismiss).toHaveBeenCalledTimes(1);
+    });
+
+    expect(captureService.captureScreenRegion).not.toHaveBeenCalled();
   });
 
   it('refuses selection smaller than 8x8 pixels (BR-31)', async () => {
