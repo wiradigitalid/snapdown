@@ -314,35 +314,48 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             </div>
           )}
         </div>
+      </div>
 
-        {/* Section 3: Live Multimodal Token Estimator */}
+      {/* Sticky Bottom Section: Token Estimator & Calm Action Footer */}
+      <div
+        style={{
+          flexShrink: 0,
+          borderTop: '1px solid var(--color-border)',
+          backgroundColor: 'var(--color-surface)',
+          padding: 'var(--space-3) var(--space-4)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--space-3)',
+        }}
+      >
         <TokenEstimator
           imageWidth={finding.finding.image_width}
           imageHeight={finding.finding.image_height}
           summaryText={noteText}
           markerNotes={markerNotes}
         />
-      </div>
 
-      {/* Panel Footer: Delete Finding Action */}
-      {onDeleteFinding && (
-        <div
-          style={{
-            padding: 'var(--space-3) var(--space-4)',
-            borderTop: '1px solid var(--color-border)',
-            backgroundColor: 'var(--color-surface)',
-          }}
-        >
+        {onDeleteFinding && (
           <button
             type="button"
             data-testid="delete-current-finding-btn"
             onClick={onDeleteFinding}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--color-danger-bg)';
+              e.currentTarget.style.color = 'var(--color-danger)';
+              e.currentTarget.style.borderColor = 'var(--color-danger)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = 'var(--color-text-muted)';
+              e.currentTarget.style.borderColor = 'var(--color-border)';
+            }}
             style={{
               width: '100%',
-              padding: 'var(--space-2) 0',
+              padding: '6px var(--space-3)',
               backgroundColor: 'transparent',
-              color: 'var(--color-danger)',
-              border: '1px solid var(--color-danger-bg)',
+              color: 'var(--color-text-muted)',
+              border: '1px solid var(--color-border)',
               borderRadius: 'var(--radius-sm)',
               fontWeight: 600,
               fontSize: 'var(--text-xs)',
@@ -351,14 +364,14 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
               gap: 'var(--space-2)',
-              transition: 'background-color 0.15s ease',
+              transition: 'all 0.15s ease',
             }}
           >
-            <span>🗑️</span>
-            <span>Delete Screenshot from Queue</span>
+            <span style={{ fontSize: '0.85rem' }}>🗑️</span>
+            <span>Remove from Queue</span>
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

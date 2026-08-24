@@ -228,12 +228,26 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
     }
   };
 
-  // Handle Delete Focused Marker via Ribbon/Key
-  const handleDeleteSelectedMarker = () => {
-    if (selectedMarkerId) {
-      handleDeleteMarker(selectedMarkerId);
+  // Context-aware delete action (Marker if selected, otherwise Selected Filmstrip Findings / Active Finding)
+  const handleDeleteActiveTarget = () => {
+    if (selectedMarkerId && onDeleteMarker && selectedFinding) {
+      onDeleteMarker(selectedFinding.finding.id, selectedMarkerId);
+      setSelectedMarkerId(null);
+    } else if (checkedFindingIds.size > 0) {
+      promptDeleteFinding(Array.from(checkedFindingIds));
+    } else if (selectedFinding) {
+      promptDeleteFinding([selectedFinding.finding.id]);
     }
   };
+
+  const canDeleteActiveTarget = Boolean(selectedMarkerId || checkedFindingIds.size > 0 || selectedFinding);
+  const deleteTooltip = selectedMarkerId
+    ? 'Delete Selected Marker (Del)'
+    : checkedFindingIds.size > 1
+    ? `Delete ${checkedFindingIds.size} Selected Screenshots (Del)`
+    : selectedFinding
+    ? 'Delete Screenshot from Queue (Del)'
+    : 'Nothing to delete';
 
   // Handle Confirm Delete Finding
   const handleConfirmDelete = async () => {
@@ -347,8 +361,9 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
         onPasteClick={onPasteClick}
         isMarkerActive={isMarkerMode}
         onToggleMarker={() => setIsMarkerMode((v) => !v)}
-        hasSelectedMarker={Boolean(selectedMarkerId)}
-        onDeleteMarker={handleDeleteSelectedMarker}
+        canDelete={canDeleteActiveTarget}
+        deleteTooltip={deleteTooltip}
+        onDeleteActiveTarget={handleDeleteActiveTarget}
         isCropActive={isCropMode}
         onToggleCrop={() => setIsCropMode((v) => !v)}
         onAssembleBundle={() => {

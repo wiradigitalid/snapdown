@@ -51,7 +51,7 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
   }, []);
 
   const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (disabled || draggingMarkerId || !onAddMarker || !containerRef.current) return;
+    if (disabled || draggingMarkerId || !containerRef.current) return;
 
     // Check if clicked directly on marker badge element
     const target = e.target as HTMLElement;
@@ -59,8 +59,15 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
       return;
     }
 
-    const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
-    onAddMarker(x, y);
+    // Clicking blank canvas deselects any active marker
+    if (onSelectMarker) {
+      onSelectMarker(null);
+    }
+
+    if (onAddMarker) {
+      const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
+      onAddMarker(x, y);
+    }
   };
 
   const handleMouseDownBadge = (e: React.MouseEvent, markerId: string) => {

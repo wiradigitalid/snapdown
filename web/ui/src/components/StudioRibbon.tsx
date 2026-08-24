@@ -6,8 +6,9 @@ export interface StudioRibbonProps {
   onPasteClick?: () => void;
   isMarkerActive?: boolean;
   onToggleMarker?: () => void;
-  onDeleteMarker?: () => void;
-  hasSelectedMarker?: boolean;
+  onDeleteActiveTarget?: () => void;
+  canDelete?: boolean;
+  deleteTooltip?: string;
   isCropActive?: boolean;
   onToggleCrop?: () => void;
   onAssembleBundle?: () => void;
@@ -24,8 +25,9 @@ export const StudioRibbon: React.FC<StudioRibbonProps> = ({
   onPasteClick,
   isMarkerActive = false,
   onToggleMarker,
-  onDeleteMarker,
-  hasSelectedMarker = false,
+  onDeleteActiveTarget,
+  canDelete = false,
+  deleteTooltip = 'Delete (Del)',
   isCropActive = false,
   onToggleCrop,
   onAssembleBundle,
@@ -157,22 +159,22 @@ export const StudioRibbon: React.FC<StudioRibbonProps> = ({
         <button
           type="button"
           data-testid="ribbon-delete-marker-btn"
-          data-tooltip="Delete Selected Marker (Del)"
-          onClick={onDeleteMarker}
-          disabled={!hasSelectedMarker}
+          data-tooltip={deleteTooltip}
+          onClick={onDeleteActiveTarget}
+          disabled={!canDelete}
           style={{
             width: '38px',
             height: '38px',
             backgroundColor: 'var(--color-surface)',
-            color: hasSelectedMarker ? 'var(--color-danger)' : 'var(--color-text-dim)',
+            color: canDelete ? 'var(--color-danger)' : 'var(--color-text-dim)',
             border: '1px solid var(--color-border)',
             borderRadius: 'var(--radius-sm)',
             fontSize: '1rem',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            cursor: hasSelectedMarker ? 'pointer' : 'not-allowed',
-            opacity: hasSelectedMarker ? 1 : 0.5,
+            cursor: canDelete ? 'pointer' : 'not-allowed',
+            opacity: canDelete ? 1 : 0.5,
           }}
         >
           🗑️
