@@ -18,6 +18,7 @@ pub struct CaptureRegionInput {
     pub y: i32,
     pub width: u32,
     pub height: u32,
+    pub note: String,
     pub source_monitor: Option<String>,
 }
 
@@ -33,18 +34,15 @@ pub struct CaptureResultDto {
     pub budget_name: String,
 }
 
-#[tauri::command]
-pub fn capture_screen_region(
-    region: CaptureRegionInput,
-    state: State<AppState>,
-    app: AppHandle,
+pub fn capture_screen_region_impl(
+    region: &CaptureRegionInput,
+    captured_png_bytes: &[u8],
+    state: &AppState,
 ) -> Result<CaptureResultDto, String> {
     // Validate region bounds (BR-31)
     if region.width < 8 || region.height < 8 {
         return Err("Region must be at least 8x8 pixels".to_string());
     }
-
-    let core_region = Region::new(region.x, region.y, region.width, region.height);
 
     let vault_path = match state
         .settings_store
@@ -89,14 +87,9 @@ pub fn capture_screen_region(
 
     let orig_dims = ImageDimensions::new(region.width, region.height).map_err(|e| e.to_string())?;
 
-    // Real screen capture of requested region encoded as PNG (CAP-1, LC-002)
-    let captured_png_bytes =
-        RegionCapturer::capture_region(&core_region, region.source_monitor.as_deref())
-            .map_err(|e| e.to_string())?;
-
     // Reduce image with QualityBudget (LC-003, FR-4, CAP-2)
     let reduced_result =
-        ImageReducer::reduce_image(&captured_png_bytes, orig_dims, &resolved, false)
+        ImageReducer::reduce_image(captured_png_bytes, orig_dims, &resolved, false)
             .map_err(|e| e.to_string())?;
 
     // Generate relative filename for finding
@@ -130,7 +123,7 @@ pub fn capture_screen_region(
     let note = Note {
         id: format!("note-{finding_id}"),
         finding_id: finding_id.clone(),
-        body: String::new(),
+        body: region.note.clone(),
         updated_at: captured_at,
     };
 
@@ -138,13 +131,6 @@ pub fn capture_screen_region(
         .finding_store
         .create_finding(&finding, &note, &[])
         .map_err(|e| e.to_string())?;
-
-    // Close capture overlay window if present
-    if let Some(overlay_win) = app.get_webview_window("overlay") {
-        let _ = overlay_win.close();
-    }
-
-    let _ = app.emit("capture-completed", ());
 
     Ok(CaptureResultDto {
         image_path: filename,
@@ -156,6 +142,36 @@ pub fn capture_screen_region(
         resolved_encoder_quality: resolved.encoder_quality,
         budget_name,
     })
+}
+
+#[tauri::command]
+pub fn capture_screen_region(
+    region: CaptureRegionInput,
+    state: State<AppState>,
+    app: AppHandle,
+) -> Result<CaptureResultDto, String> {
+    // Validate region bounds (BR-31)
+    if region.width < 8 || region.height < 8 {
+        return Err("Region must be at least 8x8 pixels".to_string());
+    }
+
+    let core_region = Region::new(region.x, region.y, region.width, region.height);
+
+    // Real screen capture of requested region encoded as PNG (CAP-1, LC-002)
+    let captured_png_bytes =
+        RegionCapturer::capture_region(&core_region, region.source_monitor.as_deref())
+            .map_err(|e| e.to_string())?;
+
+    let result = capture_screen_region_impl(&region, &captured_png_bytes, &state)?;
+
+    // Close capture overlay window if present
+    if let Some(overlay_win) = app.get_webview_window("overlay") {
+        let _ = overlay_win.close();
+    }
+
+    let _ = app.emit("capture-completed", ());
+
+    Ok(result)
 }
 
 #[tauri::command]
@@ -203,11 +219,86 @@ fn dirs_or_default_vault() -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use snapdown_core::domain::finding::Region;
+    use snapdown_store::sqlite::SqliteSettingsStore;
+    use std::sync::Arc;
 
     #[test]
     fn region_validation_refuses_small_box() {
         let reg = Region::new(10, 10, 4, 4);
         assert!(reg.width < 8);
+    }
+
+    #[test]
+    fn a_capture_carries_its_note_through_to_the_stored_finding() {
+        let store = SqliteSettingsStore::open_in_memory().unwrap();
+        let temp_vault = tempfile::tempdir().unwrap();
+        let vault_path = temp_vault.path().to_string_lossy().to_string();
+
+        store
+            .set(&Setting {
+                key: SettingKey::VaultPath,
+                value: SettingValue::String(vault_path),
+                updated_at: "2026-08-24T00:00:00Z".to_string(),
+            })
+            .unwrap();
+
+        let state = AppState {
+            settings_store: Arc::new(store),
+            finding_store: Arc::new(
+                snapdown_store::sqlite::SqliteFindingStore::open_in_memory().unwrap(),
+            ),
+            bundle_store: Arc::new(
+                snapdown_store::sqlite::SqliteBundleStore::open_in_memory().unwrap(),
+            ),
+            access_key_store: Arc::new(
+                snapdown_store::sqlite::SqliteAccessKeyStore::open_in_memory().unwrap(),
+            ),
+            publication_store: Arc::new(
+                snapdown_store::sqlite::SqlitePublicationStore::open_in_memory().unwrap(),
+            ),
+            hotkey_registrar: Arc::new(std::sync::Mutex::new(
+                crate::hotkey::DesktopHotkeyRegistrar::new(
+                    Arc::new(SqliteSettingsStore::open_in_memory().unwrap()),
+                    None,
+                ),
+            )),
+            startup_registrar: Arc::new(std::sync::Mutex::new(
+                crate::startup::DesktopStartupRegistrar::new(Arc::new(
+                    crate::startup::tests::MockAutoStartBackend::default(),
+                )),
+            )),
+        };
+
+        // Synthesise a small valid PNG (64x48)
+        let mut img = image::RgbaImage::new(64, 48);
+        for pixel in img.pixels_mut() {
+            *pixel = image::Rgba([120, 150, 200, 255]);
+        }
+        let mut png_bytes = Vec::new();
+        let encoder = image::codecs::png::PngEncoder::new(&mut png_bytes);
+        image::ImageEncoder::write_image(encoder, &img, 64, 48, image::ExtendedColorType::Rgba8)
+            .unwrap();
+
+        let note_text = "the CTA is unreadable\n\nsecond line\n";
+        let input = CaptureRegionInput {
+            x: 10,
+            y: 10,
+            width: 64,
+            height: 48,
+            note: note_text.to_string(),
+            source_monitor: Some("DISPLAY1".to_string()),
+        };
+
+        let result = capture_screen_region_impl(&input, &png_bytes, &state).unwrap();
+        assert_eq!(result.image_width, 64);
+        assert_eq!(result.image_height, 48);
+
+        let findings = state.finding_store.list_findings().unwrap();
+        assert_eq!(findings.len(), 1);
+        let finding_detail = &findings[0];
+        assert_eq!(finding_detail.note.body, note_text);
+        assert_eq!(finding_detail.note.finding_id, finding_detail.finding.id);
     }
 }

@@ -1,15 +1,13 @@
 ﻿import React, { useCallback, useEffect, useState } from 'react';
-import { captureScreenRegion, dismissOverlay } from '../services/capture';
+import { captureScreenRegion, dismissOverlay, CaptureResultDto } from '../services/capture';
+import { CaptureNoteField } from './CaptureNoteField';
 
 export interface CaptureOverlayProps {
-  onCaptureComplete?: (result: {
-    image_path: string;
-    image_width: number;
-    image_height: number;
-    region: string;
-  }) => void;
+  onCaptureComplete?: (result: CaptureResultDto) => void;
   onDismiss?: () => void;
 }
+
+type Phase = 'armed' | 'dragging' | 'narrating' | 'saving';
 
 interface DragState {
   startX: number;
@@ -19,10 +17,20 @@ interface DragState {
   isDragging: boolean;
 }
 
+interface RegionRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
   onCaptureComplete,
   onDismiss,
 }) => {
+  const [phase, setPhase] = useState<Phase>('armed');
+  const [note, setNote] = useState<string>('');
+  const [pendingRegion, setPendingRegion] = useState<RegionRect | null>(null);
   const [drag, setDrag] = useState<DragState>({
     startX: 0,
     startY: 0,
@@ -32,19 +40,25 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
   });
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const handleCancel = useCallback(async () => {
+    try {
+      await dismissOverlay();
+    } catch {
+      // ignore
+    }
+    if (onDismiss) {
+      onDismiss();
+    }
+  }, [onDismiss]);
+
   const handleKeyDown = useCallback(
     async (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        try {
-          await dismissOverlay();
-        } catch {
-          // ignore
-        }
-        if (onDismiss) onDismiss();
+        await handleCancel();
       }
     },
-    [onDismiss]
+    [handleCancel]
   );
 
   useEffect(() => {
@@ -54,6 +68,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0) return; // Left mouse button only
+    if (phase === 'narrating' || phase === 'saving') return;
     setErrorMsg(null);
     setDrag({
       startX: e.clientX,
@@ -62,6 +77,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
       currentY: e.clientY,
       isDragging: true,
     });
+    setPhase('dragging');
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -73,7 +89,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
     }));
   };
 
-  const handleMouseUp = async () => {
+  const handleMouseUp = () => {
     if (!drag.isDragging) return;
     const x = Math.min(drag.startX, drag.currentX);
     const y = Math.min(drag.startY, drag.currentY);
@@ -85,15 +101,28 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
     // BR-31: Refuse regions smaller than 8x8 pixels
     if (width < 8 || height < 8) {
       setErrorMsg('Region must be at least 8x8 pixels');
+      setPhase('armed');
+      setPendingRegion(null);
       return;
     }
 
+    const roundedRegion: RegionRect = {
+      x: Math.round(x),
+      y: Math.round(y),
+      width: Math.round(width),
+      height: Math.round(height),
+    };
+    setPendingRegion(roundedRegion);
+    setPhase('narrating');
+  };
+
+  const handleSave = async () => {
+    if (phase !== 'narrating' || !pendingRegion) return;
+    setPhase('saving');
     try {
       const res = await captureScreenRegion({
-        x: Math.round(x),
-        y: Math.round(y),
-        width: Math.round(width),
-        height: Math.round(height),
+        ...pendingRegion,
+        note,
       });
       if (onCaptureComplete) {
         onCaptureComplete(res);
@@ -101,13 +130,21 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMsg(msg);
+      setPhase('narrating');
     }
   };
 
-  const boxX = Math.min(drag.startX, drag.currentX);
-  const boxY = Math.min(drag.startY, drag.currentY);
-  const boxWidth = Math.abs(drag.currentX - drag.startX);
-  const boxHeight = Math.abs(drag.currentY - drag.startY);
+  const currentBox: RegionRect = pendingRegion ?? {
+    x: Math.min(drag.startX, drag.currentX),
+    y: Math.min(drag.startY, drag.currentY),
+    width: Math.abs(drag.currentX - drag.startX),
+    height: Math.abs(drag.currentY - drag.startY),
+  };
+
+  const showSelectionBox =
+    (phase === 'dragging' || phase === 'narrating' || phase === 'saving') &&
+    currentBox.width > 0 &&
+    currentBox.height > 0;
 
   return (
     <div
@@ -122,20 +159,20 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
         width: '100vw',
         height: '100vh',
         backgroundColor: 'var(--color-overlay-scrim)',
-        cursor: 'crosshair',
+        cursor: phase === 'armed' || phase === 'dragging' ? 'crosshair' : 'default',
         zIndex: 9999,
         userSelect: 'none',
       }}
     >
-      {drag.isDragging && boxWidth > 0 && boxHeight > 0 && (
+      {showSelectionBox && (
         <div
           data-testid="selection-box"
           style={{
             position: 'absolute',
-            left: `${boxX}px`,
-            top: `${boxY}px`,
-            width: `${boxWidth}px`,
-            height: `${boxHeight}px`,
+            left: `${currentBox.x}px`,
+            top: `${currentBox.y}px`,
+            width: `${currentBox.width}px`,
+            height: `${currentBox.height}px`,
             border: '2px solid var(--color-overlay-ring)',
             backgroundColor: 'var(--color-overlay-selection-bg)',
             pointerEvents: 'none',
@@ -157,9 +194,20 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
               whiteSpace: 'nowrap',
             }}
           >
-            {boxWidth} × {boxHeight} px
+            {currentBox.width} × {currentBox.height} px
           </span>
         </div>
+      )}
+
+      {(phase === 'narrating' || phase === 'saving') && pendingRegion && (
+        <CaptureNoteField
+          region={pendingRegion}
+          value={note}
+          onChange={setNote}
+          onSave={handleSave}
+          onCancel={handleCancel}
+          disabled={phase === 'saving'}
+        />
       )}
 
       {errorMsg && (

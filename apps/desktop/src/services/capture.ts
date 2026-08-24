@@ -5,6 +5,7 @@ export interface CaptureRegionPayload {
   y: number;
   width: number;
   height: number;
+  note: string;
   source_monitor?: string;
 }
 
