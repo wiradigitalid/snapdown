@@ -4,6 +4,7 @@ use snapdown_core::domain::finding::{Finding, Note, Region};
 use snapdown_core::domain::image::ImageDimensions;
 use snapdown_core::domain::setting::{QualityBudget, Setting, SettingKey, SettingValue};
 use snapdown_core::ports::{BlobStore, Clock, EntropySource, FindingStore, SettingsStore};
+use snapdown_store::image::ImageReducer;
 use snapdown_store::system::{SystemClock, SystemEntropySource};
 use snapdown_store::vault::VaultBlobStore;
 use std::path::PathBuf;
@@ -87,11 +88,15 @@ pub fn capture_screen_region(
     let budget_name = qb.named.display_name().to_string();
 
     let orig_dims = ImageDimensions::new(region.width, region.height).map_err(|e| e.to_string())?;
-    let target_dims = orig_dims.compute_reduced_dimensions_for_pair(&resolved);
 
     // Real screen capture of requested region encoded as PNG (CAP-1, LC-002)
     let captured_png_bytes =
         RegionCapturer::capture_region(&core_region, region.source_monitor.as_deref())
+            .map_err(|e| e.to_string())?;
+
+    // Reduce image with QualityBudget (LC-003, FR-4, CAP-2)
+    let reduced_result =
+        ImageReducer::reduce_image(&captured_png_bytes, orig_dims, &resolved, false)
             .map_err(|e| e.to_string())?;
 
     // Generate relative filename for finding
@@ -99,7 +104,7 @@ pub fn capture_screen_region(
     let filename = format!("findings/capture_{timestamp_str}.png");
 
     vault_store
-        .write_blob(&filename, &captured_png_bytes)
+        .write_blob(&filename, &reduced_result.bytes)
         .map_err(|e| e.to_string())?;
 
     // Create finding record with resolved derivation parameters (NFR-18, BR-105)
@@ -112,8 +117,8 @@ pub fn capture_screen_region(
     let finding = Finding {
         id: finding_id.clone(),
         image_path: filename.clone(),
-        image_width: target_dims.width,
-        image_height: target_dims.height,
+        image_width: reduced_result.dimensions.width,
+        image_height: reduced_result.dimensions.height,
         captured_at: captured_at.clone(),
         source_monitor: monitor_name.clone(),
         region: region_str.clone(),
@@ -143,8 +148,8 @@ pub fn capture_screen_region(
 
     Ok(CaptureResultDto {
         image_path: filename,
-        image_width: target_dims.width,
-        image_height: target_dims.height,
+        image_width: reduced_result.dimensions.width,
+        image_height: reduced_result.dimensions.height,
         source_monitor: monitor_name,
         region: region_str,
         resolved_long_edge: resolved.max_long_edge,

@@ -4023,6 +4023,7 @@ name = "snapdown-store"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "image",
  "rand 0.8.7",
  "rusqlite",
  "serde",

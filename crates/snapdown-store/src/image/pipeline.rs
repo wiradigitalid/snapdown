@@ -1,3 +1,5 @@
+use image::codecs::png::PngEncoder;
+use image::{ExtendedColorType, ImageEncoder};
 use snapdown_core::domain::image::ImageDimensions;
 use snapdown_core::domain::setting::{QualityBudget, ResolvedPair};
 use snapdown_core::error::CoreError;
@@ -20,30 +22,56 @@ impl ImageReducer {
         resolved: &ResolvedPair,
         generate_thumbnail: bool,
     ) -> Result<ReducedImageResult, CoreError> {
+        let decoded = image::load_from_memory(input_bytes)
+            .map_err(|e| CoreError::Validation(format!("Failed to decode image: {e}")))?;
+
+        let decoded_rgba = decoded.to_rgba8();
+
         let target_dims = original_dims.compute_reduced_dimensions_for_pair(resolved);
 
-        // Compress / reduce data bytes
-        let mut out_bytes = Vec::new();
-        // Standard PNG/image signature and downscaled payload simulation
-        out_bytes.extend_from_slice(b"\x89PNG\r\n\x1a\n");
-        out_bytes.extend_from_slice(&target_dims.width.to_be_bytes());
-        out_bytes.extend_from_slice(&target_dims.height.to_be_bytes());
-        out_bytes.push(resolved.encoder_quality);
-
-        // Include payload compressed slice
-        if input_bytes.len() > 16 {
-            out_bytes.extend_from_slice(&input_bytes[16..]);
+        // Downscale if image exceeds max long edge, otherwise retain without upscaling (BR-40, BR-41)
+        let target_image = if original_dims.long_edge() > resolved.max_long_edge {
+            image::imageops::resize(
+                &decoded_rgba,
+                target_dims.width,
+                target_dims.height,
+                image::imageops::FilterType::Lanczos3,
+            )
         } else {
-            out_bytes.extend_from_slice(input_bytes);
-        }
+            decoded_rgba
+        };
+
+        let mut out_bytes = Vec::new();
+        let encoder = PngEncoder::new(&mut out_bytes);
+        encoder
+            .write_image(
+                target_image.as_raw(),
+                target_dims.width,
+                target_dims.height,
+                ExtendedColorType::Rgba8,
+            )
+            .map_err(|e| CoreError::Validation(format!("Failed to encode PNG: {e}")))?;
 
         let (thumb_bytes, thumb_dims) = if generate_thumbnail {
             let t_dims = target_dims.compute_thumbnail_dimensions(320);
+            let thumb_img = image::imageops::resize(
+                &target_image,
+                t_dims.width,
+                t_dims.height,
+                image::imageops::FilterType::Lanczos3,
+            );
             let mut t_bytes = Vec::new();
-            t_bytes.extend_from_slice(b"\x89PNG\r\n\x1a\n");
-            t_bytes.extend_from_slice(&t_dims.width.to_be_bytes());
-            t_bytes.extend_from_slice(&t_dims.height.to_be_bytes());
-            t_bytes.push(60); // thumbnail default quality
+            let thumb_encoder = PngEncoder::new(&mut t_bytes);
+            thumb_encoder
+                .write_image(
+                    thumb_img.as_raw(),
+                    t_dims.width,
+                    t_dims.height,
+                    ExtendedColorType::Rgba8,
+                )
+                .map_err(|e| {
+                    CoreError::Validation(format!("Failed to encode thumbnail PNG: {e}"))
+                })?;
             (Some(t_bytes), Some(t_dims))
         } else {
             (None, None)
@@ -92,11 +120,21 @@ mod tests {
     use super::*;
     use snapdown_core::domain::setting::NamedBudget;
 
+    fn make_test_png(w: u32, h: u32) -> Vec<u8> {
+        let img = image::RgbaImage::new(w, h);
+        let mut bytes = Vec::new();
+        let encoder = PngEncoder::new(&mut bytes);
+        encoder
+            .write_image(img.as_raw(), w, h, ExtendedColorType::Rgba8)
+            .unwrap();
+        bytes
+    }
+
     #[test]
     fn quality_budget_downscaling_and_compression_for_balanced_preset() {
         let balanced = QualityBudget::new(NamedBudget::Balanced, None);
         let orig_dims = ImageDimensions::new(3840, 2160).unwrap();
-        let input_bytes = vec![0u8; 1024];
+        let input_bytes = make_test_png(3840, 2160);
 
         let result =
             ImageReducer::reduce_image_with_budget(&input_bytes, orig_dims, &balanced, true)
@@ -107,5 +145,14 @@ mod tests {
         assert!(result.bytes.len() > 8);
         assert_eq!(result.thumbnail_dimensions.as_ref().unwrap().width, 320);
         assert_eq!(result.thumbnail_dimensions.as_ref().unwrap().height, 180);
+
+        let decoded = image::load_from_memory(&result.bytes).unwrap();
+        assert_eq!(decoded.width(), 1600);
+        assert_eq!(decoded.height(), 900);
+
+        let thumb_decoded =
+            image::load_from_memory(result.thumbnail_bytes.as_ref().unwrap()).unwrap();
+        assert_eq!(thumb_decoded.width(), 320);
+        assert_eq!(thumb_decoded.height(), 180);
     }
 }
