@@ -56,7 +56,7 @@ describe('BundleComposer Component', () => {
       />
     );
 
-    const titleInput = screen.getByLabelText('Title:');
+    const titleInput = screen.getByLabelText('Bundle Title');
     fireEvent.change(titleInput, { target: { value: 'Alpha Release Review' } });
 
     // Verify rendered document preview container
@@ -64,7 +64,7 @@ describe('BundleComposer Component', () => {
     expect(screen.getByTestId('bundle-finding-section-f1')).toBeInTheDocument();
     expect(screen.getByTestId('bundle-finding-section-f2')).toBeInTheDocument();
 
-    const submitBtn = screen.getByRole('button', { name: 'Create Bundle' });
+    const submitBtn = screen.getByTestId('assemble-save-bundle-btn');
     fireEvent.click(submitBtn);
 
     await waitFor(() => {

@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { Button } from './Button';
-import { TextField } from './TextField';
 import { FindingDetailItemDto } from './FindingsEditor';
 import { calculateTokens } from './TokenEstimator';
 
@@ -88,8 +87,10 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
     <div
       data-testid="bundle-composer"
       style={{
-        width: '100%',
-        maxWidth: '1100px',
+        width: '92vw',
+        maxWidth: '1240px',
+        height: '86vh',
+        maxHeight: '86vh',
         backgroundColor: 'var(--color-surface)',
         border: '1px solid var(--color-border)',
         borderRadius: 'var(--radius-lg)',
@@ -98,13 +99,12 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
         flexDirection: 'column',
         overflow: 'hidden',
         boxSizing: 'border-box',
-        maxHeight: '90vh',
       }}
     >
-      {/* Modal Top Bar: Title, Input & Actions */}
+      {/* ROW 1: Prominent Bundle Title & Estimated Total Tokens */}
       <div
         style={{
-          padding: 'var(--space-3) var(--space-4)',
+          padding: 'var(--space-3) var(--space-5)',
           borderBottom: '1px solid var(--color-border)',
           display: 'flex',
           alignItems: 'center',
@@ -113,51 +113,43 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
           gap: 'var(--space-4)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexShrink: 0 }}>
-          <span style={{ fontSize: '1.2rem' }}>📦</span>
-          <h2
-            style={{
-              margin: 0,
-              fontSize: 'var(--text-base)',
-              fontWeight: 800,
-              color: 'var(--color-text)',
-            }}
-          >
-            Review & Assemble Bundle
-          </h2>
-        </div>
-
-        {/* Global Bundle Title Input spanning across top */}
-        <div style={{ flex: 1, maxWidth: '440px', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <label
-            htmlFor="bundle-title-input"
-            style={{ fontSize: 'var(--text-xs)', fontWeight: 700, whiteSpace: 'nowrap', color: 'var(--color-text-muted)' }}
-          >
-            Title:
-          </label>
-          <TextField
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <span style={{ fontSize: '1.3rem' }}>📦</span>
+          <input
             id="bundle-title-input"
+            aria-label="Bundle Title"
             value={bundleName}
             onChange={(e) => setBundleName(e.target.value)}
-            placeholder="e.g. Sprint Review & Defect Report"
-            style={{ height: '32px' }}
+            placeholder="Bundle Title (e.g. Sprint Review & Defect Report)"
+            style={{
+              flex: 1,
+              fontSize: 'var(--text-lg)',
+              fontWeight: 800,
+              fontFamily: 'var(--font-ui)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)',
+              padding: 'var(--space-2) var(--space-3)',
+              backgroundColor: 'var(--color-surface-sunken)',
+              color: 'var(--color-text)',
+              outline: 'none',
+            }}
           />
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexShrink: 0 }}>
           <span
             data-testid="bundle-token-badge"
             style={{
-              fontSize: 'var(--text-xs)',
+              fontSize: 'var(--text-sm)',
               fontFamily: 'var(--font-mono)',
               backgroundColor: 'var(--color-info-bg)',
               color: 'var(--color-info-text)',
-              padding: '3px 10px',
+              padding: 'var(--space-1) var(--space-3)',
               borderRadius: 'var(--radius-sm)',
-              fontWeight: 700,
+              fontWeight: 800,
             }}
           >
-            Est. Total: ~{totalTokens.toLocaleString()} tk
+            🪙 ~{totalTokens.toLocaleString()} tk
           </span>
 
           {onCancel && (
@@ -168,7 +160,7 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
               style={{
                 background: 'none',
                 border: 'none',
-                fontSize: '1.1rem',
+                fontSize: '1.2rem',
                 color: 'var(--color-text-muted)',
                 cursor: 'pointer',
                 padding: 'var(--space-1)',
@@ -180,14 +172,14 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
         </div>
       </div>
 
-      {/* 2-Column Main Workspace: Left = Rendered Markdown Preview, Right = Handoff Sidebar */}
+      {/* ROW 2: Main Rendered Markdown Viewport (Wide) + Compact Action Sidebar */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'row',
           flex: 1,
           overflow: 'hidden',
-          minHeight: '520px',
+          minHeight: 0,
         }}
       >
         {/* MAIN COLUMN: Rich Markdown Document Preview with Embedded Screenshots */}
@@ -200,7 +192,7 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
             overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',
-            gap: 'var(--space-4)',
+            gap: 'var(--space-5)',
             fontFamily: 'var(--font-ui)',
             color: 'var(--color-text)',
             lineHeight: 1.6,
@@ -211,7 +203,7 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
             <h1
               style={{
                 margin: '0 0 var(--space-1) 0',
-                fontSize: 'var(--text-2xl)',
+                fontSize: 'var(--text-3xl)',
                 fontWeight: 800,
                 color: 'var(--color-text)',
                 letterSpacing: '-0.02em',
@@ -231,7 +223,7 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
             </p>
           </div>
 
-          <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)', margin: 'var(--space-2) 0' }} />
+          <hr style={{ border: 'none', borderTop: '1px solid var(--color-border)', margin: 0 }} />
 
           {/* Rendered Findings as Markdown Sections with Embedded Images */}
           {findings.map((f, idx) => (
@@ -242,14 +234,14 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 'var(--space-3)',
-                paddingBottom: 'var(--space-5)',
+                paddingBottom: 'var(--space-6)',
                 borderBottom: idx < findings.length - 1 ? '1px dashed var(--color-border)' : 'none',
               }}
             >
               <h2
                 style={{
                   margin: 0,
-                  fontSize: 'var(--text-lg)',
+                  fontSize: 'var(--text-xl)',
                   fontWeight: 700,
                   color: 'var(--color-text)',
                 }}
@@ -261,7 +253,7 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
               <div
                 style={{
                   width: '100%',
-                  maxHeight: '380px',
+                  maxHeight: '440px',
                   backgroundColor: 'var(--color-surface-sunken)',
                   border: '1px solid var(--color-border)',
                   borderRadius: 'var(--radius-md)',
@@ -269,7 +261,7 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  boxShadow: 'var(--shadow-sm)',
+                  boxShadow: 'var(--shadow-raised)',
                 }}
               >
                 {f.imageSrc ? (
@@ -278,13 +270,13 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
                     alt={`Screenshot Finding ${idx + 1}`}
                     style={{
                       maxWidth: '100%',
-                      maxHeight: '380px',
+                      maxHeight: '440px',
                       objectFit: 'contain',
                       display: 'block',
                     }}
                   />
                 ) : (
-                  <div style={{ padding: 'var(--space-4)', color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)' }}>
+                  <div style={{ padding: 'var(--space-6)', color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)' }}>
                     [Screenshot: {f.finding.image_width} × {f.finding.image_height} px]
                   </div>
                 )}
@@ -294,10 +286,10 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
               <blockquote
                 style={{
                   margin: 'var(--space-1) 0',
-                  padding: 'var(--space-2) var(--space-3)',
+                  padding: 'var(--space-3) var(--space-4)',
                   backgroundColor: 'var(--color-surface-sunken)',
                   borderLeft: '4px solid var(--color-border-strong)',
-                  borderRadius: '0 var(--radius-xs) var(--radius-xs) 0',
+                  borderRadius: '0 var(--radius-sm) var(--radius-sm) 0',
                   fontSize: 'var(--text-sm)',
                   color: 'var(--color-text)',
                 }}
@@ -317,7 +309,7 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
                       paddingLeft: 'var(--space-4)',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '4px',
+                      gap: 'var(--space-1)',
                       fontSize: 'var(--text-xs)',
                       color: 'var(--color-text-secondary)',
                     }}
@@ -338,96 +330,102 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
           ))}
         </div>
 
-        {/* SIDEBAR COLUMN: Handoff Channels & Atomic Assembly (300px) */}
+        {/* SIDEBAR: Compact Icon Channels & Create Bundle Button */}
         <div
           data-testid="bundle-col-sidebar"
           style={{
-            width: '300px',
-            minWidth: '300px',
+            width: '180px',
+            minWidth: '180px',
             borderLeft: '1px solid var(--color-border)',
             padding: 'var(--space-4)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
             backgroundColor: 'var(--color-surface-sunken)',
+            alignItems: 'center',
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <span style={{ fontSize: 'var(--text-2xs)', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
-              🚀 Handoff Channels
+          {/* Icon-Only Handoff Channels */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', width: '100%', alignItems: 'center' }}>
+            <span style={{ fontSize: 'var(--text-2xs)', fontWeight: 800, textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
+              Channels
             </span>
 
-            {/* Channel 1: Clipboard Markdown */}
-            <button
-              type="button"
-              data-testid="copy-markdown-channel-btn"
-              onClick={handleCopyMarkdown}
-              style={{
-                padding: 'var(--space-2) var(--space-3)',
-                backgroundColor: 'var(--color-surface)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-sm)',
-                textAlign: 'left',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '2px',
-              }}
-            >
-              <div style={{ fontWeight: 700, fontSize: 'var(--text-xs)', color: 'var(--color-text)' }}>
-                📋 Copy CommonMark
-              </div>
-              <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--color-text-muted)' }}>
-                {copiedChannel === 'md' ? '✓ Copied to clipboard!' : 'Ready to paste to Claude/ChatGPT.'}
-              </div>
-            </button>
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+              {/* Channel 1: Clipboard Markdown */}
+              <button
+                type="button"
+                data-testid="copy-markdown-channel-btn"
+                data-tooltip={copiedChannel === 'md' ? 'Copied!' : 'Copy CommonMark (Markdown)'}
+                onClick={handleCopyMarkdown}
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  backgroundColor: copiedChannel === 'md' ? 'var(--color-success-bg)' : 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '1.2rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                {copiedChannel === 'md' ? '✓' : '📋'}
+              </button>
 
-            {/* Channel 2: Local MCP Bridge */}
-            <div
-              style={{
-                padding: 'var(--space-2) var(--space-3)',
-                backgroundColor: 'var(--color-surface)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-sm)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '2px',
-              }}
-            >
-              <div style={{ fontWeight: 700, fontSize: 'var(--text-xs)', color: 'var(--color-text)' }}>
-                🔑 Local MCP Bridge
-              </div>
-              <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
-                snapdown-bridge (port 3849)
-              </div>
-            </div>
+              {/* Channel 2: Local MCP Bridge */}
+              <button
+                type="button"
+                data-testid="mcp-bridge-icon-btn"
+                data-tooltip="Local MCP Bridge (127.0.0.1:3849)"
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  backgroundColor: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '1.2rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                🔑
+              </button>
 
-            {/* Channel 3: Unlisted Web Reader */}
-            <div
-              style={{
-                padding: 'var(--space-2) var(--space-3)',
-                backgroundColor: 'var(--color-surface)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-sm)',
-                opacity: 0.6,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '2px',
-              }}
-            >
-              <div style={{ fontWeight: 700, fontSize: 'var(--text-xs)', color: 'var(--color-text)' }}>
-                🌐 Publish Web Link
-              </div>
-              <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--color-text-muted)' }}>
-                Frozen under DEC-005.
-              </div>
+              {/* Channel 3: Unlisted Web Reader */}
+              <button
+                type="button"
+                data-testid="publish-web-icon-btn"
+                data-tooltip="Publish Web Link (DEC-005 Frozen)"
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  backgroundColor: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '1.2rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'not-allowed',
+                  opacity: 0.5,
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                🌐
+              </button>
             </div>
           </div>
 
-          {/* Execution Section */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
+          {/* Execution Section: Create Bundle Button with Text */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', width: '100%' }}>
             {errorMsg && (
-              <div style={{ color: 'var(--color-danger)', fontSize: 'var(--text-xs)' }}>
+              <div style={{ color: 'var(--color-danger)', fontSize: 'var(--text-2xs)', textAlign: 'center' }}>
                 {errorMsg}
               </div>
             )}
@@ -436,13 +434,15 @@ export const BundleComposer: React.FC<BundleComposerProps> = ({
               data-testid="assemble-save-bundle-btn"
               onClick={handleCreate}
               disabled={isSubmitting}
-              style={{ width: '100%', padding: 'var(--space-3) var(--space-4)', fontWeight: 800 }}
+              style={{
+                width: '100%',
+                padding: 'var(--space-3) var(--space-2)',
+                fontWeight: 800,
+                fontSize: 'var(--text-xs)',
+              }}
             >
-              {isSubmitting ? 'Assembling...' : 'Create Bundle'}
+              {isSubmitting ? 'Assembling...' : '📦 Create Bundle'}
             </Button>
-            <span style={{ fontSize: '0.65rem', color: 'var(--color-text-muted)', textAlign: 'center' }}>
-              Burns markers into images and cleans up filmstrip.
-            </span>
           </div>
         </div>
       </div>
