@@ -43,7 +43,7 @@ Replace the generic 3-pane navigation layout with the modern **Snapdown Studio S
 ```
 
 ### Key Dimensions & Styling Tokens:
-- **Titlebar Height**: `34px`, `background: var(--snagit-ribbon-bg)`, border bottom `1px solid var(--snagit-ribbon-border)`.
+- **Titlebar Height**: `34px`, `background: var(--snagit-ribbon-bg)`, border bottom `1px solid var(--snagit-ribbon-border)`. Contains `data-tauri-drag-region` on drag area and 44px `.win-control-btn` (Minimize `🗕`, Maximize `🗖`, Close `✕` with red hover `#dc2626`).
 - **Ribbon Bar Height**: `56px`, `display: flex; justify-content: space-between; align-items: center; padding: 0 16px;`.
 - **Ribbon Buttons**: `width: 40px; height: 40px; border-radius: var(--radius-sm); border: 1px solid var(--color-border);`.
 - **Filmstrip Tray Height**: `110px`, docked at bottom left (from left window edge to `width: calc(100% - 440px)`).
@@ -52,9 +52,12 @@ Replace the generic 3-pane navigation layout with the modern **Snapdown Studio S
 
 ## 3. Interaction & Functional Requirements
 
-### FR-SHELL-1: Titlebar Navigation & State
+### FR-SHELL-1: Titlebar Navigation & Custom Frameless Chrome
+- **Drag Region**: Area brand logo dan judul finding mengusung atribut `data-tauri-drag-region` untuk dragging window di desktop OS.
+- **Window Controls**: Tombol native minimize (`🗕`), maximize/restore (`🗖`), dan close (`✕`) beroperasi langsung via Tauri window webview API.
 - Titlebar displays current active finding title inside a rounded pill (`background: var(--color-surface-sunken)`).
 - Clicking `📚 Bundles History` (or `Ctrl+H`) opens the **Saved Bundles Drawer** (`SPEC-06`).
+- Clicking `⚙️ Settings` (or `Ctrl+,`) opens the **Settings & Preferences Modal** (`SPEC-07`).
 
 ### FR-SHELL-2: 3-Zone Ribbon Button Actions
 - **`🔴` Capture Button**: Invokes Tauri command `trigger_capture_overlay` to activate State 2 (`SPEC-04`).
