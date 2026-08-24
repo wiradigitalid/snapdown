@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
-use snapdown_core::domain::finding::{Finding, Note};
+use snapdown_capture::RegionCapturer;
+use snapdown_core::domain::finding::{Finding, Note, Region};
 use snapdown_core::domain::image::ImageDimensions;
 use snapdown_core::domain::setting::{QualityBudget, Setting, SettingKey, SettingValue};
 use snapdown_core::ports::{BlobStore, Clock, EntropySource, FindingStore, SettingsStore};
@@ -37,10 +38,12 @@ pub fn capture_screen_region(
     state: State<AppState>,
     app: AppHandle,
 ) -> Result<CaptureResultDto, String> {
-    // Validate region bounds
+    // Validate region bounds (BR-31)
     if region.width < 8 || region.height < 8 {
         return Err("Region must be at least 8x8 pixels".to_string());
     }
+
+    let core_region = Region::new(region.x, region.y, region.width, region.height);
 
     let vault_path = match state
         .settings_store
@@ -86,18 +89,17 @@ pub fn capture_screen_region(
     let orig_dims = ImageDimensions::new(region.width, region.height).map_err(|e| e.to_string())?;
     let target_dims = orig_dims.compute_reduced_dimensions_for_pair(&resolved);
 
+    // Real screen capture of requested region encoded as PNG (CAP-1, LC-002)
+    let captured_png_bytes =
+        RegionCapturer::capture_region(&core_region, region.source_monitor.as_deref())
+            .map_err(|e| e.to_string())?;
+
     // Generate relative filename for finding
     let timestamp_str = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
     let filename = format!("findings/capture_{timestamp_str}.png");
 
-    let placeholder_bytes = generate_placeholder_image(
-        target_dims.width,
-        target_dims.height,
-        resolved.encoder_quality,
-    );
-
     vault_store
-        .write_blob(&filename, &placeholder_bytes)
+        .write_blob(&filename, &captured_png_bytes)
         .map_err(|e| e.to_string())?;
 
     // Create finding record with resolved derivation parameters (NFR-18, BR-105)
@@ -192,15 +194,6 @@ fn dirs_or_default_vault() -> PathBuf {
     } else {
         PathBuf::from("./SnapdownVault")
     }
-}
-
-fn generate_placeholder_image(width: u32, height: u32, encoder_quality: u8) -> Vec<u8> {
-    let mut bytes = Vec::new();
-    bytes.extend_from_slice(b"\x89PNG\r\n\x1a\n");
-    bytes.extend_from_slice(&width.to_be_bytes());
-    bytes.extend_from_slice(&height.to_be_bytes());
-    bytes.push(encoder_quality);
-    bytes
 }
 
 #[cfg(test)]

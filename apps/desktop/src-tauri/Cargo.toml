@@ -20,6 +20,7 @@ tauri-build = { workspace = true }
 [dependencies]
 snapdown-core = { path = "../../../crates/snapdown-core" }
 snapdown-store = { path = "../../../crates/snapdown-store" }
+snapdown-capture = { path = "../../../crates/snapdown-capture" }
 tauri = { workspace = true }
 tauri-plugin-single-instance = { workspace = true }
 tauri-plugin-global-shortcut = { workspace = true }
