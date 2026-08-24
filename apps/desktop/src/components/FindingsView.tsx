@@ -236,6 +236,30 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
     );
   };
 
+  const handleUpdateMarkerComment = async (
+    findingId: string,
+    markerId: string,
+    comment: string
+  ) => {
+    const finding = findings.find((f) => f.finding.id === findingId);
+    const existingMarker = finding?.markers.find((m) => m.id === markerId);
+    if (!existingMarker) return;
+
+    await updateMarker(findingId, markerId, existingMarker.x, existingMarker.y, comment);
+    setFindings((prev) =>
+      prev.map((f) =>
+        f.finding.id === findingId
+          ? {
+              ...f,
+              markers: f.markers.map((m) =>
+                m.id === markerId ? { ...m, comment } : m
+              ),
+            }
+          : f
+      )
+    );
+  };
+
   const handleDeleteMarker = async (findingId: string, markerId: string) => {
     const finding = findings.find((f) => f.finding.id === findingId);
     const markerToDelete = finding?.markers.find((m) => m.id === markerId);
@@ -335,6 +359,7 @@ export const FindingsView: React.FC<FindingsViewProps> = ({
         onDeleteFinding={handleDeleteFinding}
         onAddMarker={handleAddMarker}
         onUpdateMarkerPosition={handleUpdateMarkerPosition}
+        onUpdateMarkerComment={handleUpdateMarkerComment}
         onDeleteMarker={handleDeleteMarker}
         onOpenOrphanReport={() => setViewMode('orphan-report')}
         onCompose={onCompose}

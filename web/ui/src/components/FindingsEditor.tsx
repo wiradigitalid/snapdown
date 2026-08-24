@@ -56,6 +56,7 @@ export interface FindingsEditorProps {
   onDeleteFinding?: (findingId: string) => Promise<void> | void;
   onAddMarker?: (findingId: string, x: number, y: number) => Promise<void> | void;
   onUpdateMarkerPosition?: (findingId: string, markerId: string, x: number, y: number) => Promise<void> | void;
+  onUpdateMarkerComment?: (findingId: string, markerId: string, comment: string) => Promise<void> | void;
   onDeleteMarker?: (findingId: string, markerId: string) => Promise<void> | void;
   onOpenOrphanReport?: () => void;
   onCompose?: (selectedFindingIds: string[]) => void;
@@ -83,6 +84,7 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
   onDeleteFinding,
   onAddMarker,
   onUpdateMarkerPosition,
+  onUpdateMarkerComment,
   onDeleteMarker,
   onOpenOrphanReport,
   onCompose,
@@ -555,6 +557,11 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
           selectedMarkerId={selectedMarkerId}
           onSelectMarker={setSelectedMarkerId}
           onDeleteMarker={handleDeleteMarker}
+          onUpdateMarkerComment={(markerId, comment) => {
+            if (selectedFinding && onUpdateMarkerComment) {
+              onUpdateMarkerComment(selectedFinding.finding.id, markerId, comment);
+            }
+          }}
           onDeleteFinding={() => setIsDeleteDialogOpen(true)}
         />
       </div>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { FindingDetailItemDto } from './FindingsEditor';
 import { MarkerBadge } from './MarkerBadge';
 import { TokenEstimator } from './TokenEstimator';
@@ -13,6 +13,7 @@ export interface PropertiesPanelProps {
   selectedMarkerId: string | null;
   onSelectMarker: (markerId: string | null) => void;
   onDeleteMarker: (markerId: string) => void;
+  onUpdateMarkerComment?: (markerId: string, comment: string) => void;
   onDeleteFinding?: () => void;
   className?: string;
   style?: React.CSSProperties;
@@ -26,10 +27,13 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   selectedMarkerId,
   onSelectMarker,
   onDeleteMarker,
+  onUpdateMarkerComment,
   onDeleteFinding,
   className = '',
   style,
 }) => {
+  const [editingComments, setEditingComments] = useState<Record<string, string>>({});
+
   if (!finding) {
     return (
       <div
@@ -57,7 +61,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   }
 
   const markers = finding.markers || [];
-  const markerNotes = markers.map((m) => m.comment || `Marker ${m.ordinal}`);
+  const markerNotes = markers.map(
+    (m) => editingComments[m.id] !== undefined ? editingComments[m.id] : (m.comment || '')
+  );
 
   return (
     <div
@@ -130,7 +136,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           gap: 'var(--space-4)',
         }}
       >
-        {/* Section 1: High Observation Summary */}
+        {/* Section 1: Fixed Height ~130px Observation Summary */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
           <label
             htmlFor="observation-summary-input"
@@ -150,18 +156,21 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
             value={noteText}
             onChange={(e) => onNoteChange(e.target.value)}
             onBlur={onNoteBlur}
-            placeholder="Tuliskan ringkasan temuan visual di sini..."
+            placeholder="Tuliskan ringkasan keseluruhan temuan di sini..."
             rows={5}
             style={{
-              minHeight: '110px',
+              height: '130px',
+              minHeight: '130px',
+              maxHeight: '130px',
               fontFamily: 'var(--font-ui)',
               fontSize: 'var(--text-sm)',
               lineHeight: '1.5',
+              resize: 'none',
             }}
           />
         </div>
 
-        {/* Section 2: Step Marker Notes List (1:1 with Canvas) */}
+        {/* Section 2: Step Marker Notes (Catatan langsung di tiap Step Marker 1, 2, 3...) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
           <div
             style={{
@@ -199,6 +208,8 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 .sort((a, b) => a.ordinal - b.ordinal)
                 .map((m) => {
                   const isSelected = m.id === selectedMarkerId;
+                  const currentComment =
+                    editingComments[m.id] !== undefined ? editingComments[m.id] : (m.comment || '');
 
                   return (
                     <div
@@ -207,9 +218,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                       onClick={() => onSelectMarker(m.id)}
                       style={{
                         display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 'var(--space-2)',
-                        padding: 'var(--space-2)',
+                        flexDirection: 'column',
+                        gap: 'var(--space-1)',
+                        padding: 'var(--space-3)',
                         backgroundColor: isSelected
                           ? 'var(--color-accent-subtle)'
                           : 'var(--color-surface-sunken)',
@@ -220,51 +231,83 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                         transition: 'all 0.15s ease',
                       }}
                     >
-                      <MarkerBadge number={m.ordinal} isSelected={isSelected} />
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                          <MarkerBadge number={m.ordinal} isSelected={isSelected} />
+                          <span
+                            style={{
+                              fontSize: 'var(--text-xs)',
+                              fontFamily: 'var(--font-mono)',
+                              color: 'var(--color-text-secondary)',
+                              fontWeight: 700,
+                            }}
+                          >
+                            Marker #{m.ordinal}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 'var(--text-2xs)',
+                              fontFamily: 'var(--font-mono)',
+                              color: 'var(--color-text-muted)',
+                            }}
+                          >
+                            ({Math.round(m.x * 100)}%, {Math.round(m.y * 100)}%)
+                          </span>
+                        </div>
 
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontSize: 'var(--text-xs)',
-                            fontFamily: 'var(--font-mono)',
-                            color: 'var(--color-text-secondary)',
-                            fontWeight: 600,
-                            marginBottom: '2px',
+                        <button
+                          type="button"
+                          data-testid={`delete-marker-btn-${m.ordinal}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteMarker(m.id);
                           }}
-                        >
-                          Step #{m.ordinal} ({Math.round(m.x * 100)}%, {Math.round(m.y * 100)}%)
-                        </div>
-                        <div
                           style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--color-text-muted)',
+                            cursor: 'pointer',
+                            padding: '2px 4px',
                             fontSize: 'var(--text-xs)',
-                            color: 'var(--color-text)',
-                            lineHeight: 1.4,
+                            lineHeight: 1,
                           }}
+                          title={`Delete Marker ${m.ordinal}`}
                         >
-                          {m.comment || `Observation for Step ${m.ordinal}`}
-                        </div>
+                          🗑️
+                        </button>
                       </div>
 
-                      <button
-                        type="button"
-                        data-testid={`delete-marker-btn-${m.ordinal}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteMarker(m.id);
+                      {/* Direct Editable Textarea per Step Marker */}
+                      <textarea
+                        data-testid={`marker-comment-input-${m.ordinal}`}
+                        value={currentComment}
+                        placeholder={`Tulis catatan untuk marker #${m.ordinal}...`}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditingComments((prev) => ({ ...prev, [m.id]: val }));
                         }}
+                        onBlur={() => {
+                          if (onUpdateMarkerComment && editingComments[m.id] !== undefined) {
+                            onUpdateMarkerComment(m.id, editingComments[m.id]);
+                          }
+                        }}
+                        rows={2}
                         style={{
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--color-text-muted)',
-                          cursor: 'pointer',
-                          padding: '2px',
+                          width: '100%',
+                          minHeight: '44px',
+                          padding: 'var(--space-1) var(--space-2)',
+                          fontFamily: 'var(--font-ui)',
                           fontSize: 'var(--text-xs)',
-                          lineHeight: 1,
+                          lineHeight: '1.4',
+                          borderRadius: 'var(--radius-xs)',
+                          border: '1px solid var(--color-border)',
+                          backgroundColor: 'var(--color-surface)',
+                          color: 'var(--color-text)',
+                          resize: 'vertical',
+                          boxSizing: 'border-box',
+                          outline: 'none',
                         }}
-                        title={`Delete Marker ${m.ordinal}`}
-                      >
-                        🗑️
-                      </button>
+                      />
                     </div>
                   );
                 })}

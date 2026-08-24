@@ -192,6 +192,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--autostart"]),
         ))
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(
             GlobalShortcutBuilder::new()
                 .with_handler(
