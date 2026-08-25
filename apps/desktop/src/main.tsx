@@ -49,6 +49,10 @@ export const Root: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    // Synchronize active theme from localStorage
+    const savedTheme = localStorage.getItem('snapdown-theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+
     if (isOverlay) {
       document.documentElement.classList.add('overlay-mode');
       document.body.classList.add('overlay-mode');

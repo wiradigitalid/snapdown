@@ -445,7 +445,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
             border: '2px dashed var(--color-overlay-ring)',
             backgroundColor: 'transparent',
             pointerEvents: 'none',
-            boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.65)',
+            boxShadow: '0 0 0 9999px var(--color-overlay-scrim)',
             zIndex: 10000,
           }}
         >
@@ -455,9 +455,9 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
               position: 'absolute',
               bottom: '-28px',
               left: '0px',
-              backgroundColor: 'rgba(15, 23, 42, 0.92)',
-              color: '#ffffff',
-              border: '1px solid var(--color-overlay-ring)',
+              backgroundColor: 'var(--color-surface)',
+              color: 'var(--color-text)',
+              border: '1px solid var(--color-border)',
               padding: '2px 8px',
               fontSize: 'var(--text-xs)',
               fontFamily: 'var(--font-mono)',

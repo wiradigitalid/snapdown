@@ -51,7 +51,7 @@
   --color-marker-text: #000000;
   --color-marker-ring: #ffffff;
   /* Capture overlay scrim and region ring drawn over arbitrary desktop content */
-  --color-overlay-scrim: rgba(15, 23, 42, 0.75);
+  --color-overlay-scrim: rgba(0, 0, 0, 0.82);
   --color-overlay-ring: #0284c7;
   --color-overlay-selection-bg: rgba(2, 132, 199, 0.18);
   /* Canvas checkerboard pattern for transparent areas */
@@ -172,7 +172,7 @@
     --color-marker: #f59e0b;
     --color-marker-text: #000000;
     --color-marker-ring: #ffffff;
-    --color-overlay-scrim: rgba(15, 23, 42, 0.75);
+    --color-overlay-scrim: rgba(0, 0, 0, 0.82);
     --color-overlay-ring: #0284c7;
     --color-overlay-selection-bg: rgba(2, 132, 199, 0.18);
     --canvas-checker: #e2e8f0;
