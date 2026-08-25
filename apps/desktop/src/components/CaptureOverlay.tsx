@@ -267,10 +267,11 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
         left: 0,
         width: '100vw',
         height: '100vh',
-        backgroundColor: 'var(--color-overlay-scrim)',
+        backgroundColor: showSelectionBox ? 'transparent' : 'var(--color-overlay-scrim)',
         cursor: phase === 'armed' || phase === 'dragging' ? 'crosshair' : 'default',
         zIndex: 9999,
         userSelect: 'none',
+        overflow: 'hidden',
       }}
     >
       {/* Top-Center Fullscreen Shortcut Button (Snagit-style) */}
