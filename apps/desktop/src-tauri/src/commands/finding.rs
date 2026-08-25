@@ -287,6 +287,7 @@ pub fn import_image_data(
         finding,
         note,
         markers: vec![],
+        visual_annotations: vec![],
     })
 }
 

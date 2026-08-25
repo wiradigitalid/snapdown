@@ -1,5 +1,6 @@
-﻿import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { MarkerBadge } from './MarkerBadge';
+import { AnnotationType, VisualAnnotationItem } from './types/annotation';
 
 export interface MarkerItem {
   id: string;
@@ -12,14 +13,21 @@ export interface MarkerItem {
 
 export interface MarkerLayerProps {
   markers: MarkerItem[];
+  visualAnnotations?: VisualAnnotationItem[];
+  activeTool?: AnnotationType;
   selectedMarkerId?: string | null;
   hoveredMarkerId?: string | null;
+  selectedAnnotationId?: string | null;
   onAddMarker?: (x: number, y: number) => void;
   onUpdateMarkerPosition?: (markerId: string, x: number, y: number) => void;
   onSelectMarker?: (markerId: string | null) => void;
   onHoverMarker?: (markerId: string | null) => void;
   onDeleteMarker?: (markerId: string) => void;
   onMarkerContextMenu?: (marker: MarkerItem, e: React.MouseEvent) => void;
+  onAddAnnotation?: (annotation: VisualAnnotationItem) => void;
+  onUpdateAnnotation?: (annotation: VisualAnnotationItem) => void;
+  onSelectAnnotation?: (id: string | null) => void;
+  onDeleteAnnotation?: (id: string) => void;
   disabled?: boolean;
   style?: React.CSSProperties;
   className?: string;
@@ -27,20 +35,44 @@ export interface MarkerLayerProps {
 
 export const MarkerLayer: React.FC<MarkerLayerProps> = ({
   markers,
+  visualAnnotations = [],
+  activeTool = 'marker',
   selectedMarkerId,
   hoveredMarkerId,
+  selectedAnnotationId,
   onAddMarker,
   onUpdateMarkerPosition,
   onSelectMarker,
   onHoverMarker,
   onDeleteMarker,
   onMarkerContextMenu,
+  onAddAnnotation,
+  onUpdateAnnotation,
+  onSelectAnnotation,
+  onDeleteAnnotation,
   disabled = false,
   style,
   className = '',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [draggingMarkerId, setDraggingMarkerId] = useState<string | null>(null);
+
+  // Drawing state for new visual elements (Shape, Blur, Arrow, Callout)
+  const [drawingStart, setDrawingStart] = useState<{ x: number; y: number } | null>(null);
+  const [currentDraw, setCurrentDraw] = useState<{ x: number; y: number } | null>(null);
+
+  // Dragging/Transforming existing visual elements
+  const [dragMode, setDragMode] = useState<{
+    id: string;
+    type: 'move' | 'handle' | 'arrow-start' | 'arrow-end' | 'tail';
+    handleIndex?: number;
+    startX: number;
+    startY: number;
+    initialItem: VisualAnnotationItem;
+  } | null>(null);
+
+  // Inline editing state for Callout or Text
+  const [editingTextId, setEditingTextId] = useState<string | null>(null);
 
   const calculateNormalizedCoords = useCallback((clientX: number, clientY: number) => {
     if (!containerRef.current) return { x: 0, y: 0 };
@@ -52,23 +84,48 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
     return { x, y };
   }, []);
 
-  const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (disabled || draggingMarkerId || !containerRef.current) return;
+  // Handle pointer interactions on canvas
+  const handleContainerMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (disabled || e.button !== 0 || !containerRef.current) return;
 
-    // Check if clicked directly on marker badge element
     const target = e.target as HTMLElement;
-    if (target.closest('[data-marker-badge="true"]')) {
+    if (
+      target.closest('[data-marker-badge="true"]') ||
+      target.closest('[data-annotation-handle="true"]') ||
+      target.closest('[data-annotation-item="true"]')
+    ) {
       return;
     }
 
-    // Clicking blank canvas deselects any active marker
-    if (onSelectMarker) {
-      onSelectMarker(null);
-    }
+    const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
 
-    if (onAddMarker) {
-      const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
-      onAddMarker(x, y);
+    // Deselect active items when clicking canvas
+    onSelectMarker?.(null);
+    onSelectAnnotation?.(null);
+    setEditingTextId(null);
+
+    if (activeTool === 'marker') {
+      onAddMarker?.(x, y);
+    } else if (activeTool === 'text') {
+      const newText: VisualAnnotationItem = {
+        id: `text-${Date.now()}`,
+        kind: 'text',
+        x,
+        y,
+        width: 0.25,
+        height: 0.08,
+        text: 'Type text here...',
+        fontSize: 16,
+        fontFamily: 'Inter, sans-serif',
+        textColor: 'var(--color-annotation-stroke)',
+      };
+      onAddAnnotation?.(newText);
+      onSelectAnnotation?.(newText.id);
+      setEditingTextId(newText.id);
+    } else {
+      // Start drag to create Shape, Blur, Arrow, or Callout
+      setDrawingStart({ x, y });
+      setCurrentDraw({ x, y });
     }
   };
 
@@ -76,9 +133,8 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
     if (disabled) return;
     e.stopPropagation();
     setDraggingMarkerId(markerId);
-    if (onSelectMarker) {
-      onSelectMarker(markerId);
-    }
+    onSelectMarker?.(markerId);
+    onSelectAnnotation?.(null);
   };
 
   const handleBadgeKeyDown = (e: React.KeyboardEvent<HTMLDivElement>, marker: MarkerItem) => {
@@ -94,17 +150,204 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
     }
   };
 
+  // Keyboard navigation & deletion for selected annotations
   useEffect(() => {
-    if (!draggingMarkerId) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (disabled || editingTextId) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedAnnotationId && onDeleteAnnotation) {
+          e.preventDefault();
+          onDeleteAnnotation(selectedAnnotationId);
+          onSelectAnnotation?.(null);
+        }
+      } else if (e.key === 'Escape') {
+        onSelectMarker?.(null);
+        onSelectAnnotation?.(null);
+        setEditingTextId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [disabled, editingTextId, selectedAnnotationId, onDeleteAnnotation, onSelectAnnotation, onSelectMarker]);
 
+  // Global mousemove & mouseup for dragging and drawing
+  useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
-      if (!draggingMarkerId || !containerRef.current || !onUpdateMarkerPosition) return;
       const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
-      onUpdateMarkerPosition(draggingMarkerId, x, y);
+
+      if (draggingMarkerId && onUpdateMarkerPosition) {
+        onUpdateMarkerPosition(draggingMarkerId, x, y);
+      } else if (drawingStart) {
+        setCurrentDraw({ x, y });
+      } else if (dragMode && onUpdateAnnotation) {
+        const item = dragMode.initialItem;
+        const dx = x - dragMode.startX;
+        const dy = y - dragMode.startY;
+
+        if (dragMode.type === 'move') {
+          if (item.kind === 'arrow') {
+            onUpdateAnnotation({
+              ...item,
+              startX: Math.min(Math.max(item.startX + dx, 0), 1),
+              startY: Math.min(Math.max(item.startY + dy, 0), 1),
+              endX: Math.min(Math.max(item.endX + dx, 0), 1),
+              endY: Math.min(Math.max(item.endY + dy, 0), 1),
+            });
+          } else if (item.kind === 'callout') {
+            onUpdateAnnotation({
+              ...item,
+              x: Math.min(Math.max(item.x + dx, 0), 1),
+              y: Math.min(Math.max(item.y + dy, 0), 1),
+              tailX: Math.min(Math.max(item.tailX + dx, 0), 1),
+              tailY: Math.min(Math.max(item.tailY + dy, 0), 1),
+            });
+          } else {
+            onUpdateAnnotation({
+              ...item,
+              x: Math.min(Math.max(item.x + dx, 0), 1),
+              y: Math.min(Math.max(item.y + dy, 0), 1),
+            });
+          }
+        } else if (dragMode.type === 'arrow-start' && item.kind === 'arrow') {
+          onUpdateAnnotation({
+            ...item,
+            startX: x,
+            startY: y,
+          });
+        } else if (dragMode.type === 'arrow-end' && item.kind === 'arrow') {
+          onUpdateAnnotation({
+            ...item,
+            endX: x,
+            endY: y,
+          });
+        } else if (dragMode.type === 'tail' && item.kind === 'callout') {
+          onUpdateAnnotation({
+            ...item,
+            tailX: x,
+            tailY: y,
+          });
+        } else if (dragMode.type === 'handle' && item.kind !== 'arrow') {
+          // 8-point resize box
+          const idx = dragMode.handleIndex ?? 0;
+          let newX = item.x;
+          let newY = item.y;
+          let newW = item.width || 0.1;
+          let newH = item.height || 0.1;
+
+          if (idx === 0) { // Top-left
+            newX = Math.min(item.x + dx, item.x + newW - 0.02);
+            newY = Math.min(item.y + dy, item.y + newH - 0.02);
+            newW = newW - (newX - item.x);
+            newH = newH - (newY - item.y);
+          } else if (idx === 1) { // Top-center
+            newY = Math.min(item.y + dy, item.y + newH - 0.02);
+            newH = newH - (newY - item.y);
+          } else if (idx === 2) { // Top-right
+            newY = Math.min(item.y + dy, item.y + newH - 0.02);
+            newW = Math.max(newW + dx, 0.02);
+            newH = newH - (newY - item.y);
+          } else if (idx === 3) { // Mid-right
+            newW = Math.max(newW + dx, 0.02);
+          } else if (idx === 4) { // Bottom-right
+            newW = Math.max(newW + dx, 0.02);
+            newH = Math.max(newH + dy, 0.02);
+          } else if (idx === 5) { // Bottom-center
+            newH = Math.max(newH + dy, 0.02);
+          } else if (idx === 6) { // Bottom-left
+            newX = Math.min(item.x + dx, item.x + newW - 0.02);
+            newW = newW - (newX - item.x);
+            newH = Math.max(newH + dy, 0.02);
+          } else if (idx === 7) { // Mid-left
+            newX = Math.min(item.x + dx, item.x + newW - 0.02);
+            newW = newW - (newX - item.x);
+          }
+
+          onUpdateAnnotation({
+            ...item,
+            x: Math.max(0, newX),
+            y: Math.max(0, newY),
+            width: Math.min(newW, 1.0 - newX),
+            height: Math.min(newH, 1.0 - newY),
+          });
+        }
+      }
     };
 
-    const handleGlobalMouseUp = () => {
-      setDraggingMarkerId(null);
+    const handleGlobalMouseUp = (e: MouseEvent) => {
+      if (draggingMarkerId) {
+        setDraggingMarkerId(null);
+      }
+
+      if (drawingStart && currentDraw && onAddAnnotation) {
+        const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
+        const minX = Math.min(drawingStart.x, x);
+        const minY = Math.min(drawingStart.y, y);
+        const width = Math.max(Math.abs(x - drawingStart.x), 0.02);
+        const height = Math.max(Math.abs(y - drawingStart.y), 0.02);
+
+        if (activeTool === 'shape') {
+          const item: VisualAnnotationItem = {
+            id: `shape-${Date.now()}`,
+            kind: 'shape',
+            x: minX,
+            y: minY,
+            width,
+            height,
+            strokeColor: 'var(--color-annotation-stroke)',
+            strokeWidth: 3,
+          };
+          onAddAnnotation(item);
+          onSelectAnnotation?.(item.id);
+        } else if (activeTool === 'blur') {
+          const item: VisualAnnotationItem = {
+            id: `blur-${Date.now()}`,
+            kind: 'blur',
+            x: minX,
+            y: minY,
+            width,
+            height,
+            blurRadius: 10,
+          };
+          onAddAnnotation(item);
+          onSelectAnnotation?.(item.id);
+        } else if (activeTool === 'arrow') {
+          const item: VisualAnnotationItem = {
+            id: `arrow-${Date.now()}`,
+            kind: 'arrow',
+            startX: drawingStart.x,
+            startY: drawingStart.y,
+            endX: x,
+            endY: y,
+            color: 'var(--color-annotation-stroke)',
+            strokeWidth: 4,
+          };
+          onAddAnnotation(item);
+          onSelectAnnotation?.(item.id);
+        } else if (activeTool === 'callout') {
+          const item: VisualAnnotationItem = {
+            id: `callout-${Date.now()}`,
+            kind: 'callout',
+            x: minX,
+            y: minY,
+            width: Math.max(width, 0.18),
+            height: Math.max(height, 0.08),
+            tailX: Math.min(Math.max(x + 0.05, 0), 1),
+            tailY: Math.min(Math.max(y + 0.05, 0), 1),
+            text: 'Callout note...',
+            fontSize: 14,
+            fontFamily: 'Inter, sans-serif',
+            bgColor: 'var(--color-annotation-callout-bg)',
+            textColor: 'var(--color-annotation-callout-text)',
+          };
+          onAddAnnotation(item);
+          onSelectAnnotation?.(item.id);
+          setEditingTextId(item.id);
+        }
+      }
+
+      setDrawingStart(null);
+      setCurrentDraw(null);
+      setDragMode(null);
     };
 
     window.addEventListener('mousemove', handleGlobalMouseMove);
@@ -114,26 +357,496 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
       window.removeEventListener('mousemove', handleGlobalMouseMove);
       window.removeEventListener('mouseup', handleGlobalMouseUp);
     };
-  }, [draggingMarkerId, calculateNormalizedCoords, onUpdateMarkerPosition]);
+  }, [
+    draggingMarkerId,
+    drawingStart,
+    currentDraw,
+    dragMode,
+    activeTool,
+    calculateNormalizedCoords,
+    onUpdateMarkerPosition,
+    onAddAnnotation,
+    onUpdateAnnotation,
+    onSelectAnnotation,
+  ]);
 
   return (
     <div
       ref={containerRef}
       data-testid="marker-layer"
-      onClick={handleContainerClick}
+      onMouseDown={handleContainerMouseDown}
+      onClick={(e) => {
+        // Support click for synthetic environments if onMouseDown didn't already trigger onAddMarker
+        if (disabled || !containerRef.current) return;
+        const target = e.target as HTMLElement;
+        if (
+          target.closest('[data-marker-badge="true"]') ||
+          target.closest('[data-annotation-handle="true"]') ||
+          target.closest('[data-annotation-item="true"]')
+        ) {
+          return;
+        }
+        if (activeTool === 'marker') {
+          const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
+          onAddMarker?.(x, y);
+        }
+      }}
       className={`marker-layer ${className}`.trim()}
       style={{
         position: 'absolute',
         inset: 0,
         width: '100%',
         height: '100%',
-        cursor: disabled ? 'default' : 'crosshair',
+        cursor: disabled ? 'default' : activeTool === 'marker' ? 'crosshair' : 'crosshair',
         overflow: 'hidden',
         userSelect: 'none',
         pointerEvents: disabled ? 'none' : 'auto',
         ...style,
       }}
     >
+      {/* SVG Canvas for Arrows, Shapes, Callout tails */}
+      <svg
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          zIndex: 4,
+        }}
+      >
+        <defs>
+          <marker
+            id="arrowhead-red"
+            markerWidth="8"
+            markerHeight="8"
+            refX="6"
+            refY="4"
+            orient="auto"
+          >
+            <polygon points="0 0, 8 4, 0 8" fill="var(--color-annotation-stroke)" />
+          </marker>
+        </defs>
+
+        {/* Render Arrows */}
+        {visualAnnotations
+          .filter((a): a is VisualAnnotationItem & { kind: 'arrow' } => a.kind === 'arrow')
+          .map((arrow) => {
+            const isSelected = arrow.id === selectedAnnotationId;
+            return (
+              <g key={arrow.id}>
+                <line
+                  x1={`${arrow.startX * 100}%`}
+                  y1={`${arrow.startY * 100}%`}
+                  x2={`${arrow.endX * 100}%`}
+                  y2={`${arrow.endY * 100}%`}
+                  stroke={arrow.color || 'var(--color-annotation-stroke)'}
+                  strokeWidth={arrow.strokeWidth || 4}
+                  markerEnd="url(#arrowhead-red)"
+                  style={{
+                    cursor: 'pointer',
+                    pointerEvents: 'stroke',
+                  }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    onSelectAnnotation?.(arrow.id);
+                    onSelectMarker?.(null);
+                    setDragMode({
+                      id: arrow.id,
+                      type: 'move',
+                      startX: arrow.startX,
+                      startY: arrow.startY,
+                      initialItem: arrow,
+                    });
+                  }}
+                />
+                {isSelected && (
+                  <>
+                    <circle
+                      data-annotation-handle="true"
+                      cx={`${arrow.startX * 100}%`}
+                      cy={`${arrow.startY * 100}%`}
+                      r="6"
+                      fill="var(--color-annotation-handle-bg)"
+                      stroke="var(--color-annotation-stroke)"
+                      strokeWidth="2"
+                      style={{ cursor: 'crosshair', pointerEvents: 'auto' }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setDragMode({
+                          id: arrow.id,
+                          type: 'arrow-start',
+                          startX: arrow.startX,
+                          startY: arrow.startY,
+                          initialItem: arrow,
+                        });
+                      }}
+                    />
+                    <circle
+                      data-annotation-handle="true"
+                      cx={`${arrow.endX * 100}%`}
+                      cy={`${arrow.endY * 100}%`}
+                      r="6"
+                      fill="var(--color-annotation-handle-bg)"
+                      stroke="var(--color-annotation-stroke)"
+                      strokeWidth="2"
+                      style={{ cursor: 'crosshair', pointerEvents: 'auto' }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setDragMode({
+                          id: arrow.id,
+                          type: 'arrow-end',
+                          startX: arrow.endX,
+                          startY: arrow.endY,
+                          initialItem: arrow,
+                        });
+                      }}
+                    />
+                  </>
+                )}
+              </g>
+            );
+          })}
+
+        {/* Live Drawing Preview for Arrow */}
+        {drawingStart && currentDraw && activeTool === 'arrow' && (
+          <line
+            x1={`${drawingStart.x * 100}%`}
+            y1={`${drawingStart.y * 100}%`}
+            x2={`${currentDraw.x * 100}%`}
+            y2={`${currentDraw.y * 100}%`}
+            stroke="var(--color-annotation-stroke)"
+            strokeWidth="3"
+            strokeDasharray="4 4"
+            markerEnd="url(#arrowhead-red)"
+          />
+        )}
+      </svg>
+
+      {/* Render Shapes (Rectangles) */}
+      {visualAnnotations
+        .filter((a): a is VisualAnnotationItem & { kind: 'shape' } => a.kind === 'shape')
+        .map((shape) => {
+          const isSelected = shape.id === selectedAnnotationId;
+          return (
+            <div
+              key={shape.id}
+              data-annotation-item="true"
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                onSelectAnnotation?.(shape.id);
+                onSelectMarker?.(null);
+                const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
+                setDragMode({
+                  id: shape.id,
+                  type: 'move',
+                  startX: x,
+                  startY: y,
+                  initialItem: shape,
+                });
+              }}
+              style={{
+                position: 'absolute',
+                left: `${shape.x * 100}%`,
+                top: `${shape.y * 100}%`,
+                width: `${shape.width * 100}%`,
+                height: `${shape.height * 100}%`,
+                border: `${shape.strokeWidth || 3}px solid ${shape.strokeColor || 'var(--color-annotation-stroke)'}`,
+                backgroundColor: 'transparent',
+                boxSizing: 'border-box',
+                cursor: 'move',
+                zIndex: isSelected ? 8 : 5,
+              }}
+            >
+              {isSelected && render8PointHandles((handleIdx, e) => {
+                e.stopPropagation();
+                const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
+                setDragMode({
+                  id: shape.id,
+                  type: 'handle',
+                  handleIndex: handleIdx,
+                  startX: x,
+                  startY: y,
+                  initialItem: shape,
+                });
+              })}
+            </div>
+          );
+        })}
+
+      {/* Render Blur Redaction Areas */}
+      {visualAnnotations
+        .filter((a): a is VisualAnnotationItem & { kind: 'blur' } => a.kind === 'blur')
+        .map((blur) => {
+          const isSelected = blur.id === selectedAnnotationId;
+          return (
+            <div
+              key={blur.id}
+              data-annotation-item="true"
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                onSelectAnnotation?.(blur.id);
+                onSelectMarker?.(null);
+                const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
+                setDragMode({
+                  id: blur.id,
+                  type: 'move',
+                  startX: x,
+                  startY: y,
+                  initialItem: blur,
+                });
+              }}
+              style={{
+                position: 'absolute',
+                left: `${blur.x * 100}%`,
+                top: `${blur.y * 100}%`,
+                width: `${blur.width * 100}%`,
+                height: `${blur.height * 100}%`,
+                backdropFilter: 'blur(10px) brightness(0.9)',
+                WebkitBackdropFilter: 'blur(10px) brightness(0.9)',
+                border: isSelected ? '2px dashed var(--color-primary)' : '1px solid var(--color-border)',
+                backgroundColor: 'var(--color-annotation-fill)',
+                boxSizing: 'border-box',
+                cursor: 'move',
+                zIndex: isSelected ? 8 : 5,
+              }}
+            >
+              {isSelected && render8PointHandles((handleIdx, e) => {
+                e.stopPropagation();
+                const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
+                setDragMode({
+                  id: blur.id,
+                  type: 'handle',
+                  handleIndex: handleIdx,
+                  startX: x,
+                  startY: y,
+                  initialItem: blur,
+                });
+              })}
+            </div>
+          );
+        })}
+
+      {/* Render Callout Bubbles */}
+      {visualAnnotations
+        .filter((a): a is VisualAnnotationItem & { kind: 'callout' } => a.kind === 'callout')
+        .map((callout) => {
+          const isSelected = callout.id === selectedAnnotationId;
+          const isEditing = editingTextId === callout.id;
+          return (
+            <div
+              key={callout.id}
+              data-annotation-item="true"
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                onSelectAnnotation?.(callout.id);
+                onSelectMarker?.(null);
+                const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
+                setDragMode({
+                  id: callout.id,
+                  type: 'move',
+                  startX: x,
+                  startY: y,
+                  initialItem: callout,
+                });
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                setEditingTextId(callout.id);
+              }}
+              style={{
+                position: 'absolute',
+                left: `${callout.x * 100}%`,
+                top: `${callout.y * 100}%`,
+                width: `${callout.width * 100}%`,
+                minHeight: `${callout.height * 100}%`,
+                backgroundColor: callout.bgColor || 'var(--color-annotation-callout-bg, var(--color-marker))',
+                color: callout.textColor || 'var(--color-annotation-callout-text, var(--color-marker-text))',
+                borderRadius: 'var(--radius-md, 8px)',
+                padding: '6px 10px',
+                fontSize: `${callout.fontSize || 14}px`,
+                fontFamily: callout.fontFamily || 'var(--font-ui)',
+                boxShadow: '0 4px 12px var(--color-overlay-shadow-card)',
+                boxSizing: 'border-box',
+                cursor: 'move',
+                zIndex: isSelected ? 12 : 7,
+              }}
+            >
+              {isEditing ? (
+                <textarea
+                  autoFocus
+                  defaultValue={callout.text}
+                  onBlur={(e) => {
+                    onUpdateAnnotation?.({
+                      ...callout,
+                      text: e.target.value,
+                    });
+                    setEditingTextId(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setEditingTextId(null);
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    backgroundColor: 'transparent',
+                    color: callout.textColor || 'var(--color-annotation-callout-text)',
+                    border: 'none',
+                    outline: 'none',
+                    resize: 'none',
+                    fontSize: `${callout.fontSize || 14}px`,
+                    fontFamily: 'inherit',
+                  }}
+                />
+              ) : (
+                <span>{callout.text}</span>
+              )}
+
+              {/* Tail Point Handle */}
+              {isSelected && (
+                <div
+                  data-annotation-handle="true"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
+                    setDragMode({
+                      id: callout.id,
+                      type: 'tail',
+                      startX: x,
+                      startY: y,
+                      initialItem: callout,
+                    });
+                  }}
+                  style={{
+                    position: 'fixed',
+                    left: `${callout.tailX * 100}%`,
+                    top: `${callout.tailY * 100}%`,
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--color-annotation-handle-bg)',
+                    border: '2px solid var(--color-annotation-stroke)',
+                    transform: 'translate(-50%, -50%)',
+                    cursor: 'crosshair',
+                    zIndex: 20,
+                  }}
+                />
+              )}
+
+              {isSelected && render8PointHandles((handleIdx, e) => {
+                e.stopPropagation();
+                const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
+                setDragMode({
+                  id: callout.id,
+                  type: 'handle',
+                  handleIndex: handleIdx,
+                  startX: x,
+                  startY: y,
+                  initialItem: callout,
+                });
+              })}
+            </div>
+          );
+        })}
+
+      {/* Render Floating Text */}
+      {visualAnnotations
+        .filter((a): a is VisualAnnotationItem & { kind: 'text' } => a.kind === 'text')
+        .map((txt) => {
+          const isSelected = txt.id === selectedAnnotationId;
+          const isEditing = editingTextId === txt.id;
+          return (
+            <div
+              key={txt.id}
+              data-annotation-item="true"
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                onSelectAnnotation?.(txt.id);
+                onSelectMarker?.(null);
+                const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
+                setDragMode({
+                  id: txt.id,
+                  type: 'move',
+                  startX: x,
+                  startY: y,
+                  initialItem: txt,
+                });
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                setEditingTextId(txt.id);
+              }}
+              style={{
+                position: 'absolute',
+                left: `${txt.x * 100}%`,
+                top: `${txt.y * 100}%`,
+                width: `${txt.width * 100}%`,
+                minHeight: `${txt.height * 100}%`,
+                color: txt.textColor || 'var(--color-annotation-stroke)',
+                fontSize: `${txt.fontSize || 16}px`,
+                fontFamily: txt.fontFamily || 'var(--font-ui)',
+                fontWeight: 700,
+                border: isSelected ? '1px dashed var(--color-primary)' : 'none',
+                padding: '2px 4px',
+                boxSizing: 'border-box',
+                cursor: 'move',
+                zIndex: isSelected ? 12 : 7,
+              }}
+            >
+              {isEditing ? (
+                <input
+                  autoFocus
+                  defaultValue={txt.text}
+                  onBlur={(e) => {
+                    onUpdateAnnotation?.({
+                      ...txt,
+                      text: e.target.value,
+                    });
+                    setEditingTextId(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === 'Escape') {
+                      setEditingTextId(null);
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    backgroundColor: 'transparent',
+                    color: 'inherit',
+                    border: 'none',
+                    outline: 'none',
+                    fontSize: 'inherit',
+                    fontFamily: 'inherit',
+                    fontWeight: 'inherit',
+                  }}
+                />
+              ) : (
+                <span>{txt.text}</span>
+              )}
+            </div>
+          );
+        })}
+
+      {/* Live Drawing Preview Box (for Shape / Blur / Callout) */}
+      {drawingStart && currentDraw && activeTool !== 'marker' && activeTool !== 'arrow' && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${Math.min(drawingStart.x, currentDraw.x) * 100}%`,
+            top: `${Math.min(drawingStart.y, currentDraw.y) * 100}%`,
+            width: `${Math.abs(currentDraw.x - drawingStart.x) * 100}%`,
+            height: `${Math.abs(currentDraw.y - drawingStart.y) * 100}%`,
+            border: activeTool === 'blur' ? '2px dashed var(--color-annotation-handle-border)' : '2px dashed var(--color-annotation-stroke)',
+            backgroundColor: activeTool === 'blur' ? 'var(--color-annotation-blur-selection)' : 'var(--color-annotation-fill)',
+            pointerEvents: 'none',
+            zIndex: 15,
+          }}
+        />
+      )}
+
+      {/* Render Markers */}
       {markers.map((marker) => {
         const isSelected = marker.id === selectedMarkerId;
         const isHovered = marker.id === hoveredMarkerId;
@@ -161,7 +874,7 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
               top: `${marker.y * 100}%`,
               transform: 'translate(-50%, -50%)',
               cursor: isDragging ? 'grabbing' : 'grab',
-              zIndex: isDragging ? 20 : isSelected ? 10 : 1,
+              zIndex: isDragging ? 30 : isSelected ? 25 : 10,
             }}
           >
             <MarkerBadge
@@ -178,3 +891,38 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
     </div>
   );
 };
+
+// Helper: 8-Point Resize Handles for Bounding Boxes
+function render8PointHandles(onHandleMouseDown: (idx: number, e: React.MouseEvent) => void) {
+  const positions = [
+    { top: 0, left: 0, cursor: 'nwse-resize' },       // 0: Top-left
+    { top: 0, left: '50%', cursor: 'ns-resize' },     // 1: Top-center
+    { top: 0, left: '100%', cursor: 'nesw-resize' },   // 2: Top-right
+    { top: '50%', left: '100%', cursor: 'ew-resize' }, // 3: Mid-right
+    { top: '100%', left: '100%', cursor: 'nwse-resize' }, // 4: Bottom-right
+    { top: '100%', left: '50%', cursor: 'ns-resize' },   // 5: Bottom-center
+    { top: '100%', left: 0, cursor: 'nesw-resize' },     // 6: Bottom-left
+    { top: '50%', left: 0, cursor: 'ew-resize' },       // 7: Mid-left
+  ];
+
+  return positions.map((pos, idx) => (
+    <div
+      key={idx}
+      data-annotation-handle="true"
+      onMouseDown={(e) => onHandleMouseDown(idx, e)}
+      style={{
+        position: 'absolute',
+        top: pos.top,
+        left: pos.left,
+        width: '8px',
+        height: '8px',
+        borderRadius: '2px',
+        backgroundColor: 'var(--color-annotation-handle-bg)',
+        border: '1.5px solid var(--color-annotation-handle-border, var(--color-primary))',
+        transform: 'translate(-50%, -50%)',
+        cursor: pos.cursor,
+        zIndex: 10,
+      }}
+    />
+  ));
+}

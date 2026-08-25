@@ -24,6 +24,41 @@ impl RegionCapturer {
             return Err(CaptureError::NoDisplayFound);
         }
 
+        // If "ALL" or multi-monitor requested, stitch all monitors into one virtual canvas
+        if source_monitor == Some("ALL") || (source_monitor.is_none() && monitors.len() > 1) {
+            let mut min_x = i32::MAX;
+            let mut min_y = i32::MAX;
+            let mut max_x = i32::MIN;
+            let mut max_y = i32::MIN;
+
+            for m in &monitors {
+                let x = m.x().unwrap_or(0);
+                let y = m.y().unwrap_or(0);
+                let w = m.width().unwrap_or(1920) as i32;
+                let h = m.height().unwrap_or(1080) as i32;
+
+                min_x = min_x.min(x);
+                min_y = min_y.min(y);
+                max_x = max_x.max(x + w);
+                max_y = max_y.max(y + h);
+            }
+
+            let total_w = (max_x - min_x).max(1920) as u32;
+            let total_h = (max_y - min_y).max(1080) as u32;
+
+            let mut virtual_canvas = RgbaImage::new(total_w, total_h);
+
+            for m in &monitors {
+                if let Ok(img) = m.capture_image() {
+                    let mx = m.x().unwrap_or(0) - min_x;
+                    let my = m.y().unwrap_or(0) - min_y;
+                    image::imageops::overlay(&mut virtual_canvas, &img, mx as i64, my as i64);
+                }
+            }
+
+            return Ok((virtual_canvas, total_w, total_h));
+        }
+
         let target_monitor = if let Some(target_name) = source_monitor {
             if target_name.is_empty() {
                 monitors

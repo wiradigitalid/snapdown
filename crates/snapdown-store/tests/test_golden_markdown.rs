@@ -97,6 +97,7 @@ fn the_golden_bundle_markdown_is_regenerated_from_real_image_output() {
             )
             .unwrap(),
         ],
+        visual_annotations: vec![],
     };
 
     let item1 = BundleItem {

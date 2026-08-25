@@ -32,6 +32,7 @@ fn the_markdown_serializer_renders_two_findings_byte_exactly() {
             "Badge 1 comment".into(),
         )
         .unwrap()],
+        visual_annotations: vec![],
     };
 
     let f2 = FindingDetail {
@@ -54,6 +55,7 @@ fn the_markdown_serializer_renders_two_findings_byte_exactly() {
             updated_at: "2026-08-23T11:00:00Z".into(),
         },
         markers: vec![],
+        visual_annotations: vec![],
     };
 
     let item1 = BundleItem {

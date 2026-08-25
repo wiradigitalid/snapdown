@@ -101,10 +101,71 @@ impl Marker {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum AnnotationShape {
+    Rect {
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        stroke_color: Option<String>,
+        stroke_width: Option<f64>,
+    },
+    Arrow {
+        start_x: f64,
+        start_y: f64,
+        end_x: f64,
+        end_y: f64,
+        color: Option<String>,
+        stroke_width: Option<f64>,
+    },
+    Callout {
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        tail_x: f64,
+        tail_y: f64,
+        text: String,
+        font_size: Option<f64>,
+        font_family: Option<String>,
+        bg_color: Option<String>,
+        text_color: Option<String>,
+    },
+    Blur {
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        blur_radius: Option<f64>,
+    },
+    Text {
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        text: String,
+        font_size: Option<f64>,
+        font_family: Option<String>,
+        text_color: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VisualAnnotation {
+    pub id: String,
+    pub finding_id: String,
+    pub data: AnnotationShape,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FindingDetail {
     pub finding: Finding,
     pub note: Note,
     pub markers: Vec<Marker>,
+    #[serde(default)]
+    pub visual_annotations: Vec<VisualAnnotation>,
 }
 
 #[cfg(test)]

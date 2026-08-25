@@ -47,9 +47,9 @@
 
   /* Theme-invariant tokens - deliberately invariant across themes (AD-10) */
   /* Marker badges are burned into exported images read across different machines/themes */
-  --color-marker: #f59e0b;
-  --color-marker-text: #000000;
-  --color-marker-ring: #ffffff;
+  --color-marker: #dc2626;
+  --color-marker-text: #ffffff;
+  --color-marker-ring: transparent;
   /* Capture overlay scrim and region ring drawn over arbitrary desktop content */
   --color-overlay-scrim: rgba(0, 0, 0, 0.82);
   --color-overlay-ring: #0284c7;
@@ -90,8 +90,14 @@
   --radius-xl: 1rem;    /* 16px */
   --radius-full: 9999px;
 
-  /* Bundle & Layout Dimensions */
-  --preview-line-height: 1.55;
+  /* Annotation overlay colors */
+  --color-annotation-stroke: #dc2626;
+  --color-annotation-fill: rgba(220, 38, 38, 0.1);
+  --color-annotation-callout-bg: #dc2626;
+  --color-annotation-callout-text: #ffffff;
+  --color-annotation-blur-selection: rgba(2, 132, 199, 0.15);
+  --color-annotation-handle-bg: #ffffff;
+  --color-annotation-handle-border: #0284c7;
   --bundle-list-width: 240px;
   --item-list-width: 280px;
 
@@ -178,13 +184,20 @@
     --color-neutral-text: #e2e8f0;
 
     /* Theme-invariant tokens - deliberately invariant across themes (AD-10) */
-    --color-marker: #f59e0b;
-    --color-marker-text: #000000;
-    --color-marker-ring: #ffffff;
+    --color-marker: #dc2626;
+    --color-marker-text: #ffffff;
+    --color-marker-ring: transparent;
     --color-overlay-scrim: rgba(0, 0, 0, 0.82);
     --color-overlay-ring: #0284c7;
     --color-overlay-selection-bg: rgba(2, 132, 199, 0.18);
     --canvas-checker: #e2e8f0;
+    --color-annotation-stroke: #dc2626;
+    --color-annotation-fill: rgba(220, 38, 38, 0.1);
+    --color-annotation-callout-bg: #dc2626;
+    --color-annotation-callout-text: #ffffff;
+    --color-annotation-blur-selection: rgba(2, 132, 199, 0.15);
+    --color-annotation-handle-bg: #ffffff;
+    --color-annotation-handle-border: #0284c7;
 
     /* Studio Desktop Chrome Tokens */
     --snagit-ribbon-bg: #131b2e;

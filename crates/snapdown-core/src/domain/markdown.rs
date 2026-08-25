@@ -114,6 +114,7 @@ mod tests {
             finding,
             note,
             markers: vec![m1, m2],
+            visual_annotations: vec![],
         };
 
         let item = BundleItem {

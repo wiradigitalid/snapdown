@@ -24,3 +24,4 @@ export * from './components/FilmstripTray';
 export * from './components/PropertiesPanel';
 export * from './components/BundlesDrawer';
 export * from './components/ContextMenu';
+export * from './components/types/annotation';

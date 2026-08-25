@@ -10,6 +10,7 @@ import { FilmstripTray } from './FilmstripTray';
 import { PropertiesPanel } from './PropertiesPanel';
 import { CropOverlay, CropRect } from './CropOverlay';
 import { ContextMenu, ContextMenuItem } from './ContextMenu';
+import { AnnotationType, VisualAnnotationItem } from './types/annotation';
 
 export interface FindingItemDto {
   id: string;
@@ -42,6 +43,7 @@ export interface FindingDetailItemDto {
   finding: FindingItemDto;
   note: NoteItemDto;
   markers: MarkerItemDto[];
+  visual_annotations?: VisualAnnotationItem[];
   imageSrc?: string;
   isImageMissing?: boolean;
 }
@@ -114,6 +116,11 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
   const [deleteTargetIds, setDeleteTargetIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [imageLoadError, setImageLoadError] = useState(false);
+  const [activeTool, setActiveTool] = useState<AnnotationType>('marker');
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
+  const [localAnnotations, setLocalAnnotations] = useState<Record<string, VisualAnnotationItem[]>>({});
+  const [undoStack, setUndoStack] = useState<Record<string, VisualAnnotationItem[][]>>({});
+  const [redoStack, setRedoStack] = useState<Record<string, VisualAnnotationItem[][]>>({});
   const [isMarkerMode, setIsMarkerMode] = useState(true);
   const [isCropMode, setIsCropMode] = useState(false);
   const [contextMenuState, setContextMenuState] = useState<{
@@ -121,6 +128,70 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
     y: number;
     items: ContextMenuItem[];
   } | null>(null);
+
+  const currentAnnotations = useMemo(() => {
+    if (!selectedFinding) return [];
+    return localAnnotations[selectedFinding.finding.id] || selectedFinding.visual_annotations || [];
+  }, [selectedFinding, localAnnotations]);
+
+  const handleAddAnnotation = useCallback((item: VisualAnnotationItem) => {
+    if (!selectedFinding) return;
+    const fid = selectedFinding.finding.id;
+    const prev = localAnnotations[fid] || selectedFinding.visual_annotations || [];
+    setUndoStack((u) => ({ ...u, [fid]: [...(u[fid] || []), prev] }));
+    setRedoStack((r) => ({ ...r, [fid]: [] }));
+    setLocalAnnotations((curr) => ({
+      ...curr,
+      [fid]: [...prev, item],
+    }));
+  }, [selectedFinding, localAnnotations]);
+
+  const handleUpdateAnnotation = useCallback((item: VisualAnnotationItem) => {
+    if (!selectedFinding) return;
+    const fid = selectedFinding.finding.id;
+    const prev = localAnnotations[fid] || selectedFinding.visual_annotations || [];
+    setLocalAnnotations((curr) => ({
+      ...curr,
+      [fid]: prev.map((a) => (a.id === item.id ? item : a)),
+    }));
+  }, [selectedFinding, localAnnotations]);
+
+  const handleDeleteAnnotation = useCallback((id: string) => {
+    if (!selectedFinding) return;
+    const fid = selectedFinding.finding.id;
+    const prev = localAnnotations[fid] || selectedFinding.visual_annotations || [];
+    setUndoStack((u) => ({ ...u, [fid]: [...(u[fid] || []), prev] }));
+    setRedoStack((r) => ({ ...r, [fid]: [] }));
+    setLocalAnnotations((curr) => ({
+      ...curr,
+      [fid]: prev.filter((a) => a.id !== id),
+    }));
+    setSelectedAnnotationId(null);
+  }, [selectedFinding, localAnnotations]);
+
+  const handleUndo = useCallback(() => {
+    if (!selectedFinding) return;
+    const fid = selectedFinding.finding.id;
+    const uStack = undoStack[fid] || [];
+    if (uStack.length === 0) return;
+    const prev = uStack[uStack.length - 1];
+    const current = localAnnotations[fid] || selectedFinding.visual_annotations || [];
+    setUndoStack((u) => ({ ...u, [fid]: uStack.slice(0, -1) }));
+    setRedoStack((r) => ({ ...r, [fid]: [...(r[fid] || []), current] }));
+    setLocalAnnotations((curr) => ({ ...curr, [fid]: prev }));
+  }, [selectedFinding, undoStack, localAnnotations]);
+
+  const handleRedo = useCallback(() => {
+    if (!selectedFinding) return;
+    const fid = selectedFinding.finding.id;
+    const rStack = redoStack[fid] || [];
+    if (rStack.length === 0) return;
+    const next = rStack[rStack.length - 1];
+    const current = localAnnotations[fid] || selectedFinding.visual_annotations || [];
+    setRedoStack((r) => ({ ...r, [fid]: rStack.slice(0, -1) }));
+    setUndoStack((u) => ({ ...u, [fid]: [...(u[fid] || []), current] }));
+    setLocalAnnotations((curr) => ({ ...curr, [fid]: next }));
+  }, [selectedFinding, redoStack, localAnnotations]);
 
   // Sync note text when selection changes
   useEffect(() => {
@@ -531,8 +602,16 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
         onCaptureClick={onCaptureClick}
         onOpenFileClick={onOpenFileClick}
         onPasteClick={onPasteClick}
+        activeTool={activeTool}
+        onSelectTool={(tool) => {
+          setActiveTool(tool);
+          setIsMarkerMode(tool === 'marker');
+        }}
         isMarkerActive={isMarkerMode}
-        onToggleMarker={() => setIsMarkerMode((v) => !v)}
+        onToggleMarker={() => {
+          setIsMarkerMode((v) => !v);
+          setActiveTool('marker');
+        }}
         isCropActive={isCropMode}
         onToggleCrop={() => setIsCropMode((v) => !v)}
         onAssembleBundle={() => {
@@ -541,6 +620,10 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
         }}
         onCopyImage={onCopyImage}
         onShareBundle={onShareBundle}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        canUndo={(selectedFinding && (undoStack[selectedFinding.finding.id]?.length || 0) > 0) || false}
+        canRedo={(selectedFinding && (redoStack[selectedFinding.finding.id]?.length || 0) > 0) || false}
         selectedFindingsCount={checkedFindingIds.size}
       />
 
@@ -678,18 +761,25 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
                       }}
                     />
 
-                    {/* Step Marker Layer */}
+                    {/* Canvas Annotation & Marker Layer */}
                     <MarkerLayer
                       markers={markerLayerItems}
+                      visualAnnotations={currentAnnotations}
+                      activeTool={activeTool}
                       selectedMarkerId={selectedMarkerId}
                       hoveredMarkerId={hoveredMarkerId}
+                      selectedAnnotationId={selectedAnnotationId}
                       onAddMarker={handleAddMarker}
                       onUpdateMarkerPosition={handleUpdateMarkerPosition}
                       onSelectMarker={setSelectedMarkerId}
                       onHoverMarker={setHoveredMarkerId}
                       onDeleteMarker={handleDeleteMarker}
                       onMarkerContextMenu={handleMarkerContextMenu}
-                      disabled={isCropMode || !isMarkerMode}
+                      onAddAnnotation={handleAddAnnotation}
+                      onUpdateAnnotation={handleUpdateAnnotation}
+                      onSelectAnnotation={setSelectedAnnotationId}
+                      onDeleteAnnotation={handleDeleteAnnotation}
+                      disabled={isCropMode}
                     />
 
                     {/* Crop Overlay when active */}

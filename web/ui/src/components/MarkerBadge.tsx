@@ -29,7 +29,11 @@ export const MarkerBadge: React.FC<MarkerBadgeProps> = ({
     ? Math.min(Math.max(Math.round(number), 1), 99)
     : 1;
 
-  const ringThickness = isSelected || isHovered ? '3px' : '2px';
+  const ringShadow = isSelected
+    ? '0 0 0 3px var(--color-annotation-handle-bg), 0 2px 8px var(--color-overlay-shadow-card)'
+    : isHovered
+    ? '0 0 0 2px var(--color-annotation-handle-bg), 0 2px 6px var(--color-overlay-shadow-card)'
+    : '0 2px 4px var(--color-overlay-shadow-card)';
 
   return (
     <div
@@ -45,7 +49,7 @@ export const MarkerBadge: React.FC<MarkerBadgeProps> = ({
         borderRadius: '50%',
         backgroundColor: 'var(--color-marker)',
         color: 'var(--color-marker-text)',
-        boxShadow: `0 0 0 ${ringThickness} var(--color-marker-ring)`,
+        boxShadow: ringShadow,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -53,11 +57,11 @@ export const MarkerBadge: React.FC<MarkerBadgeProps> = ({
         fontSize: 'var(--text-xs)',
         fontWeight: 700,
         userSelect: 'none',
-        opacity: isDragging ? 0.8 : 1,
+        opacity: isDragging ? 0.85 : 1,
         cursor: isDragging ? 'grabbing' : 'pointer',
         flexShrink: 0,
         outline: 'none',
-        transition: 'box-shadow 0.15s ease, opacity 0.15s ease',
+        transition: 'box-shadow 0.15s ease, opacity 0.15s ease, transform 0.1s ease',
         ...style,
       }}
     >

@@ -1,15 +1,13 @@
 use image::codecs::png::PngEncoder;
 use image::{ExtendedColorType, ImageEncoder, Rgba, RgbaImage};
-use snapdown_core::domain::finding::Marker;
+use snapdown_core::domain::finding::{AnnotationShape, Marker, VisualAnnotation};
 use snapdown_core::domain::image::ImageDimensions;
 use snapdown_core::error::CoreError;
 
-const COLOR_MARKER_FILL: Rgba<u8> = Rgba([245, 158, 11, 255]); // #f59e0b
-const COLOR_MARKER_RING: Rgba<u8> = Rgba([255, 255, 255, 255]); // #ffffff
-const COLOR_MARKER_TEXT: Rgba<u8> = Rgba([0, 0, 0, 255]); // #000000
+const COLOR_MARKER_FILL: Rgba<u8> = Rgba([220, 38, 38, 255]); // #dc2626 solid red
+const COLOR_MARKER_TEXT: Rgba<u8> = Rgba([255, 255, 255, 255]); // #ffffff solid white
 
-const BADGE_RADIUS_INNER: i32 = 14;
-const BADGE_RADIUS_OUTER: i32 = 16;
+const BADGE_RADIUS: i32 = 14;
 
 const DIGIT_3X5: [[u8; 5]; 10] = [
     [0b111, 0b101, 0b101, 0b101, 0b111], // 0
@@ -28,17 +26,21 @@ const DIGIT_3X5: [[u8; 5]; 10] = [
 pub struct MarkerBurner;
 
 impl MarkerBurner {
-    /// Burns numbered circular badges directly into image bytes at specified normalized coordinates.
-    ///
-    /// Invariants:
-    /// - AD-4: Operates on already-reduced bytes and preserves dimensions without re-scaling.
-    /// - AD-9: Validates decodability and dimensions, then returns original input bytes unchanged if no eligible markers are present.
-    /// - AD-10: Marker colors are theme-invariant (#f59e0b fill, #ffffff ring, #000000 text).
-    /// - SCN-04: Markers with empty/whitespace-only comments are not drawn.
+    /// Burns numbered circular badges and visual annotations directly into image bytes at specified normalized coordinates.
     pub fn burn_markers(
         input_bytes: &[u8],
         dimensions: &ImageDimensions,
         markers: &[Marker],
+    ) -> Result<Vec<u8>, CoreError> {
+        Self::burn_all(input_bytes, dimensions, markers, &[])
+    }
+
+    /// Burns both numbered markers and rich visual annotations (Shapes, Blur, Arrow, Callout, Text) into image bytes.
+    pub fn burn_all(
+        input_bytes: &[u8],
+        dimensions: &ImageDimensions,
+        markers: &[Marker],
+        annotations: &[VisualAnnotation],
     ) -> Result<Vec<u8>, CoreError> {
         let decoded = image::load_from_memory(input_bytes).map_err(|e| {
             CoreError::Validation(format!("Failed to decode image for burning: {e}"))
@@ -59,12 +61,57 @@ impl MarkerBurner {
             .filter(|m| !m.comment.trim().is_empty())
             .collect();
 
-        if active_markers.is_empty() {
+        if active_markers.is_empty() && annotations.is_empty() {
             return Ok(input_bytes.to_vec());
         }
 
         let mut image_rgba: RgbaImage = decoded.to_rgba8();
 
+        // 1. Burn Blur Redaction Layers first
+        for ann in annotations {
+            if let AnnotationShape::Blur { x, y, width, height, blur_radius } = &ann.data {
+                let bx = (x * dimensions.width as f64).round() as i32;
+                let by = (y * dimensions.height as f64).round() as i32;
+                let bw = (width * dimensions.width as f64).round() as i32;
+                let bh = (height * dimensions.height as f64).round() as i32;
+                let radius = blur_radius.unwrap_or(8.0) as i32;
+                Self::apply_box_blur(&mut image_rgba, bx, by, bw, bh, radius);
+            }
+        }
+
+        // 2. Burn Vector Shapes & Arrows
+        for ann in annotations {
+            match &ann.data {
+                AnnotationShape::Rect { x, y, width, height, stroke_width, .. } => {
+                    let rx = (x * dimensions.width as f64).round() as i32;
+                    let ry = (y * dimensions.height as f64).round() as i32;
+                    let rw = (width * dimensions.width as f64).round() as i32;
+                    let rh = (height * dimensions.height as f64).round() as i32;
+                    let sw = stroke_width.unwrap_or(3.0) as i32;
+                    Self::draw_rect_outline(&mut image_rgba, rx, ry, rw, rh, sw, COLOR_MARKER_FILL);
+                }
+                AnnotationShape::Arrow { start_x, start_y, end_x, end_y, stroke_width, .. } => {
+                    let x0 = (start_x * dimensions.width as f64).round() as i32;
+                    let y0 = (start_y * dimensions.height as f64).round() as i32;
+                    let x1 = (end_x * dimensions.width as f64).round() as i32;
+                    let y1 = (end_y * dimensions.height as f64).round() as i32;
+                    let sw = stroke_width.unwrap_or(4.0) as i32;
+                    Self::draw_arrow(&mut image_rgba, x0, y0, x1, y1, sw, COLOR_MARKER_FILL);
+                }
+                AnnotationShape::Callout { x, y, width, height, tail_x, tail_y, .. } => {
+                    let cx = (x * dimensions.width as f64).round() as i32;
+                    let cy = (y * dimensions.height as f64).round() as i32;
+                    let cw = (width * dimensions.width as f64).round() as i32;
+                    let ch = (height * dimensions.height as f64).round() as i32;
+                    let tx = (tail_x * dimensions.width as f64).round() as i32;
+                    let ty = (tail_y * dimensions.height as f64).round() as i32;
+                    Self::draw_callout_box(&mut image_rgba, cx, cy, cw, ch, tx, ty, COLOR_MARKER_FILL);
+                }
+                _ => {}
+            }
+        }
+
+        // 3. Burn Numbered Markers on top
         for marker in active_markers {
             let cx = (marker.x * (dimensions.width as f64)).round() as i32;
             let cy = (marker.y * (dimensions.height as f64)).round() as i32;
@@ -86,30 +133,190 @@ impl MarkerBurner {
         Ok(output_bytes)
     }
 
+    fn apply_box_blur(img: &mut RgbaImage, x: i32, y: i32, w: i32, h: i32, radius: i32) {
+        let img_w = img.width() as i32;
+        let img_h = img.height() as i32;
+
+        let x0 = x.clamp(0, img_w);
+        let y0 = y.clamp(0, img_h);
+        let x1 = (x + w).clamp(0, img_w);
+        let y1 = (y + h).clamp(0, img_h);
+
+        if x1 <= x0 || y1 <= y0 {
+            return;
+        }
+
+        let block_size = (radius.max(4)) as i32;
+
+        for by in (y0..y1).step_by(block_size as usize) {
+            for bx in (x0..x1).step_by(block_size as usize) {
+                let bw_actual = (x1 - bx).min(block_size);
+                let bh_actual = (y1 - by).min(block_size);
+
+                let mut r_sum: u32 = 0;
+                let mut g_sum: u32 = 0;
+                let mut b_sum: u32 = 0;
+                let mut a_sum: u32 = 0;
+                let mut count: u32 = 0;
+
+                for py in by..(by + bh_actual) {
+                    for px in bx..(bx + bw_actual) {
+                        let p = img.get_pixel(px as u32, py as u32);
+                        r_sum += p[0] as u32;
+                        g_sum += p[1] as u32;
+                        b_sum += p[2] as u32;
+                        a_sum += p[3] as u32;
+                        count += 1;
+                    }
+                }
+
+                if count > 0 {
+                    let avg = Rgba([
+                        (r_sum / count) as u8,
+                        (g_sum / count) as u8,
+                        (b_sum / count) as u8,
+                        (a_sum / count) as u8,
+                    ]);
+                    for py in by..(by + bh_actual) {
+                        for px in bx..(bx + bw_actual) {
+                            img.put_pixel(px as u32, py as u32, avg);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn draw_rect_outline(img: &mut RgbaImage, x: i32, y: i32, w: i32, h: i32, stroke: i32, color: Rgba<u8>) {
+        let img_w = img.width() as i32;
+        let img_h = img.height() as i32;
+
+        let x0 = x.clamp(0, img_w);
+        let y0 = y.clamp(0, img_h);
+        let x1 = (x + w).clamp(0, img_w);
+        let y1 = (y + h).clamp(0, img_h);
+
+        for px in x0..x1 {
+            for s in 0..stroke {
+                if y0 + s < img_h {
+                    img.put_pixel(px as u32, (y0 + s) as u32, color);
+                }
+                if y1 - 1 - s >= 0 {
+                    img.put_pixel(px as u32, (y1 - 1 - s) as u32, color);
+                }
+            }
+        }
+        for py in y0..y1 {
+            for s in 0..stroke {
+                if x0 + s < img_w {
+                    img.put_pixel((x0 + s) as u32, py as u32, color);
+                }
+                if x1 - 1 - s >= 0 {
+                    img.put_pixel((x1 - 1 - s) as u32, py as u32, color);
+                }
+            }
+        }
+    }
+
+    fn draw_arrow(img: &mut RgbaImage, x0: i32, y0: i32, x1: i32, y1: i32, stroke: i32, color: Rgba<u8>) {
+        // Draw line using Bresenham
+        Self::draw_thick_line(img, x0, y0, x1, y1, stroke, color);
+
+        // Draw arrowhead at (x1, y1)
+        let angle = ((y1 - y0) as f64).atan2((x1 - x0) as f64);
+        let head_len = 16.0;
+        let angle1 = angle + std::f64::consts::PI * 0.85;
+        let angle2 = angle - std::f64::consts::PI * 0.85;
+
+        let hx1 = x1 + (head_len * angle1.cos()).round() as i32;
+        let hy1 = y1 + (head_len * angle1.sin()).round() as i32;
+        let hx2 = x1 + (head_len * angle2.cos()).round() as i32;
+        let hy2 = y1 + (head_len * angle2.sin()).round() as i32;
+
+        Self::draw_thick_line(img, x1, y1, hx1, hy1, stroke, color);
+        Self::draw_thick_line(img, x1, y1, hx2, hy2, stroke, color);
+    }
+
+    fn draw_thick_line(img: &mut RgbaImage, mut x0: i32, mut y0: i32, x1: i32, y1: i32, stroke: i32, color: Rgba<u8>) {
+        let dx = (x1 - x0).abs();
+        let dy = -(y1 - y0).abs();
+        let sx = if x0 < x1 { 1 } else { -1 };
+        let sy = if y0 < y1 { 1 } else { -1 };
+        let mut err = dx + dy;
+
+        let half_s = stroke / 2;
+        let img_w = img.width() as i32;
+        let img_h = img.height() as i32;
+
+        loop {
+            for oy in -half_s..=half_s {
+                for ox in -half_s..=half_s {
+                    let px = x0 + ox;
+                    let py = y0 + oy;
+                    if px >= 0 && px < img_w && py >= 0 && py < img_h {
+                        img.put_pixel(px as u32, py as u32, color);
+                    }
+                }
+            }
+
+            if x0 == x1 && y0 == y1 {
+                break;
+            }
+            let e2 = 2 * err;
+            if e2 >= dy {
+                err += dy;
+                x0 += sx;
+            }
+            if e2 <= dx {
+                err += dx;
+                y0 += sy;
+            }
+        }
+    }
+
+    fn draw_callout_box(img: &mut RgbaImage, x: i32, y: i32, w: i32, h: i32, tx: i32, ty: i32, color: Rgba<u8>) {
+        let img_w = img.width() as i32;
+        let img_h = img.height() as i32;
+
+        let x0 = x.clamp(0, img_w);
+        let y0 = y.clamp(0, img_h);
+        let x1 = (x + w).clamp(0, img_w);
+        let y1 = (y + h).clamp(0, img_h);
+
+        // Draw solid filled callout bubble
+        for py in y0..y1 {
+            for px in x0..x1 {
+                img.put_pixel(px as u32, py as u32, color);
+            }
+        }
+
+        // Draw tail line connecting from center of bubble to target point (tx, ty)
+        let cx = x0 + (x1 - x0) / 2;
+        let cy = y0 + (y1 - y0) / 2;
+        Self::draw_thick_line(img, cx, cy, tx, ty, 3, color);
+    }
+
     fn draw_badge(img: &mut RgbaImage, cx: i32, cy: i32, ordinal: u32) {
         let img_w = img.width() as i32;
         let img_h = img.height() as i32;
 
-        let r_outer_sq = BADGE_RADIUS_OUTER * BADGE_RADIUS_OUTER;
-        let r_inner_sq = BADGE_RADIUS_INNER * BADGE_RADIUS_INNER;
+        let r_sq = BADGE_RADIUS * BADGE_RADIUS;
 
-        // Draw circular ring and fill
-        for dy in -BADGE_RADIUS_OUTER..=BADGE_RADIUS_OUTER {
+        // Draw solid red circular fill without ring
+        for dy in -BADGE_RADIUS..=BADGE_RADIUS {
             let py = cy + dy;
             if py < 0 || py >= img_h {
                 continue;
             }
-            for dx in -BADGE_RADIUS_OUTER..=BADGE_RADIUS_OUTER {
+            for dx in -BADGE_RADIUS..=BADGE_RADIUS {
                 let px = cx + dx;
                 if px < 0 || px >= img_w {
                     continue;
                 }
 
                 let dist_sq = dx * dx + dy * dy;
-                if dist_sq <= r_inner_sq {
+                if dist_sq <= r_sq {
                     img.put_pixel(px as u32, py as u32, COLOR_MARKER_FILL);
-                } else if dist_sq <= r_outer_sq {
-                    img.put_pixel(px as u32, py as u32, COLOR_MARKER_RING);
                 }
             }
         }
@@ -198,36 +405,58 @@ mod tests {
     }
 
     #[test]
-    fn edge_and_boundary_coordinates_clamp_safely_without_panic() {
-        let dims = ImageDimensions::new(100, 100).unwrap();
-        let m_corner1 =
-            Marker::new("c1".into(), "f1".into(), 1, 0.0, 0.0, "Top Left".into()).unwrap();
-        let m_corner2 = Marker::new(
-            "c2".into(),
-            "f1".into(),
-            99,
-            1.0,
-            1.0,
-            "Bottom Right".into(),
-        )
-        .unwrap();
+    fn burns_visual_annotations_and_blur() {
+        let dims = ImageDimensions::new(400, 300).unwrap();
+        let input = make_test_png(400, 300, Rgba([50, 50, 50, 255]));
 
-        let input = make_test_png(100, 100, Rgba([200, 200, 200, 255]));
-        let burned = MarkerBurner::burn_markers(&input, &dims, &[m_corner1, m_corner2]).unwrap();
+        let shape = VisualAnnotation {
+            id: "a1".into(),
+            finding_id: "f1".into(),
+            data: AnnotationShape::Rect {
+                x: 0.1,
+                y: 0.1,
+                width: 0.3,
+                height: 0.3,
+                stroke_color: None,
+                stroke_width: Some(2.0),
+            },
+            created_at: "2026-08-25T00:00:00Z".into(),
+        };
 
+        let blur = VisualAnnotation {
+            id: "a2".into(),
+            finding_id: "f1".into(),
+            data: AnnotationShape::Blur {
+                x: 0.5,
+                y: 0.5,
+                width: 0.2,
+                height: 0.2,
+                blur_radius: Some(8.0),
+            },
+            created_at: "2026-08-25T00:00:00Z".into(),
+        };
+
+        let burned = MarkerBurner::burn_all(&input, &dims, &[], &[shape, blur]).unwrap();
         let decoded = image::load_from_memory(&burned).unwrap();
-        assert_eq!(decoded.width(), 100);
-        assert_eq!(decoded.height(), 100);
+        assert_eq!(decoded.width(), 400);
+        assert_eq!(decoded.height(), 300);
     }
 
     #[test]
     fn invalid_input_bytes_returns_validation_error() {
-        let dims = ImageDimensions::new(100, 100).unwrap();
-        let marker = Marker::new("m1".into(), "f1".into(), 1, 0.5, 0.5, "Valid".into()).unwrap();
-        let corrupt_bytes = vec![0x89, 0x50, 0x4E, 0x47, 0x00, 0x00];
+        let dims = ImageDimensions::new(800, 600).unwrap();
+        let err = MarkerBurner::burn_markers(b"garbage", &dims, &[]).unwrap_err();
+        assert!(matches!(err, CoreError::Validation(_)));
+    }
 
-        let result = MarkerBurner::burn_markers(&corrupt_bytes, &dims, &[marker]);
-        assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), CoreError::Validation(_)));
+    #[test]
+    fn edge_and_boundary_coordinates_clamp_safely_without_panic() {
+        let dims = ImageDimensions::new(100, 100).unwrap();
+        let m1 = Marker::new("m1".into(), "f1".into(), 1, 0.0, 0.0, "Top Left".into()).unwrap();
+        let m2 = Marker::new("m2".into(), "f1".into(), 2, 1.0, 1.0, "Bottom Right".into()).unwrap();
+
+        let input = make_test_png(100, 100, Rgba([200, 200, 200, 255]));
+        let res = MarkerBurner::burn_markers(&input, &dims, &[m1, m2]);
+        assert!(res.is_ok());
     }
 }

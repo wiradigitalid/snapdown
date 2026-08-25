@@ -266,6 +266,7 @@ impl FindingStore for SqliteFindingStore {
             finding,
             note,
             markers,
+            visual_annotations: vec![],
         }))
     }
 
@@ -367,6 +368,7 @@ impl FindingStore for SqliteFindingStore {
                 finding,
                 note,
                 markers,
+                visual_annotations: vec![],
             });
         }
 
