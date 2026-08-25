@@ -259,7 +259,7 @@ impl RegionCapturer {
 
             let current_pid = GetCurrentProcessId();
 
-            // Try modern Windows UI Automation first (detects exact sub-panels, ribbons, tabs, sidebar panels)
+            // Try modern Windows UI Automation with Container-Level walking
             let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
             let uia_result: windows::core::Result<IUIAutomation> =
                 CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER);
@@ -268,15 +268,49 @@ impl RegionCapturer {
                 if let Ok(element) = automation.ElementFromPoint(pt) {
                     if let Ok(elem_pid) = element.CurrentProcessId() {
                         if (elem_pid as u32) != current_pid {
-                            if let Ok(rect) = element.CurrentBoundingRectangle() {
-                                let w = (rect.right - rect.left).max(0) as u32;
-                                let h = (rect.bottom - rect.top).max(0) as u32;
+                            // Find meaningful panel / viewport / toolbar container by inspecting element and its immediate ancestors
+                            let mut best_region: Option<Region> = None;
+                            let mut current_elem = Some(element);
 
-                                // Filter out full screen container root elements
-                                if w >= 24 && h >= 24 && (w < 3800 || h < 2100) {
-                                    CoUninitialize();
-                                    return Some(Region::new(rect.left, rect.top, w, h));
+                            let mut depth = 0;
+                            while let Some(elem) = current_elem {
+                                if depth > 6 {
+                                    break;
                                 }
+                                depth += 1;
+
+                                if let Ok(rect) = elem.CurrentBoundingRectangle() {
+                                    let w = (rect.right - rect.left).max(0) as u32;
+                                    let h = (rect.bottom - rect.top).max(0) as u32;
+
+                                    // Check if this container represents a meaningful UI section (e.g. web body, toolbar, split pane, card)
+                                    // Minimum size 64x40 to avoid tiny icon buttons/links, maximum under full screen canvas (w < 3800 || h < 2100)
+                                    if w >= 64 && h >= 40 && (w < 3800 || h < 2100) {
+                                        // Pick the most direct meaningful container
+                                        if best_region.is_none() {
+                                            best_region =
+                                                Some(Region::new(rect.left, rect.top, w, h));
+                                            // If it's already a sizeable content pane (like web body or document), return it immediately
+                                            if w >= 200 && h >= 150 {
+                                                CoUninitialize();
+                                                return best_region;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Walk up to parent container
+                                let tree_walker = automation.ControlViewWalker();
+                                current_elem = if let Ok(walker) = tree_walker {
+                                    walker.GetParentElement(&elem).ok()
+                                } else {
+                                    None
+                                };
+                            }
+
+                            if let Some(reg) = best_region {
+                                CoUninitialize();
+                                return Some(reg);
                             }
                         }
                     }
