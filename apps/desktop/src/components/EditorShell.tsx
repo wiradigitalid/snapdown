@@ -35,6 +35,19 @@ export const EditorShell: React.FC<EditorShellProps> = ({
   activeFindingTitle = 'No finding selected',
   children,
 }) => {
+  const [theme, setTheme] = React.useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('snapdown-theme') as 'light' | 'dark') || 'light';
+  });
+
+  React.useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('snapdown-theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
   const handleMinimize = async () => {
     try {
       const appWindow = getCurrentWebviewWindow();
@@ -92,6 +105,7 @@ export const EditorShell: React.FC<EditorShellProps> = ({
           userSelect: 'none',
           boxSizing: 'border-box',
           flexShrink: 0,
+          boxShadow: 'var(--shadow-sm)',
         }}
       >
         {/* Left Drag Region: Logo, Brand & Active Finding File Name */}
@@ -140,6 +154,30 @@ export const EditorShell: React.FC<EditorShellProps> = ({
 
         {/* Right Action Buttons (Icon Only) & Window Controls */}
         <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+          <button
+            type="button"
+            data-testid="titlebar-theme-btn"
+            data-tooltip={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            onClick={toggleTheme}
+            style={{
+              width: '28px',
+              height: '24px',
+              padding: 0,
+              fontSize: '0.85rem',
+              backgroundColor: 'transparent',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-xs)',
+              color: 'var(--color-text)',
+              cursor: 'pointer',
+              marginRight: 'var(--space-2)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
+
           {onOpenHistory && (
             <button
               type="button"

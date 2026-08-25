@@ -37,8 +37,8 @@ export const StudioRibbon: React.FC<StudioRibbonProps> = ({
       className={`studio-ribbon ${className}`.trim()}
       style={{
         height: '56px',
-        backgroundColor: 'var(--snagit-ribbon-bg)',
-        borderBottom: '1px solid var(--snagit-ribbon-border)',
+        backgroundColor: 'var(--color-surface)',
+        borderBottom: '1px solid var(--color-border)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
