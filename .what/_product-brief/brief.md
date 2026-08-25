@@ -57,9 +57,7 @@ which knows that a note and an image are one thing.
 
 One uninterrupted loop, then one handoff.
 
-**Capture.** A global hotkey dims the screen. Drag a region. On release, a small note field appears
-at the region — type the finding, press save. The overlay closes and the screen is yours again. Do
-it again immediately; nothing has stolen focus and nothing had to be opened.
+**Capture.** A global hotkey dims the screen. Precision crosshair guides, a magnifying loupe with live pixel grid/color readout, and intelligent auto-detection of windows and sub-panels (with dynamic cutout highlighting and a top-center Fullscreen shortcut) assist the Reviewer. The Reviewer can 1-click select a detected window/panel or drag a custom region, and re-select prior to saving. On release, a small note field appears at the region — type the finding, press save. The overlay closes and the screen is yours again. Do it again immediately; nothing has stolen focus and nothing had to be opened.
 
 **Compose.** The Snapdown Editor holds every finding taken so far, each as an image with its note.
 Notes are editable. Numbered markers can be placed on an image, and placing marker `3` creates line
@@ -168,7 +166,7 @@ nobody can measure, and its own Cost section admits as much.
 ### Scope In
 
 - Windows 11 desktop application, installable and runnable without an account.
-- Region-select screen capture behind a user-editable global hotkey.
+- Region-select screen capture behind a user-editable global hotkey, featuring full-screen precision crosshair guides, pixel loupe magnifier with live dimensions, smart window/panel auto-detection with dynamic cutout preview, and top-center Fullscreen shortcut.
 - A note per capture, written at capture time and editable afterwards.
 - Numbered markers on an image, bound to numbered lines in that finding's note.
 - Automatic downscale and re-encode on capture, under settings the user controls.

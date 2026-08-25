@@ -90,16 +90,23 @@ capabilities:
     component: settings
     target_release: r3
     prd: capture-to-markdown
+  - id: CAP-10
+    title: Precision crosshair guides, magnifying loupe, and intelligent window/panel auto-detection
+    goal: BG-7
+    component: finding
+    target_release: r3
+    prd: capture-to-markdown
 
 functional:
-  # --- CAP-1 Capture -----------------------------------------------------------------
+  # --- CAP-1 & CAP-10 Capture --------------------------------------------------------
   - id: FR-1
-    title: Capture a screen region from a global hotkey
+    title: Capture a screen region from a global hotkey with precision guides and auto-detection
     capability: CAP-1
     component: finding
     writes: [Finding]
-    proof: From a maximised third-party window, pressing the hotkey dims all screens, and dragging
-      a box then releasing produces an image of exactly that region.
+    proof: From a maximised third-party window, pressing the hotkey dims all screens, shows full-screen
+      crosshair guides and pixel loupe, auto-detects window/panel boundaries with dynamic cutout preview,
+      and allows 1-click container selection or drag selection.
   - id: FR-2
     title: Write the Note at capture time
     capability: CAP-1

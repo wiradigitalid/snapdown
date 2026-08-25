@@ -50,30 +50,45 @@ inventory already named (rows 2 and 7) that had no build unit behind them.
 
 ### Capture Overlay (`LC-001`) and note field (`LC-029`)
 
-One transparent, always-on-top window per monitor. No chrome, no title, no toolbar.
+One transparent, always-on-top window per monitor. No chrome, no title, no toolbar. Features full-screen crosshair axes, floating pixel loupe with live pixel grid/dimensions, smart container/panel auto-detection with dynamic un-dimmed cutout preview, and top-center Fullscreen shortcut.
 
 ```
-        ╔═════════════════════════════════╗
-  dim   ║   the selected region, sharp    ║   dim
-        ╚═════════════════════════════════╝
-              1408 × 620          ← readout, --font-mono
-        ┌─────────────────────────────────┐
-        │ What is wrong here?             │  ← LC-029, anchored beneath
-        └─────────────────────────────────┘
+                    [ 🖥️ Fullscreen ] (Top-Center)
+────────────────────────────────────────────────────────────
+              │ (Vertical Full-Screen Crosshair Guide)
+              │
+    ┌─────────┼─────────────────────────────────┐
+    │ PANEL / WINDOW DETECTED                   │
+    │ (Un-dimmed Sharp Preview)                 │
+    │                                           │
+────┼─────────● (Cursor) ───────────────────────┼───────────
+    │         │ (Circular Loupe Magnifier 6x)   │ (Horizontal Guide)
+    │        [417 × 1192 px]                    │
+    └───────────────────────────────────────────┘
+              (Rest of screen remains dimmed)
+
+        ╔═══════════════════════════════════════╗
+  dim   ║   selected region (1-click or drag)   ║   dim
+        ╚═══════════════════════════════════════╝
+              1408 × 620 px (16:9)  ← readout, --font-mono
+        ┌───────────────────────────────────────┐
+        │ What is wrong here?                   │  ← LC-029, anchored beneath
+        └───────────────────────────────────────┘
               Enter to save · Esc to cancel
 ```
 
-- The readout sits **outside** the region, never over the content being captured.
-- The note field anchors beneath the region, and flips above it when the region is near the screen
-  foot. It never covers the thing being described.
-- The hint line is `--text-xs`, `--color-text-muted`, and is the only instruction anywhere in the
-  capture path.
+- The readout sits **outside** the region, never over the content being captured. During drag, standard aspect ratios (16:9, 4:3, 1:1, 21:9) are automatically tagged.
+- Top-center button `[ 🖥️ Fullscreen ]` enables 1-click capture of the active monitor.
+- Smart auto-detection highlights top-level windows and sub-panels as un-dimmed cutouts; 1-click on a highlighted container selects it immediately.
+- Re-selection is supported: clicking or dragging elsewhere before saving instantly selects a new region without requiring dismiss.
+- The note field anchors beneath the region, and flips above it when the region is near the screen foot. It never covers the thing being described.
+- The hint line is `--text-xs`, `--color-text-muted`, and is the only instruction anywhere in the capture path.
 
 | State | Rendering |
 |---|---|
-| Armed | Full dim, crosshair cursor, readout follows the pointer |
-| Dragging | Region undimmed with `--overlay-region-ring`; readout tracks the region |
-| Narrating | Region stays lit, note field focused |
+| Armed | Full-screen crosshair axes, pixel loupe magnifier near pointer, auto-detect container cutout highlights, top-center Fullscreen button |
+| Dragging | Region undimmed with `--overlay-region-ring`; full-screen crosshairs track pointer; readout tracks region with aspect ratio tag |
+| Narrating | Region stays lit, note field focused, crosshairs/loupe unmounted, re-selection enabled by clicking/dragging outside |
 | Saving | Overlay already dismissed. Reduction runs behind it (`NFR-2`) |
 | Error | Overlay gone; a `Toast` with `--color-danger` names the Vault folder and offers Settings |
 

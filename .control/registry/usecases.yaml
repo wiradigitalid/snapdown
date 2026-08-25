@@ -6,7 +6,7 @@
 usecases:
   # --- finding ----------------------------------------------------------------------
   - id: UC-1
-    title: I press a key, box the thing that is wrong, and say what is wrong with it
+    title: I press a key, use precision crosshair/loupe or 1-click window/panel auto-detect, and say what is wrong with it
     actor: Reviewer
     component: finding
     satisfies: [FR-1, FR-2]

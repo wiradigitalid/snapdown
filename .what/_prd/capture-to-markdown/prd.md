@@ -134,38 +134,37 @@ file in the same pass.
 
 ### 4.1 Capture
 
-**Capability:** CAP-1 — serves BG-2.
+**Capability:** CAP-1, CAP-10 — serves BG-2, BG-7.
 
-**Description:** A global hotkey puts a Capture Overlay on every monitor. The Reviewer drags a
-rectangle; on release, a compact Note field appears anchored to the rectangle, pre-focused. Saving
-stores the Finding and dismisses the overlay, returning focus to whatever had it before. The loop is
-designed to be run six times in ninety seconds, so nothing in it opens a window, steals focus
-afterwards, or requires a decision the Reviewer did not come to make. Realizes UJ-1.
+**Description:** A global hotkey puts a Capture Overlay on every monitor. Precision crosshair guides, a magnifying loupe with live pixel grid/color readout, and intelligent auto-detection of windows and sub-panels (with dynamic cutout highlighting and a top-center Fullscreen shortcut) assist the Reviewer. The Reviewer can 1-click select a detected window/panel or drag a custom region, and re-select prior to saving. On release, a compact Note field appears anchored to the rectangle, pre-focused. Saving stores the Finding and dismisses the overlay, returning focus to whatever had it before. The loop is designed to be run six times in ninety seconds, so nothing in it opens a window, steals focus afterwards, or requires a decision the Reviewer did not come to make. Realizes UJ-1.
 
-The Editor does **not** open after a Capture. A toast confirms the save, shows the running count of
-Findings, and offers an action to open the Editor.
+The Editor does **not** open after a Capture. A toast confirms the save, shows the running count of Findings, and offers an action to open the Editor.
 `[ASSUMPTION: not auto-opening is what the Reviewer wants; a setting exists precisely because this may be wrong.]`
 
 **Functional Requirements:**
 
 #### FR-1: Capture a screen region from a global hotkey
 
-The Reviewer can press a system-wide hotkey, from inside any application, and get a Capture Overlay
-on every connected monitor on which they can drag out a rectangular region. Realizes UJ-1.
+The Reviewer can press a system-wide hotkey, from inside any application, and get a Capture Overlay on every connected monitor on which they can select or drag out a rectangular region. Realizes UJ-1.
 
-**Proof of done:** From a maximised third-party window, pressing the hotkey dims all screens, and
-dragging a box then releasing produces an image of exactly that region.
+**Proof of done:** From a maximised third-party window, pressing the hotkey dims all screens, and selecting a detected window/panel or dragging a box then releasing produces an image of exactly that region.
 
 **Consequences (testable):**
 - The overlay covers every connected monitor, including monitors with different scale factors.
+- Full-screen crosshair guide lines follow the pointer across the entire monitor canvas during targeting and dragging.
+- A circular pixel loupe magnifier displays a magnified view (6x-8x) with pixel grid and live dimensions readout near the pointer.
+- Moving the mouse over top-level windows and sub-panels highlights the detected container with an un-dimmed cutout preview.
+- Clicking once on a highlighted container selects that exact rectangle without requiring manual dragging.
+- Clicking the top-center Fullscreen button selects the entire active monitor area.
+- Clicking or dragging elsewhere before saving allows re-selecting the region seamlessly.
 - The selected region's dimensions are shown while dragging.
 - Pressing Escape at any point before saving dismisses the overlay and writes nothing.
 - A region smaller than 8 × 8 pixels is refused rather than saved.
 - The hotkey works while another application has focus and without administrator rights.
 
 **Out of Scope:**
-- Window-picking, full-screen shortcuts, and scrolling capture.
-- Capturing a specific monitor by index without dragging.
+- Video, GIF, and scrolling capture.
+- Capturing a specific monitor by index without dragging or clicking.
 
 #### FR-2: Write the Note at capture time
 

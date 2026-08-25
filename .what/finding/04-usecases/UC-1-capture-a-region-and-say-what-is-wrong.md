@@ -21,13 +21,12 @@ choice, or the shipped default, so this holds on a fresh install (BR-28).
 ## Main Flow
 
 1. The Reviewer presses the Capture hotkey.
-2. Snapdown dims every connected monitor and shows a crosshair on the one under the pointer.
-3. The Reviewer drags a rectangle around the thing that is wrong; Snapdown shows its pixel dimensions
-   while they drag.
-4. The Reviewer releases.
-5. Snapdown captures exactly that region, and shows a focused note field anchored to it.
-6. The Reviewer types what is wrong with it.
-7. The Reviewer saves, from the keyboard alone if they choose.
+2. Snapdown dims every connected monitor, renders full-screen crosshair guides and a pixel loupe magnifier (6x-8x) with live dimensions, and auto-detects windows/sub-panels with un-dimmed cutout highlighting.
+3. The Reviewer either clicks once on a highlighted container, clicks the top-center Fullscreen button, or drags a custom rectangle; Snapdown shows pixel dimensions and aspect ratio tags (16:9, 4:3, 1:1, 21:9).
+4. The Reviewer releases or clicks to commit the region.
+5. Snapdown highlights the selected region, and shows a focused note field anchored to it.
+6. The Reviewer types what is wrong with it (or re-selects another region by clicking/dragging elsewhere).
+7. The Reviewer saves (Enter key or Save button), from the keyboard alone if they choose.
 8. Snapdown stores the Finding, closes the overlay, returns focus to the window that had it, and shows
    a transient toast with the running count of Findings.
 

@@ -46,7 +46,7 @@ Eight Logical Components, all in `desktop-app`. Registered in `.control/registry
 
 | LC | type | Responsibility |
 | --- | --- | --- |
-| LC-001 `capture-overlay` | ui-composite | One transparent window per monitor. Owns the crosshair, the dimming, the selection rectangle, the live dimensions readout, and the note field that appears on release. Destroyed on save or cancel |
+| LC-001 `capture-overlay` | ui-composite | One transparent window per monitor. Owns the full-screen crosshair guides, pixel loupe magnifier, smart window/panel auto-detection, dynamic cutout preview, top-center Fullscreen button, region selection rectangle, live dimensions with aspect ratio tag, and the note field. Destroyed on save or cancel |
 | LC-002 `region-capturer` | service | Turns a selected rectangle in overlay coordinates into pixels, at the monitor's own scale factor. Owns the DPI conversion and nothing else |
 | LC-003 `image-reducer` | service | Applies the Quality Budget: downscale to the long edge, re-encode lossily, write to the Vault. The only place either happens (AD-4) |
 | LC-004 `finding-store` | store | `finding`, `note`, and `marker` rows. Owns every transaction over them, including the renumber |

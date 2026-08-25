@@ -34,7 +34,7 @@ describe('CaptureOverlay Component (Screen 1 & 2)', () => {
     });
 
     const readout = screen.getByTestId('dimensions-readout');
-    expect(readout).toHaveTextContent('200 × 150 px');
+    expect(readout).toHaveTextContent('200 × 150 px (4:3)');
 
     // Mouse up commits selection and enters Narrating
     fireEvent.mouseUp(overlay);
@@ -131,6 +131,26 @@ describe('CaptureOverlay Component (Screen 1 & 2)', () => {
 
     expect(screen.getByText('Region must be at least 8x8 pixels')).toBeInTheDocument();
     expect(captureService.captureScreenRegion).not.toHaveBeenCalled();
+  });
+
+  it('renders precision crosshairs, loupe magnifier, and fullscreen button in armed phase (SPEC-w9)', () => {
+    render(<CaptureOverlay />);
+
+    expect(screen.getByTestId('overlay-fullscreen-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('crosshair-axis-vertical')).toBeInTheDocument();
+    expect(screen.getByTestId('crosshair-axis-horizontal')).toBeInTheDocument();
+    expect(screen.getByTestId('capture-loupe-magnifier')).toBeInTheDocument();
+  });
+
+  it('clicking fullscreen button selects viewport and enters narrating phase (SPEC-w9)', () => {
+    render(<CaptureOverlay />);
+
+    const fullscreenBtn = screen.getByTestId('overlay-fullscreen-btn');
+    fireEvent.click(fullscreenBtn);
+
+    const noteField = screen.getByTestId('capture-note-field');
+    expect(noteField).toBeInTheDocument();
+    expect(screen.queryByTestId('overlay-fullscreen-btn')).not.toBeInTheDocument();
   });
 
   it('dismisses overlay on Escape key press (BR-32)', async () => {

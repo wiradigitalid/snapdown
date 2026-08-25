@@ -24,10 +24,11 @@ sequenceDiagram
     W->>H: hotkey pressed
     H->>O: capture requested
     Note over O: NFR-1 — visible within 200 ms,<br/>across three monitors
-    O->>O: dim every monitor, crosshair on the active one
-    O->>O: Reviewer drags; live W x H readout
-    O->>N: region released with area
-    N->>N: Reviewer types, presses Enter
+    O->>O: dim every monitor, full-screen crosshair guides + pixel loupe magnifier
+    O->>O: auto-detect windows/sub-panels with dynamic cutout preview (or top-center Fullscreen)
+    O->>O: Reviewer 1-clicks detected container or drags region; live W x H + aspect ratio readout
+    O->>N: region committed
+    N->>N: Reviewer types (or re-selects new region), presses Enter
     N->>C: region + note
     C->>O: dismiss
     Note over O: NFR-2 — dismissed and focus returned<br/>within 500 ms. Everything below is after this.

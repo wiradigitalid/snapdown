@@ -265,6 +265,8 @@ snapdown/
 | CAP-6 Settings | `apps/desktop/src-tauri` | AD-6 |
 | CAP-7 Local agent access | `apps/desktop/src-tauri` Local API, `snapdown-mcp` | AD-5, AD-7, AD-9 |
 | CAP-8 Web sharing | `apps/desktop` publish client, `web/api`, `web/ui` | AD-5, AD-6, AD-7, AD-8, AD-9 |
+| CAP-9 The surface itself | `apps/desktop/src`, `web/ui/src` | AD-10, AD-11 |
+| CAP-10 Precision guides & auto-detection | `snapdown-capture`, `apps/desktop/src` | AD-2, AD-10 |
 
 ## Deferred
 
