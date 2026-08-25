@@ -229,7 +229,11 @@ pub fn get_monitor_snapshot(source_monitor: Option<String>) -> Result<String, St
         .map_err(|e| e.to_string())?;
 
     let mut bytes = Vec::new();
-    let encoder = image::codecs::png::PngEncoder::new(&mut bytes);
+    let encoder = image::codecs::png::PngEncoder::new_with_quality(
+        &mut bytes,
+        image::codecs::png::CompressionType::Fast,
+        image::codecs::png::FilterType::NoFilter,
+    );
     image::ImageEncoder::write_image(
         encoder,
         image.as_raw(),

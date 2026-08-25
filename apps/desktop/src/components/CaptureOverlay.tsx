@@ -57,6 +57,32 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
   const [snapshotSrc, setSnapshotSrc] = useState<string | null>(null);
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const imageObjRef = React.useRef<HTMLImageElement | null>(null);
+  const rafRef = React.useRef<number | null>(null);
+
+  const renderLoupeAtPos = useCallback((clientX: number, clientY: number) => {
+    if (!canvasRef.current || !imageObjRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const img = imageObjRef.current;
+    const dpr = typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 1.0;
+
+    const sampleSize = 12;
+    const srcX = Math.round(clientX * dpr - (sampleSize * dpr) / 2);
+    const srcY = Math.round(clientY * dpr - (sampleSize * dpr) / 2);
+    const srcW = Math.round(sampleSize * dpr);
+    const srcH = Math.round(sampleSize * dpr);
+
+    try {
+      ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, canvas.width, canvas.height);
+    } catch {
+      // Ignored
+    }
+  }, []);
 
   const fetchSnapshot = useCallback(async () => {
     try {
@@ -169,41 +195,25 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    setMousePos({ x: e.clientX, y: e.clientY });
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+    setMousePos({ x: clientX, y: clientY });
 
     if (drag.isDragging) {
       setDrag((prev) => ({
         ...prev,
-        currentX: e.clientX,
-        currentY: e.clientY,
+        currentX: clientX,
+        currentY: clientY,
       }));
     }
 
-    // Live Loupe Canvas Render
-    if (canvasRef.current && imageObjRef.current) {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.imageSmoothingEnabled = false;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        const img = imageObjRef.current;
-        const dpr = typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 1.0;
-
-        // Sample 12x12 logical pixels around cursor
-        const sampleSize = 12;
-        const srcX = Math.round(e.clientX * dpr - (sampleSize * dpr) / 2);
-        const srcY = Math.round(e.clientY * dpr - (sampleSize * dpr) / 2);
-        const srcW = Math.round(sampleSize * dpr);
-        const srcH = Math.round(sampleSize * dpr);
-
-        try {
-          ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, canvas.width, canvas.height);
-        } catch {
-          // Ignored
-        }
-      }
+    // High-performance 60 FPS live loupe sampling using requestAnimationFrame
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
     }
+    rafRef.current = requestAnimationFrame(() => {
+      renderLoupeAtPos(clientX, clientY);
+    });
   };
 
   const handleMouseUp = () => {
