@@ -231,6 +231,7 @@ Deliberately excluded by the owner, and therefore not a candidate at any later p
 erDiagram
     Finding ||--|| Note : "has exactly one"
     Finding ||--o{ Marker : "carries"
+    Finding ||--o{ VisualAnnotation : "carries visual overlays"
     Finding ||--o{ BundleItem : "appears as"
     Bundle  ||--o{ BundleItem : "is made of"
     Bundle  ||--o| Publication : "may have one"

@@ -331,16 +331,20 @@ pub fn crop_finding(
         .read_blob(&detail.finding.image_path)
         .map_err(|e| format!("Failed to read image blob: {e}"))?;
 
-    let img = image::load_from_memory(&raw_bytes)
-        .map_err(|e| format!("Failed to decode image: {e}"))?;
+    let img =
+        image::load_from_memory(&raw_bytes).map_err(|e| format!("Failed to decode image: {e}"))?;
 
     let orig_w = img.width();
     let orig_h = img.height();
 
     let crop_x = ((input.x * orig_w as f64).round() as u32).min(orig_w.saturating_sub(1));
     let crop_y = ((input.y * orig_h as f64).round() as u32).min(orig_h.saturating_sub(1));
-    let crop_w = ((input.width * orig_w as f64).round() as u32).max(1).min(orig_w - crop_x);
-    let crop_h = ((input.height * orig_h as f64).round() as u32).max(1).min(orig_h - crop_y);
+    let crop_w = ((input.width * orig_w as f64).round() as u32)
+        .max(1)
+        .min(orig_w - crop_x);
+    let crop_h = ((input.height * orig_h as f64).round() as u32)
+        .max(1)
+        .min(orig_h - crop_y);
 
     let cropped_img = image::imageops::crop_imm(&img, crop_x, crop_y, crop_w, crop_h).to_image();
 
@@ -364,7 +368,12 @@ pub fn crop_finding(
     // Update finding dimensions in database
     state
         .finding_store
-        .update_finding_image(&input.finding_id, &detail.finding.image_path, crop_w, crop_h)
+        .update_finding_image(
+            &input.finding_id,
+            &detail.finding.image_path,
+            crop_w,
+            crop_h,
+        )
         .map_err(|e| e.to_string())?;
 
     // Recalibrate markers relative to cropped area
@@ -376,9 +385,13 @@ pub fn crop_finding(
         let clamped_x = new_x.clamp(0.0, 1.0);
         let clamped_y = new_y.clamp(0.0, 1.0);
 
-        let _ = state
-            .finding_store
-            .update_marker(&input.finding_id, &marker.id, clamped_x, clamped_y, &marker.comment);
+        let _ = state.finding_store.update_marker(
+            &input.finding_id,
+            &marker.id,
+            clamped_x,
+            clamped_y,
+            &marker.comment,
+        );
     }
 
     let updated_detail = state
@@ -428,7 +441,9 @@ pub fn show_item_in_folder(image_path: String, state: State<AppState>) -> Result
 
     if !path.exists() {
         // Fall back to opening vault folder if specific file does not exist
-        let parent = path.parent().unwrap_or_else(|| std::path::Path::new(&vault_path));
+        let parent = path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new(&vault_path));
         #[cfg(target_os = "windows")]
         {
             let _ = std::process::Command::new("explorer").arg(parent).spawn();
@@ -452,7 +467,12 @@ pub fn show_item_in_folder(image_path: String, state: State<AppState>) -> Result
         let path_str = path.to_string_lossy().replace('/', "\\");
         let arg = format!("/select,\"{path_str}\"");
         let _ = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &format!("Start-Process explorer -ArgumentList '{arg}'")])
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                &format!("Start-Process explorer -ArgumentList '{arg}'"),
+            ])
             .spawn();
     }
 
@@ -466,10 +486,10 @@ pub fn show_item_in_folder(image_path: String, state: State<AppState>) -> Result
 
     #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     {
-        let parent = path.parent().unwrap_or_else(|| std::path::Path::new(&vault_path));
-        let _ = std::process::Command::new("xdg-open")
-            .arg(parent)
-            .spawn();
+        let parent = path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new(&vault_path));
+        let _ = std::process::Command::new("xdg-open").arg(parent).spawn();
     }
 
     Ok(())

@@ -52,7 +52,7 @@ Five Logical Components, all in `desktop-app`. Registered in `.control/registry/
 | --- | --- | --- |
 | LC-010 `bundle-composer` | service | The whole composition, as one transaction: read the Findings, burn the images, render the Markdown, write the rows and files. Refuses if any selected Finding's image is missing |
 | LC-011 `markdown-writer` | service | Turns Findings plus their Notes and Markers into the document shape `cross-cutting.md` § Bundle Markdown shape defines. Pure, and the only place that shape exists |
-| LC-012 `marker-burner` | service | Draws numbered badges into a copy of a Finding's image, at that image's own dimensions. Converts normalised coordinates to pixels here and nowhere else |
+| LC-012 `marker-burner` | service | Draws numbered badges and burns visual annotations (outlined Shapes, Callout bubbles with tails and text, Gaussian Blur redaction areas, directional Arrows, floating Text) into a copy of a Finding's image, at that image's own dimensions. Converts normalised coordinates to pixels here and nowhere else |
 | LC-013 `bundle-store` | store | `bundle` and `bundle_item` rows, and the Bundle's own files through `vault-blobs`. Owns the delete-with-files transaction |
 | LC-014 `bundles-editor` | ui-screen | The Bundle list, the Bundle detail view, compose, copy Markdown, delete |
 

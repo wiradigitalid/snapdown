@@ -59,6 +59,7 @@ BR-14 keeps an unbundled Finding invisible to both.
 | UC-6 | I pick out several findings at once | Reviewer | FR-9 | no |
 | UC-7 | I throw away the findings I am done with | Reviewer | FR-13 | yes |
 | UC-8 | I find out what has gone missing or been left behind | Reviewer | FR-15 | no |
+| UC-27 | I annotate a screenshot with visual shapes, arrows, callouts, text, or blur redaction | Reviewer | FR-30, FR-31, FR-32, FR-33 | no |
 
 One of eight is `critical`, and it is UC-7: deleting a Finding removes a file from disk and cannot be
 undone. FR-4 has no use case of its own and says so in the registry — image reduction has no actor and

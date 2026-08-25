@@ -139,33 +139,85 @@ list surfaces at a fixed height and leaves a third of the window dark beneath th
 `--color-text` landed on them — the white-on-white the Reviewer reported. **Resolved by `W6-S1` at
 `420ecce`**, and by the only fix that holds: no literal in the component at all (`NFR-17`).
 
-### Marker canvas (`LC-007`)
+### Canvas Annotation & Marker Layer (`LC-007`)
 
-A Marker is a `28px` disc: `--color-marker` fill, `--color-marker-text` numeral, `2px`
-`--color-marker-ring`. The ring is what keeps it legible over a dark screenshot and a light one, which
-is why the Marker group does not follow the app theme.
+The canvas supports structured numbered Markers (which bind to Markdown note lines) alongside rich visual markup elements (Shape, Callout, Blur, Arrow, Text) that render onto the image overlay without creating Markdown lines.
 
-| State | Rendering |
-|---|---|
-| Idle | Disc at its point |
-| Hover / focus | Ring thickens to `3px`; the matching note row highlights simultaneously |
-| Dragging | Disc follows the pointer at 80% opacity; the point beneath stays marked |
-| Unbound | The disc is unchanged; the **note pane** shows the mismatch. The image is the artifact that gets exported, so it never carries an app-only state |
+```
+┌─────────────────────────────────────────────────────────────┐
+│ [ ● Marker ] [ ▢ Shape ] [ 💬 Callout ] [ ░ Blur ] [ ↗ Arrow ] [ T Text ]  [ ↶ Undo ] [ ↷ Redo ]
+└─────────────────────────────────────────────────────────────┘
+┌─ canvas area ───────────────────────────────────────────────┐
+│                                                             │
+│       ┌─────────┐ (Shape: red outline, transparent fill)    │
+│       │ ▢       │                                           │
+│       └─────────┘                                           │
+│                 \                                           │
+│                  \ (Arrow: start handle & end arrowhead)    │
+│                   ↘                                         │
+│       ① (Numbered Marker: solid red circle, white num)      │
+│                                                             │
+│       [ ░░░░░░░░░ ] (Blur Redaction Box)                    │
+│                                                             │
+│       ┌──────────────────┐                                  │
+│       │ Custom Text      │╲                                 │
+│       └──────────────────┘ ╲ (Callout: text bubble + tail)  │
+│                             ●                               │
+│                                                             │
+│       Floating Text [Font: Inter / 16px]                    │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### Orphan report (`LC-030`)
+#### Canvas Interaction Model & Control Points
 
-A plain table: file, size, last seen. One action, Delete, confirmed once. Empty state — "Nothing
-orphaned" — is the state this screen should almost always be in, and it says so rather than looking
-broken.
+1. **Toolbar Controls**:
+   - Primary Tools: `Marker` (1), `Shape` (2), `Callout` (3), `Blur` (4), `Arrow` (5), `Text` (6).
+   - Global Actions: `Undo` (Ctrl+Z), `Redo` (Ctrl+Y), `Delete` (Del/Backspace).
+2. **Marker**:
+   - 28px solid red circle with bold white numeral in center (no border outline).
+   - Direct click places next sequential marker (e.g. 1, 2, 3) and appends line to Markdown note.
+   - Draggable central handle to reposition.
+3. **Shape (Rectangle Outline)**:
+   - Transparent fill with solid stroke (`--color-marker` default / red).
+   - Active state displays 8 bounding control handles (4 corners + 4 edge midpoints) for free proportional or edge resizing.
+   - Clicking and dragging interior moves/translates the shape.
+4. **Callout**:
+   - Text bubble container with custom background/border + adjustable pointer tail.
+   - Double-click inside bubble enters inline text editing mode.
+   - Property bar allows customizing font family and font size.
+   - Tail anchor features a dedicated circular control handle that can be dragged in 360 degrees to point at any target spot.
+   - 8-point handles on the bubble box for resizing the text area.
+5. **Blur (Redaction Box)**:
+   - Rectangular box that applies real-time Gaussian / pixelation shader over underlying screenshot pixels.
+   - 8-point resize handles for boundary adjustments.
+   - Burnt permanently into export PNGs to prevent leaking confidential tokens/PII.
+6. **Arrow / Line**:
+   - Directional vector line with distinct arrowhead at destination point.
+   - 2 primary control handles: Start point handle and End (head) point handle.
+   - Dragging handles repositions/rotates the arrow; dragging the line body translates the entire arrow.
+7. **Floating Text**:
+   - Borderless text block. Double-click enters inline typing.
+   - Editable font family, font size, and text color.
+   - Draggable bounding box to reposition anywhere on the screenshot.
+
+| Element | Control Handles | Markdown Binding? | Deletion / Manipulation |
+|---|---|:---:|---|
+| **Marker** | 1 Center drag point | **YES** | Delete removes note line & renumbers; drag updates coordinate |
+| **Shape** | 8 Box handles (Corners + Midpoints) | **NO** | Delete removes shape; handles resize; body drags |
+| **Callout** | 8 Box handles + 1 Tail point | **NO** | Delete removes callout; tail points; double-click edits text |
+| **Blur** | 8 Box handles | **NO** | Delete removes blur; handles resize; body drags |
+| **Arrow** | 2 Endpoints (Start + End head) | **NO** | Delete removes arrow; endpoints change direction/length; shaft drags |
+| **Text** | 4 Corner handles | **NO** | Delete removes text; double-click edits text; handles scale/reflow |
 
 ## Do's and don'ts for this surface
 
 **Do** keep the capture path to a crosshair, a readout, and one field.
 **Do** let the note pane be the keyboard path to every Marker.
 **Do** show dimensions and stored size where the Reviewer can see them.
+**Do** keep visual canvas annotations (Shape, Arrow, Callout, Text, Blur) strictly separate from Markdown finding notes.
 
-**Don't** add a tool palette, an arrow, a callout, a highlight, or a blur. Non-Goal in the PRD, and the
-same conclusion Cobalt Capture reached for the same audience.
+**Don't** mix visual annotations into the structured Markdown note lines — Markers remain the only structured finding bridges.
 **Don't** put chrome on the overlay. Every pixel of it is over the thing being described.
 **Don't** require the Editor for a capture.
 **Don't** write a literal colour in a component — this surface is where that habit did its damage.

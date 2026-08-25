@@ -96,6 +96,12 @@ capabilities:
     component: finding
     target_release: r3
     prd: capture-to-markdown
+  - id: CAP-11
+    title: Rich visual canvas annotations and privacy redactions
+    goal: BG-1
+    component: finding
+    target_release: r3
+    prd: capture-to-markdown
 
 functional:
   # --- CAP-1 & CAP-10 Capture --------------------------------------------------------
@@ -252,6 +258,38 @@ functional:
     writes: []
     proof: At the window's minimum supported size, every control on every primary surface is either
       visible or visibly indicated; nothing is discovered only by scrolling.
+  # --- CAP-11 Rich visual annotations ------------------------------------------------
+  - id: FR-30
+    title: Draw transparent outlined shapes and directional arrows on canvas
+    capability: CAP-11
+    component: finding
+    writes: [Finding]
+    proof: Selecting the shape tool and dragging creates a transparent rectangular box with an outline;
+      selecting arrow tool and dragging creates a directional arrow with movable start and end handles.
+      These elements can be moved, resized, and deleted, but do not produce lines in Markdown notes.
+  - id: FR-31
+    title: Draw blur redaction boxes over sensitive image regions
+    capability: CAP-11
+    component: finding
+    writes: [Finding]
+    proof: Selecting the blur tool and dragging over an area blurs the underlying screenshot pixels;
+      the blur box can be moved, resized, and deleted; burnt image output contains redacted pixels.
+  - id: FR-32
+    title: Place floating text and callout bubbles with font and tail controls
+    capability: CAP-11
+    component: finding
+    writes: [Finding]
+    proof: Floating text elements and callout bubbles can be placed, their text content edited inline,
+      font family and font size adjusted, callout tail pointer dragged to point at target spots, and
+      remain excluded from the Markdown note lines.
+  - id: FR-33
+    title: Transform and manipulate canvas annotation elements with interactive handles
+    capability: CAP-11
+    component: finding
+    writes: [Finding]
+    proof: Clicking any visual annotation or marker displays its interactive control points (8-point
+      resizing handles for boxes, start/end points for arrows, tail handle for callouts); pressing
+      Delete or Backspace removes the active element.
   # --- CAP-7 Local agent access ------------------------------------------------------
   - id: FR-19
     title: Issue and copy an Access Key

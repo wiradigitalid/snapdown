@@ -1,3 +1,4 @@
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use snapdown_capture::RegionCapturer;
 use snapdown_core::domain::finding::{Finding, Note, Region};
@@ -242,8 +243,30 @@ pub fn get_monitor_snapshot(source_monitor: Option<String>) -> Result<String, St
     )
     .map_err(|e| e.to_string())?;
 
-    let base64_str = format!("data:image/png;base64,{}", base64::encode(&bytes));
+    let base64_str = format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(&bytes)
+    );
     Ok(base64_str)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetectedRegionDto {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[tauri::command]
+pub fn detect_window_at_point(x: i32, y: i32) -> Result<Option<DetectedRegionDto>, String> {
+    let region_opt = RegionCapturer::detect_element_at_point(x, y);
+    Ok(region_opt.map(|r| DetectedRegionDto {
+        x: r.x,
+        y: r.y,
+        width: r.width,
+        height: r.height,
+    }))
 }
 
 #[tauri::command]

@@ -54,6 +54,15 @@
   --color-overlay-scrim: rgba(0, 0, 0, 0.82);
   --color-overlay-ring: #0284c7;
   --color-overlay-selection-bg: rgba(2, 132, 199, 0.18);
+  --color-overlay-loupe-bg: #000000;
+  --color-overlay-loupe-border: #ffffff;
+  --color-overlay-loupe-grid: rgba(255, 255, 255, 0.16);
+  --color-overlay-badge-bg: rgba(0, 0, 0, 0.95);
+  --color-overlay-badge-text: #ffffff;
+  --color-overlay-badge-border: rgba(255, 255, 255, 0.2);
+  --color-overlay-shadow: rgba(0, 0, 0, 0.8);
+  --color-overlay-shadow-heavy: rgba(0, 0, 0, 0.9);
+  --color-overlay-shadow-card: rgba(0, 0, 0, 0.4);
   /* Canvas checkerboard pattern for transparent areas */
   --canvas-checker: #e2e8f0;
 

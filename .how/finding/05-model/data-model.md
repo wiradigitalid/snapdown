@@ -13,6 +13,7 @@ As-built, read from `crates/snapdown-store/src/sqlite/migrations.rs` (migration 
 erDiagram
     finding ||--|| note : "exactly one"
     finding ||--o{ marker : "zero or more, contiguous from 1"
+    finding ||--o{ visual_annotation : "zero or more visual overlays"
     finding {
         TEXT id PK
         TEXT image_path
@@ -36,7 +37,24 @@ erDiagram
         REAL y
         TEXT comment
     }
+    visual_annotation {
+        TEXT id PK
+        TEXT finding_id FK
+        TEXT kind
+        TEXT properties_json
+        TEXT created_at
+    }
 ```
+
+## Dictionary — `visual_annotation`
+
+| Column | Type | Meaning |
+|---|---|---|
+| `id` | `TEXT` PK | UUIDv7 |
+| `finding_id` | `TEXT` FK, `ON DELETE CASCADE` | Finding this visual markup belongs to |
+| `kind` | `TEXT` | `shape`, `callout`, `blur`, `arrow`, `text` |
+| `properties_json` | `TEXT` | Normalized coordinates, dimensions, font size/family, tail points, stroke, text content |
+| `created_at` | `TEXT` | RFC 3339 UTC |
 
 ## Dictionary — `finding`
 

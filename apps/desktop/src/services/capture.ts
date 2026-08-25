@@ -34,3 +34,17 @@ export const dismissOverlay = async (): Promise<void> => {
 export const getMonitorSnapshot = async (sourceMonitor?: string): Promise<string> => {
   return await invoke<string>('get_monitor_snapshot', { sourceMonitor });
 };
+
+export interface DetectedRegionDto {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export const detectWindowAtPoint = async (
+  x: number,
+  y: number
+): Promise<DetectedRegionDto | null> => {
+  return await invoke<DetectedRegionDto | null>('detect_window_at_point', { x, y });
+};

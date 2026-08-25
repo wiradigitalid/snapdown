@@ -61,7 +61,10 @@ One uninterrupted loop, then one handoff.
 
 **Compose.** The Snapdown Editor holds every finding taken so far, each as an image with its note.
 Notes are editable. Numbered markers can be placed on an image, and placing marker `3` creates line
-`3.` in that finding's note, waiting for its sub-comment. Findings can be deleted, and when one goes
+`3.` in that finding's note, waiting for its sub-comment. The canvas also provides rich visual annotations
+and privacy redactions — outlined Shapes, draggable Arrows, Callout bubbles with adjustable tail points,
+floating Text with font customisation, and Blur redaction boxes — which are burnt into the visual image
+without polluting or altering the Markdown note structure. Findings can be deleted, and when one goes
 its image file goes with it.
 
 **Hand off.** Select the findings that belong to one concern and Snapdown writes them into one

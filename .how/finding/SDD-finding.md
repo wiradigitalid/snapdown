@@ -52,7 +52,7 @@ Eight Logical Components, all in `desktop-app`. Registered in `.control/registry
 | LC-004 `finding-store` | store | `finding`, `note`, and `marker` rows. Owns every transaction over them, including the renumber |
 | LC-005 `vault-blobs` | store | The Vault folder. Create, read, and delete a blob by relative path; refuses a path that escapes the Vault root |
 | LC-006 `findings-editor` | ui-screen | The Finding list and the detail view. Note editing, multi-select, delete confirmation, the orphan report |
-| LC-007 `marker-canvas` | ui-composite | Placing, dragging, and removing Markers over an image, in normalised coordinates (AD-3) |
+| LC-007 `marker-canvas` | ui-composite | Placing, dragging, resizing, and removing Markers (AD-3) alongside visual annotations (Shapes, Callouts, Blur redaction boxes, Arrows, floating Text) over an image |
 | LC-008 `orphan-sweeper` | service | Compares `finding_store` against `vault_blobs` in both directions. Reports; never deletes on its own |
 
 ```mermaid

@@ -1,4 +1,4 @@
-﻿use snapdown_core::domain::setting::HotkeyAction;
+use snapdown_core::domain::setting::HotkeyAction;
 use snapdown_core::ports::Clock;
 use snapdown_store::error::StoreError;
 use snapdown_store::sqlite::{
@@ -31,12 +31,13 @@ use commands::bundle::{
     copy_bundle_to_clipboard, create_bundle, delete_bundle, get_bundle_detail, list_bundles,
 };
 use commands::capture::{
-    capture_screen_region, dismiss_overlay, get_monitor_snapshot, trigger_overlay,
+    capture_screen_region, detect_window_at_point, dismiss_overlay, get_monitor_snapshot,
+    trigger_overlay,
 };
 use commands::finding::{
-    add_marker, clean_orphans, crop_finding, delete_finding, delete_marker, get_burned_image_base64,
-    get_finding_detail, import_image_data, list_findings, save_note, scan_orphans,
-    show_item_in_folder, update_marker,
+    add_marker, clean_orphans, crop_finding, delete_finding, delete_marker,
+    get_burned_image_base64, get_finding_detail, import_image_data, list_findings, save_note,
+    scan_orphans, show_item_in_folder, update_marker,
 };
 use commands::hotkey::{clear_hotkey, get_hotkeys, set_hotkey};
 use commands::settings::{
@@ -367,6 +368,7 @@ pub fn run() {
             get_startup_status,
             set_startup_status,
             capture_screen_region,
+            detect_window_at_point,
             trigger_overlay,
             dismiss_overlay,
             get_monitor_snapshot,

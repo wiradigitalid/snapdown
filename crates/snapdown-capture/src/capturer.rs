@@ -233,4 +233,163 @@ impl RegionCapturer {
 
         Ok(bytes)
     }
+
+    #[cfg(windows)]
+    pub fn detect_element_at_point(screen_x: i32, screen_y: i32) -> Option<Region> {
+        use windows::core::BOOL;
+        use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
+        use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
+        use windows::Win32::System::Com::{
+            CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
+            COINIT_APARTMENTTHREADED,
+        };
+        use windows::Win32::System::Threading::GetCurrentProcessId;
+        use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation};
+        use windows::Win32::UI::WindowsAndMessaging::{
+            EnumWindows, GetDesktopWindow, GetShellWindow, GetWindowLongW, GetWindowRect,
+            GetWindowThreadProcessId, IsIconic, IsWindowVisible, GWL_EXSTYLE, GWL_STYLE,
+            WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT,
+        };
+
+        unsafe {
+            let pt = POINT {
+                x: screen_x,
+                y: screen_y,
+            };
+
+            let current_pid = GetCurrentProcessId();
+
+            // Try modern Windows UI Automation first (detects exact sub-panels, ribbons, tabs, sidebar panels)
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+            let uia_result: windows::core::Result<IUIAutomation> =
+                CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER);
+
+            if let Ok(automation) = uia_result {
+                if let Ok(element) = automation.ElementFromPoint(pt) {
+                    if let Ok(elem_pid) = element.CurrentProcessId() {
+                        if (elem_pid as u32) != current_pid {
+                            if let Ok(rect) = element.CurrentBoundingRectangle() {
+                                let w = (rect.right - rect.left).max(0) as u32;
+                                let h = (rect.bottom - rect.top).max(0) as u32;
+
+                                // Filter out full screen container root elements
+                                if w >= 24 && h >= 24 && (w < 3800 || h < 2100) {
+                                    CoUninitialize();
+                                    return Some(Region::new(rect.left, rect.top, w, h));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            CoUninitialize();
+
+            // Fallback to Win32 Top-level and Child Window enumeration
+            let shell_hwnd = GetShellWindow();
+            let desktop_hwnd = GetDesktopWindow();
+
+            struct WindowSearch {
+                pt: POINT,
+                current_pid: u32,
+                shell_hwnd: HWND,
+                desktop_hwnd: HWND,
+                found_hwnd: Option<HWND>,
+                found_rect: Option<RECT>,
+            }
+
+            let mut search = WindowSearch {
+                pt,
+                current_pid,
+                shell_hwnd,
+                desktop_hwnd,
+                found_hwnd: None,
+                found_rect: None,
+            };
+
+            unsafe extern "system" fn enum_windows_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+                let search = &mut *(lparam.0 as *mut WindowSearch);
+
+                if !IsWindowVisible(hwnd).as_bool() || IsIconic(hwnd).as_bool() {
+                    return BOOL(1);
+                }
+
+                if hwnd == search.shell_hwnd || hwnd == search.desktop_hwnd {
+                    return BOOL(1);
+                }
+
+                let mut pid = 0u32;
+                GetWindowThreadProcessId(hwnd, Some(&mut pid));
+                if pid == search.current_pid {
+                    return BOOL(1);
+                }
+
+                let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
+                if (ex_style & WS_EX_TRANSPARENT.0 != 0) && (ex_style & WS_EX_TOOLWINDOW.0 != 0) {
+                    return BOOL(1);
+                }
+
+                let mut rect = RECT::default();
+                let dwm_res = DwmGetWindowAttribute(
+                    hwnd,
+                    DWMWA_EXTENDED_FRAME_BOUNDS,
+                    &mut rect as *mut _ as *mut _,
+                    std::mem::size_of::<RECT>() as u32,
+                );
+
+                if (dwm_res.is_err()
+                    || (rect.right - rect.left <= 0)
+                    || (rect.bottom - rect.top <= 0))
+                    && GetWindowRect(hwnd, &mut rect).is_err()
+                {
+                    return BOOL(1);
+                }
+
+                let w = (rect.right - rect.left).max(0);
+                let h = (rect.bottom - rect.top).max(0);
+                if w < 16 || h < 16 {
+                    return BOOL(1);
+                }
+
+                // Ignore full-desktop background cover windows
+                if rect.left <= 0 && rect.top <= 0 && w >= 3800 && h >= 2100 {
+                    let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
+                    if (style & 0x00C00000) == 0 {
+                        return BOOL(1);
+                    }
+                }
+
+                if search.pt.x >= rect.left
+                    && search.pt.x < rect.right
+                    && search.pt.y >= rect.top
+                    && search.pt.y < rect.bottom
+                {
+                    search.found_hwnd = Some(hwnd);
+                    search.found_rect = Some(rect);
+                    return BOOL(0);
+                }
+
+                BOOL(1)
+            }
+
+            let _ = EnumWindows(
+                Some(enum_windows_proc),
+                LPARAM(&mut search as *mut _ as isize),
+            );
+
+            let final_rect = search.found_rect?;
+            let width = (final_rect.right - final_rect.left).max(0) as u32;
+            let height = (final_rect.bottom - final_rect.top).max(0) as u32;
+
+            if width < 8 || height < 8 {
+                return None;
+            }
+
+            Some(Region::new(final_rect.left, final_rect.top, width, height))
+        }
+    }
+
+    #[cfg(not(windows))]
+    pub fn detect_element_at_point(_screen_x: i32, _screen_y: i32) -> Option<Region> {
+        None
+    }
 }

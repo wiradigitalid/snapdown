@@ -120,6 +120,13 @@ images cheap enough that a machine can afford to read them.
   - **Edge case:** the chosen hotkey is already taken by another process. Snapdown says so at the
     moment of choosing and refuses to save it, rather than failing silently later.
 
+- **UJ-5. Visual markup and redaction on canvas.**
+  - **Persona + context:** the Reviewer in Editor, holding a screenshot with confidential API keys and a complex UI layout.
+  - **Entry state:** Editor open, Finding selected on canvas.
+  - **Path:** selects Blur tool and drags a box over the API key line → selects Shape tool and drags a red outline box around a misaligned card → selects Arrow tool and drags an arrow from the callout text to the broken button → selects Callout tool and types a clarification note, adjusting its tail pointer.
+  - **Climax:** the screenshot now has crystal-clear visual cues and masked credentials, but the Finding's Note lines and Markdown export contain strictly the numbered findings.
+  - **Resolution:** burning and composing the Bundle includes the blurred and annotated image cleanly without note clutter.
+
 ## 3. Glossary
 
 Every domain noun this document uses is defined once in `.control/product-glossary.md` and used
@@ -558,13 +565,53 @@ either visible or visibly indicated; nothing is discovered only by scrolling.
   left roughly a third of the screen empty to do it.
 
 
+### 4.8 Canvas Visual Annotations and Privacy Redaction
+
+**Capability:** CAP-11 — serves BG-1, BG-7.
+
+**Description:** While numbered Markers serve as the single structured bridge between visual screenshots and numbered lines in Markdown notes, visual walkthroughs and bug reports frequently require drawing attention to specific components, guiding spatial flow, or masking sensitive data (passwords, tokens, customer emails). Snapdown supports five visual overlay elements: transparent outlined Shapes, directional Arrows, Callout bubbles with font/tail control, floating Text, and Blur redaction boxes. These elements are interactive, resizable, and rendered directly onto the burnt image files without producing lines in the Markdown notes. Realizes UJ-5.
+
+**Functional Requirements:**
+
+#### FR-30: Draw transparent outlined shapes and directional arrows on canvas
+The Reviewer can select a Shape tool (transparent fill with theme-accent outline) or an Arrow tool from the canvas toolbar, click-drag on the screenshot canvas to create it, and reposition or resize it.
+- **Proof of done:** Dragging a box produces a transparent rectangle with an outline; dragging an arrow produces a directional arrow from origin to release point. Both elements can be selected, moved, and deleted, and neither adds lines to the Markdown note.
+- **Consequences (testable):**
+  - Shape box has transparent fill and solid stroke border.
+  - Arrow has a start point, shaft line, and triangular arrow head at the end point.
+  - Active elements show transformation handles.
+  - Deleting via Delete/Backspace keyboard keys or context menu removes the element cleanly.
+
+#### FR-31: Draw blur redaction boxes over sensitive image regions
+The Reviewer can drag blur redaction boxes over confidential screen contents (credentials, PII, tokens).
+- **Proof of done:** Drawing a blur box immediately renders a blurred/pixelated preview over that rectangle on canvas, and burning the image permanently modifies those pixel values in the exported/saved image.
+- **Consequences (testable):**
+  - Underlying screenshot pixels are redacted in both visual display and final burnt PNG.
+  - Blur rectangle supports standard 8-point resizing and dragging handles.
+  - Multiple blur areas can overlap or exist independently.
+
+#### FR-32: Place floating text and callout bubbles with font and tail controls
+The Reviewer can add floating text labels or callout bubbles onto the canvas, edit the text content inline, and change font family and size.
+- **Proof of done:** Double-clicking text/callout enters inline editing; font size and family can be customized; callout tail anchor can be dragged to point to any spot; Markdown notes remain unchanged.
+- **Consequences (testable):**
+  - Callout consists of a text bubble container plus an adjustable pointer tail pointing to a target coordinate.
+  - Floating text has a transparent background with legible text fill.
+  - Font size and font family can be adjusted per text/callout element.
+  - Text contents are preserved across editor sessions.
+
+#### FR-33: Transform and manipulate canvas annotation elements with interactive handles
+The Reviewer can manipulate any placed canvas annotation element using visual control points.
+- **Proof of done:** Clicking an element highlights it with dedicated control handles (8 bounding box handles for Shape/Blur/Text/Callout body, 2 endpoints for Arrow, 1 tail point for Callout); dragging handles transforms the element.
+- **Consequences (testable):**
+  - Active state displays distinct resize/transform handles.
+  - Element can be moved by dragging within its bounds.
+  - Pressing Escape deselects the active element.
+  - Redo/Undo history is supported for canvas additions, moves, edits, and deletions.
+
 ## 5. Non-Goals (Explicit)
 
-- Snapdown is not a capture tool for a human audience. No arrows, no callouts, no blur, no
-  redaction, no freehand drawing, no effects. Numbered Markers are the only annotation, in this
-  release and after it.
-- Snapdown is not an image editor. Captured pixels are never cropped, rotated, or resized after
-  capture.
+- Visual annotation elements (Shapes, Arrows, Callouts, Text, Blur) MUST NOT generate or alter structured lines in Markdown notes. Numbered Markers remain the sole structured finding bindings.
+- Snapdown is not a full-blown graphics illustration app (no gradient mesh, freehand pencil drawings, Bézier path editors).
 - Snapdown does not read what is in a screenshot. No OCR, no classification, no auto-captioning. The
   Reviewer's judgement is the payload.
 - Snapdown is not a video or GIF recorder.

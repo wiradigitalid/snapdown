@@ -1,6 +1,11 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { captureScreenRegion, dismissOverlay, CaptureResultDto } from '../services/capture';
+import {
+  captureScreenRegion,
+  detectWindowAtPoint,
+  dismissOverlay,
+  CaptureResultDto,
+} from '../services/capture';
 import { CaptureNoteField } from './CaptureNoteField';
 
 export interface CaptureOverlayProps {
@@ -25,7 +30,7 @@ interface RegionRect {
   height: number;
 }
 
-export function formatAspectRatioTag(width: number, height: number): string {
+function formatAspectRatioTag(width: number, height: number): string {
   if (width <= 0 || height <= 0) return '';
   const ratio = width / height;
 
@@ -54,10 +59,40 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
   });
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [snapshotSrc, setSnapshotSrc] = useState<string | null>(null);
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const imageObjRef = React.useRef<HTMLImageElement | null>(null);
   const rafRef = React.useRef<number | null>(null);
+  const lastDetectTimeRef = React.useRef<number>(0);
+  const isDetectingRef = React.useRef<boolean>(false);
+
+  const detectContainerAtPos = useCallback(async (clientX: number, clientY: number) => {
+    const now = Date.now();
+    if (now - lastDetectTimeRef.current < 60 || isDetectingRef.current) return;
+    lastDetectTimeRef.current = now;
+    isDetectingRef.current = true;
+
+    try {
+      const dpr = typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 1.0;
+      const physicalX = Math.round(clientX * dpr);
+      const physicalY = Math.round(clientY * dpr);
+
+      const detected = await detectWindowAtPoint(physicalX, physicalY);
+      if (detected && detected.width >= 8 && detected.height >= 8) {
+        setHoveredContainer({
+          x: Math.round(detected.x / dpr),
+          y: Math.round(detected.y / dpr),
+          width: Math.round(detected.width / dpr),
+          height: Math.round(detected.height / dpr),
+        });
+      } else {
+        setHoveredContainer(null);
+      }
+    } catch {
+      // Ignored outside Tauri / desktop backend
+    } finally {
+      isDetectingRef.current = false;
+    }
+  }, []);
 
   const renderLoupeAtPos = useCallback((clientX: number, clientY: number) => {
     if (!canvasRef.current || !imageObjRef.current) return;
@@ -93,7 +128,6 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
       setTimeout(async () => {
         const base64Data = await getMonitorSnapshot();
         if (base64Data) {
-          setSnapshotSrc(base64Data);
           const img = new Image();
           img.src = base64Data;
           img.onload = () => {
@@ -210,6 +244,9 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
         currentX: clientX,
         currentY: clientY,
       }));
+    } else if (phase === 'armed') {
+      // Auto-detect window/panel under cursor for 1-click suggestion
+      detectContainerAtPos(clientX, clientY);
     }
 
     // High-performance 60 FPS live loupe sampling using requestAnimationFrame
@@ -308,6 +345,9 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
     currentBox.width > 0 &&
     currentBox.height > 0;
 
+  const showSuggestedCutout =
+    phase === 'armed' && hoveredContainer && !showSelectionBox;
+
   const showCrosshairGuides = phase === 'armed' || phase === 'dragging';
   const showFullscreenButton = phase === 'armed';
 
@@ -339,7 +379,8 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
         left: 0,
         width: '100vw',
         height: '100vh',
-        backgroundColor: showSelectionBox ? 'transparent' : 'var(--color-overlay-scrim)',
+        backgroundColor:
+          showSelectionBox || showSuggestedCutout ? 'transparent' : 'var(--color-overlay-scrim)',
         cursor: phase === 'armed' || phase === 'dragging' ? 'crosshair' : 'default',
         zIndex: 9999,
         userSelect: 'none',
@@ -427,9 +468,9 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
             width: '104px',
             height: '104px',
             borderRadius: '50%',
-            backgroundColor: '#000000',
+            backgroundColor: 'var(--color-overlay-loupe-bg)',
             border: '2.5px solid var(--color-overlay-ring)',
-            boxShadow: 'var(--shadow-xl), 0 0 0 1px rgba(0, 0, 0, 0.8)',
+            boxShadow: 'var(--shadow-xl), 0 0 0 1px var(--color-overlay-shadow)',
             overflow: 'visible',
             pointerEvents: 'none',
             display: 'flex',
@@ -446,7 +487,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
               borderRadius: '50%',
               overflow: 'hidden',
               position: 'relative',
-              backgroundColor: '#000000',
+              backgroundColor: 'var(--color-overlay-loupe-bg)',
             }}
           >
             {/* Live Raw Clean Image Canvas */}
@@ -469,8 +510,8 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
                 position: 'absolute',
                 inset: 0,
                 backgroundImage: `
-                  linear-gradient(to right, rgba(255, 255, 255, 0.16) 1px, transparent 1px),
-                  linear-gradient(to bottom, rgba(255, 255, 255, 0.16) 1px, transparent 1px)
+                  linear-gradient(to right, var(--color-overlay-loupe-grid) 1px, transparent 1px),
+                  linear-gradient(to bottom, var(--color-overlay-loupe-grid) 1px, transparent 1px)
                 `,
                 backgroundSize: '8px 8px',
                 pointerEvents: 'none',
@@ -487,7 +528,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
                 transform: 'translateX(-50%)',
                 width: '1.5px',
                 backgroundColor: 'var(--color-overlay-ring)',
-                boxShadow: '0 0 2px rgba(0, 0, 0, 0.9)',
+                boxShadow: '0 0 2px var(--color-overlay-shadow-heavy)',
                 zIndex: 2,
               }}
             />
@@ -502,7 +543,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
                 transform: 'translateY(-50%)',
                 height: '1.5px',
                 backgroundColor: 'var(--color-overlay-ring)',
-                boxShadow: '0 0 2px rgba(0, 0, 0, 0.9)',
+                boxShadow: '0 0 2px var(--color-overlay-shadow-heavy)',
                 zIndex: 2,
               }}
             />
@@ -516,16 +557,16 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
               bottom: '-22px',
               left: '50%',
               transform: 'translateX(-50%)',
-              backgroundColor: 'rgba(0, 0, 0, 0.95)',
-              color: '#ffffff',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
+              backgroundColor: 'var(--color-overlay-badge-bg)',
+              color: 'var(--color-overlay-badge-text)',
+              border: '1px solid var(--color-overlay-badge-border)',
               padding: '2px 8px',
               borderRadius: 'var(--radius-xs)',
               fontSize: '10px',
               fontFamily: 'var(--font-mono)',
               fontWeight: 700,
               whiteSpace: 'nowrap',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
+              boxShadow: '0 2px 6px var(--color-overlay-shadow)',
               zIndex: 10002,
             }}
           >
@@ -537,7 +578,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
       )}
 
       {/* Suggested Auto-Detect Container Cutout Box (FR-GUIDE-4) */}
-      {phase === 'armed' && hoveredContainer && (
+      {showSuggestedCutout && hoveredContainer && (
         <div
           data-testid="auto-detect-container-box"
           style={{
@@ -547,8 +588,8 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
             width: `${hoveredContainer.width}px`,
             height: `${hoveredContainer.height}px`,
             border: '2px dashed var(--color-overlay-ring)',
-            backgroundColor: 'rgba(255, 255, 255, 0.08)',
-            backdropFilter: 'brightness(1.2)',
+            backgroundColor: 'transparent',
+            boxShadow: '0 0 0 9999px var(--color-overlay-scrim)',
             pointerEvents: 'none',
             zIndex: 9999,
           }}
@@ -556,18 +597,22 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
           <span
             style={{
               position: 'absolute',
-              top: '-20px',
+              top: '-24px',
               left: '0',
               backgroundColor: 'var(--color-overlay-ring)',
-              color: '#ffffff',
-              padding: '1px 6px',
-              borderRadius: '2px',
-              fontSize: '10px',
+              color: 'var(--color-overlay-badge-text)',
+              padding: '2px 8px',
+              borderRadius: 'var(--radius-xs, 4px)',
+              fontSize: '11px',
               fontWeight: 700,
               fontFamily: 'var(--font-ui)',
+              boxShadow: '0 2px 6px var(--color-overlay-shadow-card)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
             }}
           >
-            Click to Capture Container
+            <span>🎯</span> Click to Capture Area ({hoveredContainer.width} × {hoveredContainer.height})
           </span>
         </div>
       )}
