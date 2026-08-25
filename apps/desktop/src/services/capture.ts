@@ -30,3 +30,7 @@ export const triggerOverlay = async (): Promise<void> => {
 export const dismissOverlay = async (): Promise<void> => {
   await invoke<void>('dismiss_overlay');
 };
+
+export const getMonitorSnapshot = async (sourceMonitor?: string): Promise<string> => {
+  return await invoke<string>('get_monitor_snapshot', { sourceMonitor });
+};

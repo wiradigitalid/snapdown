@@ -224,6 +224,26 @@ pub fn trigger_overlay(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn get_monitor_snapshot(source_monitor: Option<String>) -> Result<String, String> {
+    let (image, _w, _h) = RegionCapturer::capture_monitor_image(source_monitor.as_deref())
+        .map_err(|e| e.to_string())?;
+
+    let mut bytes = Vec::new();
+    let encoder = image::codecs::png::PngEncoder::new(&mut bytes);
+    image::ImageEncoder::write_image(
+        &encoder,
+        image.as_raw(),
+        image.width(),
+        image.height(),
+        image::ExtendedColorType::Rgba8,
+    )
+    .map_err(|e| e.to_string())?;
+
+    let base64_str = format!("data:image/png;base64,{}", base64::encode(&bytes));
+    Ok(base64_str)
+}
+
+#[tauri::command]
 pub fn dismiss_overlay(app: AppHandle) -> Result<(), String> {
     if let Some(overlay_win) = app.get_webview_window("overlay") {
         let _ = overlay_win.hide();

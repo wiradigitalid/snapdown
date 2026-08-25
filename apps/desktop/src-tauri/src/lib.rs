@@ -30,7 +30,9 @@ use commands::agent_access::{generate_access_key, get_access_key_status, revoke_
 use commands::bundle::{
     copy_bundle_to_clipboard, create_bundle, delete_bundle, get_bundle_detail, list_bundles,
 };
-use commands::capture::{capture_screen_region, dismiss_overlay, trigger_overlay};
+use commands::capture::{
+    capture_screen_region, dismiss_overlay, get_monitor_snapshot, trigger_overlay,
+};
 use commands::finding::{
     add_marker, clean_orphans, crop_finding, delete_finding, delete_marker, get_burned_image_base64,
     get_finding_detail, import_image_data, list_findings, save_note, scan_orphans,
@@ -367,6 +369,7 @@ pub fn run() {
             capture_screen_region,
             trigger_overlay,
             dismiss_overlay,
+            get_monitor_snapshot,
             list_findings,
             get_finding_detail,
             save_note,

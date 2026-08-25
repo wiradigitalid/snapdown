@@ -8,6 +8,84 @@ use crate::error::CaptureError;
 pub struct RegionCapturer;
 
 impl RegionCapturer {
+    pub fn capture_monitor_image(
+        source_monitor: Option<&str>,
+    ) -> Result<(RgbaImage, u32, u32), CaptureError> {
+        let monitors = Monitor::all().map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("No display") || msg.contains("empty") {
+                CaptureError::NoDisplayFound
+            } else {
+                CaptureError::CaptureFailed(msg)
+            }
+        })?;
+
+        if monitors.is_empty() {
+            return Err(CaptureError::NoDisplayFound);
+        }
+
+        let target_monitor = if let Some(target_name) = source_monitor {
+            if target_name.is_empty() {
+                monitors
+                    .iter()
+                    .find(|m| m.is_primary().unwrap_or(false))
+                    .or_else(|| monitors.first())
+                    .ok_or(CaptureError::NoDisplayFound)?
+            } else {
+                monitors
+                    .iter()
+                    .find(|m| {
+                        if let Ok(name) = m.name() {
+                            name.eq_ignore_ascii_case(target_name)
+                        } else {
+                            false
+                        }
+                    })
+                    .or_else(|| {
+                        monitors.iter().find(|m| {
+                            if let Ok(name) = m.name() {
+                                name.contains(target_name) || target_name.contains(&name)
+                            } else {
+                                false
+                            }
+                        })
+                    })
+                    .or_else(|| {
+                        if target_name.eq_ignore_ascii_case("DISPLAY1")
+                            || target_name.starts_with("DISPLAY")
+                        {
+                            monitors
+                                .iter()
+                                .find(|m| m.is_primary().unwrap_or(false))
+                                .or_else(|| monitors.first())
+                        } else {
+                            None
+                        }
+                    })
+                    .ok_or_else(|| CaptureError::MonitorNotFound(target_name.to_string()))?
+            }
+        } else {
+            monitors
+                .iter()
+                .find(|m| m.is_primary().unwrap_or(false))
+                .or_else(|| monitors.first())
+                .ok_or(CaptureError::NoDisplayFound)?
+        };
+
+        let mon_w = target_monitor
+            .width()
+            .map_err(|e| CaptureError::CaptureFailed(e.to_string()))?;
+        let mon_h = target_monitor
+            .height()
+            .map_err(|e| CaptureError::CaptureFailed(e.to_string()))?;
+
+        let full_image = target_monitor
+            .capture_image()
+            .map_err(|e| CaptureError::CaptureFailed(e.to_string()))?;
+
+        Ok((full_image, mon_w, mon_h))
+    }
+
     pub fn capture_region(
         region: &Region,
         source_monitor: Option<&str>,

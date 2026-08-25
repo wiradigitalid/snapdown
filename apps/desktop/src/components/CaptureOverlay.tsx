@@ -54,6 +54,27 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
   });
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const [snapshotSrc, setSnapshotSrc] = useState<string | null>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const imageObjRef = React.useRef<HTMLImageElement | null>(null);
+
+  const fetchSnapshot = useCallback(async () => {
+    try {
+      const { getMonitorSnapshot } = await import('../services/capture');
+      const base64Data = await getMonitorSnapshot();
+      if (base64Data) {
+        setSnapshotSrc(base64Data);
+        const img = new Image();
+        img.src = base64Data;
+        img.onload = () => {
+          imageObjRef.current = img;
+        };
+      }
+    } catch {
+      // Ignored outside Tauri or in headless tests
+    }
+  }, []);
+
   const resetState = useCallback(() => {
     setPhase('armed');
     setNote('');
@@ -103,11 +124,13 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
       document.documentElement.setAttribute('data-theme', savedTheme);
     };
     syncTheme();
+    fetchSnapshot();
 
     let unlistenFn: (() => void) | undefined;
     try {
       const promise = listen('overlay-reset', () => {
         syncTheme();
+        fetchSnapshot();
         resetState();
       });
       promise.then((fn) => {
@@ -122,7 +145,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
         unlistenFn();
       }
     };
-  }, [resetState]);
+  }, [fetchSnapshot, resetState]);
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0) return; // Left mouse button only
@@ -154,6 +177,32 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
         currentX: e.clientX,
         currentY: e.clientY,
       }));
+    }
+
+    // Live Loupe Canvas Render
+    if (canvasRef.current && imageObjRef.current) {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const img = imageObjRef.current;
+        const dpr = typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 1.0;
+
+        // Sample 12x12 logical pixels around cursor
+        const sampleSize = 12;
+        const srcX = Math.round(e.clientX * dpr - (sampleSize * dpr) / 2);
+        const srcY = Math.round(e.clientY * dpr - (sampleSize * dpr) / 2);
+        const srcW = Math.round(sampleSize * dpr);
+        const srcH = Math.round(sampleSize * dpr);
+
+        try {
+          ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, canvas.width, canvas.height);
+        } catch {
+          // Ignored
+        }
+      }
     }
   };
 
@@ -362,7 +411,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
             width: '96px',
             height: '96px',
             borderRadius: '50%',
-            backgroundColor: '#ffffff',
+            backgroundColor: '#000000',
             border: '2.5px solid var(--color-overlay-ring)',
             boxShadow: 'var(--shadow-xl)',
             overflow: 'hidden',
@@ -373,31 +422,44 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
             zIndex: 10001,
           }}
         >
-          {/* High-Contrast 8x Pixelated Grid Viewport & Central Reticle */}
-          <div
+          {/* Live Zoom Canvas beneath Cursor */}
+          <canvas
+            ref={canvasRef}
+            width={96}
+            height={96}
             style={{
               width: '100%',
               height: '100%',
+              imageRendering: 'pixelated',
+              position: 'absolute',
+              inset: 0,
+            }}
+          />
+
+          {/* High-Contrast 8x Pixelated Grid Overlay & Central Reticle */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
               backgroundImage: `
-                linear-gradient(to right, rgba(15, 23, 42, 0.14) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(15, 23, 42, 0.14) 1px, transparent 1px)
+                linear-gradient(to right, rgba(255, 255, 255, 0.18) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.18) 1px, transparent 1px)
               `,
-              backgroundSize: '10px 10px',
-              backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              backgroundSize: '8px 8px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              position: 'relative',
+              pointerEvents: 'none',
             }}
           >
             {/* Center target crosshair square targeting exact 1 pixel */}
             <div
               style={{
-                width: '10px',
-                height: '10px',
+                width: '8px',
+                height: '8px',
                 border: '1.5px solid var(--color-snagit-red)',
-                backgroundColor: 'rgba(239, 68, 68, 0.35)',
-                boxShadow: '0 0 2px rgba(0, 0, 0, 0.5)',
+                backgroundColor: 'rgba(239, 68, 68, 0.4)',
+                boxShadow: '0 0 2px rgba(0, 0, 0, 0.8)',
               }}
             />
           </div>
