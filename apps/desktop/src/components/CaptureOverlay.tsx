@@ -89,15 +89,18 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
     if (imageObjRef.current) return;
     try {
       const { getMonitorSnapshot } = await import('../services/capture');
-      const base64Data = await getMonitorSnapshot();
-      if (base64Data) {
-        setSnapshotSrc(base64Data);
-        const img = new Image();
-        img.src = base64Data;
-        img.onload = () => {
-          imageObjRef.current = img;
-        };
-      }
+      // Fetch in background microtask so mouse listeners & click events never freeze
+      setTimeout(async () => {
+        const base64Data = await getMonitorSnapshot();
+        if (base64Data) {
+          setSnapshotSrc(base64Data);
+          const img = new Image();
+          img.src = base64Data;
+          img.onload = () => {
+            imageObjRef.current = img;
+          };
+        }
+      }, 50);
     } catch {
       // Ignored outside Tauri or in headless tests
     }
