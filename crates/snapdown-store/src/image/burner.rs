@@ -69,7 +69,14 @@ impl MarkerBurner {
 
         // 1. Burn Blur Redaction Layers first
         for ann in annotations {
-            if let AnnotationShape::Blur { x, y, width, height, blur_radius } = &ann.data {
+            if let AnnotationShape::Blur {
+                x,
+                y,
+                width,
+                height,
+                blur_radius,
+            } = &ann.data
+            {
                 let bx = (x * dimensions.width as f64).round() as i32;
                 let by = (y * dimensions.height as f64).round() as i32;
                 let bw = (width * dimensions.width as f64).round() as i32;
@@ -82,7 +89,14 @@ impl MarkerBurner {
         // 2. Burn Vector Shapes & Arrows
         for ann in annotations {
             match &ann.data {
-                AnnotationShape::Rect { x, y, width, height, stroke_width, .. } => {
+                AnnotationShape::Rect {
+                    x,
+                    y,
+                    width,
+                    height,
+                    stroke_width,
+                    ..
+                } => {
                     let rx = (x * dimensions.width as f64).round() as i32;
                     let ry = (y * dimensions.height as f64).round() as i32;
                     let rw = (width * dimensions.width as f64).round() as i32;
@@ -90,7 +104,14 @@ impl MarkerBurner {
                     let sw = stroke_width.unwrap_or(3.0) as i32;
                     Self::draw_rect_outline(&mut image_rgba, rx, ry, rw, rh, sw, COLOR_MARKER_FILL);
                 }
-                AnnotationShape::Arrow { start_x, start_y, end_x, end_y, stroke_width, .. } => {
+                AnnotationShape::Arrow {
+                    start_x,
+                    start_y,
+                    end_x,
+                    end_y,
+                    stroke_width,
+                    ..
+                } => {
                     let x0 = (start_x * dimensions.width as f64).round() as i32;
                     let y0 = (start_y * dimensions.height as f64).round() as i32;
                     let x1 = (end_x * dimensions.width as f64).round() as i32;
@@ -98,14 +119,24 @@ impl MarkerBurner {
                     let sw = stroke_width.unwrap_or(4.0) as i32;
                     Self::draw_arrow(&mut image_rgba, x0, y0, x1, y1, sw, COLOR_MARKER_FILL);
                 }
-                AnnotationShape::Callout { x, y, width, height, tail_x, tail_y, .. } => {
+                AnnotationShape::Callout {
+                    x,
+                    y,
+                    width,
+                    height,
+                    tail_x,
+                    tail_y,
+                    ..
+                } => {
                     let cx = (x * dimensions.width as f64).round() as i32;
                     let cy = (y * dimensions.height as f64).round() as i32;
                     let cw = (width * dimensions.width as f64).round() as i32;
                     let ch = (height * dimensions.height as f64).round() as i32;
                     let tx = (tail_x * dimensions.width as f64).round() as i32;
                     let ty = (tail_y * dimensions.height as f64).round() as i32;
-                    Self::draw_callout_box(&mut image_rgba, cx, cy, cw, ch, tx, ty, COLOR_MARKER_FILL);
+                    let rect_box = [cx, cy, cw, ch];
+                    let tail = [tx, ty];
+                    Self::draw_callout_box(&mut image_rgba, rect_box, tail, COLOR_MARKER_FILL);
                 }
                 _ => {}
             }
@@ -146,7 +177,7 @@ impl MarkerBurner {
             return;
         }
 
-        let block_size = (radius.max(4)) as i32;
+        let block_size = radius.max(4);
 
         for by in (y0..y1).step_by(block_size as usize) {
             for bx in (x0..x1).step_by(block_size as usize) {
@@ -170,13 +201,13 @@ impl MarkerBurner {
                     }
                 }
 
-                if count > 0 {
-                    let avg = Rgba([
-                        (r_sum / count) as u8,
-                        (g_sum / count) as u8,
-                        (b_sum / count) as u8,
-                        (a_sum / count) as u8,
-                    ]);
+                if let (Some(r), Some(g), Some(b), Some(a)) = (
+                    r_sum.checked_div(count),
+                    g_sum.checked_div(count),
+                    b_sum.checked_div(count),
+                    a_sum.checked_div(count),
+                ) {
+                    let avg = Rgba([r as u8, g as u8, b as u8, a as u8]);
                     for py in by..(by + bh_actual) {
                         for px in bx..(bx + bw_actual) {
                             img.put_pixel(px as u32, py as u32, avg);
@@ -187,7 +218,15 @@ impl MarkerBurner {
         }
     }
 
-    fn draw_rect_outline(img: &mut RgbaImage, x: i32, y: i32, w: i32, h: i32, stroke: i32, color: Rgba<u8>) {
+    fn draw_rect_outline(
+        img: &mut RgbaImage,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        stroke: i32,
+        color: Rgba<u8>,
+    ) {
         let img_w = img.width() as i32;
         let img_h = img.height() as i32;
 
@@ -218,7 +257,15 @@ impl MarkerBurner {
         }
     }
 
-    fn draw_arrow(img: &mut RgbaImage, x0: i32, y0: i32, x1: i32, y1: i32, stroke: i32, color: Rgba<u8>) {
+    fn draw_arrow(
+        img: &mut RgbaImage,
+        x0: i32,
+        y0: i32,
+        x1: i32,
+        y1: i32,
+        stroke: i32,
+        color: Rgba<u8>,
+    ) {
         // Draw line using Bresenham
         Self::draw_thick_line(img, x0, y0, x1, y1, stroke, color);
 
@@ -237,7 +284,15 @@ impl MarkerBurner {
         Self::draw_thick_line(img, x1, y1, hx2, hy2, stroke, color);
     }
 
-    fn draw_thick_line(img: &mut RgbaImage, mut x0: i32, mut y0: i32, x1: i32, y1: i32, stroke: i32, color: Rgba<u8>) {
+    fn draw_thick_line(
+        img: &mut RgbaImage,
+        mut x0: i32,
+        mut y0: i32,
+        x1: i32,
+        y1: i32,
+        stroke: i32,
+        color: Rgba<u8>,
+    ) {
         let dx = (x1 - x0).abs();
         let dy = -(y1 - y0).abs();
         let sx = if x0 < x1 { 1 } else { -1 };
@@ -274,7 +329,9 @@ impl MarkerBurner {
         }
     }
 
-    fn draw_callout_box(img: &mut RgbaImage, x: i32, y: i32, w: i32, h: i32, tx: i32, ty: i32, color: Rgba<u8>) {
+    fn draw_callout_box(img: &mut RgbaImage, rect: [i32; 4], tail: [i32; 2], color: Rgba<u8>) {
+        let [x, y, w, h] = rect;
+        let [tx, ty] = tail;
         let img_w = img.width() as i32;
         let img_h = img.height() as i32;
 
