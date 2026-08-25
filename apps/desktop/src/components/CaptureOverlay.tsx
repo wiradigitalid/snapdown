@@ -382,7 +382,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
       {/* Full-Screen Precision Crosshair Guides (FR-GUIDE-1) */}
       {showCrosshairGuides && (
         <>
-          {/* Vertical axis guide with thicker solid center near cursor */}
+          {/* Vertical axis guide */}
           <div
             data-testid="crosshair-axis-vertical"
             style={{
@@ -392,25 +392,13 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
               left: `${mousePos.x}px`,
               width: '1px',
               borderLeft: '1px dashed var(--color-overlay-ring)',
-              opacity: 0.75,
-              pointerEvents: 'none',
-              zIndex: 10000,
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              top: `${Math.max(0, mousePos.y - 48)}px`,
-              height: '96px',
-              left: `${mousePos.x - 0.5}px`,
-              width: '2px',
-              backgroundColor: 'var(--color-overlay-ring)',
+              opacity: 0.85,
               pointerEvents: 'none',
               zIndex: 10000,
             }}
           />
 
-          {/* Horizontal axis guide with thicker solid center near cursor */}
+          {/* Horizontal axis guide */}
           <div
             data-testid="crosshair-axis-horizontal"
             style={{
@@ -420,19 +408,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
               top: `${mousePos.y}px`,
               height: '1px',
               borderTop: '1px dashed var(--color-overlay-ring)',
-              opacity: 0.75,
-              pointerEvents: 'none',
-              zIndex: 10000,
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              left: `${Math.max(0, mousePos.x - 48)}px`,
-              width: '96px',
-              top: `${mousePos.y - 0.5}px`,
-              height: '2px',
-              backgroundColor: 'var(--color-overlay-ring)',
+              opacity: 0.85,
               pointerEvents: 'none',
               zIndex: 10000,
             }}
@@ -440,7 +416,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
         </>
       )}
 
-      {/* Circular Pixel Loupe Magnifier with Gold Crosshairs & Dimension Badge (Snagit-style) */}
+      {/* Circular Pixel Loupe Magnifier with Clean High-Contrast Ring & Dimension Badge */}
       {showCrosshairGuides && (
         <div
           data-testid="capture-loupe-magnifier"
@@ -451,9 +427,9 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
             width: '104px',
             height: '104px',
             borderRadius: '50%',
-            backgroundColor: '#111827',
-            border: '2px solid rgba(255, 255, 255, 0.85)',
-            boxShadow: 'var(--shadow-xl), 0 0 0 1px rgba(0, 0, 0, 0.6)',
+            backgroundColor: '#000000',
+            border: '2.5px solid var(--color-overlay-ring)',
+            boxShadow: 'var(--shadow-xl), 0 0 0 1px rgba(0, 0, 0, 0.8)',
             overflow: 'visible',
             pointerEvents: 'none',
             display: 'flex',
@@ -470,9 +446,10 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
               borderRadius: '50%',
               overflow: 'hidden',
               position: 'relative',
+              backgroundColor: '#000000',
             }}
           >
-            {/* Live Raw Snapshot Canvas */}
+            {/* Live Raw Clean Image Canvas */}
             <canvas
               ref={canvasRef}
               width={104}
@@ -492,15 +469,15 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
                 position: 'absolute',
                 inset: 0,
                 backgroundImage: `
-                  linear-gradient(to right, rgba(255, 255, 255, 0.18) 1px, transparent 1px),
-                  linear-gradient(to bottom, rgba(255, 255, 255, 0.18) 1px, transparent 1px)
+                  linear-gradient(to right, rgba(255, 255, 255, 0.16) 1px, transparent 1px),
+                  linear-gradient(to bottom, rgba(255, 255, 255, 0.16) 1px, transparent 1px)
                 `,
                 backgroundSize: '8px 8px',
                 pointerEvents: 'none',
               }}
             />
 
-            {/* Internal Gold Crosshair Guide Line (Vertical) */}
+            {/* Internal Precision Target Reticle (Vertical) */}
             <div
               style={{
                 position: 'absolute',
@@ -510,12 +487,12 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
                 transform: 'translateX(-50%)',
                 width: '1.5px',
                 backgroundColor: 'var(--color-overlay-ring)',
-                boxShadow: '0 0 2px rgba(0, 0, 0, 0.8)',
+                boxShadow: '0 0 2px rgba(0, 0, 0, 0.9)',
                 zIndex: 2,
               }}
             />
 
-            {/* Internal Gold Crosshair Guide Line (Horizontal) */}
+            {/* Internal Precision Target Reticle (Horizontal) */}
             <div
               style={{
                 position: 'absolute',
@@ -525,7 +502,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
                 transform: 'translateY(-50%)',
                 height: '1.5px',
                 backgroundColor: 'var(--color-overlay-ring)',
-                boxShadow: '0 0 2px rgba(0, 0, 0, 0.8)',
+                boxShadow: '0 0 2px rgba(0, 0, 0, 0.9)',
                 zIndex: 2,
               }}
             />
@@ -539,16 +516,16 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
               bottom: '-22px',
               left: '50%',
               transform: 'translateX(-50%)',
-              backgroundColor: 'rgba(0, 0, 0, 0.92)',
+              backgroundColor: 'rgba(0, 0, 0, 0.95)',
               color: '#ffffff',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
               padding: '2px 8px',
               borderRadius: 'var(--radius-xs)',
               fontSize: '10px',
               fontFamily: 'var(--font-mono)',
               fontWeight: 700,
               whiteSpace: 'nowrap',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.5)',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
               zIndex: 10002,
             }}
           >
