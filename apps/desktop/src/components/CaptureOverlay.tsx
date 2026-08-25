@@ -85,6 +85,8 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
   }, []);
 
   const fetchSnapshot = useCallback(async () => {
+    // If image snapshot already loaded in memory for this session, reuse immediately
+    if (imageObjRef.current) return;
     try {
       const { getMonitorSnapshot } = await import('../services/capture');
       const base64Data = await getMonitorSnapshot();

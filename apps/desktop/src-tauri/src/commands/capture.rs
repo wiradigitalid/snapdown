@@ -202,9 +202,9 @@ pub fn trigger_overlay(app: AppHandle) -> Result<(), String> {
     }
 
     if let Some(existing) = app.get_webview_window("overlay") {
-        let _ = existing.emit("overlay-reset", ());
         let _ = existing.show();
         let _ = existing.set_focus();
+        let _ = existing.emit("overlay-reset", ());
         return Ok(());
     }
 
