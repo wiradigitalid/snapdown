@@ -167,9 +167,8 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
       }
     }
 
-    // BR-31: Refuse regions smaller than 8x8 pixels
+    // If user merely clicked without dragging and no container was detected, stay armed silently without error toast
     if (width < 8 || height < 8) {
-      setErrorMsg('Region must be at least 8x8 pixels');
       setPhase('armed');
       setPendingRegion(null);
       return;
@@ -351,69 +350,47 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
             position: 'absolute',
             left: `${mousePos.x + loupeOffset.x}px`,
             top: `${mousePos.y + loupeOffset.y}px`,
-            width: '110px',
-            height: '110px',
+            width: '96px',
+            height: '96px',
             borderRadius: '50%',
-            backgroundColor: 'var(--color-surface)',
+            backgroundColor: '#ffffff',
             border: '2.5px solid var(--color-overlay-ring)',
             boxShadow: 'var(--shadow-xl)',
             overflow: 'hidden',
             pointerEvents: 'none',
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 10001,
           }}
         >
-          {/* Simulated 8x pixelated grid & central reticle */}
+          {/* High-Contrast 8x Pixelated Grid Viewport & Central Reticle */}
           <div
             style={{
               width: '100%',
               height: '100%',
-              background: `
-                radial-gradient(circle at center, transparent 3px, rgba(0,0,0,0.03) 4px),
-                linear-gradient(to right, rgba(0,0,0,0.08) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(0,0,0,0.08) 1px, transparent 1px)
+              backgroundImage: `
+                linear-gradient(to right, rgba(15, 23, 42, 0.14) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(15, 23, 42, 0.14) 1px, transparent 1px)
               `,
-              backgroundSize: '100% 100%, 8px 8px, 8px 8px',
+              backgroundSize: '10px 10px',
+              backgroundColor: 'rgba(255, 255, 255, 0.95)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               position: 'relative',
             }}
           >
-            {/* Center target crosshair */}
+            {/* Center target crosshair square targeting exact 1 pixel */}
             <div
               style={{
                 width: '10px',
                 height: '10px',
-                border: '1px solid var(--color-snagit-red)',
-                borderRadius: '1px',
-                backgroundColor: 'rgba(239, 68, 68, 0.25)',
+                border: '1.5px solid var(--color-snagit-red)',
+                backgroundColor: 'rgba(239, 68, 68, 0.35)',
+                boxShadow: '0 0 2px rgba(0, 0, 0, 0.5)',
               }}
             />
-
-            {/* Bottom Coordinate / Live Dimension Readout Badge */}
-            <div
-              data-testid="loupe-dimension-badge"
-              style={{
-                position: 'absolute',
-                bottom: '8px',
-                backgroundColor: 'rgba(15, 23, 42, 0.88)',
-                color: '#ffffff',
-                padding: '1px 6px',
-                borderRadius: 'var(--radius-xs)',
-                fontSize: '9px',
-                fontFamily: 'var(--font-mono)',
-                fontWeight: 700,
-                letterSpacing: '0.02em',
-              }}
-            >
-              {phase === 'dragging'
-                ? `${currentBox.width} × ${currentBox.height}`
-                : `${mousePos.x}, ${mousePos.y}`}
-            </div>
           </div>
         </div>
       )}
@@ -454,7 +431,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
         </div>
       )}
 
-      {/* Active Selection Bounding Box */}
+      {/* Active Selection Bounding Box with Clean Un-dimmed Cutout (No Inner Tint, 9999px Scrim Backdrop) */}
       {showSelectionBox && (
         <div
           data-testid="selection-box"
@@ -464,34 +441,36 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
             top: `${currentBox.y}px`,
             width: `${currentBox.width}px`,
             height: `${currentBox.height}px`,
-            border: '2px solid var(--color-overlay-ring)',
-            backgroundColor: 'var(--color-overlay-selection-bg)',
+            border: '2px dashed var(--color-overlay-ring)',
+            backgroundColor: 'transparent',
             pointerEvents: 'none',
-            boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.35)',
+            boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.65)',
+            zIndex: 10000,
           }}
         >
           <span
             data-testid="dimensions-readout"
             style={{
               position: 'absolute',
-              bottom: '-24px',
+              bottom: '-28px',
               left: '0px',
-              backgroundColor: 'var(--color-surface-sunken)',
-              color: 'var(--color-text)',
-              border: '1px solid var(--color-border)',
-              padding: 'var(--space-0) var(--space-2)',
+              backgroundColor: 'rgba(15, 23, 42, 0.92)',
+              color: '#ffffff',
+              border: '1px solid var(--color-overlay-ring)',
+              padding: '2px 8px',
               fontSize: 'var(--text-xs)',
               fontFamily: 'var(--font-mono)',
-              borderRadius: 'var(--radius-sm)',
+              borderRadius: 'var(--radius-xs)',
               whiteSpace: 'nowrap',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
+              boxShadow: 'var(--shadow-md)',
             }}
           >
             {currentBox.width} × {currentBox.height} px
             {aspectRatioTag && (
-              <span style={{ color: 'var(--color-accent)', fontWeight: 700 }}>
+              <span style={{ color: 'var(--color-marker)', fontWeight: 800 }}>
                 {aspectRatioTag}
               </span>
             )}

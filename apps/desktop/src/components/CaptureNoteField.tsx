@@ -31,17 +31,32 @@ export const CaptureNoteField: React.FC<CaptureNoteFieldProps> = ({
     textareaRef.current?.focus();
   }, []);
 
+  const isFullscreen =
+    typeof window !== 'undefined' &&
+    region.x === 0 &&
+    region.y === 0 &&
+    region.width >= window.innerWidth - 10 &&
+    region.height >= window.innerHeight - 10;
+
   const shouldFlip =
+    !isFullscreen &&
     typeof window !== 'undefined' &&
     region.y + region.height + FIELD_BLOCK_H + GAP > window.innerHeight;
 
-  const anchor = shouldFlip ? 'above' : 'below';
+  const anchor = isFullscreen ? 'center-bottom' : shouldFlip ? 'above' : 'below';
 
-  const top = shouldFlip
-    ? Math.max(0, region.y - FIELD_BLOCK_H - 8)
+  const top = isFullscreen
+    ? (typeof window !== 'undefined' ? window.innerHeight - FIELD_BLOCK_H - 48 : 800)
+    : shouldFlip
+    ? Math.max(16, region.y - FIELD_BLOCK_H - 8)
     : region.y + region.height + GAP;
 
-  const left = region.x;
+  const left = isFullscreen
+    ? (typeof window !== 'undefined' ? Math.max(16, (window.innerWidth - 380) / 2) : 100)
+    : Math.min(
+        typeof window !== 'undefined' ? window.innerWidth - 340 : region.x,
+        Math.max(16, region.x)
+      );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter') {

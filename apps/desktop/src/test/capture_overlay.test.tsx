@@ -119,7 +119,7 @@ describe('CaptureOverlay Component (Screen 1 & 2)', () => {
     expect(captureService.captureScreenRegion).not.toHaveBeenCalled();
   });
 
-  it('refuses selection smaller than 8x8 pixels (BR-31)', async () => {
+  it('refuses selection smaller than 8x8 pixels and resets cleanly without firing capture (BR-31)', async () => {
     render(<CaptureOverlay />);
 
     const overlay = screen.getByTestId('capture-overlay');
@@ -129,8 +129,8 @@ describe('CaptureOverlay Component (Screen 1 & 2)', () => {
     fireEvent.mouseMove(overlay, { clientX: 14, clientY: 14 });
     fireEvent.mouseUp(overlay);
 
-    expect(screen.getByText('Region must be at least 8x8 pixels')).toBeInTheDocument();
     expect(captureService.captureScreenRegion).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('capture-note-field')).not.toBeInTheDocument();
   });
 
   it('renders precision crosshairs, loupe magnifier, and fullscreen button in armed phase (SPEC-w9)', () => {
