@@ -382,7 +382,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
       {/* Full-Screen Precision Crosshair Guides (FR-GUIDE-1) */}
       {showCrosshairGuides && (
         <>
-          {/* Vertical axis guide */}
+          {/* Vertical axis guide with thicker solid center near cursor */}
           <div
             data-testid="crosshair-axis-vertical"
             style={{
@@ -392,12 +392,25 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
               left: `${mousePos.x}px`,
               width: '1px',
               borderLeft: '1px dashed var(--color-overlay-ring)',
-              opacity: 0.65,
+              opacity: 0.75,
               pointerEvents: 'none',
               zIndex: 10000,
             }}
           />
-          {/* Horizontal axis guide */}
+          <div
+            style={{
+              position: 'absolute',
+              top: `${Math.max(0, mousePos.y - 48)}px`,
+              height: '96px',
+              left: `${mousePos.x - 0.5}px`,
+              width: '2px',
+              backgroundColor: 'var(--color-overlay-ring)',
+              pointerEvents: 'none',
+              zIndex: 10000,
+            }}
+          />
+
+          {/* Horizontal axis guide with thicker solid center near cursor */}
           <div
             data-testid="crosshair-axis-horizontal"
             style={{
@@ -407,7 +420,19 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
               top: `${mousePos.y}px`,
               height: '1px',
               borderTop: '1px dashed var(--color-overlay-ring)',
-              opacity: 0.65,
+              opacity: 0.75,
+              pointerEvents: 'none',
+              zIndex: 10000,
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              left: `${Math.max(0, mousePos.x - 48)}px`,
+              width: '96px',
+              top: `${mousePos.y - 0.5}px`,
+              height: '2px',
+              backgroundColor: 'var(--color-overlay-ring)',
               pointerEvents: 'none',
               zIndex: 10000,
             }}
@@ -415,7 +440,7 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
         </>
       )}
 
-      {/* Circular Pixel Loupe Magnifier (FR-GUIDE-2) */}
+      {/* Circular Pixel Loupe Magnifier with Gold Crosshairs & Dimension Badge (Snagit-style) */}
       {showCrosshairGuides && (
         <div
           data-testid="capture-loupe-magnifier"
@@ -423,13 +448,13 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
             position: 'absolute',
             left: `${mousePos.x + loupeOffset.x}px`,
             top: `${mousePos.y + loupeOffset.y}px`,
-            width: '96px',
-            height: '96px',
+            width: '104px',
+            height: '104px',
             borderRadius: '50%',
-            backgroundColor: '#000000',
-            border: '2.5px solid var(--color-overlay-ring)',
-            boxShadow: 'var(--shadow-xl)',
-            overflow: 'hidden',
+            backgroundColor: '#111827',
+            border: '2px solid rgba(255, 255, 255, 0.85)',
+            boxShadow: 'var(--shadow-xl), 0 0 0 1px rgba(0, 0, 0, 0.6)',
+            overflow: 'visible',
             pointerEvents: 'none',
             display: 'flex',
             alignItems: 'center',
@@ -437,46 +462,99 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
             zIndex: 10001,
           }}
         >
-          {/* Live Zoom Canvas beneath Cursor */}
-          <canvas
-            ref={canvasRef}
-            width={96}
-            height={96}
+          {/* Circular Inner Clipping Frame */}
+          <div
             style={{
               width: '100%',
               height: '100%',
-              imageRendering: 'pixelated',
-              position: 'absolute',
-              inset: 0,
-            }}
-          />
-
-          {/* High-Contrast 8x Pixelated Grid Overlay & Central Reticle */}
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              backgroundImage: `
-                linear-gradient(to right, rgba(255, 255, 255, 0.18) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(255, 255, 255, 0.18) 1px, transparent 1px)
-              `,
-              backgroundSize: '8px 8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              pointerEvents: 'none',
+              borderRadius: '50%',
+              overflow: 'hidden',
+              position: 'relative',
             }}
           >
-            {/* Center target crosshair square targeting exact 1 pixel */}
-            <div
+            {/* Live Raw Snapshot Canvas */}
+            <canvas
+              ref={canvasRef}
+              width={104}
+              height={104}
               style={{
-                width: '8px',
-                height: '8px',
-                border: '1.5px solid var(--color-snagit-red)',
-                backgroundColor: 'rgba(239, 68, 68, 0.4)',
-                boxShadow: '0 0 2px rgba(0, 0, 0, 0.8)',
+                width: '100%',
+                height: '100%',
+                imageRendering: 'pixelated',
+                position: 'absolute',
+                inset: 0,
               }}
             />
+
+            {/* Pixel Grid Matrix */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundImage: `
+                  linear-gradient(to right, rgba(255, 255, 255, 0.18) 1px, transparent 1px),
+                  linear-gradient(to bottom, rgba(255, 255, 255, 0.18) 1px, transparent 1px)
+                `,
+                backgroundSize: '8px 8px',
+                pointerEvents: 'none',
+              }}
+            />
+
+            {/* Internal Gold Crosshair Guide Line (Vertical) */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: '1.5px',
+                backgroundColor: 'var(--color-overlay-ring)',
+                boxShadow: '0 0 2px rgba(0, 0, 0, 0.8)',
+                zIndex: 2,
+              }}
+            />
+
+            {/* Internal Gold Crosshair Guide Line (Horizontal) */}
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                height: '1.5px',
+                backgroundColor: 'var(--color-overlay-ring)',
+                boxShadow: '0 0 2px rgba(0, 0, 0, 0.8)',
+                zIndex: 2,
+              }}
+            />
+          </div>
+
+          {/* Bottom Coordinate / Resolution Black Badge pill attached to Loupe */}
+          <div
+            data-testid="loupe-dimension-badge"
+            style={{
+              position: 'absolute',
+              bottom: '-22px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              backgroundColor: 'rgba(0, 0, 0, 0.92)',
+              color: '#ffffff',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              padding: '2px 8px',
+              borderRadius: 'var(--radius-xs)',
+              fontSize: '10px',
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.5)',
+              zIndex: 10002,
+            }}
+          >
+            {phase === 'dragging'
+              ? `${currentBox.width} × ${currentBox.height}`
+              : `${mousePos.x} × ${mousePos.y}`}
           </div>
         </div>
       )}
