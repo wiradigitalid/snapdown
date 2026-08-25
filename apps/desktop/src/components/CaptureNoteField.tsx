@@ -95,7 +95,7 @@ export const CaptureNoteField: React.FC<CaptureNoteFieldProps> = ({
         display: 'flex',
         flexDirection: 'column',
         gap: 'var(--space-1)',
-        zIndex: 'var(--z-overlay)',
+        zIndex: 20000,
         boxSizing: 'border-box',
       }}
     >
