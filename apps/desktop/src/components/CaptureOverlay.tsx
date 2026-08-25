@@ -97,9 +97,17 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
   }, [handleKeyDown]);
 
   useEffect(() => {
+    // Synchronize active theme from localStorage on overlay mount and reset
+    const syncTheme = () => {
+      const savedTheme = localStorage.getItem('snapdown-theme') || 'light';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    };
+    syncTheme();
+
     let unlistenFn: (() => void) | undefined;
     try {
       const promise = listen('overlay-reset', () => {
+        syncTheme();
         resetState();
       });
       promise.then((fn) => {
