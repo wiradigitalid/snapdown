@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { MarkerBadge } from './MarkerBadge';
-import { AnnotationType, VisualAnnotationItem } from './types/annotation';
+import { AnnotationType, VisualAnnotationItem, VisualCalloutAnnotation, VisualTextAnnotation } from './types/annotation';
 
 export interface MarkerItem {
   id: string;
@@ -57,7 +57,7 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [draggingMarkerId, setDraggingMarkerId] = useState<string | null>(null);
 
-  // Drawing state for new visual elements (Shape, Blur, Arrow, Callout)
+  // Drawing state for new visual elements (Shape, Blur, Arrow, Callout, Text)
   const [drawingStart, setDrawingStart] = useState<{ x: number; y: number } | null>(null);
   const [currentDraw, setCurrentDraw] = useState<{ x: number; y: number } | null>(null);
 
@@ -92,7 +92,8 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
     if (
       target.closest('[data-marker-badge="true"]') ||
       target.closest('[data-annotation-handle="true"]') ||
-      target.closest('[data-annotation-item="true"]')
+      target.closest('[data-annotation-item="true"]') ||
+      target.closest('[data-annotation-floating-bar="true"]')
     ) {
       return;
     }
@@ -107,21 +108,8 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
     if (activeTool === 'marker') {
       onAddMarker?.(x, y);
     } else if (activeTool === 'text') {
-      const newText: VisualAnnotationItem = {
-        id: `text-${Date.now()}`,
-        kind: 'text',
-        x,
-        y,
-        width: 0.25,
-        height: 0.08,
-        text: 'Type text here...',
-        fontSize: 16,
-        fontFamily: 'Inter, sans-serif',
-        textColor: 'var(--color-annotation-stroke)',
-      };
-      onAddAnnotation?.(newText);
-      onSelectAnnotation?.(newText.id);
-      setEditingTextId(newText.id);
+      setDrawingStart({ x, y });
+      setCurrentDraw({ x, y });
     } else {
       // Start drag to create Shape, Blur, Arrow, or Callout
       setDrawingStart({ x, y });
@@ -282,8 +270,8 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
         const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
         const minX = Math.min(drawingStart.x, x);
         const minY = Math.min(drawingStart.y, y);
-        const width = Math.max(Math.abs(x - drawingStart.x), 0.02);
-        const height = Math.max(Math.abs(y - drawingStart.y), 0.02);
+        const width = Math.max(Math.abs(x - drawingStart.x), 0.03);
+        const height = Math.max(Math.abs(y - drawingStart.y), 0.03);
 
         if (activeTool === 'shape') {
           const item: VisualAnnotationItem = {
@@ -324,20 +312,46 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
           onAddAnnotation(item);
           onSelectAnnotation?.(item.id);
         } else if (activeTool === 'callout') {
+          const boxW = Math.max(width, 0.16);
+          const boxH = Math.max(height, 0.08);
+          // Tail starts pointing to bottom right of the box
+          const tailX = Math.min(minX + boxW + 0.06, 0.98);
+          const tailY = Math.min(minY + boxH + 0.06, 0.98);
+
           const item: VisualAnnotationItem = {
             id: `callout-${Date.now()}`,
             kind: 'callout',
             x: minX,
             y: minY,
-            width: Math.max(width, 0.18),
-            height: Math.max(height, 0.08),
-            tailX: Math.min(Math.max(x + 0.05, 0), 1),
-            tailY: Math.min(Math.max(y + 0.05, 0), 1),
+            width: boxW,
+            height: boxH,
+            tailX,
+            tailY,
             text: 'Callout note...',
             fontSize: 14,
             fontFamily: 'Inter, sans-serif',
+            fontWeight: '600',
+            fontStyle: 'normal',
             bgColor: 'var(--color-annotation-callout-bg)',
             textColor: 'var(--color-annotation-callout-text)',
+          };
+          onAddAnnotation(item);
+          onSelectAnnotation?.(item.id);
+          setEditingTextId(item.id);
+        } else if (activeTool === 'text') {
+          const item: VisualAnnotationItem = {
+            id: `text-${Date.now()}`,
+            kind: 'text',
+            x: minX,
+            y: minY,
+            width: Math.max(width, 0.18),
+            height: Math.max(height, 0.06),
+            text: 'Text comment...',
+            fontSize: 16,
+            fontFamily: 'Inter, sans-serif',
+            fontWeight: '700',
+            fontStyle: 'normal',
+            textColor: 'var(--color-annotation-stroke)',
           };
           onAddAnnotation(item);
           onSelectAnnotation?.(item.id);
@@ -370,6 +384,8 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
     onSelectAnnotation,
   ]);
 
+  const selectedAnnotation = visualAnnotations.find((a) => a.id === selectedAnnotationId);
+
   return (
     <div
       ref={containerRef}
@@ -382,7 +398,8 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
         if (
           target.closest('[data-marker-badge="true"]') ||
           target.closest('[data-annotation-handle="true"]') ||
-          target.closest('[data-annotation-item="true"]')
+          target.closest('[data-annotation-item="true"]') ||
+          target.closest('[data-annotation-floating-bar="true"]')
         ) {
           return;
         }
@@ -397,14 +414,14 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
         inset: 0,
         width: '100%',
         height: '100%',
-        cursor: disabled ? 'default' : activeTool === 'marker' ? 'crosshair' : 'crosshair',
+        cursor: disabled ? 'default' : 'crosshair',
         overflow: 'hidden',
         userSelect: 'none',
         pointerEvents: disabled ? 'none' : 'auto',
         ...style,
       }}
     >
-      {/* SVG Canvas for Arrows, Shapes, Callout tails */}
+      {/* SVG Canvas for Arrows, Callout tails, and preview vectors */}
       <svg
         style={{
           position: 'absolute',
@@ -427,6 +444,22 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
             <polygon points="0 0, 8 4, 0 8" fill="var(--color-annotation-stroke)" />
           </marker>
         </defs>
+
+        {/* Render Callout Tails as solid connected triangular polygons */}
+        {visualAnnotations
+          .filter((a): a is VisualAnnotationItem & { kind: 'callout' } => a.kind === 'callout')
+          .map((callout) => {
+            const tailPath = computeCalloutTailPolygon(callout);
+            return (
+              <polygon
+                key={`tail-${callout.id}`}
+                points={tailPath}
+                fill="var(--color-annotation-callout-bg, var(--color-marker))"
+                stroke="var(--color-annotation-callout-bg, var(--color-marker))"
+                strokeWidth="1"
+              />
+            );
+          })}
 
         {/* Render Arrows */}
         {visualAnnotations
@@ -627,7 +660,7 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
           );
         })}
 
-      {/* Render Callout Bubbles */}
+      {/* Render Callout Bubbles with Triangular Pointer Tail */}
       {visualAnnotations
         .filter((a): a is VisualAnnotationItem & { kind: 'callout' } => a.kind === 'callout')
         .map((callout) => {
@@ -663,10 +696,12 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
                 backgroundColor: callout.bgColor || 'var(--color-annotation-callout-bg, var(--color-marker))',
                 color: callout.textColor || 'var(--color-annotation-callout-text, var(--color-marker-text))',
                 borderRadius: 'var(--radius-md, 8px)',
-                padding: '6px 10px',
+                padding: '8px 12px',
                 fontSize: `${callout.fontSize || 14}px`,
                 fontFamily: callout.fontFamily || 'var(--font-ui)',
-                boxShadow: '0 4px 12px var(--color-overlay-shadow-card)',
+                fontWeight: (callout.fontWeight as React.CSSProperties['fontWeight']) || '600',
+                fontStyle: callout.fontStyle || 'normal',
+                boxShadow: '0 4px 14px var(--color-overlay-shadow-card)',
                 boxSizing: 'border-box',
                 cursor: 'move',
                 zIndex: isSelected ? 12 : 7,
@@ -692,19 +727,21 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
                     width: '100%',
                     height: '100%',
                     backgroundColor: 'transparent',
-                    color: callout.textColor || 'var(--color-annotation-callout-text)',
+                    color: 'inherit',
                     border: 'none',
                     outline: 'none',
                     resize: 'none',
-                    fontSize: `${callout.fontSize || 14}px`,
+                    fontSize: 'inherit',
                     fontFamily: 'inherit',
+                    fontWeight: 'inherit',
+                    fontStyle: 'inherit',
                   }}
                 />
               ) : (
-                <span>{callout.text}</span>
+                <div style={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{callout.text}</div>
               )}
 
-              {/* Tail Point Handle */}
+              {/* Tail Point Interactive Handle */}
               {isSelected && (
                 <div
                   data-annotation-handle="true"
@@ -720,14 +757,15 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
                     });
                   }}
                   style={{
-                    position: 'fixed',
-                    left: `${callout.tailX * 100}%`,
-                    top: `${callout.tailY * 100}%`,
-                    width: '12px',
-                    height: '12px',
+                    position: 'absolute',
+                    left: `${((callout.tailX - callout.x) / callout.width) * 100}%`,
+                    top: `${((callout.tailY - callout.y) / callout.height) * 100}%`,
+                    width: '14px',
+                    height: '14px',
                     borderRadius: '50%',
                     backgroundColor: 'var(--color-annotation-handle-bg)',
-                    border: '2px solid var(--color-annotation-stroke)',
+                    border: '2.5px solid var(--color-annotation-stroke)',
+                    boxShadow: '0 2px 6px var(--color-overlay-shadow-card)',
                     transform: 'translate(-50%, -50%)',
                     cursor: 'crosshair',
                     zIndex: 20,
@@ -751,7 +789,7 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
           );
         })}
 
-      {/* Render Floating Text */}
+      {/* Render Floating Text with 8-Point Bounding Resize Box */}
       {visualAnnotations
         .filter((a): a is VisualAnnotationItem & { kind: 'text' } => a.kind === 'text')
         .map((txt) => {
@@ -787,16 +825,19 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
                 color: txt.textColor || 'var(--color-annotation-stroke)',
                 fontSize: `${txt.fontSize || 16}px`,
                 fontFamily: txt.fontFamily || 'var(--font-ui)',
-                fontWeight: 700,
-                border: isSelected ? '1px dashed var(--color-primary)' : 'none',
-                padding: '2px 4px',
+                fontWeight: (txt.fontWeight as React.CSSProperties['fontWeight']) || '700',
+                fontStyle: txt.fontStyle || 'normal',
+                border: isSelected ? '1.5px dashed var(--color-primary)' : '1px solid transparent',
+                backgroundColor: isSelected ? 'var(--color-annotation-fill)' : 'transparent',
+                borderRadius: 'var(--radius-xs, 4px)',
+                padding: '4px 6px',
                 boxSizing: 'border-box',
                 cursor: 'move',
                 zIndex: isSelected ? 12 : 7,
               }}
             >
               {isEditing ? (
-                <input
+                <textarea
                   autoFocus
                   defaultValue={txt.text}
                   onBlur={(e) => {
@@ -807,29 +848,223 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
                     setEditingTextId(null);
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === 'Escape') {
+                    if (e.key === 'Escape') {
                       setEditingTextId(null);
                     }
                   }}
                   style={{
                     width: '100%',
+                    height: '100%',
                     backgroundColor: 'transparent',
                     color: 'inherit',
                     border: 'none',
                     outline: 'none',
+                    resize: 'none',
                     fontSize: 'inherit',
                     fontFamily: 'inherit',
                     fontWeight: 'inherit',
+                    fontStyle: 'inherit',
                   }}
                 />
               ) : (
-                <span>{txt.text}</span>
+                <div style={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{txt.text}</div>
               )}
+
+              {/* 8-Point Resize Handles for Bounding Box scaling of text area */}
+              {isSelected && render8PointHandles((handleIdx, e) => {
+                e.stopPropagation();
+                const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
+                setDragMode({
+                  id: txt.id,
+                  type: 'handle',
+                  handleIndex: handleIdx,
+                  startX: x,
+                  startY: y,
+                  initialItem: txt,
+                });
+              })}
             </div>
           );
         })}
 
-      {/* Live Drawing Preview Box (for Shape / Blur / Callout) */}
+      {/* Floating Canvas Property Bar for Active Callout/Text */}
+      {selectedAnnotation && (selectedAnnotation.kind === 'callout' || selectedAnnotation.kind === 'text') && (
+        <div
+          data-annotation-floating-bar="true"
+          style={{
+            position: 'absolute',
+            left: `${selectedAnnotation.x * 100}%`,
+            top: `calc(${selectedAnnotation.y * 100}% - 40px)`,
+            transform: 'translateY(-100%)',
+            backgroundColor: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            boxShadow: 'var(--shadow-raised)',
+            borderRadius: 'var(--radius-md, 8px)',
+            padding: '4px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            zIndex: 100,
+            fontSize: 'var(--text-xs)',
+          }}
+        >
+          {/* Font Family */}
+          <select
+            value={selectedAnnotation.fontFamily || 'Inter, sans-serif'}
+            onChange={(e) => {
+              onUpdateAnnotation?.({
+                ...selectedAnnotation,
+                fontFamily: e.target.value,
+              } as VisualCalloutAnnotation | VisualTextAnnotation);
+            }}
+            style={{
+              padding: '2px 6px',
+              borderRadius: 'var(--radius-xs)',
+              border: '1px solid var(--color-border)',
+              backgroundColor: 'var(--color-surface-sunken)',
+              color: 'var(--color-text)',
+              fontSize: '11px',
+              cursor: 'pointer',
+            }}
+          >
+            <option value="Inter, sans-serif">Inter</option>
+            <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+            <option value="'Playfair Display', serif">Serif</option>
+            <option value="'Plus Jakarta Sans', sans-serif">Jakarta Sans</option>
+            <option value="Impact, sans-serif">Impact</option>
+          </select>
+
+          {/* Size - / + */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+            <button
+              type="button"
+              onClick={() => {
+                const current = selectedAnnotation.fontSize || 14;
+                onUpdateAnnotation?.({
+                  ...selectedAnnotation,
+                  fontSize: Math.max(current - 2, 10),
+                } as VisualCalloutAnnotation | VisualTextAnnotation);
+              }}
+              style={{
+                width: '22px',
+                height: '22px',
+                border: '1px solid var(--color-border)',
+                backgroundColor: 'var(--color-surface-sunken)',
+                color: 'var(--color-text)',
+                borderRadius: 'var(--radius-xs)',
+                cursor: 'pointer',
+                fontWeight: 700,
+              }}
+            >
+              -
+            </button>
+            <span style={{ fontSize: '11px', minWidth: '24px', textAlign: 'center', fontWeight: 600 }}>
+              {selectedAnnotation.fontSize || 14}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                const current = selectedAnnotation.fontSize || 14;
+                onUpdateAnnotation?.({
+                  ...selectedAnnotation,
+                  fontSize: Math.min(current + 2, 48),
+                } as VisualCalloutAnnotation | VisualTextAnnotation);
+              }}
+              style={{
+                width: '22px',
+                height: '22px',
+                border: '1px solid var(--color-border)',
+                backgroundColor: 'var(--color-surface-sunken)',
+                color: 'var(--color-text)',
+                borderRadius: 'var(--radius-xs)',
+                cursor: 'pointer',
+                fontWeight: 700,
+              }}
+            >
+              +
+            </button>
+          </div>
+
+          {/* Bold */}
+          <button
+            type="button"
+            onClick={() => {
+              const isBold = selectedAnnotation.fontWeight === 'bold' || selectedAnnotation.fontWeight === '700';
+              onUpdateAnnotation?.({
+                ...selectedAnnotation,
+                fontWeight: isBold ? 'normal' : 'bold',
+              } as VisualCalloutAnnotation | VisualTextAnnotation);
+            }}
+            style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: 'var(--radius-xs)',
+              border: '1px solid var(--color-border)',
+              backgroundColor:
+                selectedAnnotation.fontWeight === 'bold' || selectedAnnotation.fontWeight === '700'
+                  ? 'var(--color-primary)'
+                  : 'var(--color-surface-sunken)',
+              color:
+                selectedAnnotation.fontWeight === 'bold' || selectedAnnotation.fontWeight === '700'
+                  ? 'var(--color-accent-text)'
+                  : 'var(--color-text)',
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}
+          >
+            B
+          </button>
+
+          {/* Italic */}
+          <button
+            type="button"
+            onClick={() => {
+              const isItalic = selectedAnnotation.fontStyle === 'italic';
+              onUpdateAnnotation?.({
+                ...selectedAnnotation,
+                fontStyle: isItalic ? 'normal' : 'italic',
+              } as VisualCalloutAnnotation | VisualTextAnnotation);
+            }}
+            style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: 'var(--radius-xs)',
+              border: '1px solid var(--color-border)',
+              backgroundColor:
+                selectedAnnotation.fontStyle === 'italic'
+                  ? 'var(--color-primary)'
+                  : 'var(--color-surface-sunken)',
+              color:
+                selectedAnnotation.fontStyle === 'italic'
+                  ? 'var(--color-accent-text)'
+                  : 'var(--color-text)',
+              fontStyle: 'italic',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            I
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onDeleteAnnotation?.(selectedAnnotation.id)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--color-danger)',
+              cursor: 'pointer',
+              fontSize: '13px',
+              padding: '0 4px',
+            }}
+            title="Delete element"
+          >
+            🗑️
+          </button>
+        </div>
+      )}
+
+      {/* Live Drawing Preview Box (for Shape / Blur / Callout / Text) */}
       {drawingStart && currentDraw && activeTool !== 'marker' && activeTool !== 'arrow' && (
         <div
           style={{
@@ -891,6 +1126,56 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
     </div>
   );
 };
+
+// Helper: Compute Callout triangular tail polygon SVG points relative to container
+function computeCalloutTailPolygon(callout: VisualCalloutAnnotation): string {
+  const boxLeft = callout.x * 100;
+  const boxTop = callout.y * 100;
+  const boxRight = (callout.x + callout.width) * 100;
+  const boxBottom = (callout.y + callout.height) * 100;
+  const boxCenterX = (boxLeft + boxRight) / 2;
+  const boxCenterY = (boxTop + boxBottom) / 2;
+
+  const tipX = callout.tailX * 100;
+  const tipY = callout.tailY * 100;
+
+  // Determine closest edge to the tail tip
+  const distBottom = tipY - boxBottom;
+  const distTop = boxTop - tipY;
+  const distRight = tipX - boxRight;
+  const distLeft = boxLeft - tipX;
+
+  const maxDist = Math.max(distBottom, distTop, distRight, distLeft);
+
+  let b1X = boxCenterX - 3;
+  let b1Y = boxBottom;
+  let b2X = boxCenterX + 3;
+  let b2Y = boxBottom;
+
+  if (maxDist === distBottom) {
+    b1X = boxCenterX - 3;
+    b1Y = boxBottom - 1;
+    b2X = boxCenterX + 3;
+    b2Y = boxBottom - 1;
+  } else if (maxDist === distTop) {
+    b1X = boxCenterX - 3;
+    b1Y = boxTop + 1;
+    b2X = boxCenterX + 3;
+    b2Y = boxTop + 1;
+  } else if (maxDist === distRight) {
+    b1X = boxRight - 1;
+    b1Y = boxCenterY - 3;
+    b2X = boxRight - 1;
+    b2Y = boxCenterY + 3;
+  } else {
+    b1X = boxLeft + 1;
+    b1Y = boxCenterY - 3;
+    b2X = boxLeft + 1;
+    b2Y = boxCenterY + 3;
+  }
+
+  return `${b1X}%,${b1Y}% ${b2X}%,${b2Y}% ${tipX}%,${tipY}%`;
+}
 
 // Helper: 8-Point Resize Handles for Bounding Boxes
 function render8PointHandles(onHandleMouseDown: (idx: number, e: React.MouseEvent) => void) {

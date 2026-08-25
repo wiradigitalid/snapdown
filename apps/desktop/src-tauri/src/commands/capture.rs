@@ -200,32 +200,8 @@ pub fn trigger_overlay(app: AppHandle) -> Result<(), String> {
         let _ = main_win.hide();
     }
 
-    #[cfg(windows)]
-    let (vx, vy, vw, vh) = {
-        use windows::Win32::UI::WindowsAndMessaging::{
-            GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
-            SM_YVIRTUALSCREEN,
-        };
-        unsafe {
-            let x = GetSystemMetrics(SM_XVIRTUALSCREEN);
-            let y = GetSystemMetrics(SM_YVIRTUALSCREEN);
-            let w = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-            let h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
-            (x as f64, y as f64, w as f64, h as f64)
-        }
-    };
-
-    #[cfg(not(windows))]
-    let (vx, vy, vw, vh) = (0.0, 0.0, 1920.0, 1080.0);
-
     if let Some(existing) = app.get_webview_window("overlay") {
         let _ = existing.hide();
-        let _ = existing.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(
-            vx as i32, vy as i32,
-        )));
-        let _ = existing.set_size(tauri::Size::Physical(tauri::PhysicalSize::new(
-            vw as u32, vh as u32,
-        )));
         let _ = existing.emit("overlay-reset", ());
         let _ = existing.show();
         let _ = existing.set_focus();
@@ -238,8 +214,7 @@ pub fn trigger_overlay(app: AppHandle) -> Result<(), String> {
             .transparent(true)
             .decorations(false)
             .always_on_top(true)
-            .position(vx, vy)
-            .inner_size(vw, vh)
+            .fullscreen(true)
             .build()
             .map_err(|e| format!("Failed to create overlay window: {e}"))?;
 

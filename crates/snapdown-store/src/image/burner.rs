@@ -347,10 +347,58 @@ impl MarkerBurner {
             }
         }
 
-        // Draw tail line connecting from center of bubble to target point (tx, ty)
+        // Compute triangular tail base from closest edge
         let cx = x0 + (x1 - x0) / 2;
         let cy = y0 + (y1 - y0) / 2;
-        Self::draw_thick_line(img, cx, cy, tx, ty, 3, color);
+
+        let dist_bottom = ty - y1;
+        let dist_top = y0 - ty;
+        let dist_right = tx - x1;
+        let dist_left = x0 - tx;
+
+        let max_dist = dist_bottom.max(dist_top).max(dist_right).max(dist_left);
+
+        let (b0, b1) = if max_dist == dist_bottom {
+            ((cx - 8, y1), (cx + 8, y1))
+        } else if max_dist == dist_top {
+            ((cx - 8, y0), (cx + 8, y0))
+        } else if max_dist == dist_right {
+            ((x1, cy - 8), (x1, cy + 8))
+        } else {
+            ((x0, cy - 8), (x0, cy + 8))
+        };
+
+        Self::draw_filled_triangle(img, b0, b1, (tx, ty), color);
+    }
+
+    fn draw_filled_triangle(
+        img: &mut RgbaImage,
+        p0: (i32, i32),
+        p1: (i32, i32),
+        p2: (i32, i32),
+        color: Rgba<u8>,
+    ) {
+        let img_w = img.width() as i32;
+        let img_h = img.height() as i32;
+        let min_x = p0.0.min(p1.0).min(p2.0).clamp(0, img_w - 1);
+        let max_x = p0.0.max(p1.0).max(p2.0).clamp(0, img_w - 1);
+        let min_y = p0.1.min(p1.1).min(p2.1).clamp(0, img_h - 1);
+        let max_y = p0.1.max(p1.1).max(p2.1).clamp(0, img_h - 1);
+
+        for y in min_y..=max_y {
+            for x in min_x..=max_x {
+                let d0 = (p1.0 - p0.0) * (y - p0.1) - (p1.1 - p0.1) * (x - p0.0);
+                let d1 = (p2.0 - p1.0) * (y - p1.1) - (p2.1 - p1.1) * (x - p1.0);
+                let d2 = (p0.0 - p2.0) * (y - p2.1) - (p0.1 - p2.1) * (x - p2.0);
+
+                let has_neg = (d0 < 0) || (d1 < 0) || (d2 < 0);
+                let has_pos = (d0 > 0) || (d1 > 0) || (d2 > 0);
+
+                if !(has_neg && has_pos) {
+                    img.put_pixel(x as u32, y as u32, color);
+                }
+            }
+        }
     }
 
     fn draw_badge(img: &mut RgbaImage, cx: i32, cy: i32, ordinal: u32) {

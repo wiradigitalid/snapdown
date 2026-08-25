@@ -34,6 +34,8 @@ export interface VisualCalloutAnnotation {
   text: string;
   fontSize?: number;
   fontFamily?: string;
+  fontWeight?: string;
+  fontStyle?: string;
   bgColor?: string;
   textColor?: string;
 }
@@ -58,6 +60,8 @@ export interface VisualTextAnnotation {
   text: string;
   fontSize?: number;
   fontFamily?: string;
+  fontWeight?: string;
+  fontStyle?: string;
   textColor?: string;
 }
 

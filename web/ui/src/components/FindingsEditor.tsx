@@ -884,6 +884,8 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
           onNoteBlur={handleNoteBlur}
           onSaveNote={handleSaveNote}
           selectedMarkerId={selectedMarkerId}
+          selectedAnnotationId={selectedAnnotationId}
+          annotations={currentAnnotations}
           onSelectMarker={setSelectedMarkerId}
           onDeleteMarker={handleDeleteMarker}
           onUpdateMarkerComment={(markerId, comment) => {
@@ -891,6 +893,8 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
               onUpdateMarkerComment(selectedFinding.finding.id, markerId, comment);
             }
           }}
+          onUpdateAnnotation={handleUpdateAnnotation}
+          onDeleteAnnotation={handleDeleteAnnotation}
           onDeleteFinding={() => {
             if (checkedFindingIds.size > 0) {
               promptDeleteFinding(Array.from(checkedFindingIds));
