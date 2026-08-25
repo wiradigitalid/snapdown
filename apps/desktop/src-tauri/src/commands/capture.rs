@@ -231,7 +231,7 @@ pub fn get_monitor_snapshot(source_monitor: Option<String>) -> Result<String, St
     let mut bytes = Vec::new();
     let encoder = image::codecs::png::PngEncoder::new(&mut bytes);
     image::ImageEncoder::write_image(
-        &encoder,
+        encoder,
         image.as_raw(),
         image.width(),
         image.height(),
