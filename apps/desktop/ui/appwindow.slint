@@ -248,6 +248,8 @@ export component CaptureOverlayWindow inherits Window {
             }
 
             Rectangle {
+                // The magnifier is NOT the source of the one-frame stall on the first pointer
+                // move of each capture: hiding it entirely was tried and the stall remained.
                 x: mouse-x + 24px;
                 y: mouse-y + 24px;
                 width: 96px;

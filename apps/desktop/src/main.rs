@@ -683,6 +683,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let close_all = {
                         let siblings = siblings.clone();
                         move || {
+                            // Take every overlay off the screen in this one pass, before any
+                            // Slint-level bookkeeping.
+                            //
+                            // `hide()` alone is not enough: Slint applies it per window on that
+                            // window's own event-loop turn, so the overlay that did not have
+                            // focus stayed on screen for a visible beat after the focused one
+                            // vanished - cancelling looked like it only closed one monitor. Going
+                            // straight to winit's set_visible(false) hides them all now, in one
+                            // turn, and the hide() below then keeps Slint's own state in step.
+                            #[cfg(windows)]
+                            {
+                                use i_slint_backend_winit::WinitWindowAccessor;
+                                for sibling in siblings.iter() {
+                                    if let Some(sibling) = sibling.upgrade() {
+                                        sibling.window().with_winit_window(|winit_win| {
+                                            winit_win.set_visible(false)
+                                        });
+                                    }
+                                }
+                            }
                             for sibling in siblings.iter() {
                                 if let Some(sibling) = sibling.upgrade() {
                                     if let Err(e) = sibling.hide() {
