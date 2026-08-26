@@ -126,18 +126,17 @@ export component CaptureOverlayWindow inherits Window {
         };
     }
 
-    // The active monitor's bounds converted to this window's logical pixels, for laying elements
-    // out against. Held in a property so a drag keeps clamping to the monitor it STARTED on, even
-    // if the pointer wanders onto the neighbouring screen mid-drag.
-    property <MonitorRectData> drag-monitor;
-    property <length> clamp-x: (root.is-dragging ? root.drag-monitor.x : root.active-monitor().x)
-        / root.source-scale * 1px;
-    property <length> clamp-y: (root.is-dragging ? root.drag-monitor.y : root.active-monitor().y)
-        / root.source-scale * 1px;
-    property <length> clamp-w: (root.is-dragging ? root.drag-monitor.width : root.active-monitor().width)
-        / root.source-scale * 1px;
-    property <length> clamp-h: (root.is-dragging ? root.drag-monitor.height : root.active-monitor().height)
-        / root.source-scale * 1px;
+    // The monitor under the pointer, in this window's logical pixels. Used ONLY to lay the
+    // crosshair out - it is deliberately not used to bound the selection.
+    //
+    // A region IS allowed to span monitors, which is what Snagit does: the drag is bounded by the
+    // canvas, not by a monitor. Where the desktop is not rectangular the canvas has no pixels, so
+    // such a region simply carries black in the gap - the same result Snagit produces, and it
+    // falls out of the canvas being the desktop's bounding box rather than needing any code.
+    property <length> crosshair-x: root.active-monitor().x / root.source-scale * 1px;
+    property <length> crosshair-y: root.active-monitor().y / root.source-scale * 1px;
+    property <length> crosshair-w: root.active-monitor().width / root.source-scale * 1px;
+    property <length> crosshair-h: root.active-monitor().height / root.source-scale * 1px;
     // Side of the source square the magnifier shows. Scaled by source-scale so the loupe reads
     // as the same 3x magnification on every monitor regardless of its DPI.
     property <float> loupe-source-size: 32 * root.source-scale;
@@ -294,15 +293,15 @@ export component CaptureOverlayWindow inherits Window {
             visible: !root.is-narrating && hover-tracker.has-hover;
             Rectangle {
                 x: mouse-x - 0.5px;
-                y: root.clamp-y;
+                y: root.crosshair-y;
                 width: 1px;
-                height: root.clamp-h;
+                height: root.crosshair-h;
                 background: Theme.accent-primary.with-alpha(0.8);
             }
             Rectangle {
-                x: root.clamp-x;
+                x: root.crosshair-x;
                 y: mouse-y - 0.5px;
-                width: root.clamp-w;
+                width: root.crosshair-w;
                 height: 1px;
                 background: Theme.accent-primary.with-alpha(0.8);
             }
@@ -369,10 +368,6 @@ export component CaptureOverlayWindow inherits Window {
                 root.mouse-y = self.mouse-y;
 
                 if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
-                    // Pin the monitor the drag starts on. Every later clamp uses this one, so
-                    // dragging onto the neighbouring screen cannot extend the region there - a
-                    // capture combining two monitors is not allowed.
-                    root.drag-monitor = root.active-monitor();
                     root.is-dragging = true;
                     root.drag-start-x = self.mouse-x;
                     root.drag-start-y = self.mouse-y;
@@ -399,10 +394,11 @@ export component CaptureOverlayWindow inherits Window {
 
             moved => {
                 if (root.is-dragging) {
-                    // Clamped to the monitor the drag started on, in that monitor's own logical
-                    // bounds.
-                    root.drag-current-x = clamp(self.mouse-x, root.clamp-x, root.clamp-x + root.clamp-w);
-                    root.drag-current-y = clamp(self.mouse-y, root.clamp-y, root.clamp-y + root.clamp-h);
+                    // Bounded by the canvas - the whole desktop - so a region may span monitors.
+                    // It must still not escape the canvas, or the crop would index outside the
+                    // snapshot.
+                    root.drag-current-x = clamp(self.mouse-x, 0px, root.width);
+                    root.drag-current-y = clamp(self.mouse-y, 0px, root.height);
                     root.sel-x = min(root.drag-start-x, root.drag-current-x);
                     root.sel-y = min(root.drag-start-y, root.drag-current-y);
                     root.sel-w = abs(root.drag-current-x - root.drag-start-x);

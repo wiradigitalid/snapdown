@@ -115,6 +115,43 @@ impl RegionCapturer {
         Ok(captures)
     }
 
+    /// The virtual desktop's bounds as `(origin_x, origin_y, width, height)` in physical pixels,
+    /// without grabbing a single pixel.
+    ///
+    /// Exists so the capture overlay can be created and placed at application start, long before
+    /// there is anything to show in it. Getting the window into existence early matters: its
+    /// geometry is corrected one event-loop turn after creation, and doing that at start-up means
+    /// the correction is not something the user watches happen when they press Capture.
+    pub fn virtual_desktop_bounds() -> Result<(i32, i32, u32, u32), CaptureError> {
+        let monitors = Monitor::all().map_err(|e| CaptureError::CaptureFailed(e.to_string()))?;
+        if monitors.is_empty() {
+            return Err(CaptureError::NoDisplayFound);
+        }
+
+        let mut min_x = i32::MAX;
+        let mut min_y = i32::MAX;
+        let mut max_x = i32::MIN;
+        let mut max_y = i32::MIN;
+
+        for m in &monitors {
+            let x = m.x().unwrap_or(0);
+            let y = m.y().unwrap_or(0);
+            let w = m.width().unwrap_or(0) as i32;
+            let h = m.height().unwrap_or(0) as i32;
+            min_x = min_x.min(x);
+            min_y = min_y.min(y);
+            max_x = max_x.max(x + w);
+            max_y = max_y.max(y + h);
+        }
+
+        Ok((
+            min_x,
+            min_y,
+            (max_x - min_x).max(1) as u32,
+            (max_y - min_y).max(1) as u32,
+        ))
+    }
+
     /// Captures the whole virtual desktop as ONE image at native physical resolution, together
     /// with where each monitor sits inside it.
     ///

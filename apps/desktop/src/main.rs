@@ -427,6 +427,75 @@ fn persist_finding(
     Some(finding_id)
 }
 
+/// Creates, places and then hides the capture overlay, so the first Capture has nothing left to
+/// build. See the call site for why this cannot wait until the overlay is actually wanted.
+///
+/// Failing here is not fatal: the capture path creates the window itself if it finds none, which
+/// is the behaviour this is optimising away rather than depending on.
+#[cfg(windows)]
+fn prewarm_capture_overlay() {
+    let (origin_x, origin_y, width, height) = match RegionCapturer::virtual_desktop_bounds() {
+        Ok(bounds) => bounds,
+        Err(e) => {
+            eprintln!("Could not read the desktop bounds to pre-warm the overlay: {e}");
+            return;
+        }
+    };
+    let placement = (origin_x, origin_y, width, height);
+
+    let overlay = match CaptureOverlayWindow::new() {
+        Ok(overlay) => overlay,
+        Err(e) => {
+            eprintln!("Could not pre-warm the capture overlay: {e}");
+            return;
+        }
+    };
+
+    NEXT_OVERLAY_PLACEMENT.with_borrow_mut(|slot| *slot = Some(placement));
+    if let Err(e) = overlay.show() {
+        eprintln!("Could not show the capture overlay to pre-warm it: {e}");
+        return;
+    }
+
+    // Deliberately NOT a zero-length delay.
+    //
+    // This runs before `run()` starts the event loop, so a 0ms timer fires before the loop has
+    // created the native window - measured: the overlay stayed at Slint's default 800x600 and
+    // with_winit_window() had nothing to act on. The capture path can use 0ms because by then the
+    // loop is already running. A short wait here is free: nothing is visible either way, and if
+    // it still loses the race the capture path re-asserts the same geometry anyway.
+    let overlay_weak = overlay.as_weak();
+    slint::Timer::single_shot(std::time::Duration::from_millis(400), move || {
+        NEXT_OVERLAY_PLACEMENT.with_borrow_mut(|slot| *slot = None);
+        let Some(overlay) = overlay_weak.upgrade() else {
+            return;
+        };
+        {
+            use i_slint_backend_winit::winit::dpi::{PhysicalPosition, PhysicalSize};
+            use i_slint_backend_winit::WinitWindowAccessor;
+            let applied = overlay.window().with_winit_window(|winit_win| {
+                winit_win.set_outer_position(PhysicalPosition::new(origin_x, origin_y));
+                let _ = winit_win.request_inner_size(PhysicalSize::new(width, height));
+            });
+            if applied.is_none() {
+                eprintln!(
+                    "Pre-warm could not place the overlay: no winit window yet. The first                      capture will place it instead."
+                );
+            }
+        }
+        if let Err(e) = overlay.hide() {
+            eprintln!("Could not hide the pre-warmed capture overlay: {e}");
+        }
+    });
+
+    LIVE_OVERLAYS.with_borrow_mut(|live| {
+        *live = vec![LiveOverlay {
+            window: overlay,
+            placement,
+        }]
+    });
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Keep the mutex handle alive for the whole process; a second launch finds it already
     // held and exits instead of opening a duplicate tray icon and window.
@@ -488,6 +557,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let main_window = AppWindow::new()?;
     let ctx = Arc::new(AppContext::init());
+
+    // Bring the capture overlay into existence NOW, at start-up, rather than on first Capture.
+    //
+    // Two things only happen when a window is first created, and both were happening in front of
+    // the user: the renderer builds its surface and pipeline (a blink), and the geometry is
+    // corrected one event-loop turn after creation, because `show()` does not create the native
+    // window - the loop does, on its next turn. That correction is what appeared as the overlay
+    // growing into place on the non-primary monitor.
+    //
+    // Doing it here pays both costs while the application is still starting, and the capture path
+    // then finds a ready window in LIVE_OVERLAYS and merely shows it.
+    #[cfg(windows)]
+    prewarm_capture_overlay();
 
     // Populate initial Filmstrip from Vault
     load_findings_into_window(&main_window, &ctx, None);

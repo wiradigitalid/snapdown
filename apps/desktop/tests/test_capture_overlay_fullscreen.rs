@@ -186,26 +186,24 @@ fn the_overlay_does_not_declare_slint_full_screen() {
     );
 }
 
-/// One window now spans every monitor, so nothing about the geometry stops a drag from running
-/// across a screen boundary. The monitor the drag STARTED on is pinned and every clamp uses it,
-/// which is what keeps a capture from combining two monitors.
+/// A region MAY span monitors, as Snagit's does - the owner asked for that explicitly after
+/// finding Snagit allows it, with black filling any gap. What it must not do is escape the canvas,
+/// because the crop indexes the snapshot directly and an out-of-range region would either panic or
+/// be silently clamped into the wrong pixels.
 #[test]
-fn a_selection_is_clamped_to_the_monitor_the_drag_started_on() {
+fn a_drag_is_bounded_by_the_canvas_not_by_a_monitor() {
     let overlay = overlay_slint_block();
 
     assert!(
-        overlay.contains("drag-monitor"),
-        "the overlay must pin the monitor a drag starts on; with one window spanning every \
-         display, geometry alone no longer prevents a region spanning two monitors (BUG-26)"
+        overlay.contains("clamp(self.mouse-x, 0px, root.width)")
+            && overlay.contains("clamp(self.mouse-y, 0px, root.height)"),
+        "the drag must be clamped to the canvas - the whole desktop - so a region can span \
+         monitors but never index outside the snapshot (BUG-26)"
     );
     assert!(
-        overlay.contains("root.drag-monitor = root.active-monitor()"),
-        "the pinned monitor must be captured on pointer-down, not recomputed as the pointer moves \
-         - otherwise dragging onto the next screen would extend the region there (BUG-26)"
-    );
-    assert!(
-        overlay.contains("clamp("),
-        "the drag must be clamped to the pinned monitor's bounds (BUG-26)"
+        !overlay.contains("drag-monitor"),
+        "the drag must no longer be pinned to the monitor it started on: a region spanning two \
+         monitors is now allowed, matching Snagit (BUG-26)"
     );
 }
 
@@ -221,8 +219,42 @@ fn the_crosshair_is_confined_to_the_monitor_under_the_pointer() {
          (BUG-26)"
     );
     assert!(
-        overlay.contains("root.clamp-h") && overlay.contains("root.clamp-w"),
+        overlay.contains("root.crosshair-h") && overlay.contains("root.crosshair-w"),
         "the crosshair lines must span the active monitor's bounds, not the whole desktop (BUG-26)"
+    );
+}
+
+/// BUG-27: the overlay must be created at start-up, not on first Capture.
+///
+/// A window's renderer surface and its geometry correction both happen only at creation, and
+/// `show()` does not create the native window - the event loop does, on its next turn. Doing that
+/// on first Capture is what the user saw as the overlay growing into place on the non-primary
+/// monitor, and it is the remaining share of the blink.
+#[test]
+fn the_overlay_is_created_at_startup_not_on_first_capture() {
+    let source = main_rs();
+
+    assert!(
+        source.contains("fn prewarm_capture_overlay"),
+        "the overlay must be built at start-up so first Capture has nothing left to create \
+         (BUG-27)"
+    );
+    assert!(
+        source.contains("virtual_desktop_bounds"),
+        "pre-warming must size the overlay from the desktop bounds, which needs no pixel grab - \
+         capturing the screen at start-up would be both slow and wrong (BUG-27)"
+    );
+
+    let prewarm_call = source
+        .find("prewarm_capture_overlay();")
+        .expect("prewarm_capture_overlay must be called");
+    let capture_cb = source
+        .find("on_capture_clicked")
+        .expect("on_capture_clicked must exist");
+    assert!(
+        prewarm_call < capture_cb,
+        "pre-warming must happen during start-up, before the Capture handler is even installed \
+         (BUG-27)"
     );
 }
 
