@@ -39,6 +39,8 @@ gen/schemas
 *.webp
 !apps/desktop/src-tauri/icons/*.png
 !apps/desktop/src-tauri/icons/*.ico
+!apps/desktop-slint/assets/app-icon.png
+!apps/desktop-slint/assets/app-icon.ico
 
 # Raw accessibility-tree dumps from UI audit workers. They are JSON snapshots of the RUNNING
 # product and they embed absolute paths under the operator's home directory, so they fall under the
