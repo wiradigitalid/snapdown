@@ -5,10 +5,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use image::imageops::crop_imm;
-use image::GenericImageView;
-use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, SharedString, VecModel};
+use slint::{ComponentHandle, ModelRc, SharedPixelBuffer, VecModel};
 use snapdown_capture::RegionCapturer;
-use snapdown_core::domain::finding::{Finding, Marker, Note};
+use snapdown_core::domain::finding::{Finding, Note};
 use snapdown_core::domain::image::ImageDimensions;
 use snapdown_core::domain::setting::{QualityBudget, Setting, SettingKey, SettingValue};
 use snapdown_core::ports::{BlobStore, Clock, EntropySource, FindingStore, SettingsStore};
