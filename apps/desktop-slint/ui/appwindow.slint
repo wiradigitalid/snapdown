@@ -266,7 +266,7 @@ export component AppWindow inherits Window {
     Rectangle {
         width: 100%;
         height: 100%;
-        background: #f8fafc;
+        background: #f1f5f9; // Unified Structural Grey Ground (Slate 100)
         border-width: 1px;
         border-color: #cbd5e1;
 
@@ -277,7 +277,7 @@ export component AppWindow inherits Window {
             // TOP SLATE-GREY WINDOW HEADER BAR (Draggable Window Title Bar)
             titlebar := Rectangle {
                 height: 40px;
-                background: #f1f5f9; // Tonal Slate-Grey Header as per Design System
+                background: #f1f5f9; // Consistent Frame Slate-Grey
 
                 // Bottom Border Line
                 Rectangle {
@@ -386,10 +386,10 @@ export component AppWindow inherits Window {
                 }
             }
 
-            // TOOLBAR & RIBBON ACTION STRIP (Matching Image #9)
+            // TOOLBAR & RIBBON ACTION STRIP (Matching Unified Slate-Grey Header & Panels)
             Rectangle {
                 height: 56px;
-                background: #ffffff;
+                background: #f1f5f9; // Matching Titlebar Slate-Grey
 
                 // Bottom Border Line
                 Rectangle {
@@ -410,17 +410,17 @@ export component AppWindow inherits Window {
                         spacing: 8px;
                         alignment: start;
                         Rectangle {
-                            width: 38px; height: 38px; border-radius: 6px; border-width: 1px; border-color: #e2e8f0; background: #ffffff;
+                            width: 38px; height: 38px; border-radius: 6px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
                             Text { text: "🔴"; font-size: 15px; horizontal-alignment: center; vertical-alignment: center; }
                             TouchArea { clicked => { root.capture-clicked(); } }
                         }
                         Rectangle {
-                            width: 38px; height: 38px; border-radius: 6px; border-width: 1px; border-color: #e2e8f0; background: #ffffff;
+                            width: 38px; height: 38px; border-radius: 6px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
                             Text { text: "📂"; font-size: 15px; horizontal-alignment: center; vertical-alignment: center; }
                             TouchArea { clicked => { root.open-file-clicked(); } }
                         }
                         Rectangle {
-                            width: 38px; height: 38px; border-radius: 6px; border-width: 1px; border-color: #e2e8f0; background: #ffffff;
+                            width: 38px; height: 38px; border-radius: 6px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
                             Text { text: "📥"; font-size: 15px; horizontal-alignment: center; vertical-alignment: center; }
                             TouchArea { clicked => { root.paste-clicked(); } }
                         }
@@ -429,10 +429,10 @@ export component AppWindow inherits Window {
                     // Center: Annotation Palette Strip (🔴 ▢ 💬 ░ ↗ T ✂ ↶ ↷)
                     Rectangle {
                         height: 42px;
-                        background: #f1f5f9;
+                        background: #e2e8f0; // Subtle contrast inside slate toolbar
                         border-radius: 8px;
                         border-width: 1px;
-                        border-color: #e2e8f0;
+                        border-color: #cbd5e1;
 
                         HorizontalLayout {
                             padding-left: 6px;
@@ -524,12 +524,12 @@ export component AppWindow inherits Window {
                             TouchArea { clicked => { root.assemble-bundle-clicked(); } }
                         }
                         Rectangle {
-                            width: 38px; height: 38px; border-radius: 6px; border-width: 1px; border-color: #e2e8f0; background: #ffffff;
+                            width: 38px; height: 38px; border-radius: 6px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
                             Text { text: "📋"; font-size: 15px; horizontal-alignment: center; vertical-alignment: center; }
                             TouchArea { clicked => { root.copy-image-clicked(); } }
                         }
                         Rectangle {
-                            height: 38px; border-radius: 6px; border-width: 1px; border-color: #e2e8f0; background: #ffffff;
+                            height: 38px; border-radius: 6px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
                             HorizontalLayout {
                                 padding-left: 12px; padding-right: 12px;
                                 spacing: 4px;
@@ -541,26 +541,26 @@ export component AppWindow inherits Window {
                 }
             }
 
-            // MAIN WORKSPACE (Flex Canvas Artboard on Left + 440px Inspector Panel on Right)
+            // MAIN WORKSPACE (Light Bright Canvas on Left + Slate-Grey Inspector Panel on Right)
             HorizontalLayout {
                 spacing: 0px;
 
-                // LEFT/CENTER: Canvas Viewport & Bottom Filmstrip
+                // LEFT/CENTER: Bright Canvas Viewport & Integrated Filmstrip
                 VerticalLayout {
                     horizontal-stretch: 1;
 
-                    // Central Image Viewport Canvas (Card Framing)
+                    // Central Image Viewport Canvas (Ultra Clean Bright Stage)
                     Rectangle {
                         vertical-stretch: 1;
-                        background: #f8fafc;
+                        background: #ffffff; // Bright Crisp Canvas Ground
 
                         canvas-viewport := Rectangle {
                             width: 90%;
                             height: 90%;
                             background: #0f172a;
                             border-radius: 8px;
-                            drop-shadow-blur: 16px;
-                            drop-shadow-color: #000000.with-alpha(0.25);
+                            drop-shadow-blur: 20px;
+                            drop-shadow-color: #000000.with-alpha(0.18);
 
                             main-img := Image {
                                 width: 100%;
@@ -602,7 +602,7 @@ export component AppWindow inherits Window {
                     // Readout Status Strip
                     Rectangle {
                         height: 28px;
-                        background: #ffffff;
+                        background: #f8fafc;
 
                         // Top Border Line
                         Rectangle { y: 0px; width: 100%; height: 1px; background: #e2e8f0; }
@@ -618,10 +618,10 @@ export component AppWindow inherits Window {
                         }
                     }
 
-                    // BOTTOM FILMSTRIP TRAY (Thumbnails)
+                    // BOTTOM FILMSTRIP TRAY (Thumbnails in Unified Slate Frame)
                     Rectangle {
                         height: 110px;
-                        background: #f1f5f9;
+                        background: #f1f5f9; // Matching Panels Slate-Grey
 
                         HorizontalLayout {
                             padding: 12px;
@@ -635,7 +635,7 @@ export component AppWindow inherits Window {
                                 background: #ffffff;
                                 border-radius: 6px;
                                 border-width: 1px;
-                                border-color: #e2e8f0;
+                                border-color: #cbd5e1;
 
                                 VerticalLayout {
                                     alignment: center;
@@ -717,10 +717,10 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                // RIGHT PANEL: 440px INSPECTOR WITH [Notes] & [Properties] TABS
+                // RIGHT PANEL: 440px INSPECTOR WITH [Notes] & [Properties] TABS (Unified Slate-Grey Frame)
                 Rectangle {
                     width: 440px;
-                    background: #ffffff;
+                    background: #f1f5f9; // Matching Titlebar Slate-Grey
 
                     // Left Border Line
                     Rectangle { x: 0px; width: 1px; height: 100%; background: #e2e8f0; }
@@ -732,7 +732,7 @@ export component AppWindow inherits Window {
                         // TAB HEADERS ([Notes] & [Properties])
                         Rectangle {
                             height: 46px;
-                            background: #ffffff;
+                            background: #f1f5f9;
 
                             // Bottom Border Line
                             Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: #e2e8f0; }
@@ -814,7 +814,7 @@ export component AppWindow inherits Window {
                                         height: 120px;
                                         border-radius: 6px;
                                         border-width: 1px;
-                                        border-color: #e2e8f0;
+                                        border-color: #cbd5e1;
                                         background: #ffffff;
                                         TextEdit {
                                             text <=> root.observation-summary;
@@ -823,7 +823,7 @@ export component AppWindow inherits Window {
                                     }
                                 }
 
-                                // Section 2: Step Marker Notes (2)
+                                // Section 2: Step Marker Notes
                                 VerticalLayout {
                                     spacing: 8px;
                                     Text {
@@ -836,9 +836,9 @@ export component AppWindow inherits Window {
 
                                     for marker in root.markers : Rectangle {
                                         border-radius: 6px;
-                                        background: #f8fafc;
+                                        background: #ffffff;
                                         border-width: 1px;
-                                        border-color: #e2e8f0;
+                                        border-color: #cbd5e1;
 
                                         VerticalLayout {
                                             padding: 10px;
@@ -864,7 +864,7 @@ export component AppWindow inherits Window {
 
                                             Rectangle {
                                                 height: 32px;
-                                                background: #ffffff;
+                                                background: #f8fafc;
                                                 border-radius: 4px;
                                                 border-width: 1px;
                                                 border-color: #e2e8f0;
@@ -881,9 +881,9 @@ export component AppWindow inherits Window {
                                 Rectangle {
                                     height: 84px;
                                     border-radius: 8px;
-                                    background: #f8fafc;
+                                    background: #ffffff;
                                     border-width: 1px;
-                                    border-color: #e2e8f0;
+                                    border-color: #cbd5e1;
 
                                     VerticalLayout {
                                         padding: 10px;
@@ -920,10 +920,10 @@ export component AppWindow inherits Window {
 
                                 Rectangle {
                                     height: 120px;
-                                    background: #f8fafc;
+                                    background: #ffffff;
                                     border-radius: 6px;
                                     border-width: 1px;
-                                    border-color: #e2e8f0;
+                                    border-color: #cbd5e1;
 
                                     VerticalLayout {
                                         padding: 12px;
