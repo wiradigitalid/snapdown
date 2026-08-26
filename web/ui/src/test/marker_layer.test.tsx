@@ -118,4 +118,74 @@ describe('MarkerLayer Component (LC-007)', () => {
     fireEvent.keyDown(badge1, { key: 'Delete' });
     expect(onDeleteMarker).toHaveBeenCalledWith('m1');
   });
+
+  it('click_without_drag_does_not_create_shape_or_callout', () => {
+    const onAddAnnotation = vi.fn();
+    const onAddMarker = vi.fn();
+
+    render(
+      <MarkerLayer
+        markers={mockMarkers}
+        activeTool="shape"
+        onAddAnnotation={onAddAnnotation}
+        onAddMarker={onAddMarker}
+      />
+    );
+
+    const layer = screen.getByTestId('marker-layer');
+    vi.spyOn(layer, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 400,
+      height: 300,
+      right: 400,
+      bottom: 300,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+
+    // Mouse down and mouse up at virtually same point without drag
+    fireEvent.mouseDown(layer, { clientX: 200, clientY: 150 });
+    fireEvent.mouseUp(window, { clientX: 200, clientY: 150 });
+
+    expect(onAddAnnotation).not.toHaveBeenCalled();
+    expect(onAddMarker).not.toHaveBeenCalled();
+  });
+
+  it('drag_gesture_creates_shape_annotation', () => {
+    const onAddAnnotation = vi.fn();
+
+    render(
+      <MarkerLayer
+        markers={mockMarkers}
+        activeTool="shape"
+        onAddAnnotation={onAddAnnotation}
+      />
+    );
+
+    const layer = screen.getByTestId('marker-layer');
+    vi.spyOn(layer, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 400,
+      height: 300,
+      right: 400,
+      bottom: 300,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+
+    // Drag from (100, 50) to (250, 200)
+    fireEvent.mouseDown(layer, { clientX: 100, clientY: 50 });
+    fireEvent.mouseMove(window, { clientX: 250, clientY: 200 });
+    fireEvent.mouseUp(window, { clientX: 250, clientY: 200 });
+
+    expect(onAddAnnotation).toHaveBeenCalledTimes(1);
+    const annotation = onAddAnnotation.mock.calls[0][0];
+    expect(annotation.kind).toBe('shape');
+    expect(annotation.x).toBeCloseTo(0.25);
+    expect(annotation.y).toBeCloseTo(0.166, 2);
+  });
 });

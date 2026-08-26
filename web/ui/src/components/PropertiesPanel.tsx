@@ -28,7 +28,7 @@ export interface PropertiesPanelProps {
   style?: React.CSSProperties;
 }
 
-export type PropertiesTab = 'notes' | 'element_properties';
+export type PropertiesTab = 'notes' | 'properties';
 
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   finding,
@@ -51,14 +51,20 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 
   const selectedAnnotation = annotations.find((a) => a.id === selectedAnnotationId);
 
-  // Auto-switch to Element Properties tab when an editable element (text or callout) is selected
+  // An element is considered to have configurable properties if it is selected and has typography/style options
+  const hasElementProperties = Boolean(
+    selectedAnnotation &&
+      (selectedAnnotation.kind === 'text' || selectedAnnotation.kind === 'callout')
+  );
+
+  // Auto-switch to Properties tab when an editable element is selected, and fallback to Notes if deselected
   useEffect(() => {
-    if (selectedAnnotation) {
-      if (selectedAnnotation.kind === 'text' || selectedAnnotation.kind === 'callout') {
-        setActiveTab('element_properties');
-      }
+    if (hasElementProperties) {
+      setActiveTab('properties');
+    } else {
+      setActiveTab('notes');
     }
-  }, [selectedAnnotationId, selectedAnnotation]);
+  }, [hasElementProperties, selectedAnnotationId]);
 
   if (!finding) {
     return (
@@ -110,48 +116,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         ...style,
       }}
     >
-      {/* Panel Header */}
-      <div
-        style={{
-          padding: 'var(--space-3) var(--space-4)',
-          borderBottom: '1px solid var(--color-border)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          backgroundColor: 'var(--color-surface)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <span style={{ fontSize: '1rem' }}>📝</span>
-          <span
-            style={{
-              fontSize: 'var(--text-xs)',
-              fontWeight: 800,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: 'var(--color-text)',
-            }}
-          >
-            Finding Inspector
-          </span>
-        </div>
-        <span
-          data-testid="finding-id-pill"
-          style={{
-            fontSize: 'var(--text-2xs)',
-            fontFamily: 'var(--font-mono)',
-            backgroundColor: 'var(--color-surface-sunken)',
-            padding: '2px 8px',
-            borderRadius: 'var(--radius-sm)',
-            color: 'var(--color-text-secondary)',
-            fontWeight: 600,
-          }}
-        >
-          {finding.finding.id.slice(0, 8)}…
-        </span>
-      </div>
-
-      {/* Tabs Header Navigation */}
+      {/* Top Segmented Tab Navigation Header */}
       <div
         data-testid="properties-tabs"
         style={{
@@ -159,7 +124,8 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           borderBottom: '1px solid var(--color-border)',
           backgroundColor: 'var(--color-surface-sunken)',
           padding: '0 var(--space-3)',
-          gap: 'var(--space-1)',
+          gap: 'var(--space-2)',
+          flexShrink: 0,
         }}
       >
         <button
@@ -168,19 +134,19 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           onClick={() => setActiveTab('notes')}
           style={{
             flex: 1,
-            padding: '10px var(--space-2)',
+            padding: '12px var(--space-2)',
             backgroundColor: 'transparent',
-            color: activeTab === 'notes' ? 'var(--color-primary)' : 'var(--color-text-muted)',
+            color: activeTab === 'notes' ? 'var(--color-accent)' : 'var(--color-text-muted)',
             border: 'none',
-            borderBottom: activeTab === 'notes' ? '2.5px solid var(--color-primary)' : '2.5px solid transparent',
+            borderBottom: activeTab === 'notes' ? '2.5px solid var(--color-accent)' : '2.5px solid transparent',
             fontSize: 'var(--text-xs)',
-            fontWeight: activeTab === 'notes' ? 700 : 500,
+            fontWeight: 600,
             cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '6px',
-            transition: 'all 0.15s ease',
+            gap: '8px',
+            transition: 'color 0.15s ease, border-color 0.15s ease',
           }}
         >
           <span>📋</span>
@@ -190,30 +156,49 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         <button
           type="button"
           data-testid="tab-element-properties-btn"
-          onClick={() => setActiveTab('element_properties')}
+          disabled={!hasElementProperties}
+          onClick={() => {
+            if (hasElementProperties) {
+              setActiveTab('properties');
+            }
+          }}
           style={{
             flex: 1,
-            padding: '10px var(--space-2)',
+            padding: '12px var(--space-2)',
             backgroundColor: 'transparent',
-            color: activeTab === 'element_properties' ? 'var(--color-primary)' : 'var(--color-text-muted)',
+            color:
+              !hasElementProperties
+                ? 'var(--color-text-dim)'
+                : activeTab === 'properties'
+                ? 'var(--color-accent)'
+                : 'var(--color-text-muted)',
             border: 'none',
-            borderBottom: activeTab === 'element_properties' ? '2.5px solid var(--color-primary)' : '2.5px solid transparent',
+            borderBottom:
+              activeTab === 'properties' && hasElementProperties
+                ? '2.5px solid var(--color-accent)'
+                : '2.5px solid transparent',
             fontSize: 'var(--text-xs)',
-            fontWeight: activeTab === 'element_properties' ? 700 : 500,
-            cursor: 'pointer',
+            fontWeight: 600,
+            cursor: hasElementProperties ? 'pointer' : 'not-allowed',
+            opacity: hasElementProperties ? 1 : 0.4,
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '6px',
-            transition: 'all 0.15s ease',
+            gap: '8px',
+            transition: 'color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease',
           }}
+          title={
+            hasElementProperties
+              ? 'Atur properti elemen aktif'
+              : 'Aktif saat elemen teks atau callout disorot'
+          }
         >
           <span>🎨</span>
-          <span>Element Properties</span>
+          <span>Properties</span>
         </button>
       </div>
 
-      {/* Scrollable Tab Content Body */}
+      {/* Tab Content Body (Scrollable) */}
       <div
         style={{
           flex: 1,
@@ -225,7 +210,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         }}
       >
         {activeTab === 'notes' ? (
-          /* TAB 1: NOTES & STEP MARKERS */
+          /* TAB 1: NOTES (Observation summary, step marker notes, estimated llm cost) */
           <>
             {/* Section 1: Fixed Height ~130px Observation Summary */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
@@ -339,7 +324,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                 style={{
                                   fontSize: 'var(--text-2xs)',
                                   fontFamily: 'var(--font-mono)',
-                                  color: 'var(--color-text-muted)',
+                                  color: 'var(--color-text-dim)',
                                 }}
                               >
                                 ({Math.round(m.x * 100)}%, {Math.round(m.y * 100)}%)
@@ -408,246 +393,234 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Section 3: Estimated LLM Cost Token Estimator */}
+            <TokenEstimator
+              imageWidth={finding.finding.image_width}
+              imageHeight={finding.finding.image_height}
+              summaryText={noteText}
+              markerNotes={markerNotes}
+            />
           </>
         ) : (
-          /* TAB 2: ELEMENT PROPERTIES */
+          /* TAB 2: PROPERTIES */
           <div data-testid="element-properties-tab" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            {selectedAnnotation ? (
-              selectedAnnotation.kind === 'text' || selectedAnnotation.kind === 'callout' ? (
-                /* Active Text / Callout Inspector */
-                <div
-                  data-testid="annotation-style-inspector"
-                  style={{
-                    padding: 'var(--space-4)',
-                    backgroundColor: 'var(--color-surface-sunken)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-md)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 'var(--space-4)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span
-                      style={{
-                        fontSize: 'var(--text-xs)',
-                        fontWeight: 800,
-                        color: 'var(--color-text)',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.04em',
-                      }}
-                    >
-                      🎨 {selectedAnnotation.kind === 'callout' ? 'Callout Properties' : 'Text Typography'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => onDeleteAnnotation?.(selectedAnnotation.id)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--color-danger)',
-                        cursor: 'pointer',
-                        fontSize: 'var(--text-xs)',
-                        fontWeight: 600,
-                      }}
-                    >
-                      Delete Element
-                    </button>
-                  </div>
-
-                  {/* Font Family Selector */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label
-                      style={{
-                        fontSize: 'var(--text-2xs)',
-                        color: 'var(--color-text-muted)',
-                        fontWeight: 700,
-                      }}
-                    >
-                      Font Family
-                    </label>
-                    <select
-                      value={selectedAnnotation.fontFamily || 'Inter, sans-serif'}
-                      onChange={(e) => {
-                        if (onUpdateAnnotation) {
-                          onUpdateAnnotation({
-                            ...selectedAnnotation,
-                            fontFamily: e.target.value,
-                          } as VisualCalloutAnnotation | VisualTextAnnotation);
-                        }
-                      }}
-                      style={{
-                        padding: '6px 8px',
-                        borderRadius: 'var(--radius-sm)',
-                        border: '1px solid var(--color-border)',
-                        backgroundColor: 'var(--color-surface)',
-                        color: 'var(--color-text)',
-                        fontSize: 'var(--text-xs)',
-                        outline: 'none',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <option value="Inter, sans-serif">Inter (Modern Clean)</option>
-                      <option value="'JetBrains Mono', monospace">JetBrains Mono (Code/Mono)</option>
-                      <option value="'Playfair Display', serif">Playfair Display (Serif)</option>
-                      <option value="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans (UI)</option>
-                      <option value="Impact, sans-serif">Impact (Bold Heading)</option>
-                      <option value="'Comic Sans MS', cursive, sans-serif">Casual / Sketch</option>
-                    </select>
-                  </div>
-
-                  {/* Font Size Slider & Readout */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <label
-                        style={{
-                          fontSize: 'var(--text-2xs)',
-                          color: 'var(--color-text-muted)',
-                          fontWeight: 700,
-                        }}
-                      >
-                        Font Size
-                      </label>
-                      <span style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                        {selectedAnnotation.fontSize || 14}px
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min={10}
-                      max={48}
-                      step={1}
-                      value={selectedAnnotation.fontSize || 14}
-                      onChange={(e) => {
-                        if (onUpdateAnnotation) {
-                          onUpdateAnnotation({
-                            ...selectedAnnotation,
-                            fontSize: Number(e.target.value),
-                          } as VisualCalloutAnnotation | VisualTextAnnotation);
-                        }
-                      }}
-                      style={{ width: '100%', cursor: 'pointer' }}
-                    />
-                  </div>
-
-                  {/* Style Toggles (Bold / Italic) */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <label
-                      style={{
-                        fontSize: 'var(--text-2xs)',
-                        color: 'var(--color-text-muted)',
-                        fontWeight: 700,
-                      }}
-                    >
-                      Font Weight & Style
-                    </label>
-                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const isBold =
-                            selectedAnnotation.fontWeight === 'bold' || selectedAnnotation.fontWeight === '700';
-                          onUpdateAnnotation?.({
-                            ...selectedAnnotation,
-                            fontWeight: isBold ? 'normal' : 'bold',
-                          } as VisualCalloutAnnotation | VisualTextAnnotation);
-                        }}
-                        style={{
-                          flex: 1,
-                          height: '36px',
-                          borderRadius: 'var(--radius-sm)',
-                          border: '1px solid var(--color-border)',
-                          backgroundColor:
-                            selectedAnnotation.fontWeight === 'bold' || selectedAnnotation.fontWeight === '700'
-                              ? 'var(--color-primary)'
-                              : 'var(--color-surface)',
-                          color:
-                            selectedAnnotation.fontWeight === 'bold' || selectedAnnotation.fontWeight === '700'
-                              ? 'var(--color-accent-text)'
-                              : 'var(--color-text)',
-                          fontWeight: 800,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Bold
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const isItalic = selectedAnnotation.fontStyle === 'italic';
-                          onUpdateAnnotation?.({
-                            ...selectedAnnotation,
-                            fontStyle: isItalic ? 'normal' : 'italic',
-                          } as VisualCalloutAnnotation | VisualTextAnnotation);
-                        }}
-                        style={{
-                          flex: 1,
-                          height: '36px',
-                          borderRadius: 'var(--radius-sm)',
-                          border: '1px solid var(--color-border)',
-                          backgroundColor:
-                            selectedAnnotation.fontStyle === 'italic'
-                              ? 'var(--color-primary)'
-                              : 'var(--color-surface)',
-                          color:
-                            selectedAnnotation.fontStyle === 'italic'
-                              ? 'var(--color-accent-text)'
-                              : 'var(--color-text)',
-                          fontStyle: 'italic',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Italic
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                /* Element has no customizable typography properties (Shape, Blur, Arrow) */
-                <div
-                  data-testid="element-no-properties-state"
-                  style={{
-                    padding: 'var(--space-6)',
-                    backgroundColor: 'var(--color-surface-sunken)',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px dashed var(--color-border)',
-                    textAlign: 'center',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 'var(--space-2)',
-                    color: 'var(--color-text-muted)',
-                  }}
-                >
-                  <span style={{ fontSize: '1.5rem' }}>📐</span>
-                  <span style={{ fontWeight: 700, color: 'var(--color-text)' }}>
-                    {selectedAnnotation.kind.toUpperCase()} Element
-                  </span>
-                  <span style={{ fontSize: 'var(--text-xs)' }}>
-                    Elemen ini tidak memiliki properti tipografi yang dapat disesuaikan. Anda dapat mengubah ukuran dan posisinya langsung pada canvas.
+            {selectedAnnotation && (selectedAnnotation.kind === 'text' || selectedAnnotation.kind === 'callout') ? (
+              /* Active Text / Callout Inspector */
+              <div
+                data-testid="annotation-style-inspector"
+                style={{
+                  padding: 'var(--space-4)',
+                  backgroundColor: 'var(--color-surface-sunken)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 'var(--space-4)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span
+                    style={{
+                      fontSize: 'var(--text-xs)',
+                      fontWeight: 800,
+                      color: 'var(--color-text)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    🎨 {selectedAnnotation.kind === 'callout' ? 'Callout Properties' : 'Text Typography'}
                   </span>
                   <button
                     type="button"
                     onClick={() => onDeleteAnnotation?.(selectedAnnotation.id)}
                     style={{
-                      marginTop: 'var(--space-2)',
-                      padding: '4px 12px',
-                      backgroundColor: 'transparent',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: 'var(--radius-sm)',
+                      background: 'none',
+                      border: 'none',
                       color: 'var(--color-danger)',
-                      fontSize: 'var(--text-xs)',
                       cursor: 'pointer',
+                      fontSize: 'var(--text-xs)',
+                      fontWeight: 600,
                     }}
                   >
                     Delete Element
                   </button>
                 </div>
-              )
+
+                {/* Font Family Selector */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label
+                    style={{
+                      fontSize: 'var(--text-2xs)',
+                      color: 'var(--color-text-muted)',
+                      fontWeight: 700,
+                    }}
+                  >
+                    Font Family
+                  </label>
+                  <select
+                    value={selectedAnnotation.fontFamily || 'Inter, sans-serif'}
+                    onChange={(e) => {
+                      if (onUpdateAnnotation) {
+                        onUpdateAnnotation({
+                          ...selectedAnnotation,
+                          fontFamily: e.target.value,
+                        } as VisualCalloutAnnotation | VisualTextAnnotation);
+                      }
+                    }}
+                    style={{
+                      padding: '6px 8px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--color-border)',
+                      backgroundColor: 'var(--color-surface)',
+                      color: 'var(--color-text)',
+                      fontSize: 'var(--text-xs)',
+                      outline: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="Inter, sans-serif">Inter (Modern Clean)</option>
+                    <option value="'JetBrains Mono', monospace">JetBrains Mono (Code/Mono)</option>
+                    <option value="'Playfair Display', serif">Playfair Display (Serif)</option>
+                    <option value="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans (UI)</option>
+                    <option value="Impact, sans-serif">Impact (Bold Heading)</option>
+                    <option value="'Comic Sans MS', cursive, sans-serif">Casual / Sketch</option>
+                  </select>
+                </div>
+
+                {/* Font Size Slider & Readout */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label
+                      style={{
+                        fontSize: 'var(--text-2xs)',
+                        color: 'var(--color-text-muted)',
+                        fontWeight: 700,
+                      }}
+                    >
+                      Font Size
+                    </label>
+                    <span style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                      {selectedAnnotation.fontSize || 14}px
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={10}
+                    max={48}
+                    step={1}
+                    value={selectedAnnotation.fontSize || 14}
+                    onChange={(e) => {
+                      if (onUpdateAnnotation) {
+                        onUpdateAnnotation({
+                          ...selectedAnnotation,
+                          fontSize: Number(e.target.value),
+                        } as VisualCalloutAnnotation | VisualTextAnnotation);
+                      }
+                    }}
+                    style={{ width: '100%', cursor: 'pointer' }}
+                  />
+                </div>
+
+                {/* Style Toggles (Bold / Italic) with High-Contrast Active State Indication */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label
+                    style={{
+                      fontSize: 'var(--text-2xs)',
+                      color: 'var(--color-text-muted)',
+                      fontWeight: 700,
+                    }}
+                  >
+                    Font Weight & Style
+                  </label>
+                  <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                    {(() => {
+                      const isBold =
+                        selectedAnnotation.fontWeight === 'bold' ||
+                        selectedAnnotation.fontWeight === '700';
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onUpdateAnnotation?.({
+                              ...selectedAnnotation,
+                              fontWeight: isBold ? 'normal' : 'bold',
+                            } as VisualCalloutAnnotation | VisualTextAnnotation);
+                          }}
+                          style={{
+                            flex: 1,
+                            height: '36px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: isBold
+                              ? '1.5px solid var(--color-accent)'
+                              : '1px solid var(--color-border)',
+                            backgroundColor: isBold
+                              ? 'var(--color-accent)'
+                              : 'var(--color-surface)',
+                            color: isBold
+                              ? 'var(--color-accent-text)'
+                              : 'var(--color-text)',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            boxShadow: isBold ? 'var(--shadow-sm)' : 'none',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <span>{isBold ? '✓' : ''}</span>
+                          <span>Bold</span>
+                        </button>
+                      );
+                    })()}
+
+                    {(() => {
+                      const isItalic = selectedAnnotation.fontStyle === 'italic';
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onUpdateAnnotation?.({
+                              ...selectedAnnotation,
+                              fontStyle: isItalic ? 'normal' : 'italic',
+                            } as VisualCalloutAnnotation | VisualTextAnnotation);
+                          }}
+                          style={{
+                            flex: 1,
+                            height: '36px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: isItalic
+                              ? '1.5px solid var(--color-accent)'
+                              : '1px solid var(--color-border)',
+                            backgroundColor: isItalic
+                              ? 'var(--color-accent)'
+                              : 'var(--color-surface)',
+                            color: isItalic
+                              ? 'var(--color-accent-text)'
+                              : 'var(--color-text)',
+                            fontStyle: 'italic',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            boxShadow: isItalic ? 'var(--shadow-sm)' : 'none',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <span>{isItalic ? '✓' : ''}</span>
+                          <span>Italic</span>
+                        </button>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
             ) : (
-              /* No Element Selected Empty State */
+              /* No Configurable Element Selected Empty State */
               <div
                 data-testid="element-properties-empty-state"
                 style={{
@@ -665,24 +638,16 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               >
                 <span style={{ fontSize: '1.5rem' }}>🎯</span>
                 <span style={{ fontWeight: 700, color: 'var(--color-text)' }}>
-                  Tidak ada elemen aktif
+                  Tidak ada elemen dengan properti
                 </span>
                 <span style={{ fontSize: 'var(--text-xs)' }}>
-                  Klik elemen Teks atau Callout pada canvas untuk mengubah font family, ukuran font, atau gaya teks.
+                  Sorot elemen Teks atau Callout pada canvas untuk mengubah font family, ukuran font, atau gaya teks.
                 </span>
               </div>
             )}
           </div>
         )}
       </div>
-
-      {/* Token Estimator Footer */}
-      <TokenEstimator
-        imageWidth={finding.finding.image_width}
-        imageHeight={finding.finding.image_height}
-        summaryText={noteText}
-        markerNotes={markerNotes}
-      />
     </div>
   );
 };

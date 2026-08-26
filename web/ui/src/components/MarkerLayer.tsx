@@ -268,94 +268,104 @@ export const MarkerLayer: React.FC<MarkerLayerProps> = ({
 
       if (drawingStart && currentDraw && onAddAnnotation) {
         const { x, y } = calculateNormalizedCoords(e.clientX, e.clientY);
-        const minX = Math.min(drawingStart.x, x);
-        const minY = Math.min(drawingStart.y, y);
-        const width = Math.max(Math.abs(x - drawingStart.x), 0.03);
-        const height = Math.max(Math.abs(y - drawingStart.y), 0.03);
+        const dx = Math.abs(x - drawingStart.x);
+        const dy = Math.abs(y - drawingStart.y);
+        const dragDist = Math.hypot(x - drawingStart.x, y - drawingStart.y);
 
-        if (activeTool === 'shape') {
-          const item: VisualAnnotationItem = {
-            id: `shape-${Date.now()}`,
-            kind: 'shape',
-            x: minX,
-            y: minY,
-            width,
-            height,
-            strokeColor: 'var(--color-annotation-stroke)',
-            strokeWidth: 3,
-          };
-          onAddAnnotation(item);
-          onSelectAnnotation?.(item.id);
-        } else if (activeTool === 'blur') {
-          const item: VisualAnnotationItem = {
-            id: `blur-${Date.now()}`,
-            kind: 'blur',
-            x: minX,
-            y: minY,
-            width,
-            height,
-            blurRadius: 10,
-          };
-          onAddAnnotation(item);
-          onSelectAnnotation?.(item.id);
-        } else if (activeTool === 'arrow') {
-          const item: VisualAnnotationItem = {
-            id: `arrow-${Date.now()}`,
-            kind: 'arrow',
-            startX: drawingStart.x,
-            startY: drawingStart.y,
-            endX: x,
-            endY: y,
-            color: 'var(--color-annotation-stroke)',
-            strokeWidth: 4,
-          };
-          onAddAnnotation(item);
-          onSelectAnnotation?.(item.id);
-        } else if (activeTool === 'callout') {
-          const boxW = Math.max(width, 0.16);
-          const boxH = Math.max(height, 0.08);
-          // Tail starts pointing to bottom right of the box
-          const tailX = Math.min(minX + boxW + 0.06, 0.98);
-          const tailY = Math.min(minY + boxH + 0.06, 0.98);
+        // Require drag gesture (minimum movement) for shape, blur, arrow, callout, and text
+        // Plain clicks without dragging should not create annotations (only marker tool creates on single click)
+        const MIN_DRAG_THRESHOLD = 0.015;
 
-          const item: VisualAnnotationItem = {
-            id: `callout-${Date.now()}`,
-            kind: 'callout',
-            x: minX,
-            y: minY,
-            width: boxW,
-            height: boxH,
-            tailX,
-            tailY,
-            text: 'Callout note...',
-            fontSize: 14,
-            fontFamily: 'Inter, sans-serif',
-            fontWeight: '600',
-            fontStyle: 'normal',
-            bgColor: 'var(--color-annotation-callout-bg)',
-            textColor: 'var(--color-annotation-callout-text)',
-          };
-          onAddAnnotation(item);
-          onSelectAnnotation?.(item.id);
-          setEditingTextId(item.id);
-        } else if (activeTool === 'text') {
-          const item: VisualAnnotationItem = {
-            id: `text-${Date.now()}`,
-            kind: 'text',
-            x: minX,
-            y: minY,
-            width: Math.max(width, 0.18),
-            height: Math.max(height, 0.06),
-            text: 'Text comment...',
-            fontSize: 16,
-            fontFamily: 'Inter, sans-serif',
-            fontWeight: '700',
-            fontStyle: 'normal',
-            textColor: 'var(--color-annotation-stroke)',
-          };
-          onAddAnnotation(item);
-          onSelectAnnotation?.(item.id);
-          setEditingTextId(item.id);
+        if (dragDist >= MIN_DRAG_THRESHOLD || dx >= MIN_DRAG_THRESHOLD || dy >= MIN_DRAG_THRESHOLD) {
+          const minX = Math.min(drawingStart.x, x);
+          const minY = Math.min(drawingStart.y, y);
+          const width = Math.max(dx, 0.03);
+          const height = Math.max(dy, 0.03);
+
+          if (activeTool === 'shape') {
+            const item: VisualAnnotationItem = {
+              id: `shape-${Date.now()}`,
+              kind: 'shape',
+              x: minX,
+              y: minY,
+              width,
+              height,
+              strokeColor: 'var(--color-annotation-stroke)',
+              strokeWidth: 3,
+            };
+            onAddAnnotation(item);
+            onSelectAnnotation?.(item.id);
+          } else if (activeTool === 'blur') {
+            const item: VisualAnnotationItem = {
+              id: `blur-${Date.now()}`,
+              kind: 'blur',
+              x: minX,
+              y: minY,
+              width,
+              height,
+              blurRadius: 10,
+            };
+            onAddAnnotation(item);
+            onSelectAnnotation?.(item.id);
+          } else if (activeTool === 'arrow') {
+            const item: VisualAnnotationItem = {
+              id: `arrow-${Date.now()}`,
+              kind: 'arrow',
+              startX: drawingStart.x,
+              startY: drawingStart.y,
+              endX: x,
+              endY: y,
+              color: 'var(--color-annotation-stroke)',
+              strokeWidth: 4,
+            };
+            onAddAnnotation(item);
+            onSelectAnnotation?.(item.id);
+          } else if (activeTool === 'callout') {
+            const boxW = Math.max(width, 0.16);
+            const boxH = Math.max(height, 0.08);
+            // Tail starts pointing to bottom right of the box
+            const tailX = Math.min(minX + boxW + 0.06, 0.98);
+            const tailY = Math.min(minY + boxH + 0.06, 0.98);
+
+            const item: VisualAnnotationItem = {
+              id: `callout-${Date.now()}`,
+              kind: 'callout',
+              x: minX,
+              y: minY,
+              width: boxW,
+              height: boxH,
+              tailX,
+              tailY,
+              text: 'Callout note...',
+              fontSize: 14,
+              fontFamily: 'Inter, sans-serif',
+              fontWeight: '600',
+              fontStyle: 'normal',
+              bgColor: 'var(--color-annotation-callout-bg)',
+              textColor: 'var(--color-annotation-callout-text)',
+            };
+            onAddAnnotation(item);
+            onSelectAnnotation?.(item.id);
+            setEditingTextId(item.id);
+          } else if (activeTool === 'text') {
+            const item: VisualAnnotationItem = {
+              id: `text-${Date.now()}`,
+              kind: 'text',
+              x: minX,
+              y: minY,
+              width: Math.max(width, 0.18),
+              height: Math.max(height, 0.06),
+              text: 'Text comment...',
+              fontSize: 16,
+              fontFamily: 'Inter, sans-serif',
+              fontWeight: '700',
+              fontStyle: 'normal',
+              textColor: 'var(--color-annotation-stroke)',
+            };
+            onAddAnnotation(item);
+            onSelectAnnotation?.(item.id);
+            setEditingTextId(item.id);
+          }
         }
       }
 

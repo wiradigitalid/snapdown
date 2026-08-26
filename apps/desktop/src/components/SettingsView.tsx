@@ -136,11 +136,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   border: 'none',
                   backgroundColor: isActive ? 'var(--color-surface)' : 'transparent',
                   color: isActive ? 'var(--color-text)' : 'var(--color-text-muted)',
-                  fontWeight: isActive ? 700 : 500,
+                  fontWeight: 600,
                   fontSize: 'var(--text-xs)',
                   cursor: 'pointer',
                   boxShadow: isActive ? 'var(--shadow-sm)' : 'none',
-                  transition: 'all 0.15s ease',
+                  transition: 'background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease',
                 }}
               >
                 <span>{tab.icon}</span>

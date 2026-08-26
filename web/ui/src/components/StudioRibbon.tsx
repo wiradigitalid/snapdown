@@ -177,6 +177,7 @@ export const StudioRibbon: React.FC<StudioRibbonProps> = ({
               type="button"
               data-testid={`ribbon-tool-${t.id}`}
               data-tooltip={t.tooltip}
+              title={t.tooltip}
               onClick={() => {
                 if (isCropActive && onToggleCrop) onToggleCrop();
                 onSelectTool?.(t.id);
@@ -185,52 +186,52 @@ export const StudioRibbon: React.FC<StudioRibbonProps> = ({
                 }
               }}
               style={{
-                height: '32px',
-                padding: '0 10px',
+                width: '36px',
+                height: '36px',
+                padding: 0,
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '6px',
+                justifyContent: 'center',
                 backgroundColor: isActive ? 'var(--color-accent)' : 'transparent',
                 color: isActive ? 'var(--color-accent-text)' : 'var(--color-text)',
                 border: 'none',
                 borderRadius: 'var(--radius-sm)',
-                fontSize: 'var(--text-xs)',
-                fontWeight: isActive ? 700 : 500,
+                fontSize: '15px',
                 cursor: 'pointer',
-                transition: 'all 0.12s ease',
+                transition: 'background-color 0.12s ease, color 0.12s ease',
               }}
             >
-              <span style={{ fontSize: '13px' }}>{t.icon}</span>
-              <span>{t.label}</span>
+              <span>{t.icon}</span>
             </button>
           );
         })}
 
         <div style={{ width: '1px', height: '20px', backgroundColor: 'var(--color-border)', margin: '0 2px' }} />
 
-        {/* Crop tool */}
+        {/* Crop tool (Icon-only with tooltip) */}
         <button
           type="button"
           data-testid="ribbon-crop-btn"
           data-tooltip="Crop Region"
+          title="Crop Region"
           onClick={onToggleCrop}
           style={{
-            height: '32px',
-            padding: '0 10px',
+            width: '36px',
+            height: '36px',
+            padding: 0,
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '6px',
+            justifyContent: 'center',
             backgroundColor: isCropActive ? 'var(--color-accent)' : 'transparent',
             color: isCropActive ? 'var(--color-accent-text)' : 'var(--color-text)',
             border: 'none',
             borderRadius: 'var(--radius-sm)',
-            fontSize: 'var(--text-xs)',
-            fontWeight: isCropActive ? 700 : 500,
+            fontSize: '15px',
             cursor: 'pointer',
+            transition: 'background-color 0.12s ease, color 0.12s ease',
           }}
         >
           <span>✂️</span>
-          <span>Crop</span>
         </button>
 
         <div style={{ width: '1px', height: '20px', backgroundColor: 'var(--color-border)', margin: '0 2px' }} />
