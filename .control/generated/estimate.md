@@ -11,7 +11,7 @@
 
 | Task | FR | Epic | mode | Exposure | Load | Priority | Depends on | Release |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Capture a screen region from a global hotkey | `FR-1` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
+| Capture a screen region from a global hotkey with precision guides and auto-detection | `FR-1` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
 | Compose selected Findings into a named Bundle | `FR-10` | `bundle` | `deep` | `low` — Deleting a Bundle is an irreversible action that removes fi… | — | — | `CAP-3` | r1 |
 | List and reopen Bundles | `FR-11` | `bundle` | `deep` | `low` — Deleting a Bundle is an irreversible action that removes fi… | — | — | `CAP-3` | r1 |
 | Copy a Bundle's Markdown | `FR-12` | `bundle` | `deep` | `low` — Deleting a Bundle is an irreversible action that removes fi… | — | — | `CAP-3` | r1 |
@@ -34,6 +34,10 @@
 | Reach every surface from every surface | `FR-28` | `settings` | `deep` | `medium` — No money, no personal data, no irreversible action. The wor… | — | — | — | r3 |
 | A primary surface fits the window it opens in | `FR-29` | `settings` | `deep` | `medium` — No money, no personal data, no irreversible action. The wor… | — | — | — | r3 |
 | Capture repeatedly without leaving the loop | `FR-3` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
+| Draw transparent outlined shapes and directional arrows on canvas | `FR-30` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r3 |
+| Draw blur redaction boxes over sensitive image regions | `FR-31` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r3 |
+| Place floating text and callout bubbles with font and tail controls | `FR-32` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r3 |
+| Transform and manipulate canvas annotation elements with interactive handles | `FR-33` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r3 |
 | Reduce every captured image automatically | `FR-4` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
 | Choose a Quality Budget by naming the intent | `FR-5` | `settings` | `deep` | `medium` — No money, no personal data, no irreversible action. The wor… | — | — | — | r1 |
 | See every Finding with its Note | `FR-6` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |

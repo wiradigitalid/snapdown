@@ -31,8 +31,32 @@ jobs:
       - name: Run Cargo tests
         run: cargo test --workspace
 
-  web-check:
-    name: Desktop Frontend Check
+  shared-ui-check:
+    name: Shared UI Check
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm --prefix web/ui ci
+
+      - name: Shared UI typecheck
+        run: npm --prefix web/ui run typecheck
+
+      - name: Shared UI lint
+        run: npm --prefix web/ui run lint
+
+      - name: Shared UI unit tests
+        run: npm --prefix web/ui run test
+
+  desktop-build:
+    name: Desktop Build & Verify
     runs-on: windows-latest
     steps:
       - name: Checkout repository
@@ -44,39 +68,8 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - name: Install dependencies
-        run: |
-          npm --prefix web/ui ci
-          npm --prefix apps/desktop ci
-
-      - name: Shared UI typecheck
-        run: npm --prefix web/ui run typecheck
-
-      - name: Shared UI lint
-        run: npm --prefix web/ui run lint
-
-      - name: Shared UI unit tests
-        run: npm --prefix web/ui run test
-
-      - name: Desktop Frontend typecheck
-        run: npm --prefix apps/desktop run typecheck
-
-      - name: Desktop Frontend lint
-        run: npm --prefix apps/desktop run lint
-
-      - name: Desktop Frontend unit tests
-        run: npm --prefix apps/desktop run test
-
-      - name: Desktop Frontend build
-        run: npm --prefix apps/desktop run build
-
-      - name: Build desktop application
-        run: npm --prefix apps/desktop run tauri build -- --no-bundle
+      - name: Build desktop application (release)
+        run: cargo build --release --workspace
 
       - name: Verify desktop executable
         shell: pwsh

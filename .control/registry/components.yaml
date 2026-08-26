@@ -104,7 +104,9 @@ platform_owns: []
 containers:
   - id: desktop-app
     title: Snapdown Desktop
-    technology: Tauri v2 — Rust core, React + Vite + TypeScript webview
+    technology: Rust core, native Slint UI (i-slint-backend-winit on Windows). Was Tauri v2 with a
+      React + Vite + TypeScript webview until DEC-007; the previous implementation is archived at
+      archive/desktop-tauri
     built: true
     runs: The Reviewer's Windows 11 machine, as one signed-in user process with a tray icon
   - id: mcp-bridge

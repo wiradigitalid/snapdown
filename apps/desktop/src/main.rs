@@ -1,22 +1,74 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod hotkey;
+mod startup;
+mod tray;
+
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 
+use global_hotkey::hotkey::HotKey;
+use global_hotkey::{GlobalHotKeyEvent, HotKeyState};
 use image::imageops::crop_imm;
 use slint::{ComponentHandle, ModelRc, SharedPixelBuffer, VecModel};
 use snapdown_capture::RegionCapturer;
 use snapdown_core::domain::finding::{Finding, Note};
 use snapdown_core::domain::image::ImageDimensions;
-use snapdown_core::domain::setting::{QualityBudget, Setting, SettingKey, SettingValue};
+use snapdown_core::domain::setting::{
+    HotkeyAction, QualityBudget, Setting, SettingKey, SettingValue,
+};
 use snapdown_core::ports::{BlobStore, Clock, EntropySource, FindingStore, SettingsStore};
 use snapdown_store::image::ImageReducer;
 use snapdown_store::sqlite::{SqliteFindingStore, SqliteSettingsStore};
 use snapdown_store::system::{SystemClock, SystemEntropySource};
 use snapdown_store::vault::VaultBlobStore;
 
+use hotkey::{DesktopGlobalHotkeyBackend, DesktopHotkeyRegistrar, GlobalShortcutBackend};
+#[cfg(not(windows))]
+use startup::NoopAutoStartBackend;
+#[cfg(windows)]
+use startup::WindowsRegistryAutoStartBackend;
+use startup::{reconcile_startup_on_boot, AutoStartBackend, DesktopStartupRegistrar};
+use tray::{AppTray, TrayAction};
+
+const SINGLE_INSTANCE_MUTEX_NAME: &str = "Snapdown-SingleInstance-id.wiradigital.snapdown";
+
 slint::include_modules!();
+
+/// Acquires a named OS mutex for the lifetime of the process. Returns `None` when another
+/// instance already holds it, so the caller can exit instead of opening a second tray icon.
+/// The returned handle must be kept alive (bound to a variable) until the process exits.
+#[cfg(windows)]
+fn acquire_single_instance_lock() -> Option<windows::Win32::Foundation::HANDLE> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
+    use windows::Win32::System::Threading::CreateMutexW;
+
+    let wide_name: Vec<u16> = SINGLE_INSTANCE_MUTEX_NAME
+        .encode_utf16()
+        .chain(Some(0))
+        .collect();
+
+    unsafe {
+        match CreateMutexW(None, false, PCWSTR(wide_name.as_ptr())) {
+            Ok(handle) => {
+                if GetLastError() == ERROR_ALREADY_EXISTS {
+                    None
+                } else {
+                    Some(handle)
+                }
+            }
+            Err(_) => Some(windows::Win32::Foundation::HANDLE::default()),
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn acquire_single_instance_lock() -> Option<()> {
+    Some(())
+}
 
 fn default_vault_path() -> PathBuf {
     if let Some(user_dirs) = std::env::var_os("USERPROFILE")
@@ -224,6 +276,16 @@ fn load_findings_into_window(
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Keep the mutex handle alive for the whole process; a second launch finds it already
+    // held and exits instead of opening a duplicate tray icon and window.
+    let _single_instance_lock = match acquire_single_instance_lock() {
+        Some(lock) => lock,
+        None => {
+            eprintln!("Snapdown is already running.");
+            return Ok(());
+        }
+    };
+
     let main_window = AppWindow::new()?;
     let ctx = Arc::new(AppContext::init());
 
@@ -269,11 +331,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // Close hides to the tray instead of exiting; Exit is reached only via the tray menu.
     let win_close = main_window.as_weak();
     main_window.on_close_clicked(move || {
         if let Some(win) = win_close.upgrade() {
             win.hide().unwrap();
-            std::process::exit(0);
         }
     });
 
@@ -448,6 +510,146 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    main_window.run()?;
+    // --- Tray icon, global hotkeys, and startup registration ---
+    let tray_icon_bytes = include_bytes!("../assets/icon.png");
+    let tray_icon_rgba = image::load_from_memory(tray_icon_bytes)
+        .expect("embedded tray icon must decode")
+        .to_rgba8();
+    let (tray_icon_w, tray_icon_h) = tray_icon_rgba.dimensions();
+    let app_tray = match AppTray::new(tray_icon_rgba.into_raw(), tray_icon_w, tray_icon_h) {
+        Ok(tray) => Some(tray),
+        Err(e) => {
+            eprintln!("Failed to create tray icon: {e}");
+            None
+        }
+    };
+
+    let hotkey_backend = match DesktopGlobalHotkeyBackend::new() {
+        Ok(backend) => Some(Arc::new(backend) as Arc<dyn GlobalShortcutBackend>),
+        Err(e) => {
+            eprintln!("Failed to init global hotkey manager: {e}");
+            None
+        }
+    };
+    let mut hotkey_registrar =
+        DesktopHotkeyRegistrar::new(ctx.settings_store.clone(), hotkey_backend);
+    if let Err(e) = hotkey_registrar.init_from_store() {
+        eprintln!("Failed to init hotkeys from store: {e}");
+    }
+    let hotkey_registrar = Arc::new(Mutex::new(hotkey_registrar));
+
+    #[cfg(windows)]
+    let autostart_backend: Arc<dyn AutoStartBackend> =
+        match WindowsRegistryAutoStartBackend::current_executable(
+            "Snapdown",
+            vec!["--autostart".to_string()],
+        ) {
+            Ok(backend) => Arc::new(backend),
+            Err(e) => {
+                eprintln!("Failed to resolve current executable for autostart: {e}");
+                Arc::new(WindowsRegistryAutoStartBackend::new(
+                    "Snapdown",
+                    PathBuf::from("Snapdown.exe"),
+                    vec!["--autostart".to_string()],
+                ))
+            }
+        };
+    #[cfg(not(windows))]
+    let autostart_backend: Arc<dyn AutoStartBackend> = Arc::new(NoopAutoStartBackend);
+
+    let mut startup_registrar = DesktopStartupRegistrar::new(autostart_backend);
+    let boot_clock = SystemClock::new();
+    let is_autostart_launch = std::env::args().any(|arg| arg == "--autostart");
+    let _ = reconcile_startup_on_boot(
+        ctx.settings_store.as_ref(),
+        &mut startup_registrar,
+        &boot_clock,
+    );
+
+    // Per FR-18/BR-121: launching via Windows startup opens no window, tray icon only.
+    if !is_autostart_launch {
+        main_window.show()?;
+    }
+
+    // Poll tray-icon and global-hotkey events on the UI thread; both crates deliver events
+    // through crossbeam channels rather than hooking into Slint's winit event loop directly.
+    let window_for_events = main_window.as_weak();
+    let hotkey_poll_registrar = hotkey_registrar.clone();
+    let poll_timer = slint::Timer::default();
+    poll_timer.start(
+        slint::TimerMode::Repeated,
+        std::time::Duration::from_millis(150),
+        move || {
+            if let Some(tray) = &app_tray {
+                if let Some(action) = tray.poll_action() {
+                    match action {
+                        TrayAction::Capture => {
+                            if let Some(win) = window_for_events.upgrade() {
+                                win.show().unwrap();
+                                win.invoke_capture_clicked();
+                            }
+                        }
+                        TrayAction::OpenEditor => {
+                            if let Some(win) = window_for_events.upgrade() {
+                                win.show().unwrap();
+                                win.window().set_minimized(false);
+                            }
+                        }
+                        TrayAction::Settings => {
+                            if let Some(win) = window_for_events.upgrade() {
+                                win.show().unwrap();
+                                win.window().set_minimized(false);
+                                win.invoke_settings_clicked();
+                            }
+                        }
+                        TrayAction::Quit => {
+                            std::process::exit(0);
+                        }
+                    }
+                }
+            }
+
+            if let Ok(event) = GlobalHotKeyEvent::receiver().try_recv() {
+                if event.state == HotKeyState::Pressed {
+                    let action = hotkey_poll_registrar.lock().ok().and_then(|registrar| {
+                        registrar
+                            .get_bindings()
+                            .iter()
+                            .find_map(|(action, shortcut)| {
+                                if shortcut.is_empty() {
+                                    return None;
+                                }
+                                HotKey::from_str(shortcut)
+                                    .ok()
+                                    .filter(|hk| hk.id() == event.id)
+                                    .map(|_| *action)
+                            })
+                    });
+
+                    if let Some(action) = action {
+                        match action {
+                            HotkeyAction::Capture => {
+                                if let Some(win) = window_for_events.upgrade() {
+                                    win.show().unwrap();
+                                    win.invoke_capture_clicked();
+                                }
+                            }
+                            HotkeyAction::OpenEditor => {
+                                if let Some(win) = window_for_events.upgrade() {
+                                    win.show().unwrap();
+                                    win.window().set_minimized(false);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+    );
+
+    // `run_event_loop()` quits as soon as the last window is hidden, which would tear down
+    // the tray icon along with the window on close. Only the tray's Exit action (which calls
+    // `std::process::exit`) or `slint::quit_event_loop()` should end the process.
+    slint::run_event_loop_until_quit()?;
     Ok(())
 }

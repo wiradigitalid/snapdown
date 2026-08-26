@@ -143,7 +143,13 @@ def derive_api(root: Path) -> "Derived":      # noqa: F821
 
     # 1. Local API — desktop, loopback only, read-only (AD-5). Hand-routed string matching, not a
     #    router macro, so the routes are read from the `clean_path ==` / `starts_with` comparisons.
-    h = root / "apps" / "desktop" / "src-tauri" / "src" / "server" / "handlers.rs"
+    #
+    #    Updated 2026-08-26 after the full migration off Tauri/React onto Slint (apps/desktop is
+    #    now the Slint app; the Tauri implementation that used to serve this API from
+    #    src-tauri/src/server/handlers.rs is archived at archive/desktop-tauri and is not part of
+    #    the active workspace). The Slint app has no local HTTP server yet, so this correctly
+    #    reads every route as `unread` until one is (re)built — see DEC-<slint-migration>.
+    h = root / "apps" / "desktop" / "src" / "server.rs"
     if h.exists():
         content = read(h)
         local = [
@@ -158,12 +164,12 @@ def derive_api(root: Path) -> "Derived":      # noqa: F821
                 rows.append(Row(              # noqa: F821
                     key=f"{verb} `{path.upper()}` agent-access",
                     cells=[verb, f"`{path}`", "`agent-access`", purpose, "active"],
-                    source="apps/desktop/src-tauri/src/server/handlers.rs",
+                    source="apps/desktop/src/server.rs",
                 ))
             else:
-                unread.append(f"{verb} {path} not found in handlers.rs")
+                unread.append(f"{verb} {path} not found in server.rs")
     else:
-        unread.append("apps/desktop/src-tauri/src/server/handlers.rs not found")
+        unread.append("apps/desktop/src/server.rs not found — the Slint app has no local HTTP server yet")
 
     # 2. Web service — Go, chi. These ARE declared with router calls, so they can be read properly.
     g = root / "apps" / "web-service" / "internal" / "server" / "server.go"
@@ -216,43 +222,54 @@ def derive_screen(root: Path) -> "Derived":   # noqa: F821
     The engine's screen key is `{spa}:{route}`, where `spa` comes from a screen name written
     `<spa>/<Component>`. This product's plan writes plain screen names, so every key is `?:{route}`.
     That is the plan's shape, not a bug here, and the keys below match it deliberately.
+
+    Updated 2026-08-26 after the full migration off Tauri/React onto Slint. `apps/desktop` is now
+    the Slint app (one `.slint` UI file, not one React component per screen); the Tauri/React
+    implementation that used to back most of the rows below is archived at `archive/desktop-tauri`
+    and is not part of the active product. `web/ui` (`shared` below) still exists on disk with the
+    React components it always had, but nothing in the active workspace consumes it any more —
+    apps/desktop dropped it when it moved to Slint, and apps/web-service (Go) never did. A file
+    surviving there is not evidence a screen is built, so desktop-owned rows are read from the
+    Slint source instead of `shared`, and correctly come back `unread` for everything not yet
+    rebuilt there. See DEC-<slint-migration>.
     """
     rows: list[Row] = []                      # noqa: F821
     unread: list[str] = []
 
     desktop = root / "apps" / "desktop" / "src"
+    desktop_ui = root / "apps" / "desktop" / "ui"
     shared = root / "web" / "ui" / "src"
 
     # route -> (screen name, owning component, actor, UC served, the file that must exist)
     plan = [
         ("— (the window frame itself)", "Editor shell", "settings", "Reviewer", "UC-24, UC-25",
-         desktop / "components" / "EditorShell.tsx"),
+         desktop_ui / "appwindow.slint"),
         ("— (one transparent window per monitor)", "Capture Overlay", "finding", "Reviewer", "UC-1, UC-2",
-         desktop / "components" / "CaptureOverlay.tsx"),
+         desktop_ui / "appwindow.slint"),
         ("— (anchored to the selected region)", "Capture note field", "finding", "Reviewer", "UC-1",
-         desktop / "components" / "CaptureNoteField.tsx"),
+         desktop_ui / "appwindow.slint"),
         ("— (transient, never takes focus)", "Capture confirmation toast", "finding", "Reviewer", "UC-2",
-         shared / "components" / "Toast.tsx"),
+         desktop_ui / "components" / "toast.slint"),
         ("/findings", "Editor — Findings", "finding", "Reviewer", "UC-3, UC-4, UC-6",
-         desktop / "components" / "FindingsView.tsx"),
+         desktop_ui / "screens" / "findings-view.slint"),
         ("/findings/:id", "Finding detail with Marker canvas", "finding", "Reviewer", "UC-4, UC-5",
-         shared / "components" / "MarkerLayer.tsx"),
+         desktop_ui / "components" / "marker-layer.slint"),
         ("/findings/delete` (modal)", "Delete Findings confirmation", "finding", "Reviewer", "UC-7",
-         shared / "components" / "ConfirmDialog.tsx"),
+         desktop_ui / "components" / "confirm-dialog.slint"),
         ("/findings/orphans", "Orphan report", "finding", "Reviewer", "UC-8",
-         desktop / "components" / "OrphanReportView.tsx"),
+         desktop_ui / "screens" / "orphan-report-view.slint"),
         ("/bundles", "Editor — Bundles", "bundle", "Reviewer", "UC-10, UC-11, UC-23",
-         desktop / "components" / "BundleView.tsx"),
+         desktop_ui / "screens" / "bundle-view.slint"),
         ("/bundles/compose` (modal)", "Compose Bundle", "bundle", "Reviewer", "UC-9",
-         shared / "components" / "BundleComposer.tsx"),
+         desktop_ui / "components" / "bundle-composer.slint"),
         ("/bundles/:id", "Bundle detail", "bundle", "Reviewer", "UC-11, UC-12, UC-23",
-         desktop / "components" / "BundleView.tsx"),
+         desktop_ui / "screens" / "bundle-view.slint"),
         ("/bundles/:id/publish` (modal)", "Publish and unpublish a Bundle", "sharing", "Reviewer", "UC-20, UC-22",
-         desktop / "components" / "PublishDialog.tsx"),
+         desktop_ui / "components" / "publish-dialog.slint"),
         ("/settings", "Settings", "settings", "Reviewer", "UC-13, UC-14, UC-15, UC-16",
-         desktop / "App.tsx"),
+         desktop_ui / "screens" / "settings-view.slint"),
         ("/settings/agent-access", "Settings — Agent access", "agent-access", "Reviewer", "UC-17, UC-19",
-         desktop / "components" / "AgentAccessView.tsx"),
+         desktop_ui / "screens" / "agent-access-view.slint"),
         ("/b/:slug", "Published Bundle reader", "sharing", "Remote coding agent, Reviewer", "UC-21",
          shared / "screens" / "PublishedBundleReader.tsx"),
         ("/b/:slug` (the refused state)", "Publication not available", "sharing", "Remote coding agent, Reviewer", "UC-22",

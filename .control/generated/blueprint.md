@@ -8,11 +8,11 @@ This is what the owner reads at **G3 Blueprint**, instead of seven files. Its co
 
 ## Use case catalogue
 
-**26 use cases**, 4 marked `critical`.
+**27 use cases**, 4 marked `critical`.
 
 | id | Use case | Component | Satisfies | critical |
 | --- | --- | --- | --- | --- |
-| `UC-1` | I press a key, box the thing that is wrong, and say what is wrong with it | `finding` | `FR-1`, `FR-2` | no |
+| `UC-1` | I press a key, use precision crosshair/loupe or 1-click window/panel auto-detect, and say what is wrong with… | `finding` | `FR-1`, `FR-2` | no |
 | `UC-10` | I look back at the reviews I have already put together | `bundle` | `FR-11` | no |
 | `UC-11` | I drop a whole review straight into the conversation I am having with my agent | `bundle` | `FR-12` | no |
 | `UC-12` | I get rid of a review and everything in it | `bundle` | `FR-14` | yes |
@@ -31,6 +31,7 @@ This is what the owner reads at **G3 Blueprint**, instead of seven files. Its co
 | `UC-24` | I can tell what I have opened and which part of it I am in | `settings` | `FR-27` | no |
 | `UC-25` | I can get to any part of Snapdown from wherever I happen to be | `settings` | `FR-28` | no |
 | `UC-26` | I can see everything a screen offers me without hunting for it | `settings` | `FR-29` | no |
+| `UC-27` | I annotate a screenshot with visual shapes, arrows, callouts, text, or blur redaction | `finding` | `FR-30`, `FR-31`, `FR-32`, `FR-33` | no |
 | `UC-3` | I look at everything I have captured so far | `finding` | `FR-6` | no |
 | `UC-4` | I reword a note now that I have read it back | `finding` | `FR-7` | no |
 | `UC-5` | I point at three separate spots inside one screenshot | `finding` | `FR-8` | no |
@@ -428,6 +429,7 @@ neither is a container, and a row's owning component is what decides which store
 | 1 | `finding` | `finding` | One observation. The row exists only while its image file does (AD-2) | `id` UUIDv7 pk · `image_path` relative to the Vault · `image_width` · `image_height` · `captured_at` · `source_monitor` · `region` | draft |
 | 2 | `note` | `finding` | The prose body of one Finding's Note. The numbered lines are not here — they belong to `marker` (AD-1) | `id` pk · `finding_id` fk unique · `body` · `updated_at` | draft |
 | 3 | `marker` | `finding` | One numbered Marker and the Note line that is the same thing as it. `ordinal` is the badge number and the line number at once | `id` pk · `finding_id` fk · `ordinal` unique per finding, from 1, no gaps · `x` · `y` normalised 0–1 (AD-3) · `comment` | draft |
+| 13 | `visual_annotation` | `finding` | Visual markup elements (Shape, Callout, Blur, Arrow, Text) on canvas overlay. Does not bind to Markdown note lines. | `id` pk · `finding_id` fk · `kind` (shape, callout, blur, arrow, text) · `properties_json` (coords, dimensions, style, font, text, tail) · `created_at` | draft |
 | 4 | `bundle` | `bundle` | One composed Bundle, including the composed Markdown itself so that every handoff path serves identical bytes (AD-9) | `id` pk · `name` · `markdown` · `markdown_path` relative to the Vault · `composed_at` | draft |
 | 5 | `bundle_item` | `bundle` | The membership of one Finding in one Bundle, and the path of the Marker-burned image copy written for it | `id` pk · `bundle_id` fk · `finding_id` fk · `position` · `image_path` · unique on (`bundle_id`, `finding_id`) | draft |
 | 6 | `publication` | `sharing` | Where a Bundle is published and whether it is still live. `slug` is generated independently of every id here (AD-8) | `id` pk · `bundle_id` fk unique · `slug` unique · `base_url` · `published_at` · `unpublished_at` nullable · `last_error` nullable | draft |
@@ -509,26 +511,26 @@ reader's browser. A desktop surface that is a window rather than a route has `�
 `No` is stable. A new row takes the next number; a removed one keeps its number with
 `status: removed`.
 
-#### Rows
+#### Rows & UI Design Assets Mapping
 
-| No | Screen | Route | Owning component | Actor | UC served |
-| --- | --- | --- | --- | --- | --- |
-| 0 | Editor shell | — (the window frame itself) | `settings` | Reviewer | UC-24, UC-25 |
-| 1 | Capture Overlay | — (one transparent window per monitor) | `finding` | Reviewer | UC-1, UC-2 |
-| 2 | Capture note field | — (anchored to the selected region) | `finding` | Reviewer | UC-1 |
-| 3 | Capture confirmation toast | — (transient, never takes focus) | `finding` | Reviewer | UC-2 |
-| 4 | Editor — Findings | `/findings` | `finding` | Reviewer | UC-3, UC-4, UC-6 |
-| 5 | Finding detail with Marker canvas | `/findings/:id` | `finding` | Reviewer | UC-4, UC-5 |
-| 6 | Delete Findings confirmation | `/findings/delete` (modal) | `finding` | Reviewer | UC-7 |
-| 7 | Orphan report | `/findings/orphans` | `finding` | Reviewer | UC-8 |
-| 8 | Editor — Bundles | `/bundles` | `bundle` | Reviewer | UC-10, UC-11, UC-23 |
-| 9 | Compose Bundle | `/bundles/compose` (modal) | `bundle` | Reviewer | UC-9 |
-| 10 | Bundle detail | `/bundles/:id` | `bundle` | Reviewer | UC-11, UC-12, UC-23 |
-| 11 | Publish and unpublish a Bundle | `/bundles/:id/publish` (modal) | `sharing` | Reviewer | UC-20, UC-22 |
-| 12 | Settings | `/settings` | `settings` | Reviewer | UC-13, UC-14, UC-15, UC-16 |
-| 13 | Settings — Agent access | `/settings/agent-access` | `agent-access` | Reviewer | UC-17, UC-19 |
-| 14 | Published Bundle reader | `/b/:slug` | `sharing` | Remote coding agent, Reviewer | UC-21 |
-| 15 | Publication not available | `/b/:slug` (the refused state) | `sharing` | Remote coding agent, Reviewer | UC-22 |
+| No | Screen | Route | Owning component | Actor | UC served | Permanent HTML Asset (.how Layer) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | Editor shell | — (the window frame itself) | `settings` | Reviewer | UC-24, UC-25 | [`.how/finding/01-ux/assets/01-studio-workspace.html`](../finding/01-ux/assets/01-studio-workspace.html) |
+| 1 | Capture Overlay | — (one transparent window per monitor) | `finding` | Reviewer | UC-1, UC-2 | [`.how/finding/01-ux/assets/02-capture-overlay.html`](../finding/01-ux/assets/02-capture-overlay.html) |
+| 2 | Capture note field | — (anchored to the selected region) | `finding` | Reviewer | UC-1 | [`.how/finding/01-ux/assets/02-capture-overlay.html`](../finding/01-ux/assets/02-capture-overlay.html) |
+| 3 | Capture confirmation toast | — (transient, never takes focus) | `finding` | Reviewer | UC-2 | [`.how/finding/01-ux/assets/01-studio-workspace.html`](../finding/01-ux/assets/01-studio-workspace.html) |
+| 4 | Editor — Findings | `/findings` | `finding` | Reviewer | UC-3, UC-4, UC-6 | [`.how/finding/01-ux/assets/01-studio-workspace.html`](../finding/01-ux/assets/01-studio-workspace.html) |
+| 5 | Finding detail with Marker canvas | `/findings/:id` | `finding` | Reviewer | UC-4, UC-5 | [`.how/finding/01-ux/assets/01-studio-workspace.html`](../finding/01-ux/assets/01-studio-workspace.html) |
+| 6 | Delete Findings confirmation | `/findings/delete` (modal) | `finding` | Reviewer | UC-7 | [`.how/bundle/01-ux/assets/05-saved-bundles-drawer.html`](../bundle/01-ux/assets/05-saved-bundles-drawer.html) |
+| 7 | Orphan report | `/findings/orphans` | `finding` | Reviewer | UC-8 | [`.how/finding/01-ux/assets/01-studio-workspace.html`](../finding/01-ux/assets/01-studio-workspace.html) |
+| 8 | Editor — Bundles | `/bundles` | `bundle` | Reviewer | UC-10, UC-11, UC-23 | [`.how/bundle/01-ux/assets/05-saved-bundles-drawer.html`](../bundle/01-ux/assets/05-saved-bundles-drawer.html) |
+| 9 | Compose Bundle | `/bundles/compose` (modal) | `bundle` | Reviewer | UC-9 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
+| 10 | Bundle detail | `/bundles/:id` | `bundle` | Reviewer | UC-11, UC-12, UC-23 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
+| 11 | Publish and unpublish a Bundle | `/bundles/:id/publish` (modal) | `sharing` | Reviewer | UC-20, UC-22 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
+| 12 | Settings — General & Quality | `/settings` | `settings` | Reviewer | UC-13, UC-14, UC-15, UC-16 | [`.how/settings/01-ux/assets/06a-settings-general.html`](../settings/01-ux/assets/06a-settings-general.html)<br>[`.how/settings/01-ux/assets/06b-settings-hotkeys.html`](../settings/01-ux/assets/06b-settings-hotkeys.html)<br>[`.how/settings/01-ux/assets/06d-settings-about.html`](../settings/01-ux/assets/06d-settings-about.html) |
+| 13 | Settings — Agent access | `/settings/agent-access` | `agent-access` | Reviewer | UC-17, UC-19 | [`.how/settings/01-ux/assets/06c-settings-agent-bridge.html`](../settings/01-ux/assets/06c-settings-agent-bridge.html) |
+| 14 | Published Bundle reader | `/b/:slug` | `sharing` | Remote coding agent, Reviewer | UC-21 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
+| 15 | Publication not available | `/b/:slug` (the refused state) | `sharing` | Remote coding agent, Reviewer | UC-22 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 
 Row 0 is numbered 0 rather than 16 deliberately. Numbers here are stable and a new row normally takes
 the next one — but the shell is not a new surface, it is the frame every other row has always been

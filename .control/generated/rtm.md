@@ -9,14 +9,18 @@ rtm:
   FR: FR-1
   DEC: []
   UC: UC-1
-  story: ''
-  wave: ''
-  release: ''
-  test: []
-  status: ''
-  green: false
+  story: W8-S4
+  wave: W8
+  release: r3
+  test:
+  - vitest::the_overlay_asks_for_a_note_before_it_writes_a_finding
+  - vitest::enter_saves_the_note_with_the_finding
+  - vitest::esc_cancels_the_capture_and_writes_no_finding
+  - cargo::a_capture_carries_its_note_through_to_the_stored_finding
+  status: done
   exempt: false
-  broken_at: story
+  green: true
+  broken_at: ''
 - BG: BG-1
   CAP: CAP-4
   FR: FR-10
@@ -212,14 +216,18 @@ rtm:
   FR: FR-2
   DEC: []
   UC: UC-1
-  story: ''
-  wave: ''
-  release: ''
-  test: []
-  status: ''
-  green: false
+  story: W8-S4
+  wave: W8
+  release: r3
+  test:
+  - vitest::the_overlay_asks_for_a_note_before_it_writes_a_finding
+  - vitest::enter_saves_the_note_with_the_finding
+  - vitest::esc_cancels_the_capture_and_writes_no_finding
+  - cargo::a_capture_carries_its_note_through_to_the_stored_finding
+  status: done
   exempt: false
-  broken_at: story
+  green: true
+  broken_at: ''
 - BG: BG-2
   CAP: CAP-7
   FR: FR-20
@@ -382,6 +390,62 @@ rtm:
   FR: FR-3
   DEC: []
   UC: UC-2
+  story: W8-S1
+  wave: W8
+  release: r3
+  test:
+  - cargo::a_captured_region_decodes_as_a_real_image
+  - cargo::a_captured_region_has_the_dimensions_that_were_requested
+  - cargo::a_captured_image_is_not_uniformly_one_colour
+  - cargo::a_region_larger_than_the_monitor_is_refused_not_clamped_silently
+  status: done
+  exempt: false
+  green: true
+  broken_at: ''
+- BG: BG-1
+  CAP: CAP-11
+  FR: FR-30
+  DEC: []
+  UC: UC-27
+  story: ''
+  wave: ''
+  release: ''
+  test: []
+  status: ''
+  green: false
+  exempt: false
+  broken_at: story
+- BG: BG-1
+  CAP: CAP-11
+  FR: FR-31
+  DEC: []
+  UC: UC-27
+  story: ''
+  wave: ''
+  release: ''
+  test: []
+  status: ''
+  green: false
+  exempt: false
+  broken_at: story
+- BG: BG-1
+  CAP: CAP-11
+  FR: FR-32
+  DEC: []
+  UC: UC-27
+  story: ''
+  wave: ''
+  release: ''
+  test: []
+  status: ''
+  green: false
+  exempt: false
+  broken_at: story
+- BG: BG-1
+  CAP: CAP-11
+  FR: FR-33
+  DEC: []
+  UC: UC-27
   story: ''
   wave: ''
   release: ''

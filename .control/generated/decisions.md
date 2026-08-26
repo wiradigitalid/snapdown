@@ -4,7 +4,7 @@
 
 Decisions are no longer looked up through the memlog — the memlog goes back to being just a pass log.
 
-**5 decisions** — applied: 5.
+**7 decisions** — applied: 5 · draft: 2.
 
 | id | Title | Status | Type | Touches | File |
 | --- | --- | --- | --- | --- | --- |
@@ -13,3 +13,5 @@ Decisions are no longer looked up through the memlog — the memlog goes back to
 | `DEC-003` | Snapdown is one process wearing two window personas, not two executables | `applied` | — | `.control/product-glossary.md`, `.how/_platform/ARCHITECTURE-SPINE.md`, `.how/_platform/c4-l2-containers.md`, `.how/_platform/c4-l3-desktop-app.md`, `.how/_platform/inventory-screen.md`, `.how/settings/04-components/LC-028-editor-shell.md`, `.what/_prd/capture-to-markdown/prd.md`, `.what/_product-brief/brief.md`, `.what/business-rules.md`, `.what/settings/04-usecases/EXPERIENCE.md` | `.control/decisions/DEC-003-one-process-two-windows.md` |
 | `DEC-004` | The Quality Budget is chosen as a named intent, and Auto derives the numbers per capture | `applied` | — | `.control/product-glossary.md`, `.control/registry/waves.yaml`, `.how/finding/02-contracts/contract-inventory.md`, `.how/finding/04-components/LC-003-image-reducer.md`, `.how/finding/SDD-finding.md`, `.how/settings/01-ux/DESIGN.md`, `.how/settings/02-contracts/contract-inventory.md`, `.how/settings/05-model/data-model.md`, `.how/settings/SDD-settings.md`, `.what/_prd/capture-to-markdown/prd.md`, `.what/_product-brief/brief.md`, `.what/business-rules.md`, `.what/finding/05-scenarios/SCN-03-the-quality-budget-that-resolves-differently.md`, `.what/settings/02-rules/rules-settings.md`, `.what/settings/03-domain/domain-model.md`, `.what/settings/04-usecases/UC-13-decide-how-much-picture-quality-a-screenshot-is-worth.md`, `.what/settings/SRS-settings.md` | `.control/decisions/DEC-004-quality-budget-presets.md` |
 | `DEC-005` | The desktop experience is finished before `sharing` and `agent-access` are touched again | `applied` | — | `.control/registry/defects.yaml`, `.control/registry/waves.yaml`, `.how/_platform/inventory-screen.md`, `.how/bundle/01-ux/DESIGN.md`, `.how/bundle/SDD-bundle.md`, `.how/settings/01-ux/DESIGN.md`, `.how/settings/04-components/LC-028-editor-shell.md`, `.what/_product-brief/brief.md`, `.what/bundle/04-usecases/EXPERIENCE.md`, `.what/business-rules.md`, `.what/settings/04-usecases/EXPERIENCE.md` | `.control/decisions/DEC-005-desktop-first-ordering.md` |
+| `DEC-006` | Every stored image Snapdown writes is PNG | `draft` | — | — | `.control/decisions/DEC-006-stored-image-format-is-png.md` |
+| `DEC-007` | The desktop application's UI moves from a Tauri v2 + React webview to native Slint | `draft` | — | — | `.control/decisions/DEC-007-desktop-moves-to-slint.md` |

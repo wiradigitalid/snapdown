@@ -48,4 +48,18 @@ dag:
     - W7-S2
   - parallel:
     - W7-S3
+- wave: W8
+  order:
+  - parallel:
+    - W8-S1
+  - parallel:
+    - W8-S2
+  - parallel:
+    - W8-S3
+  - parallel:
+    - W8-S4
+  - parallel:
+    - W8-S5
+  - parallel:
+    - W8-S6
 ```

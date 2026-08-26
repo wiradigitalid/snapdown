@@ -127,7 +127,10 @@ Product Component folders are in the table above and are deliberately not expand
 ```
 
 `design-system.md` does not exist in `_platform/`. It is optional at every `mode` and belongs to
-`wdi-ux`; two React front ends make it worth having, and it is written when `wdi-ux` runs.
+`wdi-ux`; a shared token/component vocabulary across the Slint desktop app and `web-ui`'s React
+front end makes it worth having, and it is written when `wdi-ux` runs. (Corrected 2026-08-26,
+narrowly: this line said "two React front ends" before `DEC-007` moved the desktop app to Slint.
+The rest of this map's `2026-08-22` Verified stamp was not re-checked in this pass.)
 
 ## `_bmad-output/` and `.work/`
 

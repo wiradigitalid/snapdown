@@ -27,9 +27,9 @@ jobs:
           fail=0
 
           echo "--- captured images anywhere in the tree ---"
-          if git ls-files -- '*.png' '*.jpg' '*.jpeg' '*.webp'                | grep -vE '^apps/desktop/src-tauri/icons/' | grep -q .; then
+          if git ls-files -- '*.png' '*.jpg' '*.jpeg' '*.webp'                | grep -vE '^apps/desktop/assets/app-icon\.(png|ico)$|^archive/desktop-tauri/src-tauri/icons/' | grep -q .; then
             echo "::error::A captured image is tracked outside the app icon set."
-            git ls-files -- '*.png' '*.jpg' '*.jpeg' '*.webp'               | grep -vE '^apps/desktop/src-tauri/icons/'
+            git ls-files -- '*.png' '*.jpg' '*.jpeg' '*.webp'               | grep -vE '^apps/desktop/assets/app-icon\.(png|ico)$|^archive/desktop-tauri/src-tauri/icons/'
             fail=1
           fi
 

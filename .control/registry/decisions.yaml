@@ -92,3 +92,10 @@ decisions:
     serves: [CAP-4]
     touches: []
     created: "2026-08-24"
+  - id: DEC-007
+    title: The desktop application's UI moves from a Tauri v2 + React webview to native Slint
+    status: draft
+    file: .control/decisions/DEC-007-desktop-moves-to-slint.md
+    serves: [CAP-1, CAP-6, CAP-7, CAP-8]
+    touches: []
+    created: "2026-08-26"
