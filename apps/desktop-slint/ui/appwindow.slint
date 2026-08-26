@@ -378,12 +378,18 @@ export component AppWindow inherits Window {
                     spacing: 8px;
                     alignment: space-between;
 
-                    // Left: App Branding
+                    // Left: App Branding with Official Logo
                     HorizontalLayout {
-                        spacing: 6px;
+                        spacing: 8px;
                         alignment: start;
+                        Image {
+                            width: 18px;
+                            height: 18px;
+                            source: @image-url("../assets/app-icon.png");
+                            vertical-alignment: center;
+                        }
                         Text {
-                            text: "⚡ Snapdown";
+                            text: "Snapdown";
                             font-size: 12px;
                             font-weight: 800;
                             color: #0f172a;
