@@ -373,21 +373,30 @@ export component AppWindow inherits Window {
                 }
 
                 HorizontalLayout {
-                    padding-left: 12px;
+                    padding-left: 0px;
                     padding-right: 0px;
-                    spacing: 8px;
                     alignment: space-between;
 
-                    // Left: App Branding with Official Logo
+                    // Left: 1:1 Square Icon Box (32px × 32px) + App Branding Text
                     HorizontalLayout {
-                        spacing: 8px;
+                        spacing: 4px;
                         alignment: start;
-                        Image {
-                            width: 18px;
-                            height: 18px;
-                            source: @image-url("../assets/app-icon.png");
-                            vertical-alignment: center;
+
+                        // 1:1 Square Box centered in top-left corner
+                        Rectangle {
+                            width: 32px;
+                            height: 32px;
+
+                            Image {
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                width: 18px;
+                                height: 18px;
+                                image-fit: contain;
+                                source: @image-url("../assets/app-icon.png");
+                            }
                         }
+
                         Text {
                             text: "Snapdown";
                             font-size: 12px;
