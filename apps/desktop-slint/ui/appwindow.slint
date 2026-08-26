@@ -551,7 +551,7 @@ export component AppWindow inherits Window {
                             width: 52px;
                             height: 44px;
                             border-radius: 6px;
-                            background: lib-touch.has-hover ? #e2e8f0 : transparent;
+                            background: lib-touch.has-hover ? root.bg-hover : transparent;
 
                             VerticalLayout {
                                 alignment: center;
@@ -566,7 +566,7 @@ export component AppWindow inherits Window {
                                     text: "Library";
                                     font-size: 10px;
                                     font-weight: 600;
-                                    color: #334155;
+                                    color: root.text-secondary;
                                     horizontal-alignment: center;
                                 }
                             }
@@ -574,14 +574,14 @@ export component AppWindow inherits Window {
                         }
 
                         // Divider
-                        Rectangle { width: 1px; height: 24px; background: #cbd5e1; y: 10px; }
+                        Rectangle { width: 1px; height: 24px; background: root.border-strong; y: 10px; }
 
                         // Capture Button
                         Rectangle {
                             width: 54px;
                             height: 44px;
                             border-radius: 6px;
-                            background: cap-touch.has-hover ? #e2e8f0 : transparent;
+                            background: cap-touch.has-hover ? root.bg-hover : transparent;
 
                             VerticalLayout {
                                 alignment: center;
@@ -596,7 +596,7 @@ export component AppWindow inherits Window {
                                     text: "Capture";
                                     font-size: 10px;
                                     font-weight: 700;
-                                    color: #0f172a;
+                                    color: #e11d48;
                                     horizontal-alignment: center;
                                 }
                             }
@@ -608,7 +608,7 @@ export component AppWindow inherits Window {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: open-touch.has-hover ? #e2e8f0 : transparent;
+                            background: open-touch.has-hover ? root.bg-hover : transparent;
 
                             VerticalLayout {
                                 alignment: center;
@@ -623,7 +623,7 @@ export component AppWindow inherits Window {
                                     text: "Open";
                                     font-size: 10px;
                                     font-weight: 600;
-                                    color: #334155;
+                                    color: root.text-secondary;
                                     horizontal-alignment: center;
                                 }
                             }
@@ -635,7 +635,7 @@ export component AppWindow inherits Window {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: paste-touch.has-hover ? #e2e8f0 : transparent;
+                            background: paste-touch.has-hover ? root.bg-hover : transparent;
 
                             VerticalLayout {
                                 alignment: center;
@@ -650,7 +650,7 @@ export component AppWindow inherits Window {
                                     text: "Paste";
                                     font-size: 10px;
                                     font-weight: 600;
-                                    color: #334155;
+                                    color: root.text-secondary;
                                     horizontal-alignment: center;
                                 }
                             }
