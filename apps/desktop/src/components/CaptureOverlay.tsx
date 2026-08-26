@@ -153,6 +153,17 @@ export const CaptureOverlay: React.FC<CaptureOverlayProps> = ({
       currentY: 0,
       isDragging: false,
     });
+    // Immediately release full-screen bitmap from browser RAM when leaving active capture
+    if (imageObjRef.current) {
+      imageObjRef.current.src = '';
+      imageObjRef.current = null;
+    }
+    if (canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      }
+    }
   }, []);
 
   const handleCancel = useCallback(async () => {
