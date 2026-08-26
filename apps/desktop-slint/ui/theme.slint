@@ -2,32 +2,37 @@ export global Theme {
     in-out property <bool> is-dark: false;
 
     // 1. Surface & Background Tokens
-    out property <color> bg-app:         is-dark ? #090d16 : #f1f5f9; // Ground Window & Toolbar Slate Frame
-    out property <color> bg-card:        is-dark ? #131b2e : #ffffff; // Panel, Card & Canvas Ground
-    out property <color> bg-subtle:      is-dark ? #0f172a : #f8fafc; // Background Readout Strip / Subtle Controls
-    out property <color> bg-hover:       is-dark ? #1e293b : #e2e8f0; // Hover State Plate
+    out property <color> bg-app:         is-dark ? #1c1c1f : #f1f5f9; // Ground Window & Toolbar Slate Frame
+    out property <color> bg-card:        is-dark ? #232326 : #ffffff; // Panel, Card & Canvas Ground
+    out property <color> bg-subtle:      is-dark ? #17171a : #f8fafc; // Background Readout Strip / Subtle Controls
+    out property <color> bg-hover:       is-dark ? #2c2c30 : #e2e8f0; // Hover State Plate
 
     // 2. Border Tokens
-    out property <color> border-subtle:  is-dark ? #1e293b : #e2e8f0; // Divider Lines
-    out property <color> border-strong:  is-dark ? #334155 : #cbd5e1; // Card & Window Borders
-    out property <color> border-focus:   is-dark ? #38bdf8 : #0284c7; // Active Focus Rings
+    out property <color> border-subtle:  is-dark ? #2a2a2e : #e2e8f0; // Divider Lines
+    out property <color> border-strong:  is-dark ? #3a3a3f : #cbd5e1; // Card & Window Borders
+    out property <color> border-focus:   is-dark ? #5b9dff : #0284c7; // Active Focus Rings
 
     // 3. Text & Typography Tokens
-    out property <color> text-primary:   is-dark ? #f8fafc : #0f172a; // Judul & Teks Utama (Slate 900 / 50)
-    out property <color> text-secondary: is-dark ? #e2e8f0 : #334155; // Label & Button Text (Slate 700 / 200)
-    out property <color> text-muted:     is-dark ? #94a3b8 : #64748b; // Subtitle, Timestamp, Dimensions
-    out property <color> text-dim:       is-dark ? #64748b : #94a3b8; // Placeholder & Inactive Glyphs
+    out property <color> text-primary:   is-dark ? #f2f2f3 : #0f172a; // Judul & Teks Utama (Slate 900 / 50)
+    out property <color> text-secondary: is-dark ? #c9cacd : #334155; // Label & Button Text (Slate 700 / 200)
+    out property <color> text-muted:     is-dark ? #9a9ba0 : #64748b; // Subtitle, Timestamp, Dimensions
+    out property <color> text-dim:       is-dark ? #6b6c70 : #94a3b8; // Placeholder & Inactive Glyphs
     out property <color> text-on-accent: #ffffff;                     // Teks putih di atas background aksen
 
     // 4. Accent & Active State Tokens (WCAG AA Compliant)
-    out property <color> accent-primary: is-dark ? #38bdf8 : #2563eb; // Primary Actions (Assemble, Tab Active Bar)
-    out property <color> accent-hover:   is-dark ? #0ea5e9 : #1d4ed8; // Primary Action Hover
-    out property <color> accent-pressed: is-dark ? #0284c7 : #1e40af; // Primary Action Pressed
-    out property <color> accent-surface: is-dark ? #38bdf8.with-alpha(0.22) : #38bdf8.with-alpha(0.18); // Active Tool Pill
-    out property <color> accent-active:  is-dark ? #38bdf8 : #0369a1; // Active Tool Text/Icon Color
+    out property <color> accent-primary: is-dark ? #4c8dff : #2563eb; // Primary Actions (Assemble, Tab Active Bar)
+    out property <color> accent-hover:   is-dark ? #6ba0ff : #1d4ed8; // Primary Action Hover
+    out property <color> accent-pressed: is-dark ? #3a72e0 : #1e40af; // Primary Action Pressed
+    out property <color> accent-surface: is-dark ? #4c8dff.with-alpha(0.16) : #38bdf8.with-alpha(0.18); // Active Tool Pill
+    out property <color> accent-active:  is-dark ? #7db2ff : #0369a1; // Active Tool Text/Icon Color
 
     // 5. Semantic Tokens (Theme Invariant & Feedback)
     out property <color> semantic-error: #ef4444;                     // Pin Marker & Critical Issues (Selalu Solid Red Kontras)
     out property <color> semantic-success: is-dark ? #4ade80 : #166534; // Tag Status Editing Green
     out property <color> semantic-success-bg: is-dark ? #166534.with-alpha(0.3) : #ffffff.with-alpha(0.92);
+
+    // 6. Geometry Tokens (Theme Invariant)
+    out property <length> radius-sharp: 3px;
+    out property <length> radius-pill: 9999px;
 }
+

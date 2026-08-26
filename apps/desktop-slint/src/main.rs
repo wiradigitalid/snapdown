@@ -61,7 +61,10 @@ impl AppContext {
         let finding_store = match SqliteFindingStore::open(&db_path) {
             Ok(store) => Arc::new(store),
             Err(e) => {
-                eprintln!("Warning: Failed to open DB at {:?}: {e}, falling back to in-memory", db_path);
+                eprintln!(
+                    "Warning: Failed to open DB at {:?}: {e}, falling back to in-memory",
+                    db_path
+                );
                 Arc::new(SqliteFindingStore::open_in_memory().unwrap())
             }
         };
@@ -69,13 +72,19 @@ impl AppContext {
         let settings_store = match SqliteSettingsStore::open(&db_path) {
             Ok(store) => Arc::new(store),
             Err(e) => {
-                eprintln!("Warning: Failed to open settings DB at {:?}: {e}, falling back to in-memory", db_path);
+                eprintln!(
+                    "Warning: Failed to open settings DB at {:?}: {e}, falling back to in-memory",
+                    db_path
+                );
                 Arc::new(SqliteSettingsStore::open_in_memory().unwrap())
             }
         };
 
         let vault_path = match settings_store.get(&SettingKey::VaultPath) {
-            Ok(Some(Setting { value: SettingValue::String(s), .. })) => PathBuf::from(s),
+            Ok(Some(Setting {
+                value: SettingValue::String(s),
+                ..
+            })) => PathBuf::from(s),
             _ => default_vault_path(),
         };
 
@@ -186,7 +195,13 @@ fn load_findings_into_window(
                 let kb = metadata.len() as f64 / 1024.0;
                 window.set_size_text(format!("{:.1} KB", kb).into());
             } else {
-                window.set_size_text(format!("{:.1} KB", (f.image_width * f.image_height * 4) as f64 / 1024.0 / 6.0).into());
+                window.set_size_text(
+                    format!(
+                        "{:.1} KB",
+                        (f.image_width * f.image_height * 4) as f64 / 1024.0 / 6.0
+                    )
+                    .into(),
+                );
             }
 
             window.set_observation_summary(detail.note.body.into());
@@ -306,11 +321,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         // Convert raw RgbaImage to Slint RgbaImage
-        let pixel_buffer = SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(
-            raw_img.as_raw(),
-            w,
-            h,
-        );
+        let pixel_buffer =
+            SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(raw_img.as_raw(), w, h);
         let slint_img = slint::Image::from_rgba8(pixel_buffer);
 
         let overlay = match CaptureOverlayWindow::new() {
@@ -350,14 +362,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 // Reduce image using QualityBudget
                 let qb = match ctx_inner.settings_store.get(&SettingKey::QualityBudget) {
-                    Ok(Some(Setting { value: SettingValue::QualityBudget(budget), .. })) => budget,
+                    Ok(Some(Setting {
+                        value: SettingValue::QualityBudget(budget),
+                        ..
+                    })) => budget,
                     _ => QualityBudget::default(),
                 };
                 let region_long_edge = crop_w.max(crop_h);
                 let resolved = qb.resolve(region_long_edge);
-                let orig_dims = ImageDimensions::new(crop_w, crop_h).unwrap_or(ImageDimensions { width: crop_w, height: crop_h });
+                let orig_dims = ImageDimensions::new(crop_w, crop_h).unwrap_or(ImageDimensions {
+                    width: crop_w,
+                    height: crop_h,
+                });
 
-                let (reduced_bytes, final_w, final_h) = if let Ok(red) = ImageReducer::reduce_image(&png_bytes, orig_dims, &resolved, false) {
+                let (reduced_bytes, final_w, final_h) = if let Ok(red) =
+                    ImageReducer::reduce_image(&png_bytes, orig_dims, &resolved, false)
+                {
                     (red.bytes, red.dimensions.width, red.dimensions.height)
                 } else {
                     (png_bytes, crop_w, crop_h)
@@ -367,12 +387,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let timestamp_str = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
                 let rel_filename = format!("findings/capture_{timestamp_str}.png");
 
-                let _ = ctx_inner.vault_store.write_blob(&rel_filename, &reduced_bytes);
+                let _ = ctx_inner
+                    .vault_store
+                    .write_blob(&rel_filename, &reduced_bytes);
 
                 // Save to FindingStore
                 let clock = SystemClock::new();
                 let entropy = SystemEntropySource::new();
-                let finding_id = snapdown_core::util::id::id_from_parts(clock.now_unix_millis(), entropy.random_bytes_10());
+                let finding_id = snapdown_core::util::id::id_from_parts(
+                    clock.now_unix_millis(),
+                    entropy.random_bytes_10(),
+                );
                 let captured_at = clock.now_rfc3339();
 
                 let finding = Finding {
@@ -395,7 +420,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     updated_at: captured_at,
                 };
 
-                let _ = ctx_inner.finding_store.create_finding(&finding, &note_record, &[]);
+                let _ = ctx_inner
+                    .finding_store
+                    .create_finding(&finding, &note_record, &[]);
 
                 // Reload filmstrip with the new finding active
                 load_findings_into_window(&main, &ctx_inner, Some(&finding_id));
@@ -433,4 +460,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     main_window.run()?;
     Ok(())
 }
-
