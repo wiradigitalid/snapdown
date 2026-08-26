@@ -706,38 +706,48 @@ export component AppWindow inherits Window {
                         vertical-stretch: 1;
                         background: root.bg-card;
 
-                        canvas-viewport := Rectangle {
-                            width: 90%;
-                            height: 90%;
-                            background: #0f172a;
-                            border-radius: Theme.radius-sharp;
-                            drop-shadow-blur: 20px;
-                            drop-shadow-color: #000000.with-alpha(0.18);
+                        scroll-view := ScrollView {
+                            width: 100%;
+                            height: 100%;
+                            viewport-width: max(self.visible-width, canvas-viewport.width + 48px);
+                            viewport-height: max(self.visible-height, canvas-viewport.height + 48px);
 
-                            main-img := Image {
-                                width: 100%;
-                                height: 100%;
-                                source: root.active-image;
-                            }
+                            canvas-viewport := Rectangle {
+                                x: max(24px, (parent.width - self.width) / 2);
+                                y: max(24px, (parent.height - self.height) / 2);
+                                width: root.active-image.width * 1px;
+                                height: root.active-image.height * 1px;
+                                background: #0f172a;
+                                border-radius: Theme.radius-sharp;
+                                drop-shadow-blur: 20px;
+                                drop-shadow-color: #000000.with-alpha(0.18);
+                                visible: root.active-image.width > 0;
 
-                            // Corner Brackets Viewfinder Overlay
-                            CornerBrackets {
-                                size: 16px;
-                                stroke: 1.5px;
-                                color: Theme.border-strong;
-                                inset: 4px;
-                            }
+                                main-img := Image {
+                                    width: 100%;
+                                    height: 100%;
+                                    source: root.active-image;
+                                }
 
-                            // Numbered Reticle Marker Overlay
-                            for m in root.markers : ReticleMarker {
-                                x: m.x * parent.width - 15px;
-                                y: m.y * parent.height - 15px;
-                                ordinal: m.ordinal;
-                            }
+                                // Corner Brackets Viewfinder Overlay
+                                CornerBrackets {
+                                    size: 16px;
+                                    stroke: 1.5px;
+                                    color: Theme.border-strong;
+                                    inset: 4px;
+                                }
 
-                            TouchArea {
-                                clicked => {
-                                    root.marker-placed(self.mouse-x / parent.width, self.mouse-y / parent.height);
+                                // Numbered Reticle Marker Overlay
+                                for m in root.markers : ReticleMarker {
+                                    x: m.x * parent.width - 15px;
+                                    y: m.y * parent.height - 15px;
+                                    ordinal: m.ordinal;
+                                }
+
+                                TouchArea {
+                                    clicked => {
+                                        root.marker-placed(self.mouse-x / parent.width, self.mouse-y / parent.height);
+                                    }
                                 }
                             }
                         }
