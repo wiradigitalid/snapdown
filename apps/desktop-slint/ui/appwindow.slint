@@ -1,0 +1,873 @@
+import { Button, ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
+
+export struct MarkerData {
+    id: string,
+    ordinal: int,
+    x: float,
+    y: float,
+    comment: string,
+}
+
+export struct FindingThumb {
+    id: string,
+    time-str: string,
+    dimensions-str: string,
+    is-selected: bool,
+    is-active: bool,
+    image: image,
+}
+
+export component CaptureOverlayWindow inherits Window {
+    title: "Snapdown Capture Overlay";
+    no-frame: true;
+    always-on-top: true;
+    background: transparent;
+
+    in-out property <image> snapshot-image;
+    in-out property <length> mouse-x: 0px;
+    in-out property <length> mouse-y: 0px;
+    in-out property <bool> is-dragging: false;
+    in-out property <length> drag-start-x: 0px;
+    in-out property <length> drag-start-y: 0px;
+    in-out property <length> drag-current-x: 0px;
+    in-out property <length> drag-current-y: 0px;
+    in-out property <bool> has-selection: false;
+    in-out property <length> sel-x: 0px;
+    in-out property <length> sel-y: 0px;
+    in-out property <length> sel-w: 0px;
+    in-out property <length> sel-h: 0px;
+    in-out property <string> note-text: "";
+    in-out property <bool> is-narrating: false;
+
+    callback capture-completed(int, int, int, int, string);
+    callback overlay-cancelled();
+
+    // Dark Scrim Background
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #000000.with-alpha(0.72);
+    }
+
+    // Un-dimmed Selection Cutout Box
+    if has-selection : Rectangle {
+        x: sel-x;
+        y: sel-y;
+        width: sel-w;
+        height: sel-h;
+        border-color: #0284c7;
+        border-width: 2px;
+        background: transparent;
+
+        // Note HUD Anchored below region
+        if is-narrating : Rectangle {
+            y: parent.height + 12px;
+            x: (parent.width - self.width) / 2;
+            width: 320px;
+            height: 110px;
+            background: #ffffff;
+            border-radius: 8px;
+            drop-shadow-blur: 16px;
+            drop-shadow-color: #000000.with-alpha(0.4);
+
+            VerticalLayout {
+                padding: 10px;
+                spacing: 8px;
+                Text {
+                    text: "What is wrong here?";
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: #475569;
+                }
+                note-input := LineEdit {
+                    text <=> root.note-text;
+                    placeholder-text: "Type finding note...";
+                    accepted => {
+                        root.capture-completed(
+                            sel-x / 1px,
+                            sel-y / 1px,
+                            sel-w / 1px,
+                            sel-h / 1px,
+                            root.note-text
+                        );
+                    }
+                }
+                HorizontalLayout {
+                    alignment: space-between;
+                    Text {
+                        text: "Enter to save · Esc to cancel";
+                        font-size: 10px;
+                        color: #94a3b8;
+                    }
+                    Button {
+                        text: "Save Finding";
+                        primary: true;
+                        clicked => {
+                            root.capture-completed(
+                                sel-x / 1px,
+                                sel-y / 1px,
+                                sel-w / 1px,
+                                sel-h / 1px,
+                                root.note-text
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Full-screen Crosshair Axes
+    if !is-narrating : Rectangle {
+        // Vertical axis line
+        Rectangle {
+            x: mouse-x - 0.5px;
+            y: 0px;
+            width: 1px;
+            height: 100%;
+            background: #0284c7.with-alpha(0.8);
+        }
+        // Horizontal axis line
+        Rectangle {
+            x: 0px;
+            y: mouse-y - 0.5px;
+            width: 100%;
+            height: 1px;
+            background: #0284c7.with-alpha(0.8);
+        }
+
+        // Circular Magnifying Loupe
+        Rectangle {
+            x: mouse-x + 24px;
+            y: mouse-y + 24px;
+            width: 96px;
+            height: 96px;
+            border-radius: 48px;
+            border-width: 2.5px;
+            border-color: #0284c7;
+            background: #000000;
+            clip: true;
+
+            Image {
+                x: -(mouse-x * 3 - 48px);
+                y: -(mouse-y * 3 - 48px);
+                width: root.width * 3;
+                height: root.height * 3;
+                source: root.snapshot-image;
+            }
+
+            // Crosshair in Loupe Center
+            Rectangle {
+                x: 47px;
+                y: 0px;
+                width: 2px;
+                height: 96px;
+                background: #0284c7;
+            }
+            Rectangle {
+                x: 0px;
+                y: 47px;
+                width: 96px;
+                height: 2px;
+                background: #0284c7;
+            }
+        }
+    }
+
+    // Touch / Drag Area
+    TouchArea {
+        width: 100%;
+        height: 100%;
+
+        pointer-event(event) => {
+            root.mouse-x = self.mouse-x;
+            root.mouse-y = self.mouse-y;
+
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                root.is-dragging = true;
+                root.drag-start-x = self.mouse-x;
+                root.drag-start-y = self.mouse-y;
+                root.drag-current-x = self.mouse-x;
+                root.drag-current-y = self.mouse-y;
+                root.has-selection = false;
+                root.is-narrating = false;
+            }
+            if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) {
+                root.is-dragging = false;
+                root.sel-x = min(root.drag-start-x, root.drag-current-x);
+                root.sel-y = min(root.drag-start-y, root.drag-current-y);
+                root.sel-w = max(abs(root.drag-current-x - root.drag-start-x), 16px);
+                root.sel-h = max(abs(root.drag-current-y - root.drag-start-y), 16px);
+                root.has-selection = true;
+                root.is-narrating = true;
+            }
+            if (event.kind == PointerEventKind.cancel) {
+                root.overlay-cancelled();
+            }
+        }
+
+        moved => {
+            if (root.is-dragging) {
+                root.drag-current-x = self.mouse-x;
+                root.drag-current-y = self.mouse-y;
+                root.sel-x = min(root.drag-start-x, root.drag-current-x);
+                root.sel-y = min(root.drag-start-y, root.drag-current-y);
+                root.sel-w = max(abs(root.drag-current-x - root.drag-start-x), 4px);
+                root.sel-h = max(abs(root.drag-current-y - root.drag-start-y), 4px);
+                root.has-selection = true;
+            }
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "Snapdown";
+    min-width: 1024px;
+    min-height: 720px;
+    preferred-width: 1280px;
+    preferred-height: 820px;
+    background: #f8fafc;
+    default-font-family: "Plus Jakarta Sans";
+
+    in-out property <string> current-filename: "capture_20260826_041750.png";
+    in-out property <int> active-tool-index: 0; // 0: Marker, 1: Shape, 2: Callout, 3: Blur, 4: Arrow, 5: Text, 6: Crop
+    in-out property <int> active-tab-index: 0; // 0: Notes, 1: Properties
+    in-out property <string> observation-summary: "test\n1. Marker 1\n2. Marker 2";
+    in-out property <int> selected-finding-count: 0;
+    in-out property <string> resolution-text: "1020 × 885  px";
+    in-out property <string> size-text: "119.5  KB";
+    in-out property <image> active-image;
+    in-out property <[MarkerData]> markers: [
+        { id: "m1", ordinal: 1, x: 0.28, y: 0.31, comment: "Marker 1" },
+        { id: "m2", ordinal: 2, x: 0.36, y: 0.49, comment: "Marker 2" },
+    ];
+    in-out property <[FindingThumb]> filmstrip-items: [
+        { id: "f1", time-str: "11.17", dimensions-str: "1020×885", is-selected: false, is-active: true }
+    ];
+
+    callback capture-clicked();
+    callback open-file-clicked();
+    callback paste-clicked();
+    callback assemble-bundle-clicked();
+    callback copy-image-clicked();
+    callback share-bundle-clicked();
+    callback marker-placed(float, float);
+    callback delete-marker-clicked(string);
+
+    VerticalLayout {
+        padding: 0px;
+        spacing: 0px;
+
+        // TOP NAVIGATION & WINDOW HEADER BAR
+        Rectangle {
+            height: 42px;
+            background: #ffffff;
+
+            // Bottom Border Line
+            Rectangle {
+                y: parent.height - 1px;
+                width: 100%;
+                height: 1px;
+                background: #e2e8f0;
+            }
+
+            HorizontalLayout {
+                padding-left: 16px;
+                padding-right: 16px;
+                spacing: 12px;
+                alignment: space-between;
+
+                // Left: Logo & Filename Title
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Text {
+                        text: "⚡ Snapdown";
+                        font-size: 14px;
+                        font-weight: 800;
+                        color: #0f172a;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: "|";
+                        font-size: 13px;
+                        color: #cbd5e1;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: root.current-filename;
+                        font-size: 12px;
+                        color: #64748b;
+                        font-family: "JetBrains Mono";
+                        vertical-alignment: center;
+                    }
+                }
+
+                // Right: Utility icons (Theme, Settings, Window Controls)
+                HorizontalLayout {
+                    spacing: 14px;
+                    alignment: end;
+                    Text { text: "🌙"; font-size: 14px; vertical-alignment: center; }
+                    Text { text: "🗂️"; font-size: 14px; vertical-alignment: center; }
+                    Text { text: "⚙️"; font-size: 14px; vertical-alignment: center; }
+                    Text { text: "—"; font-size: 14px; color: #64748b; font-weight: 700; vertical-alignment: center; }
+                    Text { text: "▢"; font-size: 14px; color: #64748b; font-weight: 700; vertical-alignment: center; }
+                    Text { text: "✕"; font-size: 14px; color: #64748b; font-weight: 700; vertical-alignment: center; }
+                }
+            }
+        }
+
+        // TOOLBAR & RIBBON ACTION STRIP
+        Rectangle {
+            height: 56px;
+            background: #ffffff;
+
+            // Bottom Border Line
+            Rectangle {
+                y: parent.height - 1px;
+                width: 100%;
+                height: 1px;
+                background: #e2e8f0;
+            }
+
+            HorizontalLayout {
+                padding-left: 16px;
+                padding-right: 16px;
+                spacing: 12px;
+                alignment: space-between;
+
+                // Left: Input Buttons (🔴 📂 📥)
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+                    Rectangle {
+                        width: 38px; height: 38px; border-radius: 6px; border-width: 1px; border-color: #e2e8f0; background: #ffffff;
+                        Text { text: "🔴"; font-size: 16px; horizontal-alignment: center; vertical-alignment: center; }
+                        TouchArea { clicked => { root.capture-clicked(); } }
+                    }
+                    Rectangle {
+                        width: 38px; height: 38px; border-radius: 6px; border-width: 1px; border-color: #e2e8f0; background: #ffffff;
+                        Text { text: "📂"; font-size: 16px; horizontal-alignment: center; vertical-alignment: center; }
+                        TouchArea { clicked => { root.open-file-clicked(); } }
+                    }
+                    Rectangle {
+                        width: 38px; height: 38px; border-radius: 6px; border-width: 1px; border-color: #e2e8f0; background: #ffffff;
+                        Text { text: "📥"; font-size: 16px; horizontal-alignment: center; vertical-alignment: center; }
+                        TouchArea { clicked => { root.paste-clicked(); } }
+                    }
+                }
+
+                // Center: Annotation Palette Strip (🔴 ▢ 💬 ░ ↗ T ✂ ↶ ↷)
+                Rectangle {
+                    height: 42px;
+                    background: #f1f5f9;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: #e2e8f0;
+
+                    HorizontalLayout {
+                        padding-left: 6px;
+                        padding-right: 6px;
+                        spacing: 4px;
+                        alignment: center;
+
+                        // Tool 0: Marker (🔴)
+                        Rectangle {
+                            width: 34px; height: 34px; border-radius: 6px;
+                            background: root.active-tool-index == 0 ? #2563eb : transparent;
+                            Text { text: "🔴"; font-size: 14px; horizontal-alignment: center; vertical-alignment: center; }
+                            TouchArea { clicked => { root.active-tool-index = 0; } }
+                        }
+                        // Tool 1: Shape (▢)
+                        Rectangle {
+                            width: 34px; height: 34px; border-radius: 6px;
+                            background: root.active-tool-index == 1 ? #2563eb : transparent;
+                            Text { text: "▢"; font-size: 16px; font-weight: 700; color: root.active-tool-index == 1 ? #ffffff : #334155; horizontal-alignment: center; vertical-alignment: center; }
+                            TouchArea { clicked => { root.active-tool-index = 1; } }
+                        }
+                        // Tool 2: Callout (💬)
+                        Rectangle {
+                            width: 34px; height: 34px; border-radius: 6px;
+                            background: root.active-tool-index == 2 ? #2563eb : transparent;
+                            Text { text: "💬"; font-size: 14px; horizontal-alignment: center; vertical-alignment: center; }
+                            TouchArea { clicked => { root.active-tool-index = 2; } }
+                        }
+                        // Tool 3: Blur (░)
+                        Rectangle {
+                            width: 34px; height: 34px; border-radius: 6px;
+                            background: root.active-tool-index == 3 ? #2563eb : transparent;
+                            Text { text: "░"; font-size: 16px; font-weight: 700; color: root.active-tool-index == 3 ? #ffffff : #334155; horizontal-alignment: center; vertical-alignment: center; }
+                            TouchArea { clicked => { root.active-tool-index = 3; } }
+                        }
+                        // Tool 4: Arrow (↗)
+                        Rectangle {
+                            width: 34px; height: 34px; border-radius: 6px;
+                            background: root.active-tool-index == 4 ? #2563eb : transparent;
+                            Text { text: "↗"; font-size: 16px; font-weight: 700; color: root.active-tool-index == 4 ? #ffffff : #334155; horizontal-alignment: center; vertical-alignment: center; }
+                            TouchArea { clicked => { root.active-tool-index = 4; } }
+                        }
+                        // Tool 5: Text (T)
+                        Rectangle {
+                            width: 34px; height: 34px; border-radius: 6px;
+                            background: root.active-tool-index == 5 ? #2563eb : transparent;
+                            Text { text: "T"; font-size: 15px; font-weight: 800; color: root.active-tool-index == 5 ? #ffffff : #334155; horizontal-alignment: center; vertical-alignment: center; }
+                            TouchArea { clicked => { root.active-tool-index = 5; } }
+                        }
+                        // Divider
+                        Rectangle { width: 1px; height: 20px; background: #cbd5e1; }
+                        // Crop (✂️)
+                        Rectangle {
+                            width: 34px; height: 34px; border-radius: 6px;
+                            background: root.active-tool-index == 6 ? #2563eb : transparent;
+                            Text { text: "✂️"; font-size: 14px; horizontal-alignment: center; vertical-alignment: center; }
+                            TouchArea { clicked => { root.active-tool-index = 6; } }
+                        }
+                        // Divider
+                        Rectangle { width: 1px; height: 20px; background: #cbd5e1; }
+                        // Undo / Redo
+                        Rectangle {
+                            width: 30px; height: 34px;
+                            Text { text: "↶"; font-size: 15px; color: #64748b; horizontal-alignment: center; vertical-alignment: center; }
+                        }
+                        Rectangle {
+                            width: 30px; height: 34px;
+                            Text { text: "↷"; font-size: 15px; color: #64748b; horizontal-alignment: center; vertical-alignment: center; }
+                        }
+                    }
+                }
+
+                // Right: Assemble Bundle, Copy, and Share Buttons
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+                    Rectangle {
+                        height: 38px;
+                        background: #2563eb;
+                        border-radius: 6px;
+                        HorizontalLayout {
+                            padding-left: 14px;
+                            padding-right: 14px;
+                            spacing: 6px;
+                            alignment: center;
+                            Text { text: "📦"; font-size: 14px; vertical-alignment: center; }
+                            Text { text: "Assemble"; font-size: 13px; font-weight: 700; color: #ffffff; vertical-alignment: center; }
+                        }
+                        TouchArea { clicked => { root.assemble-bundle-clicked(); } }
+                    }
+                    Rectangle {
+                        width: 38px; height: 38px; border-radius: 6px; border-width: 1px; border-color: #e2e8f0; background: #ffffff;
+                        Text { text: "📋"; font-size: 15px; horizontal-alignment: center; vertical-alignment: center; }
+                        TouchArea { clicked => { root.copy-image-clicked(); } }
+                    }
+                    Rectangle {
+                        height: 38px; border-radius: 6px; border-width: 1px; border-color: #e2e8f0; background: #ffffff;
+                        HorizontalLayout {
+                            padding-left: 12px; padding-right: 12px;
+                            spacing: 4px;
+                            Text { text: "Share ▼"; font-size: 12px; font-weight: 700; color: #0f172a; vertical-alignment: center; }
+                        }
+                        TouchArea { clicked => { root.share-bundle-clicked(); } }
+                    }
+                }
+            }
+        }
+
+        // MAIN WORKSPACE (Flex Canvas Artboard on Left + 440px Inspector Panel on Right)
+        HorizontalLayout {
+            spacing: 0px;
+
+            // LEFT/CENTER: Canvas Viewport & Bottom Filmstrip
+            VerticalLayout {
+                horizontal-stretch: 1;
+
+                // Central Image Viewport Canvas
+                Rectangle {
+                    vertical-stretch: 1;
+                    background: #f8fafc;
+
+                    canvas-viewport := Rectangle {
+                        width: 90%;
+                        height: 90%;
+                        background: #0f172a;
+                        border-radius: 8px;
+                        drop-shadow-blur: 16px;
+                        drop-shadow-color: #000000.with-alpha(0.25);
+
+                        main-img := Image {
+                            width: 100%;
+                            height: 100%;
+                            source: root.active-image;
+                        }
+
+                        // Numbered Solid Red Markers Overlay
+                        for m in root.markers : Rectangle {
+                            x: m.x * parent.width - 14px;
+                            y: m.y * parent.height - 14px;
+                            width: 28px;
+                            height: 28px;
+                            border-radius: 14px;
+                            background: #ef4444;
+                            drop-shadow-blur: 6px;
+                            drop-shadow-color: #000000.with-alpha(0.4);
+
+                            Text {
+                                text: m.ordinal;
+                                color: #ffffff;
+                                font-size: 13px;
+                                font-weight: 800;
+                                font-family: "JetBrains Mono";
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        // Interactive Canvas Click Area
+                        TouchArea {
+                            clicked => {
+                                root.marker-placed(self.mouse-x / parent.width, self.mouse-y / parent.height);
+                            }
+                        }
+                    }
+                }
+
+                // Readout Status Strip
+                Rectangle {
+                    height: 28px;
+                    background: #ffffff;
+
+                    // Top Border Line
+                    Rectangle { y: 0px; width: 100%; height: 1px; background: #e2e8f0; }
+                    // Bottom Border Line
+                    Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: #e2e8f0; }
+
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 12px;
+                        Text { text: "📐 " + root.resolution-text; font-size: 11px; font-family: "JetBrains Mono"; color: #64748b; vertical-alignment: center; }
+                        Text { text: "·"; font-size: 11px; color: #cbd5e1; vertical-alignment: center; }
+                        Text { text: "💾 " + root.size-text; font-size: 11px; font-family: "JetBrains Mono"; color: #64748b; vertical-alignment: center; }
+                    }
+                }
+
+                // BOTTOM FILMSTRIP TRAY (Thumbnails)
+                Rectangle {
+                    height: 110px;
+                    background: #f1f5f9;
+
+                    HorizontalLayout {
+                        padding: 12px;
+                        spacing: 12px;
+                        alignment: start;
+
+                        // Batch Selection Action Card (0 selected / Assemble)
+                        Rectangle {
+                            width: 110px;
+                            height: 86px;
+                            background: #ffffff;
+                            border-radius: 6px;
+                            border-width: 1px;
+                            border-color: #e2e8f0;
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 6px;
+                                Text {
+                                    text: root.selected-finding-count + " selected";
+                                    font-size: 11px;
+                                    font-weight: 700;
+                                    color: #0f172a;
+                                    horizontal-alignment: center;
+                                }
+                                Rectangle {
+                                    height: 26px;
+                                    width: 86px;
+                                    border-radius: 4px;
+                                    background: #2563eb;
+                                    Text {
+                                        text: "📦 Assemble";
+                                        font-size: 10px;
+                                        font-weight: 700;
+                                        color: #ffffff;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Thumbnail Cards
+                        for thumb in root.filmstrip-items : Rectangle {
+                            width: 120px;
+                            height: 86px;
+                            background: #0f172a;
+                            border-radius: 6px;
+                            border-width: thumb.is-active ? 2px : 1px;
+                            border-color: thumb.is-active ? #2563eb : #cbd5e1;
+                            clip: true;
+
+                            Image {
+                                width: 100%;
+                                height: 100%;
+                                source: thumb.image;
+                            }
+
+                            // Active Tag Pill (Editing)
+                            Rectangle {
+                                y: 36px;
+                                x: (parent.width - self.width) / 2;
+                                width: 70px;
+                                height: 20px;
+                                border-radius: 10px;
+                                background: #ffffff.with-alpha(0.92);
+                                Text {
+                                    text: "● Editing";
+                                    font-size: 10px;
+                                    font-weight: 800;
+                                    color: #166534;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            // Info Footer
+                            Rectangle {
+                                y: parent.height - 18px;
+                                width: 100%;
+                                height: 18px;
+                                background: #ffffff;
+                                HorizontalLayout {
+                                    padding-left: 6px;
+                                    padding-right: 6px;
+                                    alignment: space-between;
+                                    Text { text: thumb.time-str; font-size: 9px; font-family: "JetBrains Mono"; color: #475569; vertical-alignment: center; }
+                                    Text { text: thumb.dimensions-str; font-size: 9px; font-family: "JetBrains Mono"; color: #64748b; vertical-alignment: center; }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // RIGHT PANEL: 440px INSPECTOR WITH [Notes] & [Properties] TABS
+            Rectangle {
+                width: 440px;
+                background: #ffffff;
+
+                // Left Border Line
+                Rectangle { x: 0px; width: 1px; height: 100%; background: #e2e8f0; }
+
+                VerticalLayout {
+                    padding: 0px;
+                    spacing: 0px;
+
+                    // TAB HEADERS ([Notes] & [Properties])
+                    Rectangle {
+                        height: 46px;
+                        background: #ffffff;
+
+                        // Bottom Border Line
+                        Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: #e2e8f0; }
+
+                        HorizontalLayout {
+                            padding-left: 16px;
+                            padding-right: 16px;
+                            spacing: 16px;
+
+                            // Tab 0: Notes
+                            Rectangle {
+                                width: 100px;
+                                Rectangle {
+                                    y: parent.height - 2.5px;
+                                    width: 100%;
+                                    height: root.active-tab-index == 0 ? 2.5px : 0px;
+                                    background: #2563eb;
+                                }
+                                HorizontalLayout {
+                                    spacing: 6px;
+                                    alignment: center;
+                                    Text { text: "📋"; font-size: 13px; vertical-alignment: center; }
+                                    Text {
+                                        text: "Notes";
+                                        font-size: 13px;
+                                        font-weight: root.active-tab-index == 0 ? 700 : 500;
+                                        color: root.active-tab-index == 0 ? #2563eb : #64748b;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                                TouchArea { clicked => { root.active-tab-index = 0; } }
+                            }
+
+                            // Tab 1: Properties
+                            Rectangle {
+                                width: 120px;
+                                Rectangle {
+                                    y: parent.height - 2.5px;
+                                    width: 100%;
+                                    height: root.active-tab-index == 1 ? 2.5px : 0px;
+                                    background: #2563eb;
+                                }
+                                HorizontalLayout {
+                                    spacing: 6px;
+                                    alignment: center;
+                                    Text { text: "🎨"; font-size: 13px; vertical-alignment: center; }
+                                    Text {
+                                        text: "Properties";
+                                        font-size: 13px;
+                                        font-weight: root.active-tab-index == 1 ? 700 : 500;
+                                        color: root.active-tab-index == 1 ? #2563eb : #94a3b8;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                                TouchArea { clicked => { root.active-tab-index = 1; } }
+                            }
+                        }
+                    }
+
+                    // TAB CONTENT BODY (SCROLLABLE)
+                    ScrollView {
+                        vertical-stretch: 1;
+
+                        if root.active-tab-index == 0 : VerticalLayout {
+                            padding: 16px;
+                            spacing: 16px;
+
+                            // Section 1: Observation Summary
+                            VerticalLayout {
+                                spacing: 6px;
+                                Text {
+                                    text: "OBSERVATION SUMMARY";
+                                    font-size: 11px;
+                                    font-weight: 800;
+                                    color: #475569;
+                                    letter-spacing: 0.5px;
+                                }
+                                Rectangle {
+                                    height: 120px;
+                                    border-radius: 6px;
+                                    border-width: 1px;
+                                    border-color: #e2e8f0;
+                                    background: #ffffff;
+                                    TextEdit {
+                                        text <=> root.observation-summary;
+                                        font-size: 13px;
+                                    }
+                                }
+                            }
+
+                            // Section 2: Step Marker Notes (2)
+                            VerticalLayout {
+                                spacing: 8px;
+                                Text {
+                                    text: "STEP MARKER NOTES (" + root.markers.length + ")";
+                                    font-size: 11px;
+                                    font-weight: 800;
+                                    color: #475569;
+                                    letter-spacing: 0.5px;
+                                }
+
+                                for marker in root.markers : Rectangle {
+                                    border-radius: 6px;
+                                    background: #f8fafc;
+                                    border-width: 1px;
+                                    border-color: #e2e8f0;
+
+                                    VerticalLayout {
+                                        padding: 10px;
+                                        spacing: 6px;
+                                        HorizontalLayout {
+                                            alignment: space-between;
+                                            HorizontalLayout {
+                                                spacing: 8px;
+                                                Rectangle {
+                                                    width: 22px; height: 22px; border-radius: 11px; background: #ef4444;
+                                                    Text { text: marker.ordinal; color: #ffffff; font-size: 11px; font-weight: 800; horizontal-alignment: center; vertical-alignment: center; }
+                                                }
+                                                Text { text: "Marker #" + marker.ordinal; font-size: 12px; font-weight: 700; color: #0f172a; vertical-alignment: center; }
+                                                Text { text: "(" + round(marker.x * 100) + "%, " + round(marker.y * 100) + "%)"; font-size: 10px; color: #94a3b8; vertical-alignment: center; }
+                                            }
+                                            Text {
+                                                text: "✕";
+                                                font-size: 12px;
+                                                color: #94a3b8;
+                                                vertical-alignment: center;
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            height: 32px;
+                                            background: #ffffff;
+                                            border-radius: 4px;
+                                            border-width: 1px;
+                                            border-color: #e2e8f0;
+                                            LineEdit {
+                                                text: marker.comment;
+                                                font-size: 12px;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Section 3: Estimated LLM Cost Card
+                            Rectangle {
+                                height: 84px;
+                                border-radius: 8px;
+                                background: #f8fafc;
+                                border-width: 1px;
+                                border-color: #e2e8f0;
+
+                                VerticalLayout {
+                                    padding: 10px;
+                                    spacing: 4px;
+                                    HorizontalLayout {
+                                        alignment: space-between;
+                                        Text { text: "🪙 ESTIMATED LLM COST"; font-size: 11px; font-weight: 800; color: #334155; }
+                                        Text { text: "~1.217 TK"; font-size: 12px; font-weight: 800; color: #2563eb; }
+                                    }
+                                    HorizontalLayout {
+                                        alignment: space-between;
+                                        Text { text: "🖼️ Image (1020×885)"; font-size: 11px; color: #64748b; }
+                                        Text { text: "~1204 tk"; font-size: 11px; color: #64748b; font-family: "JetBrains Mono"; }
+                                    }
+                                    HorizontalLayout {
+                                        alignment: space-between;
+                                        Text { text: "📝 Notes (46 chars)"; font-size: 11px; color: #64748b; }
+                                        Text { text: "~13 tk"; font-size: 11px; color: #64748b; font-family: "JetBrains Mono"; }
+                                    }
+                                }
+                            }
+                        }
+
+                        if root.active-tab-index == 1 : VerticalLayout {
+                            padding: 16px;
+                            spacing: 12px;
+
+                            Text {
+                                text: "ELEMENT PROPERTIES";
+                                font-size: 11px;
+                                font-weight: 800;
+                                color: #475569;
+                            }
+
+                            Rectangle {
+                                height: 120px;
+                                background: #f8fafc;
+                                border-radius: 6px;
+                                border-width: 1px;
+                                border-color: #e2e8f0;
+
+                                VerticalLayout {
+                                    padding: 12px;
+                                    spacing: 8px;
+                                    Text { text: "Font Family"; font-size: 11px; font-weight: 700; color: #64748b; }
+                                    LineEdit { text: "Inter, sans-serif"; }
+                                    Text { text: "Font Size: 14px"; font-size: 11px; font-weight: 700; color: #64748b; }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

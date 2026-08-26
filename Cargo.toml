@@ -6,6 +6,7 @@ members = [
     "crates/snapdown-bridge",
     "crates/snapdown-capture",
     "apps/desktop/src-tauri",
+    "apps/desktop-slint",
 ]
 
 [workspace.package]
