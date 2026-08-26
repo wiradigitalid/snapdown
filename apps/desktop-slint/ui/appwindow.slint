@@ -648,14 +648,12 @@ export component AppWindow inherits Window {
                         spacing: 2px;
                         alignment: center;
 
-                        // Tool 0: Marker (Active = Red Fill Icon, Clean White Background, Neutral Text)
+                        // Tool 0: Marker (Active = Red Fill Icon, Pure White Background, No Border)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
                             background: root.active-tool-index == 0 ? #ffffff : (m-touch.has-hover ? #e2e8f0 : transparent);
-                            border-width: root.active-tool-index == 0 ? 1px : 0px;
-                            border-color: #cbd5e1;
 
                             VerticalLayout {
                                 alignment: center;
@@ -677,14 +675,12 @@ export component AppWindow inherits Window {
                             m-touch := TouchArea { clicked => { root.active-tool-index = 0; } }
                         }
 
-                        // Tool 1: Shape (Active = Red Outline Icon, Clean White Background, Neutral Text)
+                        // Tool 1: Shape (Active = Red Outline Icon, Pure White Background, No Border)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
                             background: root.active-tool-index == 1 ? #ffffff : (s-touch.has-hover ? #e2e8f0 : transparent);
-                            border-width: root.active-tool-index == 1 ? 1px : 0px;
-                            border-color: #cbd5e1;
 
                             VerticalLayout {
                                 alignment: center;
@@ -706,14 +702,12 @@ export component AppWindow inherits Window {
                             s-touch := TouchArea { clicked => { root.active-tool-index = 1; } }
                         }
 
-                        // Tool 2: Callout (Active = Red Outline Icon, Clean White Background, Neutral Text)
+                        // Tool 2: Callout (Active = Red Outline Icon, Pure White Background, No Border)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
                             background: root.active-tool-index == 2 ? #ffffff : (c-touch.has-hover ? #e2e8f0 : transparent);
-                            border-width: root.active-tool-index == 2 ? 1px : 0px;
-                            border-color: #cbd5e1;
 
                             VerticalLayout {
                                 alignment: center;
@@ -735,14 +729,12 @@ export component AppWindow inherits Window {
                             c-touch := TouchArea { clicked => { root.active-tool-index = 2; } }
                         }
 
-                        // Tool 3: Blur (Active = Red Outline Icon, Clean White Background, Neutral Text)
+                        // Tool 3: Blur (Active = Red Outline Icon, Pure White Background, No Border)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
                             background: root.active-tool-index == 3 ? #ffffff : (b-touch.has-hover ? #e2e8f0 : transparent);
-                            border-width: root.active-tool-index == 3 ? 1px : 0px;
-                            border-color: #cbd5e1;
 
                             VerticalLayout {
                                 alignment: center;
@@ -764,14 +756,12 @@ export component AppWindow inherits Window {
                             b-touch := TouchArea { clicked => { root.active-tool-index = 3; } }
                         }
 
-                        // Tool 4: Arrow (Active = Red Outline Icon, Clean White Background, Neutral Text)
+                        // Tool 4: Arrow (Active = Red Outline Icon, Pure White Background, No Border)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
                             background: root.active-tool-index == 4 ? #ffffff : (a-touch.has-hover ? #e2e8f0 : transparent);
-                            border-width: root.active-tool-index == 4 ? 1px : 0px;
-                            border-color: #cbd5e1;
 
                             VerticalLayout {
                                 alignment: center;
@@ -793,14 +783,12 @@ export component AppWindow inherits Window {
                             a-touch := TouchArea { clicked => { root.active-tool-index = 4; } }
                         }
 
-                        // Tool 5: Text (Active = Red Outline Icon, Clean White Background, Neutral Text)
+                        // Tool 5: Text (Active = Red Outline Icon, Pure White Background, No Border)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
                             background: root.active-tool-index == 5 ? #ffffff : (t-touch.has-hover ? #e2e8f0 : transparent);
-                            border-width: root.active-tool-index == 5 ? 1px : 0px;
-                            border-color: #cbd5e1;
 
                             VerticalLayout {
                                 alignment: center;
@@ -825,14 +813,12 @@ export component AppWindow inherits Window {
                         // Divider
                         Rectangle { width: 1px; height: 24px; background: #cbd5e1; y: 10px; }
 
-                        // Tool 6: Crop (Active = Red Outline Icon, Clean White Background, Neutral Text)
+                        // Tool 6: Crop (Active = Red Outline Icon, Pure White Background, No Border)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
                             background: root.active-tool-index == 6 ? #ffffff : (cr-touch.has-hover ? #e2e8f0 : transparent);
-                            border-width: root.active-tool-index == 6 ? 1px : 0px;
-                            border-color: #cbd5e1;
 
                             VerticalLayout {
                                 alignment: center;
