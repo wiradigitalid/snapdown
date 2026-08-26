@@ -849,14 +849,32 @@ export const FindingsEditor: React.FC<FindingsEditorProps> = ({
                   gap: 'var(--space-3)',
                 }}
               >
-                <span>
-                  📐 {selectedFinding.finding.image_width} × {selectedFinding.finding.image_height} px
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-1)',
+                  }}
+                >
+                  <span>📐</span>
+                  <span>
+                    {selectedFinding.finding.image_width} × {selectedFinding.finding.image_height} px
+                  </span>
                 </span>
-                <span>·</span>
-                <span>
-                  💾 {selectedFinding.finding.file_size_bytes
-                    ? `${(selectedFinding.finding.file_size_bytes / 1024).toFixed(1)} KB`
-                    : `${Math.round((selectedFinding.finding.image_width * selectedFinding.finding.image_height * 0.25) / 1024)} KB`}
+                <span style={{ lineHeight: 1 }}>·</span>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-1)',
+                  }}
+                >
+                  <span>💾</span>
+                  <span>
+                    {selectedFinding.finding.file_size_bytes
+                      ? `${(selectedFinding.finding.file_size_bytes / 1024).toFixed(1)} KB`
+                      : `${Math.round((selectedFinding.finding.image_width * selectedFinding.finding.image_height * 0.25) / 1024)} KB`}
+                  </span>
                 </span>
               </div>
             )}
