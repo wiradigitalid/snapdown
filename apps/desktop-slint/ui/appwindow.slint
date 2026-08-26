@@ -436,25 +436,49 @@ export component AppWindow inherits Window {
                         // Standard Windows 11 Minimize Button (46px × 32px)
                         Rectangle {
                             width: 46px; height: 32px; background: min-touch.has-hover ? #e2e8f0 : transparent;
-                            Text { text: "—"; font-size: 10px; font-weight: 700; color: #475569; horizontal-alignment: center; vertical-alignment: center; }
+
+                            // Native Line Glyphs
+                            Rectangle {
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                width: 10px;
+                                height: 1px;
+                                background: #334155;
+                            }
                             min-touch := TouchArea { clicked => { root.minimize-clicked(); } }
                         }
                         // Standard Windows 11 Maximize Button (46px × 32px)
                         Rectangle {
                             width: 46px; height: 32px; background: max-touch.has-hover ? #e2e8f0 : transparent;
-                            Text { text: "▢"; font-size: 11px; font-weight: 700; color: #475569; horizontal-alignment: center; vertical-alignment: center; }
+
+                            // Native Square Glyphs
+                            Rectangle {
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                width: 10px;
+                                height: 10px;
+                                border-width: 1px;
+                                border-color: #334155;
+                                background: transparent;
+                            }
                             max-touch := TouchArea { clicked => { root.maximize-clicked(); } }
                         }
                         // Standard Windows 11 Close Button (46px × 32px, Red on hover)
                         Rectangle {
                             width: 46px; height: 32px; background: close-touch.has-hover ? #e81123 : transparent;
-                            Text {
-                                text: "✕";
-                                font-size: 11px;
-                                font-weight: 700;
-                                color: close-touch.has-hover ? #ffffff : #475569;
-                                horizontal-alignment: center;
-                                vertical-alignment: center;
+
+                            // Native Cross (X) Vector Glyphs using Path
+                            Path {
+                                width: 10px;
+                                height: 10px;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                stroke-width: 1.2px;
+                                stroke: close-touch.has-hover ? #ffffff : #334155;
+                                MoveTo { x: 0; y: 0; }
+                                LineTo { x: 10; y: 10; }
+                                MoveTo { x: 10; y: 0; }
+                                LineTo { x: 0; y: 10; }
                             }
                             close-touch := TouchArea { clicked => { root.close-clicked(); } }
                         }
