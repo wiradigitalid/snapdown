@@ -1398,4 +1398,62 @@ defects:
       so saved output stays full quality; only the on-screen preview softens on a monitor whose
       scale differs. That is a DEC-, not a patch, and it has not been decided.
     related: BUG-26
+    resolved: |
+      2026-08-26, commits 9277ecc / 31e391f / 030f886. Not by finding what stalled that one
+      frame - that was never identified - but by removing the conditions that made it happen at
+      all, in three steps:
+
+        1. Reuse. The overlay is created once and re-shown, not rebuilt per capture. Confirmed by
+           measurement: with SLINT_DEBUG_PERFORMANCE=refresh_lazy,console the renderer
+           initialisation count does not grow across captures. Took five blinks down to one.
+        2. One window instead of one per monitor. Per-window renderer warm-up and per-window
+           event-loop turns were the mechanism behind both the residual blink and Escape clearing
+           only one screen.
+        3. Pre-warming at start-up. A window's renderer surface is built, and its geometry
+           corrected, only at creation - and `show()` does not create the native window, the event
+           loop does on its next turn. Doing that during start-up means neither is in front of the
+           user when they press Capture. Verified: after start-up the overlay already exists
+           hidden at pos=(-2160,-838) size=6000x3840, its final geometry.
+
+      Owner confirmed acceptable. The lesson worth keeping is in the ruled-out list above: four
+      fixes aimed at the symptom all failed, and what worked was removing the structure that
+      produced it.
+    status: resolved
+  - id: BUG-28
+    title: The capture overlay takes a visible moment to appear
+    found: "2026-08-26"
+    found_by: kodesh87, manual capture test
+    component: capture
+    severity: low
+    contradicts: [FR-1]
+    evidence: |
+      Owner: "muncul overlaynya cukup lama", and separately "agak lama, tapi oke". Timed in a
+      debug build at grab=1284ms before the grab was parallelised and 805ms after; release is
+      substantially faster but still perceptible.
+
+      The cost is preparing the image, not the overlay logic:
+        - two monitor grabs at ~8.3 megapixels each (parallelised, so the slower one dominates)
+        - a stitched virtual-desktop canvas: on a 6000x3840 desktop that is a ~92MB allocation
+          plus a blit per monitor
+        - a copy of that into a Slint SharedPixelBuffer, then a texture upload
+    impact: |
+      A pause between pressing Capture and the screen freezing. The frozen screenshot is taken at
+      the moment of the grab, so nothing is lost - it reads as latency, not as a wrong capture.
+    why_undetected: |
+      Nothing here measures this, and it only becomes obvious at 6000x3840 across two monitors.
+    fix: |
+      NOT DONE. Note that the single-window architecture MADE THIS WORSE: the per-monitor design
+      needed no stitched canvas at all. That was a deliberate trade - see BUG-27 - and reverting it
+      to buy latency back would reintroduce the whole multi-window defect class.
+
+      Untried ideas, cheapest first:
+        - Avoid the extra copy into SharedPixelBuffer by capturing directly into one, or by
+          keeping one buffer and overwriting its pixels between captures rather than allocating a
+          new Image each time (a new texture per capture is also the last untested suspicion in
+          BUG-27).
+        - Skip the stitch when only one monitor exists, which is the common case for most users.
+        - A faster grab path than xcap's (DXGI Desktop Duplication).
+        - Show the overlay before the image is ready, then fill it in - changes the UX contract
+          (the screen would not freeze instantly) and needs the owner's call.
+    related: BUG-27
     status: open
