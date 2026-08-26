@@ -4,6 +4,7 @@ mod hotkey;
 mod startup;
 mod tray;
 
+use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -36,6 +37,35 @@ use tray::{AppTray, TrayAction};
 const SINGLE_INSTANCE_MUTEX_NAME: &str = "Snapdown-SingleInstance-id.wiradigital.snapdown";
 
 slint::include_modules!();
+
+thread_local! {
+    /// The capture overlays - one per monitor - kept alive for the life of the process so their
+    /// renderer warm-up is paid once rather than on every capture. See [`LiveOverlay`].
+    ///
+    /// They need an owner that outlives the callback that created them, and they are only ever
+    /// touched from the UI thread, so they live here rather than in an `Rc` that would have to
+    /// cross the capture thread (it cannot: `invoke_from_event_loop` requires `Send`). Each
+    /// overlay's own callbacks hold only `Weak` handles, so nothing here is kept alive by a
+    /// reference cycle.
+    static LIVE_OVERLAYS: RefCell<Vec<LiveOverlay>> = const { RefCell::new(Vec::new()) };
+
+    /// Where the next overlay window should be *born*, as `(x, y, width, height)` in physical
+    /// virtual-desktop pixels.
+    ///
+    /// Setting geometry after the window exists is not enough. Windows creates a window at the
+    /// primary monitor's DPI; moving it onto a display with a different scale factor then fires
+    /// `WM_DPICHANGED`, which rebuilds the surface and re-derives the size - visible as a brief
+    /// "growing into place" transition on the non-primary monitor only. Feeding the position and
+    /// size into `winit`'s `WindowAttributes` instead means the window is created on its target
+    /// monitor already, so no DPI change ever happens.
+    ///
+    /// Read and cleared by the window-attributes hook installed on the backend. The hook runs on
+    /// the event-loop thread, which is the same thread that sets this, so a thread-local is the
+    /// right channel.
+    #[cfg(windows)]
+    static NEXT_OVERLAY_PLACEMENT: RefCell<Option<(i32, i32, u32, u32)>> =
+        const { RefCell::new(None) };
+}
 
 /// Acquires a named OS mutex for the lifetime of the process. Returns `None` when another
 /// instance already holds it, so the caller can exit instead of opening a second tray icon.
@@ -275,6 +305,129 @@ fn load_findings_into_window(
     }
 }
 
+/// A capture overlay, kept alive between captures.
+///
+/// Overlays are deliberately NOT recreated per capture. A GPU renderer builds each window's
+/// surface and shader pipeline lazily, and that first frame gets presented with only the clear
+/// colour and no content - which is the whole-screen black blink. On Windows, Slint's `hide()`
+/// maps to winit's `set_visible(false)` and leaves the native window and its renderer intact (it
+/// only destroys the window on Wayland, or when `SLINT_DESTROY_WINDOW_ON_HIDE` is set), so
+/// holding on to these and re-showing them pays that warm-up once per monitor layout instead of
+/// once per capture.
+struct LiveOverlay {
+    window: CaptureOverlayWindow,
+    /// `(x, y, width, height)` in physical virtual-desktop pixels. Doubles as the reuse key: if
+    /// the monitor layout still matches, the existing windows are reused untouched.
+    placement: (i32, i32, u32, u32),
+}
+
+/// Crops one monitor's capture to the selected region, shrinks it to the active QualityBudget,
+/// writes it to the Vault, and records the Finding plus its note.
+///
+/// `region` is in the source image's own pixel space, which for a per-monitor overlay is the
+/// same space its pointer coordinates arrive in - one overlay covers exactly one monitor at 1:1,
+/// so no virtual-desktop translation is involved.
+///
+/// Returns the new Finding's id, or `None` if the region could not be persisted.
+fn persist_finding(
+    ctx: &AppContext,
+    source: &image::RgbaImage,
+    region: (u32, u32, u32, u32),
+    monitor_name: &str,
+    note_body: &str,
+) -> Option<String> {
+    let (src_w, src_h) = (source.width(), source.height());
+    let (sel_x, sel_y, sel_w, sel_h) = region;
+
+    // Clamp into the source rather than trusting the caller: a drag released off-screen can
+    // report a region reaching past the monitor's own bounds.
+    let crop_x = sel_x.min(src_w.saturating_sub(1));
+    let crop_y = sel_y.min(src_h.saturating_sub(1));
+    let crop_w = sel_w.min(src_w - crop_x).max(1);
+    let crop_h = sel_h.min(src_h - crop_y).max(1);
+
+    let cropped = crop_imm(source, crop_x, crop_y, crop_w, crop_h).to_image();
+
+    let mut png_bytes = Vec::new();
+    if let Err(e) = image::ImageEncoder::write_image(
+        image::codecs::png::PngEncoder::new(&mut png_bytes),
+        &cropped,
+        crop_w,
+        crop_h,
+        image::ExtendedColorType::Rgba8,
+    ) {
+        eprintln!("Failed to encode captured region as PNG: {e}");
+        return None;
+    }
+
+    let qb = match ctx.settings_store.get(&SettingKey::QualityBudget) {
+        Ok(Some(Setting {
+            value: SettingValue::QualityBudget(budget),
+            ..
+        })) => budget,
+        _ => QualityBudget::default(),
+    };
+    let resolved = qb.resolve(crop_w.max(crop_h));
+    let orig_dims = ImageDimensions::new(crop_w, crop_h).unwrap_or(ImageDimensions {
+        width: crop_w,
+        height: crop_h,
+    });
+
+    let (reduced_bytes, final_w, final_h) =
+        match ImageReducer::reduce_image(&png_bytes, orig_dims, &resolved, false) {
+            Ok(red) => (red.bytes, red.dimensions.width, red.dimensions.height),
+            Err(e) => {
+                eprintln!("Quality-budget reduction failed, storing the region unreduced: {e}");
+                (png_bytes, crop_w, crop_h)
+            }
+        };
+
+    let clock = SystemClock::new();
+    let entropy = SystemEntropySource::new();
+    let finding_id =
+        snapdown_core::util::id::id_from_parts(clock.now_unix_millis(), entropy.random_bytes_10());
+    let captured_at = clock.now_rfc3339();
+    let rel_filename = format!(
+        "findings/capture_{}.png",
+        chrono::Utc::now().format("%Y%m%d_%H%M%S")
+    );
+
+    if let Err(e) = ctx.vault_store.write_blob(&rel_filename, &reduced_bytes) {
+        eprintln!("Failed to write the captured region into the Vault: {e}");
+        return None;
+    }
+
+    let finding = Finding {
+        id: finding_id.clone(),
+        image_path: rel_filename,
+        image_width: final_w,
+        image_height: final_h,
+        captured_at: captured_at.clone(),
+        source_monitor: monitor_name.to_string(),
+        region: format!("{crop_x},{crop_y},{crop_w},{crop_h}"),
+        resolved_long_edge: Some(resolved.max_long_edge),
+        resolved_encoder_quality: Some(resolved.encoder_quality),
+        budget_name: Some(qb.named.display_name().to_string()),
+    };
+
+    let note_record = Note {
+        id: format!("note-{finding_id}"),
+        finding_id: finding_id.clone(),
+        body: note_body.to_string(),
+        updated_at: captured_at,
+    };
+
+    if let Err(e) = ctx
+        .finding_store
+        .create_finding(&finding, &note_record, &[])
+    {
+        eprintln!("Failed to record the Finding: {e}");
+        return None;
+    }
+
+    Some(finding_id)
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Keep the mutex handle alive for the whole process; a second launch finds it already
     // held and exits instead of opening a duplicate tray icon and window.
@@ -285,6 +438,54 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Ok(());
         }
     };
+
+    // A custom backend is installed for one reason: the window-attributes hook, which lets each
+    // capture overlay be *created* already on its target monitor. See NEXT_OVERLAY_PLACEMENT for
+    // why that has to happen at creation rather than afterwards.
+    //
+    // The renderer is left at Slint's default, which is GPU-accelerated. A GPU renderer builds
+    // each window's surface and shader pipeline lazily, so the first frame of a newly created
+    // window is presented with only the clear colour - the whole-screen black blink. The answer
+    // is NOT to fall back to the software renderer: that removes the blink but cannot repaint a
+    // full-screen 8-megapixel overlay per pointer move, so dragging a region out becomes choppy,
+    // and every attempt to make that cheap cost visual correctness. Instead the overlays are
+    // created once and reused, so the warm-up is paid once - see LiveOverlay.
+    //
+    // SLINT_BACKEND is still honoured when set, so the renderers stay A/B comparable without a
+    // rebuild (`SLINT_BACKEND=software` for the CPU path).
+    #[cfg(windows)]
+    {
+        let mut builder =
+            i_slint_backend_winit::Backend::builder().with_window_attributes_hook(|attributes| {
+                match NEXT_OVERLAY_PLACEMENT.with_borrow_mut(|placement| placement.take()) {
+                    Some((x, y, width, height)) => attributes
+                        .with_position(i_slint_backend_winit::winit::dpi::PhysicalPosition::new(
+                            x, y,
+                        ))
+                        .with_inner_size(i_slint_backend_winit::winit::dpi::PhysicalSize::new(
+                            width, height,
+                        )),
+                    None => attributes,
+                }
+            });
+        // Accepted names are matched in i-slint-backend-winit's lib.rs - "software"/"sw",
+        // "skia", "femtovg" and friends. NOT "renderer-software", which `with_renderer_name`'s
+        // own doc comment shows: that matches nothing, and the backend then logs "unrecognized
+        // renderer ... falling back to <default>" and silently hands back the default. That log
+        // goes to Slint's debug output, which a release windows-subsystem build has nowhere to
+        // print, so a typo here fails completely silently.
+        if let Some(name) = std::env::var_os("SLINT_BACKEND").and_then(|v| v.into_string().ok()) {
+            builder = builder.with_renderer_name(name);
+        }
+        match builder.build() {
+            Ok(backend) => {
+                if let Err(e) = slint::platform::set_platform(Box::new(backend)) {
+                    eprintln!("Could not install the winit backend, using the default: {e}");
+                }
+            }
+            Err(e) => eprintln!("Could not build the winit backend, using the default: {e}"),
+        }
+    }
 
     let main_window = AppWindow::new()?;
     let ctx = Arc::new(AppContext::init());
@@ -361,144 +562,219 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Open Settings clicked");
     });
 
-    // Setup Capture callback
+    // Setup Capture callback.
+    //
+    // One overlay window per attached monitor, each covering exactly that monitor and showing
+    // only that monitor's own pixels. That is what confines the crosshair to a single screen and
+    // makes a region spanning two monitors impossible to draw, and it is also the only correct
+    // option on Windows: a window has exactly one DPI, so one window spanning displays at 150%
+    // and 175% renders 1:1 on neither, and crossing the boundary fires WM_DPICHANGED which
+    // re-derives its physical size and inflates it.
+    //
+    // The windows are created once and then reused for every later capture, which is what keeps
+    // the GPU renderer's per-window warm-up from being visible - see LiveOverlay.
     let window_weak = main_window.as_weak();
     let ctx_capture = ctx.clone();
     main_window.on_capture_clicked(move || {
-        let (raw_img, w, h) = match RegionCapturer::capture_monitor_image(None) {
-            Ok(res) => res,
-            Err(e) => {
-                eprintln!("Capture failed: {e}");
-                return;
-            }
-        };
-
-        // Convert raw RgbaImage to Slint RgbaImage
-        let pixel_buffer =
-            SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(raw_img.as_raw(), w, h);
-        let slint_img = slint::Image::from_rgba8(pixel_buffer);
-
-        let overlay = match CaptureOverlayWindow::new() {
-            Ok(ov) => ov,
-            Err(e) => {
-                eprintln!("Failed to create CaptureOverlayWindow: {e}");
-                return;
-            }
-        };
-        overlay.set_snapshot_image(slint_img);
-
-        let overlay_weak = overlay.as_weak();
+        // The monitor grab is a blocking syscall; run it off the UI thread so the window does
+        // not freeze while it runs, then hop back onto the event loop to build the overlays.
         let main_weak = window_weak.clone();
         let ctx_inner = ctx_capture.clone();
-        let img_clone = raw_img.clone();
-
-        overlay.on_capture_completed(move |x, y, sel_w, sel_h, note| {
-            if let Some(main) = main_weak.upgrade() {
-                // Bounds safety check for cropping
-                let crop_x = (x as u32).min(w.saturating_sub(1));
-                let crop_y = (y as u32).min(h.saturating_sub(1));
-                let crop_w = (sel_w as u32).min(w - crop_x).max(1);
-                let crop_h = (sel_h as u32).min(h - crop_y).max(1);
-
-                let cropped = crop_imm(&img_clone, crop_x, crop_y, crop_w, crop_h).to_image();
-
-                // Encode cropped image to PNG
-                let mut png_bytes = Vec::new();
-                let encoder = image::codecs::png::PngEncoder::new(&mut png_bytes);
-                let _ = image::ImageEncoder::write_image(
-                    encoder,
-                    &cropped,
-                    crop_w,
-                    crop_h,
-                    image::ExtendedColorType::Rgba8,
-                );
-
-                // Reduce image using QualityBudget
-                let qb = match ctx_inner.settings_store.get(&SettingKey::QualityBudget) {
-                    Ok(Some(Setting {
-                        value: SettingValue::QualityBudget(budget),
-                        ..
-                    })) => budget,
-                    _ => QualityBudget::default(),
+        std::thread::spawn(move || {
+            let capture_result = RegionCapturer::capture_each_monitor();
+            if let Err(e) = slint::invoke_from_event_loop(move || {
+                let captures = match capture_result {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("Capture failed: {e}");
+                        return;
+                    }
                 };
-                let region_long_edge = crop_w.max(crop_h);
-                let resolved = qb.resolve(region_long_edge);
-                let orig_dims = ImageDimensions::new(crop_w, crop_h).unwrap_or(ImageDimensions {
-                    width: crop_w,
-                    height: crop_h,
-                });
 
-                let (reduced_bytes, final_w, final_h) = if let Ok(red) =
-                    ImageReducer::reduce_image(&png_bytes, orig_dims, &resolved, false)
+                // Take the overlays out while they are being reconfigured, so nothing else can
+                // borrow the thread-local mid-flight. They go back at the end.
+                let mut live: Vec<LiveOverlay> = LIVE_OVERLAYS.with_borrow_mut(std::mem::take);
+
+                let wanted: Vec<(i32, i32, u32, u32)> = captures
+                    .iter()
+                    .map(|c| (c.origin_x, c.origin_y, c.width, c.height))
+                    .collect();
+
+                // Reuse only while the monitor layout is unchanged. If a display was added,
+                // removed, moved or re-scaled, the old windows are the wrong shape and the set is
+                // rebuilt - the warm-up cost is paid again, which is correct: it is a new layout.
+                let layout_unchanged = live.len() == wanted.len()
+                    && live.iter().zip(&wanted).all(|(l, w)| l.placement == *w);
+
+                if !layout_unchanged {
+                    // Drop the stale windows before creating replacements, so a monitor's overlay
+                    // is never briefly duplicated.
+                    live.clear();
+                    for placement in &wanted {
+                        // Publish the placement so the attributes hook can create this window
+                        // directly on its target monitor, at that monitor's DPI.
+                        NEXT_OVERLAY_PLACEMENT.with_borrow_mut(|slot| *slot = Some(*placement));
+                        let overlay = match CaptureOverlayWindow::new() {
+                            Ok(ov) => ov,
+                            Err(e) => {
+                                eprintln!("Failed to create CaptureOverlayWindow: {e}");
+                                continue;
+                            }
+                        };
+                        live.push(LiveOverlay {
+                            window: overlay,
+                            placement: *placement,
+                        });
+                    }
+                    NEXT_OVERLAY_PLACEMENT.with_borrow_mut(|slot| *slot = None);
+                }
+
+                if live.is_empty() {
+                    eprintln!("Capture aborted: no overlay window could be created.");
+                    return;
+                }
+
+                // Weak handles only, so the callbacks that close every overlay do not keep any
+                // overlay alive.
+                let siblings: Rc<Vec<slint::Weak<CaptureOverlayWindow>>> =
+                    Rc::new(live.iter().map(|l| l.window.as_weak()).collect());
+
+                for (self_index, (entry, capture)) in live.iter().zip(captures).enumerate() {
+                    let overlay = &entry.window;
+                    let monitor_name = capture.name;
+                    let monitor_image = Rc::new(capture.image);
+
+                    // A reused overlay still carries the previous capture's state, so reset it
+                    // before it is shown again.
+                    overlay.set_interactive(true);
+                    overlay.set_has_selection(false);
+                    overlay.set_is_narrating(false);
+                    overlay.set_is_dragging(false);
+                    overlay.set_note_text(slint::SharedString::new());
+                    overlay.set_snapshot_image(slint::Image::from_rgba8(SharedPixelBuffer::<
+                        slint::Rgba8Pixel,
+                    >::clone_from_slice(
+                        monitor_image.as_raw(),
+                        capture.width,
+                        capture.height,
+                    )));
+
+                    // Belt-and-braces geometry for the case where the attributes hook did not
+                    // apply. The size MUST be given in LOGICAL pixels derived from this monitor's
+                    // own scale factor: set_size(Physical) divides by the window's *current*
+                    // scale factor, which is 1.0 before the window exists, so physical numbers
+                    // would be stored as logical ones and then multiplied by the real scale
+                    // factor - the original "everything is zoomed and grows into place" bug.
+                    overlay
+                        .window()
+                        .set_position(slint::WindowPosition::Physical(
+                            slint::PhysicalPosition::new(capture.origin_x, capture.origin_y),
+                        ));
+                    overlay
+                        .window()
+                        .set_size(slint::WindowSize::Logical(slint::LogicalSize::new(
+                            capture.width as f32 / capture.scale_factor,
+                            capture.height as f32 / capture.scale_factor,
+                        )));
+
+                    // Callbacks are reinstalled every capture: a reused overlay's old handlers
+                    // still close over the PREVIOUS capture's image, which would crop this
+                    // capture's region out of a stale screenshot. Setting a handler replaces it.
+                    let close_all = {
+                        let siblings = siblings.clone();
+                        move || {
+                            for sibling in siblings.iter() {
+                                if let Some(sibling) = sibling.upgrade() {
+                                    if let Err(e) = sibling.hide() {
+                                        eprintln!("Failed to hide a capture overlay: {e}");
+                                    }
+                                }
+                            }
+                        }
+                    };
+
+                    // Selecting on one monitor stands the others down, so only one screen can be
+                    // mid-selection while its note popup is open.
+                    overlay.on_narration_started({
+                        let siblings = siblings.clone();
+                        move || {
+                            for (index, sibling) in siblings.iter().enumerate() {
+                                if index == self_index {
+                                    continue;
+                                }
+                                if let Some(sibling) = sibling.upgrade() {
+                                    sibling.set_interactive(false);
+                                }
+                            }
+                        }
+                    });
+
+                    overlay.on_capture_completed({
+                        let ctx_inner = ctx_inner.clone();
+                        let main_weak = main_weak.clone();
+                        let monitor_image = monitor_image.clone();
+                        let close_all = close_all.clone();
+                        move |x, y, sel_w, sel_h, note| {
+                            let region = (
+                                x.max(0) as u32,
+                                y.max(0) as u32,
+                                sel_w.max(0) as u32,
+                                sel_h.max(0) as u32,
+                            );
+                            let finding_id = persist_finding(
+                                &ctx_inner,
+                                &monitor_image,
+                                region,
+                                &monitor_name,
+                                note.as_str(),
+                            );
+                            close_all();
+                            if let Some(main) = main_weak.upgrade() {
+                                load_findings_into_window(&main, &ctx_inner, finding_id.as_deref());
+                                if let Err(e) = main.show() {
+                                    eprintln!("Failed to reshow the main window: {e}");
+                                }
+                            }
+                        }
+                    });
+
+                    overlay.on_overlay_cancelled({
+                        let main_weak = main_weak.clone();
+                        move || {
+                            close_all();
+                            if let Some(main) = main_weak.upgrade() {
+                                if let Err(e) = main.show() {
+                                    eprintln!("Failed to reshow the main window: {e}");
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // Show them in one tight pass, after every one is fully configured.
+                for entry in &live {
+                    if let Err(e) = entry.window.show() {
+                        eprintln!("Failed to show a capture overlay: {e}");
+                    }
+                }
+
+                // The first overlay takes keyboard focus, so Escape works without a click first.
+                #[cfg(windows)]
                 {
-                    (red.bytes, red.dimensions.width, red.dimensions.height)
-                } else {
-                    (png_bytes, crop_w, crop_h)
-                };
+                    use i_slint_backend_winit::WinitWindowAccessor;
+                    if let Some(entry) = live.first() {
+                        entry
+                            .window
+                            .window()
+                            .with_winit_window(|winit_win| winit_win.focus_window());
+                    }
+                }
 
-                // Generate timestamp and file in Vault
-                let timestamp_str = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
-                let rel_filename = format!("findings/capture_{timestamp_str}.png");
-
-                let _ = ctx_inner
-                    .vault_store
-                    .write_blob(&rel_filename, &reduced_bytes);
-
-                // Save to FindingStore
-                let clock = SystemClock::new();
-                let entropy = SystemEntropySource::new();
-                let finding_id = snapdown_core::util::id::id_from_parts(
-                    clock.now_unix_millis(),
-                    entropy.random_bytes_10(),
-                );
-                let captured_at = clock.now_rfc3339();
-
-                let finding = Finding {
-                    id: finding_id.clone(),
-                    image_path: rel_filename.clone(),
-                    image_width: final_w,
-                    image_height: final_h,
-                    captured_at: captured_at.clone(),
-                    source_monitor: "DISPLAY1".to_string(),
-                    region: format!("{crop_x},{crop_y},{crop_w},{crop_h}"),
-                    resolved_long_edge: Some(resolved.max_long_edge),
-                    resolved_encoder_quality: Some(resolved.encoder_quality),
-                    budget_name: Some(qb.named.display_name().to_string()),
-                };
-
-                let note_record = Note {
-                    id: format!("note-{finding_id}"),
-                    finding_id: finding_id.clone(),
-                    body: note.to_string(),
-                    updated_at: captured_at,
-                };
-
-                let _ = ctx_inner
-                    .finding_store
-                    .create_finding(&finding, &note_record, &[]);
-
-                // Reload filmstrip with the new finding active
-                load_findings_into_window(&main, &ctx_inner, Some(&finding_id));
-
-                main.show().unwrap();
-            }
-            if let Some(ov) = overlay_weak.upgrade() {
-                ov.hide().unwrap();
+                LIVE_OVERLAYS.with_borrow_mut(|slot| *slot = live);
+            }) {
+                eprintln!("Failed to dispatch the capture overlays to the UI thread: {e}");
             }
         });
-
-        let overlay_cancel = overlay.as_weak();
-        let main_restore = window_weak.clone();
-        overlay.on_overlay_cancelled(move || {
-            if let Some(ov) = overlay_cancel.upgrade() {
-                ov.hide().unwrap();
-            }
-            if let Some(main) = main_restore.upgrade() {
-                main.show().unwrap();
-            }
-        });
-
-        overlay.show().unwrap();
     });
 
     main_window.on_open_file_clicked(|| {

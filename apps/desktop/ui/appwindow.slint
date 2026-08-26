@@ -30,11 +30,21 @@ export struct FindingThumb {
     is-active: bool,
     image: image,
 }
+
+// One overlay window covers exactly one monitor, and one is opened per attached monitor. That
+// is what keeps the crosshair on a single screen and makes a selection spanning two monitors
+// impossible by construction, and it is also required for correctness: a Win32 window has one
+// DPI, so a single window spanning displays at different scale factors (150% and 175%, say) can
+// render 1:1 on neither. See MonitorCapture in crates/snapdown-capture.
 export component CaptureOverlayWindow inherits Window {
     title: "Snapdown Capture Overlay";
     no-frame: true;
     always-on-top: true;
-    background: transparent;
+    // Deliberately opaque, not transparent. The frozen screenshot below covers every pixel of
+    // this window, so transparency buys nothing - and it costs: a transparent no-frame window is
+    // a layered, per-pixel-alpha composited surface on Windows, whose first frame shows the live
+    // desktop through it before the content lands. That read as a flicker on reveal.
+    background: #000000;
 
     in-out property <image> snapshot-image;
     in-out property <length> mouse-x: 0px;
@@ -52,98 +62,129 @@ export component CaptureOverlayWindow inherits Window {
     in-out property <string> note-text: "";
     in-out property <bool> is-narrating: false;
 
+    // Cleared on every other overlay once one of them starts asking for a note, so that only one
+    // monitor at a time can be mid-selection. Without it a second overlay would happily begin a
+    // fresh drag while the first still has an unanswered note popup open.
+    in-out property <bool> interactive: true;
+
+    // Below this drag distance, a press+release is a click, not a region selection.
+    property <length> click-threshold: 4px;
+
+    // Source (screenshot) pixels per logical pixel. The snapshot is this monitor's physical
+    // resolution while the window is measured in logical pixels, so this is the monitor's own
+    // DPI scale factor - derived here rather than passed in, so it cannot fall out of step.
+    property <float> source-scale: (root.width > 0px && root.snapshot-image.width > 0)
+        ? root.snapshot-image.width / (root.width / 1px)
+        : 1.0;
+    // Side of the source square the magnifier shows. Scaled by source-scale so the loupe reads
+    // as the same 3x magnification on every monitor regardless of its DPI.
+    property <float> loupe-source-size: 32 * root.source-scale;
+
     callback capture-completed(int, int, int, int, string);
     callback overlay-cancelled();
+    // Fired when this overlay opens its note popup, so the app can stand the others down.
+    callback narration-started();
 
-    Image {
+    key-handler := FocusScope {
         width: 100%;
         height: 100%;
-        source: root.snapshot-image;
-    }
 
-    if !has-selection : Rectangle {
-        width: 100%;
-        height: 100%;
-        background: #000000.with-alpha(0.65);
-    }
-    if has-selection : Rectangle {
-        Rectangle { x: 0px; y: 0px; width: 100%; height: sel-y; background: #000000.with-alpha(0.65); }
-        Rectangle { x: 0px; y: sel-y + sel-h; width: 100%; height: parent.height - (sel-y + sel-h); background: #000000.with-alpha(0.65); }
-        Rectangle { x: 0px; y: sel-y; width: sel-x; height: sel-h; background: #000000.with-alpha(0.65); }
-        Rectangle { x: sel-x + sel-w; y: sel-y; width: parent.width - (sel-x + sel-w); height: sel-h; background: #000000.with-alpha(0.65); }
-    }
-    if has-selection : Rectangle {
-        x: sel-x;
-        y: sel-y;
-        width: sel-w;
-        height: sel-h;
-        border-color: Theme.border-focus;
-        border-width: 2px;
-        background: transparent;
-
-        Rectangle {
-            y: -24px;
-            x: 0px;
-            height: 20px;
-            width: 90px;
-            border-radius: Theme.radius-sharp;
-            background: Theme.accent-primary;
-            Text {
-                text: (sel-w / 1px) + " × " + (sel-h / 1px);
-                color: #ffffff;
-                font-size: 11px;
-                font-weight: 700;
-                font-family: "IBM Plex Mono";
-                horizontal-alignment: center;
-                vertical-alignment: center;
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                root.overlay-cancelled();
+                accept
+            } else {
+                reject
             }
         }
 
-        if is-narrating : Rectangle {
-            y: parent.height + 12px;
-            x: (parent.width - self.width) / 2;
-            width: 320px;
-            height: 110px;
-            background: #ffffff;
-            border-radius: Theme.radius-sharp;
-            drop-shadow-blur: 16px;
-            drop-shadow-color: #000000.with-alpha(0.4);
+        init => {
+            self.focus();
+        }
 
-            VerticalLayout {
-                padding: 10px;
-                spacing: 8px;
+        Image {
+            width: 100%;
+            height: 100%;
+            source: root.snapshot-image;
+        }
+
+        // The dim layer is built as four rectangles AROUND the selection, leaving the selected
+        // region showing the one full-bleed screenshot above, undimmed.
+        //
+        // Do not "optimise" this into a static scrim plus a re-clipped copy of the image drawn
+        // over it. That was tried: `source-clip-*` are integer SOURCE-pixel properties while the
+        // selection sits at fractional logical coordinates (scale 1.5 / 1.75), so the cut-out's
+        // contents snap to whole source pixels while its frame moves smoothly - the image inside
+        // the selection visibly slides against the backdrop as you drag. Leaving one image and
+        // dimming around it is aligned by construction, and correctness wins here.
+        //
+        // Gated with `visible` rather than `if` so neither subtree is torn down and rebuilt; a
+        // freshly built subtree presents one frame with no content, which reads as a blink.
+        Rectangle {
+            visible: !root.has-selection;
+            width: 100%;
+            height: 100%;
+            background: #000000.with-alpha(0.65);
+        }
+        Rectangle {
+            visible: root.has-selection;
+            Rectangle { x: 0px; y: 0px; width: 100%; height: sel-y; background: #000000.with-alpha(0.65); }
+            Rectangle { x: 0px; y: sel-y + sel-h; width: 100%; height: parent.height - (sel-y + sel-h); background: #000000.with-alpha(0.65); }
+            Rectangle { x: 0px; y: sel-y; width: sel-x; height: sel-h; background: #000000.with-alpha(0.65); }
+            Rectangle { x: sel-x + sel-w; y: sel-y; width: parent.width - (sel-x + sel-w); height: sel-h; background: #000000.with-alpha(0.65); }
+        }
+        Rectangle {
+            visible: root.has-selection;
+            x: sel-x;
+            y: sel-y;
+            width: sel-w;
+            height: sel-h;
+            border-color: Theme.border-focus;
+            border-width: 2px;
+            background: transparent;
+
+            Rectangle {
+                y: -24px;
+                x: 0px;
+                height: 20px;
+                width: 90px;
+                border-radius: Theme.radius-sharp;
+                background: Theme.accent-primary;
                 Text {
-                    text: "What is wrong here?";
+                    text: round(sel-w / 1px) + " × " + round(sel-h / 1px);
+                    color: #ffffff;
                     font-size: 11px;
                     font-weight: 700;
-                    color: #475569;
-                    font-family: "IBM Plex Sans";
+                    font-family: "IBM Plex Mono";
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
                 }
-                note-input := LineEdit {
-                    text <=> root.note-text;
-                    placeholder-text: "Type finding note...";
-                    accepted => {
-                        root.capture-completed(
-                            sel-x / 1px,
-                            sel-y / 1px,
-                            sel-w / 1px,
-                            sel-h / 1px,
-                            root.note-text
-                        );
-                    }
-                }
-                HorizontalLayout {
-                    alignment: space-between;
+            }
+
+            if is-narrating : Rectangle {
+                y: parent.height + 12px;
+                x: (parent.width - self.width) / 2;
+                width: 320px;
+                height: 110px;
+                background: #ffffff;
+                border-radius: Theme.radius-sharp;
+                drop-shadow-blur: 16px;
+                drop-shadow-color: #000000.with-alpha(0.4);
+
+                VerticalLayout {
+                    padding: 10px;
+                    spacing: 8px;
                     Text {
-                        text: "Enter to save · Esc to cancel";
-                        font-size: 10px;
-                        color: #94a3b8;
+                        text: "What is wrong here?";
+                        font-size: 11px;
+                        font-weight: 700;
+                        color: #475569;
                         font-family: "IBM Plex Sans";
                     }
-                    Button {
-                        text: "Save Finding";
-                        primary: true;
-                        clicked => {
+                    note-input := LineEdit {
+                        text <=> root.note-text;
+                        placeholder-text: "Type finding note...";
+                        accepted => {
                             root.capture-completed(
                                 sel-x / 1px,
                                 sel-y / 1px,
@@ -153,91 +194,162 @@ export component CaptureOverlayWindow inherits Window {
                             );
                         }
                     }
+                    HorizontalLayout {
+                        alignment: space-between;
+                        Text {
+                            text: "Enter to save · Esc to cancel";
+                            font-size: 10px;
+                            color: #94a3b8;
+                            font-family: "IBM Plex Sans";
+                        }
+                        Button {
+                            text: "Save Finding";
+                            primary: true;
+                            clicked => {
+                                root.capture-completed(
+                                    sel-x / 1px,
+                                    sel-y / 1px,
+                                    sel-w / 1px,
+                                    sel-h / 1px,
+                                    root.note-text
+                                );
+                            }
+                        }
+                    }
                 }
             }
         }
-    }
 
-    if !is-narrating : Rectangle {
+        // The crosshair spans this window, and this window is exactly one monitor - so it is
+        // confined to the screen the pointer is on with no coordinate arithmetic at all. It also
+        // only shows while the pointer is actually inside this overlay, so the idle monitor is
+        // left clean rather than drawing a stale crosshair at the last known position.
+        //
+        // Gated with `visible`, deliberately NOT with `if`. An `if` creates and destroys the
+        // element subtree, so every time the pointer entered or left a monitor this whole group
+        // was rebuilt - and the first paint of a freshly built subtree presented one frame with
+        // the window's clear colour and no image, which is the black blink. `visible` keeps the
+        // elements alive and merely stops drawing them.
         Rectangle {
-            x: mouse-x - 0.5px;
-            y: 0px;
-            width: 1px;
-            height: 100%;
-            background: Theme.accent-primary.with-alpha(0.8);
+            visible: !root.is-narrating && root.interactive && hover-tracker.has-hover;
+            Rectangle {
+                x: mouse-x - 0.5px;
+                y: 0px;
+                width: 1px;
+                height: 100%;
+                background: Theme.accent-primary.with-alpha(0.8);
+            }
+            Rectangle {
+                x: 0px;
+                y: mouse-y - 0.5px;
+                width: 100%;
+                height: 1px;
+                background: Theme.accent-primary.with-alpha(0.8);
+            }
+
+            Rectangle {
+                x: mouse-x + 24px;
+                y: mouse-y + 24px;
+                width: 96px;
+                height: 96px;
+                border-radius: 48px;
+                border-width: 2.5px;
+                border-color: Theme.border-focus;
+                background: #000000;
+                clip: true;
+
+                // Only the small square under the cursor is read out of the screenshot, via
+                // source-clip, and drawn into the 96px loupe.
+                //
+                // It used to lay out the ENTIRE screenshot at 3x (`width: root.width * 3`) and
+                // rely on `clip: true` to show a 96px window onto it. On a 3840x2160 monitor that
+                // asks the renderer for a ~75-megapixel scaled image on every pointer move, which
+                // is what made the overlay flicker while the mouse moved and then settle once the
+                // renderer had finally cached that texture.
+                Image {
+                    width: 96px;
+                    height: 96px;
+                    source: root.snapshot-image;
+                    image-fit: fill;
+                    // Left at the default `smooth`. `pixelated` was tried here on the theory that
+                    // filtered magnification was what stalled the first draw after each new
+                    // snapshot texture - it made the flicker measurably WORSE, so the theory was
+                    // wrong and this stays as it is.
+                    source-clip-width: root.loupe-source-size;
+                    source-clip-height: root.loupe-source-size;
+                    // Clamped so the loupe stays filled at the screen edges instead of running
+                    // off the source and going blank.
+                    source-clip-x: clamp(
+                        root.mouse-x / 1px * root.source-scale - root.loupe-source-size / 2,
+                        0,
+                        max(0, root.snapshot-image.width - root.loupe-source-size));
+                    source-clip-y: clamp(
+                        root.mouse-y / 1px * root.source-scale - root.loupe-source-size / 2,
+                        0,
+                        max(0, root.snapshot-image.height - root.loupe-source-size));
+                }
+
+                Rectangle { x: 47px; y: 0px; width: 2px; height: 96px; background: Theme.border-focus; }
+                Rectangle { x: 0px; y: 47px; width: 96px; height: 2px; background: Theme.border-focus; }
+            }
         }
-        Rectangle {
-            x: 0px;
-            y: mouse-y - 0.5px;
+
+        hover-tracker := TouchArea {
             width: 100%;
-            height: 1px;
-            background: Theme.accent-primary.with-alpha(0.8);
-        }
+            height: 100%;
+            // Once a selection is being narrated, this catch-all must get out of the way: it
+            // otherwise sits on top of the note popup in z-order and swallows every click meant
+            // for the note field or the Save Finding button. `interactive` does the same for the
+            // overlays on the *other* monitors while this one is narrating.
+            enabled: !root.is-narrating && root.interactive;
 
-        Rectangle {
-            x: mouse-x + 24px;
-            y: mouse-y + 24px;
-            width: 96px;
-            height: 96px;
-            border-radius: 48px;
-            border-width: 2.5px;
-            border-color: Theme.border-focus;
-            background: #000000;
-            clip: true;
+            pointer-event(event) => {
+                root.mouse-x = self.mouse-x;
+                root.mouse-y = self.mouse-y;
 
-            Image {
-                x: -(mouse-x * 3 - 48px);
-                y: -(mouse-y * 3 - 48px);
-                width: root.width * 3;
-                height: root.height * 3;
-                source: root.snapshot-image;
+                if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                    root.is-dragging = true;
+                    root.drag-start-x = self.mouse-x;
+                    root.drag-start-y = self.mouse-y;
+                    root.drag-current-x = self.mouse-x;
+                    root.drag-current-y = self.mouse-y;
+                    root.has-selection = false;
+                    root.is-narrating = false;
+                }
+                if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) {
+                    root.is-dragging = false;
+                    // Clamp to this overlay, i.e. to this one monitor. A drag released past the
+                    // edge (Windows keeps delivering moves to the window that took the press)
+                    // must not produce a region reaching onto the neighbouring screen.
+                    root.sel-x = clamp(min(root.drag-start-x, root.drag-current-x), 0px, root.width);
+                    root.sel-y = clamp(min(root.drag-start-y, root.drag-current-y), 0px, root.height);
+                    root.sel-w = clamp(abs(root.drag-current-x - root.drag-start-x), 0px, root.width - root.sel-x);
+                    root.sel-h = clamp(abs(root.drag-current-y - root.drag-start-y), 0px, root.height - root.sel-y);
+                    // A plain click - no meaningful drag distance - is not a region selection.
+                    if (root.sel-w < root.click-threshold || root.sel-h < root.click-threshold) {
+                        root.has-selection = false;
+                        root.is-narrating = false;
+                    } else {
+                        root.has-selection = true;
+                        root.is-narrating = true;
+                        root.narration-started();
+                    }
+                }
+                if (event.kind == PointerEventKind.cancel) {
+                    root.overlay-cancelled();
+                }
             }
 
-            Rectangle { x: 47px; y: 0px; width: 2px; height: 96px; background: Theme.border-focus; }
-            Rectangle { x: 0px; y: 47px; width: 96px; height: 2px; background: Theme.border-focus; }
-        }
-    }
-
-    TouchArea {
-        width: 100%;
-        height: 100%;
-
-        pointer-event(event) => {
-            root.mouse-x = self.mouse-x;
-            root.mouse-y = self.mouse-y;
-
-            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
-                root.is-dragging = true;
-                root.drag-start-x = self.mouse-x;
-                root.drag-start-y = self.mouse-y;
-                root.drag-current-x = self.mouse-x;
-                root.drag-current-y = self.mouse-y;
-                root.has-selection = false;
-                root.is-narrating = false;
-            }
-            if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) {
-                root.is-dragging = false;
-                root.sel-x = min(root.drag-start-x, root.drag-current-x);
-                root.sel-y = min(root.drag-start-y, root.drag-current-y);
-                root.sel-w = max(abs(root.drag-current-x - root.drag-start-x), 16px);
-                root.sel-h = max(abs(root.drag-current-y - root.drag-start-y), 16px);
-                root.has-selection = true;
-                root.is-narrating = true;
-            }
-            if (event.kind == PointerEventKind.cancel) {
-                root.overlay-cancelled();
-            }
-        }
-
-        moved => {
-            if (root.is-dragging) {
-                root.drag-current-x = self.mouse-x;
-                root.drag-current-y = self.mouse-y;
-                root.sel-x = min(root.drag-start-x, root.drag-current-x);
-                root.sel-y = min(root.drag-start-y, root.drag-current-y);
-                root.sel-w = max(abs(root.drag-current-x - root.drag-start-x), 4px);
-                root.sel-h = max(abs(root.drag-current-y - root.drag-start-y), 4px);
-                root.has-selection = true;
+            moved => {
+                if (root.is-dragging) {
+                    root.drag-current-x = clamp(self.mouse-x, 0px, root.width);
+                    root.drag-current-y = clamp(self.mouse-y, 0px, root.height);
+                    root.sel-x = min(root.drag-start-x, root.drag-current-x);
+                    root.sel-y = min(root.drag-start-y, root.drag-current-y);
+                    root.sel-w = abs(root.drag-current-x - root.drag-start-x);
+                    root.sel-h = abs(root.drag-current-y - root.drag-start-y);
+                    root.has-selection = true;
+                }
             }
         }
     }

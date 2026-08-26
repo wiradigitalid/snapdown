@@ -5,12 +5,122 @@ use xcap::Monitor;
 
 use crate::error::CaptureError;
 
+/// One monitor's own pixels, plus where that monitor sits in virtual-desktop coordinates.
+///
+/// The capture overlay uses one of these per monitor rather than a single stitched canvas: on
+/// Windows a window has exactly one DPI, so a window spanning displays with different scale
+/// factors cannot render any of them 1:1 - it gets bitmap-scaled and, when it crosses the
+/// boundary, `WM_DPICHANGED` re-derives its physical size and inflates it. Keeping each overlay
+/// wholly inside one monitor sidesteps both.
+pub struct MonitorCapture {
+    pub image: RgbaImage,
+    pub width: u32,
+    pub height: u32,
+    /// Top-left of this monitor in virtual-desktop coordinates. Negative on monitors placed
+    /// left of, or above, the primary one.
+    pub origin_x: i32,
+    pub origin_y: i32,
+    /// This monitor's own DPI scale factor (1.5 at 150%, 1.75 at 175%). `width`/`height` above
+    /// are *physical* pixels; a toolkit that sizes windows in logical pixels needs this to
+    /// convert, and it cannot be asked of the window itself before that window exists.
+    pub scale_factor: f32,
+    /// The OS display name, recorded on the Finding so a capture can be traced to its screen.
+    pub name: String,
+}
+
 pub struct RegionCapturer;
 
 impl RegionCapturer {
+    /// Captures every attached monitor separately, each at its own native resolution.
+    ///
+    /// Prefer this over [`Self::capture_monitor_image`] for anything that has to *display* the
+    /// capture: it never allocates a stitched virtual canvas (which on a 6000x3840 desktop is a
+    /// 92 MB zeroed allocation plus a blit per monitor), and it keeps each monitor's pixels in
+    /// their own image so a per-monitor overlay can show them 1:1. See [`MonitorCapture`] for
+    /// why per-monitor matters on mixed-DPI setups.
+    ///
+    /// A monitor whose grab fails is skipped rather than failing the whole capture; the error is
+    /// only returned when no monitor could be captured at all.
+    pub fn capture_each_monitor() -> Result<Vec<MonitorCapture>, CaptureError> {
+        let monitors = Monitor::all().map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("No display") || msg.contains("empty") {
+                CaptureError::NoDisplayFound
+            } else {
+                CaptureError::CaptureFailed(msg)
+            }
+        })?;
+
+        if monitors.is_empty() {
+            return Err(CaptureError::NoDisplayFound);
+        }
+
+        // One thread per monitor. The grab dominates the time the user waits for the overlay to
+        // appear, and it is a per-display operation with no shared state, so the displays are
+        // captured concurrently rather than one after the other.
+        let handles: Vec<_> = (0..monitors.len())
+            .map(|index| std::thread::spawn(move || Self::capture_one_monitor(index)))
+            .collect();
+
+        let mut captures = Vec::with_capacity(handles.len());
+        let mut last_error: Option<String> = None;
+
+        for handle in handles {
+            match handle.join() {
+                Ok(Ok(capture)) => captures.push(capture),
+                Ok(Err(e)) => last_error = Some(e),
+                Err(_) => last_error = Some("a monitor capture thread panicked".to_string()),
+            }
+        }
+
+        if captures.is_empty() {
+            return Err(CaptureError::CaptureFailed(
+                last_error.unwrap_or_else(|| "no monitor could be captured".to_string()),
+            ));
+        }
+
+        // Deterministic order regardless of which thread finished first, so the overlay list and
+        // the recorded monitor names do not shuffle between captures.
+        captures.sort_by_key(|c| (c.origin_x, c.origin_y));
+
+        Ok(captures)
+    }
+
+    /// Grabs one monitor, tagging it with its placement, scale factor and display name.
+    ///
+    /// Takes an index and re-enumerates rather than accepting a `Monitor`: a `Monitor` owns a raw
+    /// `HMONITOR` and so is not `Send`, and re-enumerating (an `EnumDisplayMonitors` call) is far
+    /// cheaper than the grab this runs in parallel with. A monitor that vanished between the
+    /// caller's enumeration and this one simply reports an error and is skipped.
+    fn capture_one_monitor(index: usize) -> Result<MonitorCapture, String> {
+        let m = Monitor::all()
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .nth(index)
+            .ok_or_else(|| format!("monitor {index} disappeared before it could be captured"))?;
+        let image = m.capture_image().map_err(|e| e.to_string())?;
+        let (width, height) = (image.width(), image.height());
+        Ok(MonitorCapture {
+            image,
+            width,
+            height,
+            origin_x: m.x().unwrap_or(0),
+            origin_y: m.y().unwrap_or(0),
+            scale_factor: m.scale_factor().ok().filter(|s| *s > 0.0).unwrap_or(1.0),
+            name: m
+                .name()
+                .ok()
+                .filter(|n| !n.is_empty())
+                .unwrap_or_else(|| format!("DISPLAY{}", index + 1)),
+        })
+    }
+
+    /// Returns the captured image, its width and height, and the top-left origin of the
+    /// captured area in virtual-desktop coordinates (nonzero whenever the captured monitor, or
+    /// the stitched multi-monitor canvas, does not start at the primary monitor's origin).
     pub fn capture_monitor_image(
         source_monitor: Option<&str>,
-    ) -> Result<(RgbaImage, u32, u32), CaptureError> {
+    ) -> Result<(RgbaImage, u32, u32, i32, i32), CaptureError> {
         let monitors = Monitor::all().map_err(|e| {
             let msg = e.to_string();
             if msg.contains("No display") || msg.contains("empty") {
@@ -56,7 +166,7 @@ impl RegionCapturer {
                 }
             }
 
-            return Ok((virtual_canvas, total_w, total_h));
+            return Ok((virtual_canvas, total_w, total_h, min_x, min_y));
         }
 
         let target_monitor = if let Some(target_name) = source_monitor {
@@ -118,7 +228,10 @@ impl RegionCapturer {
             .capture_image()
             .map_err(|e| CaptureError::CaptureFailed(e.to_string()))?;
 
-        Ok((full_image, mon_w, mon_h))
+        let origin_x = target_monitor.x().unwrap_or(0);
+        let origin_y = target_monitor.y().unwrap_or(0);
+
+        Ok((full_image, mon_w, mon_h, origin_x, origin_y))
     }
 
     pub fn capture_region(
