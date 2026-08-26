@@ -648,12 +648,12 @@ export component AppWindow inherits Window {
                         spacing: 2px;
                         alignment: center;
 
-                        // Tool 0: Marker
+                        // Tool 0: Marker (Active = Red Fill Circle with White 1, Inactive = Neutral Outline Circle with 1)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 0 ? #38bdf8.with-alpha(0.25) : (m-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 0 ? #fee2e2.with-alpha(0.7) : (m-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -662,25 +662,25 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: @image-url("../assets/icons/marker.svg");
+                                    source: root.active-tool-index == 0 ? @image-url("../assets/icons/marker-active.svg") : @image-url("../assets/icons/marker-inactive.svg");
                                 }
                                 Text {
                                     text: "Marker";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 0 ? 800 : 600;
-                                    color: root.active-tool-index == 0 ? #0369a1 : #475569;
+                                    color: root.active-tool-index == 0 ? #e11d48 : #475569;
                                     horizontal-alignment: center;
                                 }
                             }
                             m-touch := TouchArea { clicked => { root.active-tool-index = 0; } }
                         }
 
-                        // Tool 1: Shape
+                        // Tool 1: Shape (Active = Red Outline Vector, Inactive = Neutral)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 1 ? #38bdf8.with-alpha(0.25) : (s-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 1 ? #fee2e2.with-alpha(0.7) : (s-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -689,25 +689,25 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: @image-url("../assets/icons/square.svg");
+                                    source: root.active-tool-index == 1 ? @image-url("../assets/icons/square-active.svg") : @image-url("../assets/icons/square.svg");
                                 }
                                 Text {
                                     text: "Shape";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 1 ? 800 : 600;
-                                    color: root.active-tool-index == 1 ? #0369a1 : #475569;
+                                    color: root.active-tool-index == 1 ? #e11d48 : #475569;
                                     horizontal-alignment: center;
                                 }
                             }
                             s-touch := TouchArea { clicked => { root.active-tool-index = 1; } }
                         }
 
-                        // Tool 2: Callout
+                        // Tool 2: Callout (Active = Red Outline Vector, Inactive = Neutral)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 2 ? #38bdf8.with-alpha(0.25) : (c-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 2 ? #fee2e2.with-alpha(0.7) : (c-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -716,25 +716,25 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: @image-url("../assets/icons/message-square.svg");
+                                    source: root.active-tool-index == 2 ? @image-url("../assets/icons/message-square-active.svg") : @image-url("../assets/icons/message-square.svg");
                                 }
                                 Text {
                                     text: "Callout";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 2 ? 800 : 600;
-                                    color: root.active-tool-index == 2 ? #0369a1 : #475569;
+                                    color: root.active-tool-index == 2 ? #e11d48 : #475569;
                                     horizontal-alignment: center;
                                 }
                             }
                             c-touch := TouchArea { clicked => { root.active-tool-index = 2; } }
                         }
 
-                        // Tool 3: Blur
+                        // Tool 3: Blur (Active = Red Outline Vector, Inactive = Neutral)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 3 ? #38bdf8.with-alpha(0.25) : (b-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 3 ? #fee2e2.with-alpha(0.7) : (b-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -743,25 +743,25 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: @image-url("../assets/icons/blur.svg");
+                                    source: root.active-tool-index == 3 ? @image-url("../assets/icons/blur-active.svg") : @image-url("../assets/icons/blur.svg");
                                 }
                                 Text {
                                     text: "Blur";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 3 ? 800 : 600;
-                                    color: root.active-tool-index == 3 ? #0369a1 : #475569;
+                                    color: root.active-tool-index == 3 ? #e11d48 : #475569;
                                     horizontal-alignment: center;
                                 }
                             }
                             b-touch := TouchArea { clicked => { root.active-tool-index = 3; } }
                         }
 
-                        // Tool 4: Arrow
+                        // Tool 4: Arrow (Active = Red Outline Vector, Inactive = Neutral)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 4 ? #38bdf8.with-alpha(0.25) : (a-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 4 ? #fee2e2.with-alpha(0.7) : (a-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -770,25 +770,25 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: @image-url("../assets/icons/arrow-up-right.svg");
+                                    source: root.active-tool-index == 4 ? @image-url("../assets/icons/arrow-up-right-active.svg") : @image-url("../assets/icons/arrow-up-right.svg");
                                 }
                                 Text {
                                     text: "Arrow";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 4 ? 800 : 600;
-                                    color: root.active-tool-index == 4 ? #0369a1 : #475569;
+                                    color: root.active-tool-index == 4 ? #e11d48 : #475569;
                                     horizontal-alignment: center;
                                 }
                             }
                             a-touch := TouchArea { clicked => { root.active-tool-index = 4; } }
                         }
 
-                        // Tool 5: Text
+                        // Tool 5: Text (Active = Red Outline Vector, Inactive = Neutral)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 5 ? #38bdf8.with-alpha(0.25) : (t-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 5 ? #fee2e2.with-alpha(0.7) : (t-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -797,13 +797,13 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: @image-url("../assets/icons/type.svg");
+                                    source: root.active-tool-index == 5 ? @image-url("../assets/icons/type-active.svg") : @image-url("../assets/icons/type.svg");
                                 }
                                 Text {
                                     text: "Text";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 5 ? 800 : 600;
-                                    color: root.active-tool-index == 5 ? #0369a1 : #475569;
+                                    color: root.active-tool-index == 5 ? #e11d48 : #475569;
                                     horizontal-alignment: center;
                                 }
                             }
@@ -813,12 +813,12 @@ export component AppWindow inherits Window {
                         // Divider
                         Rectangle { width: 1px; height: 24px; background: #cbd5e1; y: 10px; }
 
-                        // Tool 6: Crop
+                        // Tool 6: Crop (Active = Red Outline Vector, Inactive = Neutral)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 6 ? #38bdf8.with-alpha(0.25) : (cr-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 6 ? #fee2e2.with-alpha(0.7) : (cr-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -827,13 +827,13 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: @image-url("../assets/icons/crop.svg");
+                                    source: root.active-tool-index == 6 ? @image-url("../assets/icons/crop-active.svg") : @image-url("../assets/icons/crop.svg");
                                 }
                                 Text {
                                     text: "Crop";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 6 ? 800 : 600;
-                                    color: root.active-tool-index == 6 ? #0369a1 : #475569;
+                                    color: root.active-tool-index == 6 ? #e11d48 : #475569;
                                     horizontal-alignment: center;
                                 }
                             }
@@ -1199,10 +1199,16 @@ export component AppWindow inherits Window {
                                     HorizontalLayout {
                                         spacing: 6px;
                                         alignment: center;
-                                        Image {
-                                            width: 14px; height: 14px;
-                                            image-fit: contain;
-                                            source: @image-url("../assets/icons/file-text.svg");
+                                        Rectangle {
+                                            width: 14px;
+                                            height: parent.height;
+                                            Image {
+                                                y: (parent.height - self.height) / 2 + 1px;
+                                                width: 14px;
+                                                height: 14px;
+                                                image-fit: contain;
+                                                source: @image-url("../assets/icons/file-text.svg");
+                                            }
                                         }
                                         Text {
                                             text: "Notes";
@@ -1227,10 +1233,16 @@ export component AppWindow inherits Window {
                                     HorizontalLayout {
                                         spacing: 6px;
                                         alignment: center;
-                                        Image {
-                                            width: 14px; height: 14px;
-                                            image-fit: contain;
-                                            source: @image-url("../assets/icons/palette.svg");
+                                        Rectangle {
+                                            width: 14px;
+                                            height: parent.height;
+                                            Image {
+                                                y: (parent.height - self.height) / 2 + 1px;
+                                                width: 14px;
+                                                height: 14px;
+                                                image-fit: contain;
+                                                source: @image-url("../assets/icons/palette.svg");
+                                            }
                                         }
                                         Text {
                                             text: "Properties";
