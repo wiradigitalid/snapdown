@@ -7,6 +7,29 @@ slint::include_modules!();
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let main_window = AppWindow::new()?;
 
+    // Native Window Dragging on Titlebar
+    #[cfg(windows)]
+    {
+        main_window.on_drag_window_requested(|| {
+            use windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
+            use windows::Win32::UI::WindowsAndMessaging::{
+                GetForegroundWindow, SendMessageW, HTCAPTION, WM_NCLBUTTONDOWN,
+            };
+            unsafe {
+                let hwnd = GetForegroundWindow();
+                if !hwnd.is_invalid() {
+                    let _ = ReleaseCapture();
+                    let _ = SendMessageW(
+                        hwnd,
+                        WM_NCLBUTTONDOWN,
+                        Some(windows::Win32::Foundation::WPARAM(HTCAPTION as usize)),
+                        Some(windows::Win32::Foundation::LPARAM(0)),
+                    );
+                }
+            }
+        });
+    }
+
     // Window controls
     let win_min = main_window.as_weak();
     main_window.on_minimize_clicked(move || {
@@ -29,6 +52,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             win.hide().unwrap();
             std::process::exit(0);
         }
+    });
+
+    // Theme Toggle
+    main_window.on_theme_toggle_clicked(|| {
+        println!("Toggle Dark/Light theme clicked");
+    });
+
+    // Bundles Drawer Toggle
+    main_window.on_bundles_drawer_clicked(|| {
+        println!("Toggle Bundles Drawer clicked");
+    });
+
+    // Settings Toggle
+    main_window.on_settings_clicked(|| {
+        println!("Open Settings clicked");
     });
 
     // Setup Capture callback

@@ -254,6 +254,10 @@ export component AppWindow inherits Window {
     callback share-bundle-clicked();
     callback marker-placed(float, float);
     callback delete-marker-clicked(string);
+    callback drag-window-requested();
+    callback theme-toggle-clicked();
+    callback bundles-drawer-clicked();
+    callback settings-clicked();
     callback minimize-clicked();
     callback maximize-clicked();
     callback close-clicked();
@@ -270,10 +274,10 @@ export component AppWindow inherits Window {
             padding: 0px;
             spacing: 0px;
 
-            // TOP NAVIGATION & WINDOW HEADER BAR (Frameless Window Drag Bar)
-            Rectangle {
+            // TOP SLATE-GREY WINDOW HEADER BAR (Draggable Window Title Bar)
+            titlebar := Rectangle {
                 height: 40px;
-                background: #ffffff;
+                background: #f1f5f9; // Tonal Slate-Grey Header as per Design System
 
                 // Bottom Border Line
                 Rectangle {
@@ -283,13 +287,24 @@ export component AppWindow inherits Window {
                     background: #e2e8f0;
                 }
 
+                // Window Drag Area spanning entire header background
+                TouchArea {
+                    width: 100%;
+                    height: 100%;
+                    pointer-event(event) => {
+                        if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                            root.drag-window-requested();
+                        }
+                    }
+                }
+
                 HorizontalLayout {
                     padding-left: 14px;
-                    padding-right: 12px;
+                    padding-right: 10px;
                     spacing: 12px;
                     alignment: space-between;
 
-                    // Left: Logo & Filename Title
+                    // Left: App Branding & Active File Title
                     HorizontalLayout {
                         spacing: 8px;
                         alignment: start;
@@ -315,47 +330,57 @@ export component AppWindow inherits Window {
                         }
                     }
 
-                    // Right: Utility icons & Frameless Window Controls
+                    // Right: Utility icons & Native Window Controls
                     HorizontalLayout {
-                        spacing: 6px;
+                        spacing: 4px;
                         alignment: end;
 
-                        // Theme Icon Button
-                        Rectangle {
-                            width: 28px; height: 28px; border-radius: 4px; background: transparent;
+                        // Theme Toggle (Dark / Light)
+                        theme-btn := Rectangle {
+                            width: 32px; height: 32px; border-radius: 4px; background: theme-touch.has-hover ? #e2e8f0 : transparent;
                             Text { text: "🌙"; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                            theme-touch := TouchArea { clicked => { root.theme-toggle-clicked(); } }
                         }
-                        // Drawer Button
-                        Rectangle {
-                            width: 28px; height: 28px; border-radius: 4px; background: transparent;
+                        // Bundle Drawer Toggle
+                        drawer-btn := Rectangle {
+                            width: 32px; height: 32px; border-radius: 4px; background: drawer-touch.has-hover ? #e2e8f0 : transparent;
                             Text { text: "🗂️"; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                            drawer-touch := TouchArea { clicked => { root.bundles-drawer-clicked(); } }
                         }
                         // Settings Button
-                        Rectangle {
-                            width: 28px; height: 28px; border-radius: 4px; background: transparent;
+                        settings-btn := Rectangle {
+                            width: 32px; height: 32px; border-radius: 4px; background: settings-touch.has-hover ? #e2e8f0 : transparent;
                             Text { text: "⚙️"; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                            settings-touch := TouchArea { clicked => { root.settings-clicked(); } }
                         }
 
                         // Window Control Separator
-                        Rectangle { width: 1px; height: 16px; background: #e2e8f0; y: 6px; }
+                        Rectangle { width: 1px; height: 16px; background: #cbd5e1; y: 8px; }
 
-                        // Minimize
-                        Rectangle {
-                            width: 32px; height: 28px; border-radius: 4px; background: transparent;
+                        // Minimize Button
+                        min-btn := Rectangle {
+                            width: 36px; height: 32px; border-radius: 4px; background: min-touch.has-hover ? #e2e8f0 : transparent;
                             Text { text: "—"; font-size: 12px; font-weight: 700; color: #475569; horizontal-alignment: center; vertical-alignment: center; }
-                            TouchArea { clicked => { root.minimize-clicked(); } }
+                            min-touch := TouchArea { clicked => { root.minimize-clicked(); } }
                         }
-                        // Maximize
-                        Rectangle {
-                            width: 32px; height: 28px; border-radius: 4px; background: transparent;
+                        // Maximize Button
+                        max-btn := Rectangle {
+                            width: 36px; height: 32px; border-radius: 4px; background: max-touch.has-hover ? #e2e8f0 : transparent;
                             Text { text: "▢"; font-size: 13px; font-weight: 700; color: #475569; horizontal-alignment: center; vertical-alignment: center; }
-                            TouchArea { clicked => { root.maximize-clicked(); } }
+                            max-touch := TouchArea { clicked => { root.maximize-clicked(); } }
                         }
-                        // Close
-                        Rectangle {
-                            width: 32px; height: 28px; border-radius: 4px; background: transparent;
-                            Text { text: "✕"; font-size: 12px; font-weight: 700; color: #475569; horizontal-alignment: center; vertical-alignment: center; }
-                            TouchArea { clicked => { root.close-clicked(); } }
+                        // Close Button (Turns red on hover)
+                        close-btn := Rectangle {
+                            width: 36px; height: 32px; border-radius: 4px; background: close-touch.has-hover ? #ef4444 : transparent;
+                            Text {
+                                text: "✕";
+                                font-size: 13px;
+                                font-weight: 700;
+                                color: close-touch.has-hover ? #ffffff : #475569;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                            close-touch := TouchArea { clicked => { root.close-clicked(); } }
                         }
                     }
                 }
