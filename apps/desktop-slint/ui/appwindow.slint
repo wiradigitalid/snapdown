@@ -372,6 +372,9 @@ export component AppWindow inherits Window {
                             root.drag-window-requested();
                         }
                     }
+                    double-clicked => {
+                        root.maximize-clicked();
+                    }
                 }
 
                 // Center: Active File Title Badge
