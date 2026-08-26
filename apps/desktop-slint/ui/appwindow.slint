@@ -1,5 +1,18 @@
 import { Button, ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
 import { Theme } from "theme.slint";
+import { ReticleMarker } from "components/reticle-marker.slint";
+import { CornerBrackets } from "components/corner-brackets.slint";
+import { IconButton } from "components/icon-button.slint";
+
+import "../assets/fonts/IBMPlexSans-Medium.ttf";
+import "../assets/fonts/IBMPlexSans-SemiBold.ttf";
+import "../assets/fonts/IBMPlexSans-Bold.ttf";
+import "../assets/fonts/IBMPlexMono-Regular.ttf";
+import "../assets/fonts/IBMPlexMono-Medium.ttf";
+import "../assets/fonts/IBMPlexMono-SemiBold.ttf";
+import "../assets/fonts/IBMPlexMono-Bold.ttf";
+
+export { Theme }
 
 export struct MarkerData {
     id: string,
@@ -17,7 +30,6 @@ export struct FindingThumb {
     is-active: bool,
     image: image,
 }
-
 export component CaptureOverlayWindow inherits Window {
     title: "Snapdown Capture Overlay";
     no-frame: true;
@@ -43,91 +55,57 @@ export component CaptureOverlayWindow inherits Window {
     callback capture-completed(int, int, int, int, string);
     callback overlay-cancelled();
 
-    // 1. Fullscreen Freeze-Frame Snapshot Underlay
     Image {
         width: 100%;
         height: 100%;
         source: root.snapshot-image;
     }
 
-    // 2. 4-Way Dark Scrim Cutout (Surrounds the un-dimmed active selection)
     if !has-selection : Rectangle {
         width: 100%;
         height: 100%;
         background: #000000.with-alpha(0.65);
     }
     if has-selection : Rectangle {
-        // Top Scrim
-        Rectangle {
-            x: 0px;
-            y: 0px;
-            width: 100%;
-            height: sel-y;
-            background: #000000.with-alpha(0.65);
-        }
-        // Bottom Scrim
-        Rectangle {
-            x: 0px;
-            y: sel-y + sel-h;
-            width: 100%;
-            height: parent.height - (sel-y + sel-h);
-            background: #000000.with-alpha(0.65);
-        }
-        // Left Scrim
-        Rectangle {
-            x: 0px;
-            y: sel-y;
-            width: sel-x;
-            height: sel-h;
-            background: #000000.with-alpha(0.65);
-        }
-        // Right Scrim
-        Rectangle {
-            x: sel-x + sel-w;
-            y: sel-y;
-            width: parent.width - (sel-x + sel-w);
-            height: sel-h;
-            background: #000000.with-alpha(0.65);
-        }
+        Rectangle { x: 0px; y: 0px; width: 100%; height: sel-y; background: #000000.with-alpha(0.65); }
+        Rectangle { x: 0px; y: sel-y + sel-h; width: 100%; height: parent.height - (sel-y + sel-h); background: #000000.with-alpha(0.65); }
+        Rectangle { x: 0px; y: sel-y; width: sel-x; height: sel-h; background: #000000.with-alpha(0.65); }
+        Rectangle { x: sel-x + sel-w; y: sel-y; width: parent.width - (sel-x + sel-w); height: sel-h; background: #000000.with-alpha(0.65); }
     }
-
-    // 3. Selection Bounding Box & Dimension Readout
     if has-selection : Rectangle {
         x: sel-x;
         y: sel-y;
         width: sel-w;
         height: sel-h;
-        border-color: #0284c7;
+        border-color: Theme.border-focus;
         border-width: 2px;
         background: transparent;
 
-        // Dimension Pill Label (Top-Left above selection)
         Rectangle {
             y: -24px;
             x: 0px;
             height: 20px;
             width: 90px;
-            border-radius: 4px;
-            background: #0284c7;
+            border-radius: Theme.radius-sharp;
+            background: Theme.accent-primary;
             Text {
                 text: (sel-w / 1px) + " × " + (sel-h / 1px);
                 color: #ffffff;
                 font-size: 11px;
                 font-weight: 700;
-                font-family: "JetBrains Mono";
+                font-family: "IBM Plex Mono";
                 horizontal-alignment: center;
                 vertical-alignment: center;
             }
         }
 
-        // Note HUD Anchored below region
         if is-narrating : Rectangle {
             y: parent.height + 12px;
             x: (parent.width - self.width) / 2;
             width: 320px;
             height: 110px;
             background: #ffffff;
-            border-radius: 8px;
+            border-radius: Theme.radius-sharp;
             drop-shadow-blur: 16px;
             drop-shadow-color: #000000.with-alpha(0.4);
 
@@ -139,6 +117,7 @@ export component CaptureOverlayWindow inherits Window {
                     font-size: 11px;
                     font-weight: 700;
                     color: #475569;
+                    font-family: "IBM Plex Sans";
                 }
                 note-input := LineEdit {
                     text <=> root.note-text;
@@ -159,6 +138,7 @@ export component CaptureOverlayWindow inherits Window {
                         text: "Enter to save · Esc to cancel";
                         font-size: 10px;
                         color: #94a3b8;
+                        font-family: "IBM Plex Sans";
                     }
                     Button {
                         text: "Save Finding";
@@ -178,26 +158,22 @@ export component CaptureOverlayWindow inherits Window {
         }
     }
 
-    // Full-screen Crosshair Axes
     if !is-narrating : Rectangle {
-        // Vertical axis line
         Rectangle {
             x: mouse-x - 0.5px;
             y: 0px;
             width: 1px;
             height: 100%;
-            background: #0284c7.with-alpha(0.8);
+            background: Theme.accent-primary.with-alpha(0.8);
         }
-        // Horizontal axis line
         Rectangle {
             x: 0px;
             y: mouse-y - 0.5px;
             width: 100%;
             height: 1px;
-            background: #0284c7.with-alpha(0.8);
+            background: Theme.accent-primary.with-alpha(0.8);
         }
 
-        // Circular Magnifying Loupe
         Rectangle {
             x: mouse-x + 24px;
             y: mouse-y + 24px;
@@ -205,7 +181,7 @@ export component CaptureOverlayWindow inherits Window {
             height: 96px;
             border-radius: 48px;
             border-width: 2.5px;
-            border-color: #0284c7;
+            border-color: Theme.border-focus;
             background: #000000;
             clip: true;
 
@@ -217,25 +193,11 @@ export component CaptureOverlayWindow inherits Window {
                 source: root.snapshot-image;
             }
 
-            // Crosshair in Loupe Center
-            Rectangle {
-                x: 47px;
-                y: 0px;
-                width: 2px;
-                height: 96px;
-                background: #0284c7;
-            }
-            Rectangle {
-                x: 0px;
-                y: 47px;
-                width: 96px;
-                height: 2px;
-                background: #0284c7;
-            }
+            Rectangle { x: 47px; y: 0px; width: 2px; height: 96px; background: Theme.border-focus; }
+            Rectangle { x: 0px; y: 47px; width: 96px; height: 2px; background: Theme.border-focus; }
         }
     }
 
-    // Touch / Drag Area
     TouchArea {
         width: 100%;
         height: 100%;
@@ -280,21 +242,19 @@ export component CaptureOverlayWindow inherits Window {
         }
     }
 }
-
 export component AppWindow inherits Window {
     title: "Snapdown";
-    icon: @image-url("../assets/app-icon.png");
+    icon: @image-url("../assets/app-icon.ico");
     no-frame: true;
     min-width: 1024px;
     min-height: 720px;
     preferred-width: 1366px;
     preferred-height: 860px;
     background: Theme.bg-app;
-    default-font-family: "Plus Jakarta Sans";
+    default-font-family: "IBM Plex Sans";
 
     in-out property <bool> is-dark-theme <=> Theme.is-dark;
 
-    // Theme Color Tokens
     out property <color> bg-app: Theme.bg-app;
     out property <color> bg-card: Theme.bg-card;
     out property <color> bg-subtle: Theme.bg-subtle;
@@ -307,8 +267,8 @@ export component AppWindow inherits Window {
     out property <color> text-dim: Theme.text-dim;
 
     in-out property <string> current-filename: "capture_20260826_041750.png";
-    in-out property <int> active-tool-index: 0; // 0: Marker, 1: Shape, 2: Callout, 3: Blur, 4: Arrow, 5: Text, 6: Crop
-    in-out property <int> active-tab-index: 0; // 0: Notes, 1: Properties
+    in-out property <int> active-tool-index: 0;
+    in-out property <int> active-tab-index: 0;
     in-out property <string> observation-summary: "test\n1. Marker 1\n2. Marker 2";
     in-out property <int> selected-finding-count: 0;
     in-out property <string> resolution-text: "1020 × 885  px";
@@ -338,11 +298,10 @@ export component AppWindow inherits Window {
     callback maximize-clicked();
     callback close-clicked();
 
-    // Outer Frameless Window Container with subtle window border
     Rectangle {
         width: 100%;
         height: 100%;
-        background: root.bg-app; // Unified Structural Grey Ground (Slate 100 / Obsidian)
+        background: root.bg-app;
         border-width: 1px;
         border-color: root.border-strong;
 
@@ -350,12 +309,10 @@ export component AppWindow inherits Window {
             padding: 0px;
             spacing: 0px;
 
-            // TOP SLATE-GREY WINDOW HEADER / TITLE BAR (Native Windows 11 Fluent Standard - 32px)
             titlebar := Rectangle {
                 height: 32px;
-                background: root.bg-app; // Unified Frame Slate-Grey
+                background: root.bg-app;
 
-                // Bottom Border Line
                 Rectangle {
                     y: parent.height - 1px;
                     width: 100%;
@@ -363,7 +320,6 @@ export component AppWindow inherits Window {
                     background: root.border-subtle;
                 }
 
-                // Global Titlebar Drag Area (Underlay for all non-interactive titlebar space)
                 TouchArea {
                     width: 100%;
                     height: 100%;
@@ -377,7 +333,6 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                // Center: Active File Title Badge
                 Text {
                     x: (parent.width - self.width) / 2;
                     y: 0px;
@@ -386,7 +341,7 @@ export component AppWindow inherits Window {
                     font-size: 11px;
                     font-weight: 600;
                     color: root.text-muted;
-                    font-family: "JetBrains Mono";
+                    font-family: "IBM Plex Mono";
                     vertical-alignment: center;
                     horizontal-alignment: center;
                 }
@@ -396,12 +351,10 @@ export component AppWindow inherits Window {
                     padding-right: 0px;
                     alignment: space-between;
 
-                    // Left: 1:1 Square Icon Box (32px × 32px) + App Branding Text
                     HorizontalLayout {
                         spacing: 4px;
                         alignment: start;
 
-                        // 1:1 Square Box centered in top-left corner
                         Rectangle {
                             width: 32px;
                             height: 32px;
@@ -412,7 +365,7 @@ export component AppWindow inherits Window {
                                 width: 18px;
                                 height: 18px;
                                 image-fit: contain;
-                                source: @image-url("../assets/app-icon.png");
+                                source: @image-url("../assets/app-icon.ico");
                             }
                         }
 
@@ -422,15 +375,14 @@ export component AppWindow inherits Window {
                             font-weight: 600;
                             color: root.text-secondary;
                             vertical-alignment: center;
+                            font-family: "IBM Plex Sans";
                         }
                     }
 
-                    // Right: Utility icons & Native Windows Controls (46px standard width)
                     HorizontalLayout {
                         spacing: 0px;
                         alignment: end;
 
-                        // Theme Toggle Button (Dark / Light SVG Switcher)
                         Rectangle {
                             width: 32px; height: 32px;
                             background: theme-touch.has-hover ? root.bg-hover : transparent;
@@ -451,7 +403,6 @@ export component AppWindow inherits Window {
                             }
                         }
 
-                        // Settings Button (Standard Clean SVG Gear)
                         Rectangle {
                             width: 32px; height: 32px;
                             background: settings-touch.has-hover ? root.bg-hover : transparent;
@@ -467,14 +418,11 @@ export component AppWindow inherits Window {
                             settings-touch := TouchArea { clicked => { root.settings-clicked(); } }
                         }
 
-                        // Window Control Separator
                         Rectangle { width: 1px; height: 16px; background: root.border-strong; y: 8px; }
 
-                        // Standard Windows 11 Minimize Button (46px × 32px)
                         Rectangle {
                             width: 46px; height: 32px; background: min-touch.has-hover ? root.bg-hover : transparent;
 
-                            // Native Line Glyphs
                             Rectangle {
                                 x: (parent.width - self.width) / 2;
                                 y: (parent.height - self.height) / 2;
@@ -484,11 +432,10 @@ export component AppWindow inherits Window {
                             }
                             min-touch := TouchArea { clicked => { root.minimize-clicked(); } }
                         }
-                        // Standard Windows 11 Maximize Button (46px × 32px)
+
                         Rectangle {
                             width: 46px; height: 32px; background: max-touch.has-hover ? root.bg-hover : transparent;
 
-                            // Native Square Glyphs
                             Rectangle {
                                 x: (parent.width - self.width) / 2;
                                 y: (parent.height - self.height) / 2;
@@ -500,11 +447,10 @@ export component AppWindow inherits Window {
                             }
                             max-touch := TouchArea { clicked => { root.maximize-clicked(); } }
                         }
-                        // Standard Windows 11 Close Button (46px × 32px, Red on hover)
+
                         Rectangle {
                             width: 46px; height: 32px; background: close-touch.has-hover ? #e81123 : transparent;
 
-                            // Native Cross (X) Vector Glyphs using Path
                             Path {
                                 width: 10px;
                                 height: 10px;
@@ -522,13 +468,11 @@ export component AppWindow inherits Window {
                     }
                 }
             }
-
-            // TOOLBAR & RIBBON ACTION STRIP (Frameless Fluent Studio Ribbon - Vertical Icon+Text)
+            // TOOLBAR & RIBBON ACTION STRIP
             Rectangle {
                 height: 52px;
-                background: root.bg-app; // Matching Titlebar Slate-Grey
+                background: root.bg-app;
 
-                // Bottom Border Line
                 Rectangle {
                     y: parent.height - 1px;
                     width: 100%;
@@ -549,369 +493,143 @@ export component AppWindow inherits Window {
                         spacing: 2px;
                         alignment: start;
 
-                        // Snapdown Library / Bundle History
-                        Rectangle {
+                        IconButton {
                             width: 52px;
                             height: 44px;
-                            border-radius: 6px;
-                            background: lib-touch.has-hover ? root.bg-hover : transparent;
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 17px; height: 17px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    source: @image-url("../assets/icons/library.svg");
-                                }
-                                Text {
-                                    text: "Library";
-                                    font-size: 10px;
-                                    font-weight: 600;
-                                    color: root.text-secondary;
-                                    horizontal-alignment: center;
-                                }
-                            }
-                            lib-touch := TouchArea { clicked => { root.library-clicked(); } }
+                            icon: @image-url("../assets/icons/library.svg");
+                            text: "Library";
+                            clicked => { root.library-clicked(); }
                         }
 
-                        // Divider
                         Rectangle { width: 1px; height: 24px; background: root.border-strong; y: 10px; }
 
-                        // Capture Button
-                        Rectangle {
+                        IconButton {
                             width: 54px;
                             height: 44px;
-                            border-radius: 6px;
-                            background: cap-touch.has-hover ? root.bg-hover : transparent;
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 17px; height: 17px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    source: @image-url("../assets/icons/camera.svg");
-                                }
-                                Text {
-                                    text: "Capture";
-                                    font-size: 10px;
-                                    font-weight: 700;
-                                    color: #e11d48;
-                                    horizontal-alignment: center;
-                                }
-                            }
-                            cap-touch := TouchArea { clicked => { root.capture-clicked(); } }
+                            icon: @image-url("../assets/icons/camera.svg");
+                            text: "Capture";
+                            custom-text-color: #e11d48;
+                            clicked => { root.capture-clicked(); }
                         }
 
-                        // Open File Button
-                        Rectangle {
+                        IconButton {
                             width: 48px;
                             height: 44px;
-                            border-radius: 6px;
-                            background: open-touch.has-hover ? root.bg-hover : transparent;
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 17px; height: 17px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    source: @image-url("../assets/icons/folder.svg");
-                                }
-                                Text {
-                                    text: "Open";
-                                    font-size: 10px;
-                                    font-weight: 600;
-                                    color: root.text-secondary;
-                                    horizontal-alignment: center;
-                                }
-                            }
-                            open-touch := TouchArea { clicked => { root.open-file-clicked(); } }
+                            icon: @image-url("../assets/icons/folder.svg");
+                            text: "Open";
+                            clicked => { root.open-file-clicked(); }
                         }
 
-                        // Paste Button
-                        Rectangle {
+                        IconButton {
                             width: 48px;
                             height: 44px;
-                            border-radius: 6px;
-                            background: paste-touch.has-hover ? root.bg-hover : transparent;
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 17px; height: 17px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    source: @image-url("../assets/icons/clipboard.svg");
-                                }
-                                Text {
-                                    text: "Paste";
-                                    font-size: 10px;
-                                    font-weight: 600;
-                                    color: root.text-secondary;
-                                    horizontal-alignment: center;
-                                }
-                            }
-                            paste-touch := TouchArea { clicked => { root.paste-clicked(); } }
+                            icon: @image-url("../assets/icons/clipboard.svg");
+                            text: "Paste";
+                            clicked => { root.paste-clicked(); }
                         }
                     }
 
-                    // Group 2 (Center): Snug Annotation Palette Strip (Frameless Vertical Items)
+                    // Group 2 (Center): Snug Annotation Palette Strip
                     HorizontalLayout {
                         spacing: 2px;
                         alignment: center;
 
-                        // Tool 0: Marker (Active Pill Accent)
-                        Rectangle {
+                        IconButton {
                             width: 48px;
                             height: 44px;
-                            border-radius: 6px;
-                            background: root.active-tool-index == 0 ? Theme.accent-surface : (m-touch.has-hover ? Theme.bg-hover : transparent);
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 16px; height: 16px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    source: root.active-tool-index == 0 ? @image-url("../assets/icons/marker-active.svg") : @image-url("../assets/icons/marker-inactive.svg");
-                                }
-                                Text {
-                                    text: "Marker";
-                                    font-size: 9.5px;
-                                    font-weight: root.active-tool-index == 0 ? 800 : 500;
-                                    color: root.active-tool-index == 0 ? Theme.accent-active : Theme.text-secondary;
-                                    horizontal-alignment: center;
-                                }
-                            }
-                            m-touch := TouchArea { clicked => { root.active-tool-index = 0; } }
+                            icon: root.active-tool-index == 0 ? @image-url("../assets/icons/marker-active.svg") : @image-url("../assets/icons/marker-inactive.svg");
+                            text: "Marker";
+                            active: root.active-tool-index == 0;
+                            ordinal-hint: "1";
+                            clicked => { root.active-tool-index = 0; }
                         }
 
-                        // Tool 1: Shape (Active Pill Accent)
-                        Rectangle {
+                        IconButton {
                             width: 48px;
                             height: 44px;
-                            border-radius: 6px;
-                            background: root.active-tool-index == 1 ? Theme.accent-surface : (s-touch.has-hover ? Theme.bg-hover : transparent);
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 16px; height: 16px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    source: root.active-tool-index == 1 ? @image-url("../assets/icons/square-active.svg") : @image-url("../assets/icons/square.svg");
-                                }
-                                Text {
-                                    text: "Shape";
-                                    font-size: 9.5px;
-                                    font-weight: root.active-tool-index == 1 ? 800 : 500;
-                                    color: root.active-tool-index == 1 ? Theme.accent-active : Theme.text-secondary;
-                                    horizontal-alignment: center;
-                                }
-                            }
-                            s-touch := TouchArea { clicked => { root.active-tool-index = 1; } }
+                            icon: root.active-tool-index == 1 ? @image-url("../assets/icons/square-active.svg") : @image-url("../assets/icons/square.svg");
+                            text: "Shape";
+                            active: root.active-tool-index == 1;
+                            ordinal-hint: "2";
+                            clicked => { root.active-tool-index = 1; }
                         }
 
-                        // Tool 2: Callout (Active Pill Accent)
-                        Rectangle {
+                        IconButton {
                             width: 48px;
                             height: 44px;
-                            border-radius: 6px;
-                            background: root.active-tool-index == 2 ? Theme.accent-surface : (c-touch.has-hover ? Theme.bg-hover : transparent);
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 16px; height: 16px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    source: root.active-tool-index == 2 ? @image-url("../assets/icons/message-square-active.svg") : @image-url("../assets/icons/message-square.svg");
-                                }
-                                Text {
-                                    text: "Callout";
-                                    font-size: 9.5px;
-                                    font-weight: root.active-tool-index == 2 ? 800 : 500;
-                                    color: root.active-tool-index == 2 ? Theme.accent-active : Theme.text-secondary;
-                                    horizontal-alignment: center;
-                                }
-                            }
-                            c-touch := TouchArea { clicked => { root.active-tool-index = 2; } }
+                            icon: root.active-tool-index == 2 ? @image-url("../assets/icons/message-square-active.svg") : @image-url("../assets/icons/message-square.svg");
+                            text: "Callout";
+                            active: root.active-tool-index == 2;
+                            ordinal-hint: "3";
+                            clicked => { root.active-tool-index = 2; }
                         }
 
-                        // Tool 3: Blur (Active Pill Accent)
-                        Rectangle {
+                        IconButton {
                             width: 48px;
                             height: 44px;
-                            border-radius: 6px;
-                            background: root.active-tool-index == 3 ? Theme.accent-surface : (b-touch.has-hover ? Theme.bg-hover : transparent);
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 16px; height: 16px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    source: root.active-tool-index == 3 ? @image-url("../assets/icons/blur-active.svg") : @image-url("../assets/icons/blur.svg");
-                                }
-                                Text {
-                                    text: "Blur";
-                                    font-size: 9.5px;
-                                    font-weight: root.active-tool-index == 3 ? 800 : 500;
-                                    color: root.active-tool-index == 3 ? Theme.accent-active : Theme.text-secondary;
-                                    horizontal-alignment: center;
-                                }
-                            }
-                            b-touch := TouchArea { clicked => { root.active-tool-index = 3; } }
+                            icon: root.active-tool-index == 3 ? @image-url("../assets/icons/blur-active.svg") : @image-url("../assets/icons/blur.svg");
+                            text: "Blur";
+                            active: root.active-tool-index == 3;
+                            ordinal-hint: "4";
+                            clicked => { root.active-tool-index = 3; }
                         }
 
-                        // Tool 4: Arrow (Active Pill Accent)
-                        Rectangle {
+                        IconButton {
                             width: 48px;
                             height: 44px;
-                            border-radius: 6px;
-                            background: root.active-tool-index == 4 ? Theme.accent-surface : (a-touch.has-hover ? Theme.bg-hover : transparent);
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 16px; height: 16px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    source: root.active-tool-index == 4 ? @image-url("../assets/icons/arrow-up-right-active.svg") : @image-url("../assets/icons/arrow-up-right.svg");
-                                }
-                                Text {
-                                    text: "Arrow";
-                                    font-size: 9.5px;
-                                    font-weight: root.active-tool-index == 4 ? 800 : 500;
-                                    color: root.active-tool-index == 4 ? Theme.accent-active : Theme.text-secondary;
-                                    horizontal-alignment: center;
-                                }
-                            }
-                            a-touch := TouchArea { clicked => { root.active-tool-index = 4; } }
+                            icon: root.active-tool-index == 4 ? @image-url("../assets/icons/arrow-up-right-active.svg") : @image-url("../assets/icons/arrow-up-right.svg");
+                            text: "Arrow";
+                            active: root.active-tool-index == 4;
+                            ordinal-hint: "5";
+                            clicked => { root.active-tool-index = 4; }
                         }
 
-                        // Tool 5: Text (Active Pill Accent)
-                        Rectangle {
+                        IconButton {
                             width: 48px;
                             height: 44px;
-                            border-radius: 6px;
-                            background: root.active-tool-index == 5 ? Theme.accent-surface : (t-touch.has-hover ? Theme.bg-hover : transparent);
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 16px; height: 16px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    source: root.active-tool-index == 5 ? @image-url("../assets/icons/type-active.svg") : @image-url("../assets/icons/type.svg");
-                                }
-                                Text {
-                                    text: "Text";
-                                    font-size: 9.5px;
-                                    font-weight: root.active-tool-index == 5 ? 800 : 500;
-                                    color: root.active-tool-index == 5 ? Theme.accent-active : Theme.text-secondary;
-                                    horizontal-alignment: center;
-                                }
-                            }
-                            t-touch := TouchArea { clicked => { root.active-tool-index = 5; } }
+                            icon: root.active-tool-index == 5 ? @image-url("../assets/icons/type-active.svg") : @image-url("../assets/icons/type.svg");
+                            text: "Text";
+                            active: root.active-tool-index == 5;
+                            ordinal-hint: "6";
+                            clicked => { root.active-tool-index = 5; }
                         }
 
-                        // Divider
                         Rectangle { width: 1px; height: 24px; background: Theme.border-strong; y: 10px; }
 
-                        // Tool 6: Crop (Active Pill Accent)
-                        Rectangle {
+                        IconButton {
                             width: 48px;
                             height: 44px;
-                            border-radius: 6px;
-                            background: root.active-tool-index == 6 ? Theme.accent-surface : (cr-touch.has-hover ? Theme.bg-hover : transparent);
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 16px; height: 16px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    source: root.active-tool-index == 6 ? @image-url("../assets/icons/crop-active.svg") : @image-url("../assets/icons/crop.svg");
-                                }
-                                Text {
-                                    text: "Crop";
-                                    font-size: 9.5px;
-                                    font-weight: root.active-tool-index == 6 ? 800 : 500;
-                                    color: root.active-tool-index == 6 ? Theme.accent-active : Theme.text-secondary;
-                                    horizontal-alignment: center;
-                                }
-                            }
-                            cr-touch := TouchArea { clicked => { root.active-tool-index = 6; } }
+                            icon: root.active-tool-index == 6 ? @image-url("../assets/icons/crop-active.svg") : @image-url("../assets/icons/crop.svg");
+                            text: "Crop";
+                            active: root.active-tool-index == 6;
+                            clicked => { root.active-tool-index = 6; }
                         }
 
-                        // Divider
                         Rectangle { width: 1px; height: 24px; background: Theme.border-strong; y: 10px; }
 
-                        // Undo / Redo Actions
-                        Rectangle {
+                        IconButton {
                             width: 40px;
                             height: 44px;
-                            border-radius: 6px;
-                            background: u-touch.has-hover ? Theme.bg-hover : transparent;
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 16px; height: 16px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    source: @image-url("../assets/icons/undo.svg");
-                                }
-                                Text { text: "Undo"; font-size: 9.5px; color: Theme.text-muted; horizontal-alignment: center; }
-                            }
-                            u-touch := TouchArea {}
+                            icon: @image-url("../assets/icons/undo.svg");
+                            text: "Undo";
                         }
-                        Rectangle {
+                        IconButton {
                             width: 40px;
                             height: 44px;
-                            border-radius: 6px;
-                            background: r-touch.has-hover ? Theme.bg-hover : transparent;
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 16px; height: 16px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    source: @image-url("../assets/icons/redo.svg");
-                                }
-                                Text { text: "Redo"; font-size: 9.5px; color: Theme.text-muted; horizontal-alignment: center; }
-                            }
-                            r-touch := TouchArea {}
+                            icon: @image-url("../assets/icons/redo.svg");
+                            text: "Redo";
                         }
                     }
 
-                    // Group 3 (Right): Assemble & Sharing Action Buttons (Primary Accent Suite)
+                    // Group 3 (Right): Assemble & Sharing Action Buttons
                     HorizontalLayout {
                         spacing: 6px;
                         alignment: end;
 
-                        // Assemble Button
                         Rectangle {
                             width: 68px;
                             height: 44px;
-                            border-radius: 6px;
+                            border-radius: Theme.radius-sharp;
                             background: assem-touch.pressed ? Theme.accent-pressed : (assem-touch.has-hover ? Theme.accent-hover : Theme.accent-primary);
                             drop-shadow-blur: assem-touch.has-hover ? 6px : 2px;
                             drop-shadow-color: Theme.accent-primary.with-alpha(0.35);
@@ -925,16 +643,15 @@ export component AppWindow inherits Window {
                                     image-fit: contain;
                                     source: @image-url("../assets/icons/package.svg");
                                 }
-                                Text { text: "Assemble"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; }
+                                Text { text: "Assemble"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; font-family: "IBM Plex Sans"; }
                             }
                             assem-touch := TouchArea { clicked => { root.assemble-bundle-clicked(); } }
                         }
 
-                        // Copy Button
                         Rectangle {
                             width: 52px;
                             height: 44px;
-                            border-radius: 6px;
+                            border-radius: Theme.radius-sharp;
                             background: cp-touch.pressed ? Theme.accent-pressed : (cp-touch.has-hover ? Theme.accent-hover : Theme.accent-primary);
                             drop-shadow-blur: cp-touch.has-hover ? 6px : 2px;
                             drop-shadow-color: Theme.accent-primary.with-alpha(0.35);
@@ -948,16 +665,15 @@ export component AppWindow inherits Window {
                                     image-fit: contain;
                                     source: @image-url("../assets/icons/copy-white.svg");
                                 }
-                                Text { text: "Copy"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; }
+                                Text { text: "Copy"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; font-family: "IBM Plex Sans"; }
                             }
                             cp-touch := TouchArea { clicked => { root.copy-image-clicked(); } }
                         }
 
-                        // Share Button
                         Rectangle {
                             width: 52px;
                             height: 44px;
-                            border-radius: 6px;
+                            border-radius: Theme.radius-sharp;
                             background: sh-touch.pressed ? Theme.accent-pressed : (sh-touch.has-hover ? Theme.accent-hover : Theme.accent-primary);
                             drop-shadow-blur: sh-touch.has-hover ? 6px : 2px;
                             drop-shadow-color: Theme.accent-primary.with-alpha(0.35);
@@ -971,32 +687,30 @@ export component AppWindow inherits Window {
                                     image-fit: contain;
                                     source: @image-url("../assets/icons/share-white.svg");
                                 }
-                                Text { text: "Share"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; }
+                                Text { text: "Share"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; font-family: "IBM Plex Sans"; }
                             }
                             sh-touch := TouchArea { clicked => { root.share-bundle-clicked(); } }
                         }
                     }
                 }
             }
-
-            // MAIN WORKSPACE (Light Bright Canvas on Left + Slate-Grey Inspector Panel on Right)
+            // MAIN WORKSPACE
             HorizontalLayout {
                 spacing: 0px;
 
-                // LEFT/CENTER: Bright Canvas Viewport & Integrated Filmstrip
                 VerticalLayout {
                     horizontal-stretch: 1;
 
-                    // Central Image Viewport Canvas (Ultra Clean Bright Stage)
+                    // Central Image Viewport Canvas
                     Rectangle {
                         vertical-stretch: 1;
-                        background: root.bg-card; // Crisp Canvas Ground
+                        background: root.bg-card;
 
                         canvas-viewport := Rectangle {
                             width: 90%;
                             height: 90%;
                             background: #0f172a;
-                            border-radius: 8px;
+                            border-radius: Theme.radius-sharp;
                             drop-shadow-blur: 20px;
                             drop-shadow-color: #000000.with-alpha(0.18);
 
@@ -1006,29 +720,21 @@ export component AppWindow inherits Window {
                                 source: root.active-image;
                             }
 
-                            // Numbered Solid Red Markers Overlay
-                            for m in root.markers : Rectangle {
-                                x: m.x * parent.width - 14px;
-                                y: m.y * parent.height - 14px;
-                                width: 28px;
-                                height: 28px;
-                                border-radius: 14px;
-                                background: #ef4444;
-                                drop-shadow-blur: 6px;
-                                drop-shadow-color: #000000.with-alpha(0.4);
-
-                                Text {
-                                    text: m.ordinal;
-                                    color: #ffffff;
-                                    font-size: 13px;
-                                    font-weight: 800;
-                                    font-family: "JetBrains Mono";
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
+                            // Corner Brackets Viewfinder Overlay
+                            CornerBrackets {
+                                size: 16px;
+                                stroke: 1.5px;
+                                color: Theme.border-strong;
+                                inset: 4px;
                             }
 
-                            // Interactive Canvas Click Area
+                            // Numbered Reticle Marker Overlay
+                            for m in root.markers : ReticleMarker {
+                                x: m.x * parent.width - 15px;
+                                y: m.y * parent.height - 15px;
+                                ordinal: m.ordinal;
+                            }
+
                             TouchArea {
                                 clicked => {
                                     root.marker-placed(self.mouse-x / parent.width, self.mouse-y / parent.height);
@@ -1042,9 +748,7 @@ export component AppWindow inherits Window {
                         height: 28px;
                         background: root.bg-subtle;
 
-                        // Top Border Line
                         Rectangle { y: 0px; width: 100%; height: 1px; background: root.border-subtle; }
-                        // Bottom Border Line
                         Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: root.border-subtle; }
 
                         HorizontalLayout {
@@ -1058,7 +762,7 @@ export component AppWindow inherits Window {
                                     image-fit: contain;
                                     source: @image-url("../assets/icons/ruler.svg");
                                 }
-                                Text { text: root.resolution-text; font-size: 11px; font-family: "JetBrains Mono"; color: root.text-muted; vertical-alignment: center; }
+                                Text { text: root.resolution-text; font-size: 11px; font-family: "IBM Plex Mono"; color: root.text-muted; vertical-alignment: center; }
                             }
                             Text { text: "·"; font-size: 11px; color: root.border-strong; vertical-alignment: center; }
                             HorizontalLayout {
@@ -1069,27 +773,26 @@ export component AppWindow inherits Window {
                                     image-fit: contain;
                                     source: @image-url("../assets/icons/hard-drive.svg");
                                 }
-                                Text { text: root.size-text; font-size: 11px; font-family: "JetBrains Mono"; color: root.text-muted; vertical-alignment: center; }
+                                Text { text: root.size-text; font-size: 11px; font-family: "IBM Plex Mono"; color: root.text-muted; vertical-alignment: center; }
                             }
                         }
                     }
 
-                    // BOTTOM FILMSTRIP TRAY (Thumbnails in Unified Slate Frame)
+                    // BOTTOM FILMSTRIP TRAY
                     Rectangle {
                         height: 110px;
-                        background: root.bg-app; // Matching Panels Slate-Grey
+                        background: root.bg-app;
 
                         HorizontalLayout {
                             padding: 12px;
                             spacing: 12px;
                             alignment: start;
 
-                            // Batch Selection Action Card (0 selected / Assemble)
                             Rectangle {
                                 width: 110px;
                                 height: 86px;
                                 background: root.bg-card;
-                                border-radius: 6px;
+                                border-radius: Theme.radius-sharp;
                                 border-width: 1px;
                                 border-color: root.border-strong;
 
@@ -1102,12 +805,13 @@ export component AppWindow inherits Window {
                                         font-weight: 700;
                                         color: root.text-primary;
                                         horizontal-alignment: center;
+                                        font-family: "IBM Plex Sans";
                                     }
                                     Rectangle {
                                         height: 26px;
                                         width: 86px;
-                                        border-radius: 4px;
-                                        background: #2563eb;
+                                        border-radius: Theme.radius-sharp;
+                                        background: Theme.accent-primary;
                                         HorizontalLayout {
                                             spacing: 4px;
                                             alignment: center;
@@ -1122,20 +826,20 @@ export component AppWindow inherits Window {
                                                 font-weight: 700;
                                                 color: #ffffff;
                                                 vertical-alignment: center;
+                                                font-family: "IBM Plex Sans";
                                             }
                                         }
                                     }
                                 }
                             }
 
-                            // Thumbnail Cards
                             for thumb in root.filmstrip-items : Rectangle {
                                 width: 120px;
                                 height: 86px;
                                 background: #0f172a;
-                                border-radius: 6px;
+                                border-radius: Theme.radius-sharp;
                                 border-width: thumb.is-active ? 2px : 1px;
-                                border-color: thumb.is-active ? #2563eb : root.border-strong;
+                                border-color: thumb.is-active ? Theme.accent-primary : root.border-strong;
                                 clip: true;
 
                                 Image {
@@ -1145,25 +849,24 @@ export component AppWindow inherits Window {
                                     source: thumb.image;
                                 }
 
-                                // Active Tag Pill (Editing)
                                 if thumb.is-active : Rectangle {
                                     y: 36px;
                                     x: (parent.width - self.width) / 2;
                                     width: 70px;
                                     height: 20px;
-                                    border-radius: 10px;
-                                    background: #ffffff.with-alpha(0.92);
+                                    border-radius: Theme.radius-pill;
+                                    background: Theme.semantic-success-bg;
                                     Text {
                                         text: "● Editing";
                                         font-size: 10px;
                                         font-weight: 800;
-                                        color: #166534;
+                                        color: Theme.semantic-success;
                                         horizontal-alignment: center;
                                         vertical-alignment: center;
+                                        font-family: "IBM Plex Sans";
                                     }
                                 }
 
-                                // Info Footer
                                 Rectangle {
                                     y: parent.height - 18px;
                                     width: 100%;
@@ -1173,12 +876,11 @@ export component AppWindow inherits Window {
                                         padding-left: 6px;
                                         padding-right: 6px;
                                         alignment: space-between;
-                                        Text { text: thumb.time-str; font-size: 9px; font-family: "JetBrains Mono"; color: root.text-secondary; vertical-alignment: center; }
-                                        Text { text: thumb.dimensions-str; font-size: 9px; font-family: "JetBrains Mono"; color: root.text-muted; vertical-alignment: center; }
+                                        Text { text: thumb.time-str; font-size: 9px; font-family: "IBM Plex Mono"; color: root.text-secondary; vertical-alignment: center; }
+                                        Text { text: thumb.dimensions-str; font-size: 9px; font-family: "IBM Plex Mono"; color: root.text-muted; vertical-alignment: center; }
                                     }
                                 }
 
-                                // Click selection touch area
                                 TouchArea {
                                     clicked => {
                                         root.finding-selected(thumb.id);
@@ -1188,13 +890,11 @@ export component AppWindow inherits Window {
                         }
                     }
                 }
-
-                // RIGHT PANEL: 440px INSPECTOR WITH [Notes] & [Properties] TABS (Unified Slate-Grey Frame)
+                // RIGHT PANEL: 440px INSPECTOR
                 Rectangle {
                     width: 440px;
-                    background: root.bg-app; // Matching Titlebar Slate-Grey
+                    background: root.bg-app;
 
-                    // Left Border Line
                     Rectangle { x: 0px; width: 1px; height: 100%; background: root.border-subtle; }
 
                     VerticalLayout {
@@ -1206,7 +906,6 @@ export component AppWindow inherits Window {
                             height: 46px;
                             background: root.bg-app;
 
-                            // Bottom Border Line
                             Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: root.border-subtle; }
 
                             HorizontalLayout {
@@ -1221,7 +920,7 @@ export component AppWindow inherits Window {
                                         y: parent.height - 2.5px;
                                         width: 100%;
                                         height: root.active-tab-index == 0 ? 2.5px : 0px;
-                                        background: #2563eb;
+                                        background: Theme.accent-primary;
                                     }
                                     HorizontalLayout {
                                         spacing: 6px;
@@ -1241,8 +940,9 @@ export component AppWindow inherits Window {
                                             text: "Notes";
                                             font-size: 13px;
                                             font-weight: root.active-tab-index == 0 ? 700 : 500;
-                                            color: root.active-tab-index == 0 ? #2563eb : root.text-muted;
+                                            color: root.active-tab-index == 0 ? Theme.accent-primary : root.text-muted;
                                             vertical-alignment: center;
+                                            font-family: "IBM Plex Sans";
                                         }
                                     }
                                     TouchArea { clicked => { root.active-tab-index = 0; } }
@@ -1255,7 +955,7 @@ export component AppWindow inherits Window {
                                         y: parent.height - 2.5px;
                                         width: 100%;
                                         height: root.active-tab-index == 1 ? 2.5px : 0px;
-                                        background: #2563eb;
+                                        background: Theme.accent-primary;
                                     }
                                     HorizontalLayout {
                                         spacing: 6px;
@@ -1275,8 +975,9 @@ export component AppWindow inherits Window {
                                             text: "Properties";
                                             font-size: 13px;
                                             font-weight: root.active-tab-index == 1 ? 700 : 500;
-                                            color: root.active-tab-index == 1 ? #2563eb : root.text-muted;
+                                            color: root.active-tab-index == 1 ? Theme.accent-primary : root.text-muted;
                                             vertical-alignment: center;
+                                            font-family: "IBM Plex Sans";
                                         }
                                     }
                                     TouchArea { clicked => { root.active-tab-index = 1; } }
@@ -1284,7 +985,6 @@ export component AppWindow inherits Window {
                             }
                         }
 
-                        // TAB CONTENT BODY (SCROLLABLE)
                         ScrollView {
                             vertical-stretch: 1;
 
@@ -1301,10 +1001,11 @@ export component AppWindow inherits Window {
                                         font-weight: 800;
                                         color: root.text-secondary;
                                         letter-spacing: 0.5px;
+                                        font-family: "IBM Plex Sans";
                                     }
                                     Rectangle {
                                         height: 120px;
-                                        border-radius: 6px;
+                                        border-radius: Theme.radius-sharp;
                                         border-width: 1px;
                                         border-color: root.border-strong;
                                         background: root.bg-card;
@@ -1324,10 +1025,11 @@ export component AppWindow inherits Window {
                                         font-weight: 800;
                                         color: root.text-secondary;
                                         letter-spacing: 0.5px;
+                                        font-family: "IBM Plex Sans";
                                     }
 
                                     for marker in root.markers : Rectangle {
-                                        border-radius: 6px;
+                                        border-radius: Theme.radius-sharp;
                                         background: root.bg-card;
                                         border-width: 1px;
                                         border-color: root.border-strong;
@@ -1339,12 +1041,11 @@ export component AppWindow inherits Window {
                                                 alignment: space-between;
                                                 HorizontalLayout {
                                                     spacing: 8px;
-                                                    Rectangle {
-                                                        width: 22px; height: 22px; border-radius: 11px; background: #ef4444;
-                                                        Text { text: marker.ordinal; color: #ffffff; font-size: 11px; font-weight: 800; horizontal-alignment: center; vertical-alignment: center; }
+                                                    ReticleMarker {
+                                                        ordinal: marker.ordinal;
                                                     }
-                                                    Text { text: "Marker #" + marker.ordinal; font-size: 12px; font-weight: 700; color: root.text-primary; vertical-alignment: center; }
-                                                    Text { text: "(" + round(marker.x * 100) + "%, " + round(marker.y * 100) + "%)"; font-size: 10px; color: root.text-muted; vertical-alignment: center; }
+                                                    Text { text: "Marker #" + marker.ordinal; font-size: 12px; font-weight: 700; color: root.text-primary; vertical-alignment: center; font-family: "IBM Plex Sans"; }
+                                                    Text { text: "(" + round(marker.x * 100) + "%, " + round(marker.y * 100) + "%)"; font-size: 10px; color: root.text-muted; vertical-alignment: center; font-family: "IBM Plex Mono"; }
                                                 }
                                                 Text {
                                                     text: "✕";
@@ -1357,7 +1058,7 @@ export component AppWindow inherits Window {
                                             Rectangle {
                                                 height: 32px;
                                                 background: root.bg-subtle;
-                                                border-radius: 4px;
+                                                border-radius: Theme.radius-sharp;
                                                 border-width: 1px;
                                                 border-color: root.border-subtle;
                                                 LineEdit {
@@ -1372,7 +1073,7 @@ export component AppWindow inherits Window {
                                 // Section 3: Estimated LLM Cost Card
                                 Rectangle {
                                     height: 84px;
-                                    border-radius: 8px;
+                                    border-radius: Theme.radius-sharp;
                                     background: root.bg-card;
                                     border-width: 1px;
                                     border-color: root.border-strong;
@@ -1390,9 +1091,9 @@ export component AppWindow inherits Window {
                                                     image-fit: contain;
                                                     source: @image-url("../assets/icons/coins.svg");
                                                 }
-                                                Text { text: "ESTIMATED LLM COST"; font-size: 10px; font-weight: 800; color: root.text-secondary; }
+                                                Text { text: "ESTIMATED LLM COST"; font-size: 10px; font-weight: 800; color: root.text-secondary; font-family: "IBM Plex Sans"; }
                                             }
-                                            Text { text: "~1.217 TK"; font-size: 12px; font-weight: 800; color: #2563eb; }
+                                            Text { text: "~1.217 TK"; font-size: 12px; font-weight: 800; color: Theme.accent-primary; font-family: "IBM Plex Mono"; }
                                         }
                                         HorizontalLayout {
                                             alignment: space-between;
@@ -1404,9 +1105,9 @@ export component AppWindow inherits Window {
                                                     image-fit: contain;
                                                     source: @image-url("../assets/icons/image.svg");
                                                 }
-                                                Text { text: "Image (1020×885)"; font-size: 11px; color: root.text-muted; }
+                                                Text { text: "Image (1020×885)"; font-size: 11px; color: root.text-muted; font-family: "IBM Plex Sans"; }
                                             }
-                                            Text { text: "~1204 tk"; font-size: 11px; color: root.text-muted; font-family: "JetBrains Mono"; }
+                                            Text { text: "~1204 tk"; font-size: 11px; color: root.text-muted; font-family: "IBM Plex Mono"; }
                                         }
                                         HorizontalLayout {
                                             alignment: space-between;
@@ -1418,9 +1119,9 @@ export component AppWindow inherits Window {
                                                     image-fit: contain;
                                                     source: @image-url("../assets/icons/file-lines.svg");
                                                 }
-                                                Text { text: "Notes (46 chars)"; font-size: 11px; color: root.text-muted; }
+                                                Text { text: "Notes (46 chars)"; font-size: 11px; color: root.text-muted; font-family: "IBM Plex Sans"; }
                                             }
-                                            Text { text: "~13 tk"; font-size: 11px; color: root.text-muted; font-family: "JetBrains Mono"; }
+                                            Text { text: "~13 tk"; font-size: 11px; color: root.text-muted; font-family: "IBM Plex Mono"; }
                                         }
                                     }
                                 }
@@ -1435,21 +1136,22 @@ export component AppWindow inherits Window {
                                     font-size: 11px;
                                     font-weight: 800;
                                     color: root.text-secondary;
+                                    font-family: "IBM Plex Sans";
                                 }
 
                                 Rectangle {
                                     height: 120px;
                                     background: root.bg-card;
-                                    border-radius: 6px;
+                                    border-radius: Theme.radius-sharp;
                                     border-width: 1px;
                                     border-color: root.border-strong;
 
                                     VerticalLayout {
                                         padding: 12px;
                                         spacing: 8px;
-                                        Text { text: "Font Family"; font-size: 11px; font-weight: 700; color: root.text-muted; }
-                                        LineEdit { text: "Inter, sans-serif"; }
-                                        Text { text: "Font Size: 14px"; font-size: 11px; font-weight: 700; color: root.text-muted; }
+                                        Text { text: "Font Family"; font-size: 11px; font-weight: 700; color: root.text-muted; font-family: "IBM Plex Sans"; }
+                                        LineEdit { text: "IBM Plex Sans, sans-serif"; }
+                                        Text { text: "Font Size: 14px"; font-size: 11px; font-weight: 700; color: root.text-muted; font-family: "IBM Plex Sans"; }
                                     }
                                 }
                             }

@@ -1,0 +1,76 @@
+import { Theme } from "../theme.slint";
+
+export component CornerBrackets {
+    in-out property <length> size: 16px;
+    in-out property <length> stroke: 1.5px;
+    in-out property <color> color: Theme.border-strong;
+    in-out property <length> inset: 4px;
+
+    width: 100%;
+    height: 100%;
+
+    // Top-Left L-bracket
+    Rectangle {
+        x: root.inset;
+        y: root.inset;
+        width: root.size;
+        height: root.stroke;
+        background: root.color;
+    }
+    Rectangle {
+        x: root.inset;
+        y: root.inset;
+        width: root.stroke;
+        height: root.size;
+        background: root.color;
+    }
+
+    // Top-Right L-bracket
+    Rectangle {
+        x: parent.width - root.inset - root.size;
+        y: root.inset;
+        width: root.size;
+        height: root.stroke;
+        background: root.color;
+    }
+    Rectangle {
+        x: parent.width - root.inset - root.stroke;
+        y: root.inset;
+        width: root.stroke;
+        height: root.size;
+        background: root.color;
+    }
+
+    // Bottom-Left L-bracket
+    Rectangle {
+        x: root.inset;
+        y: parent.height - root.inset - root.stroke;
+        width: root.size;
+        height: root.stroke;
+        background: root.color;
+    }
+    Rectangle {
+        x: root.inset;
+        y: parent.height - root.inset - root.size;
+        width: root.stroke;
+        height: root.size;
+        background: root.color;
+    }
+
+    // Bottom-Right L-bracket
+    Rectangle {
+        x: parent.width - root.inset - root.size;
+        y: parent.height - root.inset - root.stroke;
+        width: root.size;
+        height: root.stroke;
+        background: root.color;
+    }
+    Rectangle {
+        x: parent.width - root.inset - root.stroke;
+        y: parent.height - root.inset - root.size;
+        width: root.stroke;
+        height: root.size;
+        background: root.color;
+    }
+}
+

@@ -1,0 +1,84 @@
+import { Theme } from "../theme.slint";
+
+export component IconButton {
+    in-out property <image> icon;
+    in-out property <string> text: "";
+    in-out property <bool> active: false;
+    in-out property <bool> enabled: true;
+    in-out property <string> ordinal-hint: "";
+    in-out property <color> custom-text-color: transparent;
+    in-out property <length> icon-size: 16px;
+
+    width: 48px;
+    height: 44px;
+
+    callback clicked();
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        border-radius: Theme.radius-sharp;
+        background: root.active ? Theme.bg-hover : (touch.has-hover && root.enabled ? Theme.bg-hover : transparent);
+        opacity: root.enabled ? 1.0 : 0.4;
+
+        // Active bottom accent indicator bar (2px tall, ~14px wide, radius-pill)
+        if root.active : Rectangle {
+            y: parent.height - 2px;
+            x: (parent.width - 14px) / 2;
+            width: 14px;
+            height: 2px;
+            border-radius: Theme.radius-pill;
+            background: Theme.accent-primary;
+        }
+
+        // Ordinal hint badge in top-right corner if present
+        if root.ordinal-hint != "" : Text {
+            x: parent.width - self.width - 4px;
+            y: 2px;
+            text: root.ordinal-hint;
+            font-size: 8.5px;
+            font-weight: 700;
+            font-family: "IBM Plex Mono";
+            color: root.active ? Theme.accent-active : Theme.text-dim;
+        }
+
+        // Content: vertical layout if text is present, or centered icon
+        if root.text != "" : VerticalLayout {
+            alignment: center;
+            spacing: 3px;
+            padding-top: 2px;
+            padding-bottom: 2px;
+
+            Image {
+                width: root.icon-size;
+                height: root.icon-size;
+                x: (parent.width - self.width) / 2;
+                image-fit: contain;
+                source: root.icon;
+            }
+            Text {
+                text: root.text;
+                font-size: 9.5px;
+                font-weight: root.active ? 800 : 500;
+                color: root.custom-text-color != transparent ? root.custom-text-color : (root.active ? Theme.accent-active : Theme.text-secondary);
+                horizontal-alignment: center;
+                font-family: "IBM Plex Sans";
+            }
+        }
+
+        if root.text == "" : Image {
+            width: root.icon-size;
+            height: root.icon-size;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            image-fit: contain;
+            source: root.icon;
+        }
+
+        touch := TouchArea {
+            enabled: root.enabled;
+            clicked => { root.clicked(); }
+        }
+    }
+}
+
