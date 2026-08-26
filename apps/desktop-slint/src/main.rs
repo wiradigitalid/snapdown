@@ -7,6 +7,30 @@ slint::include_modules!();
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let main_window = AppWindow::new()?;
 
+    // Window controls
+    let win_min = main_window.as_weak();
+    main_window.on_minimize_clicked(move || {
+        if let Some(win) = win_min.upgrade() {
+            win.window().set_minimized(true);
+        }
+    });
+
+    let win_max = main_window.as_weak();
+    main_window.on_maximize_clicked(move || {
+        if let Some(win) = win_max.upgrade() {
+            let is_max = win.window().is_maximized();
+            win.window().set_maximized(!is_max);
+        }
+    });
+
+    let win_close = main_window.as_weak();
+    main_window.on_close_clicked(move || {
+        if let Some(win) = win_close.upgrade() {
+            win.hide().unwrap();
+            std::process::exit(0);
+        }
+    });
+
     // Setup Capture callback
     let window_weak = main_window.as_weak();
     main_window.on_capture_clicked(move || {
