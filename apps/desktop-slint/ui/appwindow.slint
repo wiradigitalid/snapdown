@@ -582,7 +582,7 @@ export component AppWindow inherits Window {
                                     text: "Capture";
                                     font-size: 10px;
                                     font-weight: 700;
-                                    color: #e11d48;
+                                    color: #0f172a;
                                     horizontal-alignment: center;
                                 }
                             }
@@ -1024,9 +1024,27 @@ export component AppWindow inherits Window {
                         HorizontalLayout {
                             alignment: center;
                             spacing: 12px;
-                            Text { text: "📐 " + root.resolution-text; font-size: 11px; font-family: "JetBrains Mono"; color: #64748b; vertical-alignment: center; }
+                            HorizontalLayout {
+                                spacing: 4px;
+                                alignment: center;
+                                Image {
+                                    width: 12px; height: 12px;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/ruler.svg");
+                                }
+                                Text { text: root.resolution-text; font-size: 11px; font-family: "JetBrains Mono"; color: #64748b; vertical-alignment: center; }
+                            }
                             Text { text: "·"; font-size: 11px; color: #cbd5e1; vertical-alignment: center; }
-                            Text { text: "💾 " + root.size-text; font-size: 11px; font-family: "JetBrains Mono"; color: #64748b; vertical-alignment: center; }
+                            HorizontalLayout {
+                                spacing: 4px;
+                                alignment: center;
+                                Image {
+                                    width: 12px; height: 12px;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/hard-drive.svg");
+                                }
+                                Text { text: root.size-text; font-size: 11px; font-family: "JetBrains Mono"; color: #64748b; vertical-alignment: center; }
+                            }
                         }
                     }
 
@@ -1064,13 +1082,21 @@ export component AppWindow inherits Window {
                                         width: 86px;
                                         border-radius: 4px;
                                         background: #2563eb;
-                                        Text {
-                                            text: "📦 Assemble";
-                                            font-size: 10px;
-                                            font-weight: 700;
-                                            color: #ffffff;
-                                            horizontal-alignment: center;
-                                            vertical-alignment: center;
+                                        HorizontalLayout {
+                                            spacing: 4px;
+                                            alignment: center;
+                                            Image {
+                                                width: 12px; height: 12px;
+                                                image-fit: contain;
+                                                source: @image-url("../assets/icons/package.svg");
+                                            }
+                                            Text {
+                                                text: "Assemble";
+                                                font-size: 10px;
+                                                font-weight: 700;
+                                                color: #ffffff;
+                                                vertical-alignment: center;
+                                            }
                                         }
                                     }
                                 }
@@ -1166,7 +1192,11 @@ export component AppWindow inherits Window {
                                     HorizontalLayout {
                                         spacing: 6px;
                                         alignment: center;
-                                        Text { text: "📋"; font-size: 13px; vertical-alignment: center; }
+                                        Image {
+                                            width: 14px; height: 14px;
+                                            image-fit: contain;
+                                            source: @image-url("../assets/icons/file-text.svg");
+                                        }
                                         Text {
                                             text: "Notes";
                                             font-size: 13px;
@@ -1190,7 +1220,11 @@ export component AppWindow inherits Window {
                                     HorizontalLayout {
                                         spacing: 6px;
                                         alignment: center;
-                                        Text { text: "🎨"; font-size: 13px; vertical-alignment: center; }
+                                        Image {
+                                            width: 14px; height: 14px;
+                                            image-fit: contain;
+                                            source: @image-url("../assets/icons/palette.svg");
+                                        }
                                         Text {
                                             text: "Properties";
                                             font-size: 13px;
@@ -1302,17 +1336,44 @@ export component AppWindow inherits Window {
                                         spacing: 4px;
                                         HorizontalLayout {
                                             alignment: space-between;
-                                            Text { text: "🪙 ESTIMATED LLM COST"; font-size: 11px; font-weight: 800; color: #334155; }
+                                            HorizontalLayout {
+                                                spacing: 6px;
+                                                alignment: start;
+                                                Image {
+                                                    width: 13px; height: 13px;
+                                                    image-fit: contain;
+                                                    source: @image-url("../assets/icons/coins.svg");
+                                                }
+                                                Text { text: "ESTIMATED LLM COST"; font-size: 10px; font-weight: 800; color: #334155; }
+                                            }
                                             Text { text: "~1.217 TK"; font-size: 12px; font-weight: 800; color: #2563eb; }
                                         }
                                         HorizontalLayout {
                                             alignment: space-between;
-                                            Text { text: "🖼️ Image (1020×885)"; font-size: 11px; color: #64748b; }
+                                            HorizontalLayout {
+                                                spacing: 6px;
+                                                alignment: start;
+                                                Image {
+                                                    width: 12px; height: 12px;
+                                                    image-fit: contain;
+                                                    source: @image-url("../assets/icons/image.svg");
+                                                }
+                                                Text { text: "Image (1020×885)"; font-size: 11px; color: #64748b; }
+                                            }
                                             Text { text: "~1204 tk"; font-size: 11px; color: #64748b; font-family: "JetBrains Mono"; }
                                         }
                                         HorizontalLayout {
                                             alignment: space-between;
-                                            Text { text: "📝 Notes (46 chars)"; font-size: 11px; color: #64748b; }
+                                            HorizontalLayout {
+                                                spacing: 6px;
+                                                alignment: start;
+                                                Image {
+                                                    width: 12px; height: 12px;
+                                                    image-fit: contain;
+                                                    source: @image-url("../assets/icons/file-lines.svg");
+                                                }
+                                                Text { text: "Notes (46 chars)"; font-size: 11px; color: #64748b; }
+                                            }
                                             Text { text: "~13 tk"; font-size: 11px; color: #64748b; font-family: "JetBrains Mono"; }
                                         }
                                     }
