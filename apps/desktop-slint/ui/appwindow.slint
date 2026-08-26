@@ -1,8 +1,6 @@
 import { Button, ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 
-export { Theme }
-
 export struct MarkerData {
     id: string,
     ordinal: int,
@@ -296,6 +294,18 @@ export component AppWindow inherits Window {
 
     // Theme Toggle State connected to Global Theme
     in-out property <bool> is-dark-theme <=> Theme.is-dark;
+
+    // Theme Color Tokens
+    out property <color> bg-app: Theme.bg-app;
+    out property <color> bg-card: Theme.bg-card;
+    out property <color> bg-subtle: Theme.bg-subtle;
+    out property <color> bg-hover: Theme.bg-hover;
+    out property <color> border-subtle: Theme.border-subtle;
+    out property <color> border-strong: Theme.border-strong;
+    out property <color> text-primary: Theme.text-primary;
+    out property <color> text-secondary: Theme.text-secondary;
+    out property <color> text-muted: Theme.text-muted;
+    out property <color> text-dim: Theme.text-dim;
 
     in-out property <string> current-filename: "capture_20260826_041750.png";
     in-out property <int> active-tool-index: 0; // 0: Marker, 1: Shape, 2: Callout, 3: Blur, 4: Arrow, 5: Text, 6: Crop
@@ -654,12 +664,12 @@ export component AppWindow inherits Window {
                         spacing: 2px;
                         alignment: center;
 
-                        // Tool 0: Marker (Active = Red Fill Icon, Pure White Background, No Border)
+                        // Tool 0: Marker (Active Pill Accent)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 0 ? #ffffff : (m-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 0 ? Theme.accent-surface : (m-touch.has-hover ? Theme.bg-hover : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -673,20 +683,20 @@ export component AppWindow inherits Window {
                                 Text {
                                     text: "Marker";
                                     font-size: 9.5px;
-                                    font-weight: root.active-tool-index == 0 ? 700 : 500;
-                                    color: root.active-tool-index == 0 ? #0f172a : #64748b;
+                                    font-weight: root.active-tool-index == 0 ? 800 : 500;
+                                    color: root.active-tool-index == 0 ? Theme.accent-active : Theme.text-secondary;
                                     horizontal-alignment: center;
                                 }
                             }
                             m-touch := TouchArea { clicked => { root.active-tool-index = 0; } }
                         }
 
-                        // Tool 1: Shape (Active = Red Outline Icon, Pure White Background, No Border)
+                        // Tool 1: Shape (Active Pill Accent)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 1 ? #ffffff : (s-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 1 ? Theme.accent-surface : (s-touch.has-hover ? Theme.bg-hover : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -700,20 +710,20 @@ export component AppWindow inherits Window {
                                 Text {
                                     text: "Shape";
                                     font-size: 9.5px;
-                                    font-weight: root.active-tool-index == 1 ? 700 : 500;
-                                    color: root.active-tool-index == 1 ? #0f172a : #64748b;
+                                    font-weight: root.active-tool-index == 1 ? 800 : 500;
+                                    color: root.active-tool-index == 1 ? Theme.accent-active : Theme.text-secondary;
                                     horizontal-alignment: center;
                                 }
                             }
                             s-touch := TouchArea { clicked => { root.active-tool-index = 1; } }
                         }
 
-                        // Tool 2: Callout (Active = Red Outline Icon, Pure White Background, No Border)
+                        // Tool 2: Callout (Active Pill Accent)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 2 ? #ffffff : (c-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 2 ? Theme.accent-surface : (c-touch.has-hover ? Theme.bg-hover : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -727,20 +737,20 @@ export component AppWindow inherits Window {
                                 Text {
                                     text: "Callout";
                                     font-size: 9.5px;
-                                    font-weight: root.active-tool-index == 2 ? 700 : 500;
-                                    color: root.active-tool-index == 2 ? #0f172a : #64748b;
+                                    font-weight: root.active-tool-index == 2 ? 800 : 500;
+                                    color: root.active-tool-index == 2 ? Theme.accent-active : Theme.text-secondary;
                                     horizontal-alignment: center;
                                 }
                             }
                             c-touch := TouchArea { clicked => { root.active-tool-index = 2; } }
                         }
 
-                        // Tool 3: Blur (Active = Red Outline Icon, Pure White Background, No Border)
+                        // Tool 3: Blur (Active Pill Accent)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 3 ? #ffffff : (b-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 3 ? Theme.accent-surface : (b-touch.has-hover ? Theme.bg-hover : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -754,20 +764,20 @@ export component AppWindow inherits Window {
                                 Text {
                                     text: "Blur";
                                     font-size: 9.5px;
-                                    font-weight: root.active-tool-index == 3 ? 700 : 500;
-                                    color: root.active-tool-index == 3 ? #0f172a : #64748b;
+                                    font-weight: root.active-tool-index == 3 ? 800 : 500;
+                                    color: root.active-tool-index == 3 ? Theme.accent-active : Theme.text-secondary;
                                     horizontal-alignment: center;
                                 }
                             }
                             b-touch := TouchArea { clicked => { root.active-tool-index = 3; } }
                         }
 
-                        // Tool 4: Arrow (Active = Red Outline Icon, Pure White Background, No Border)
+                        // Tool 4: Arrow (Active Pill Accent)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 4 ? #ffffff : (a-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 4 ? Theme.accent-surface : (a-touch.has-hover ? Theme.bg-hover : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -781,20 +791,20 @@ export component AppWindow inherits Window {
                                 Text {
                                     text: "Arrow";
                                     font-size: 9.5px;
-                                    font-weight: root.active-tool-index == 4 ? 700 : 500;
-                                    color: root.active-tool-index == 4 ? #0f172a : #64748b;
+                                    font-weight: root.active-tool-index == 4 ? 800 : 500;
+                                    color: root.active-tool-index == 4 ? Theme.accent-active : Theme.text-secondary;
                                     horizontal-alignment: center;
                                 }
                             }
                             a-touch := TouchArea { clicked => { root.active-tool-index = 4; } }
                         }
 
-                        // Tool 5: Text (Active = Red Outline Icon, Pure White Background, No Border)
+                        // Tool 5: Text (Active Pill Accent)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 5 ? #ffffff : (t-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 5 ? Theme.accent-surface : (t-touch.has-hover ? Theme.bg-hover : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -808,8 +818,8 @@ export component AppWindow inherits Window {
                                 Text {
                                     text: "Text";
                                     font-size: 9.5px;
-                                    font-weight: root.active-tool-index == 5 ? 700 : 500;
-                                    color: root.active-tool-index == 5 ? #0f172a : #64748b;
+                                    font-weight: root.active-tool-index == 5 ? 800 : 500;
+                                    color: root.active-tool-index == 5 ? Theme.accent-active : Theme.text-secondary;
                                     horizontal-alignment: center;
                                 }
                             }
@@ -817,14 +827,14 @@ export component AppWindow inherits Window {
                         }
 
                         // Divider
-                        Rectangle { width: 1px; height: 24px; background: #cbd5e1; y: 10px; }
+                        Rectangle { width: 1px; height: 24px; background: Theme.border-strong; y: 10px; }
 
-                        // Tool 6: Crop (Active = Red Outline Icon, Pure White Background, No Border)
+                        // Tool 6: Crop (Active Pill Accent)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 6 ? #ffffff : (cr-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 6 ? Theme.accent-surface : (cr-touch.has-hover ? Theme.bg-hover : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -838,8 +848,8 @@ export component AppWindow inherits Window {
                                 Text {
                                     text: "Crop";
                                     font-size: 9.5px;
-                                    font-weight: root.active-tool-index == 6 ? 700 : 500;
-                                    color: root.active-tool-index == 6 ? #0f172a : #64748b;
+                                    font-weight: root.active-tool-index == 6 ? 800 : 500;
+                                    color: root.active-tool-index == 6 ? Theme.accent-active : Theme.text-secondary;
                                     horizontal-alignment: center;
                                 }
                             }
@@ -847,14 +857,14 @@ export component AppWindow inherits Window {
                         }
 
                         // Divider
-                        Rectangle { width: 1px; height: 24px; background: #cbd5e1; y: 10px; }
+                        Rectangle { width: 1px; height: 24px; background: Theme.border-strong; y: 10px; }
 
                         // Undo / Redo Actions
                         Rectangle {
                             width: 40px;
                             height: 44px;
                             border-radius: 6px;
-                            background: u-touch.has-hover ? #e2e8f0 : transparent;
+                            background: u-touch.has-hover ? Theme.bg-hover : transparent;
 
                             VerticalLayout {
                                 alignment: center;
@@ -865,7 +875,7 @@ export component AppWindow inherits Window {
                                     image-fit: contain;
                                     source: @image-url("../assets/icons/undo.svg");
                                 }
-                                Text { text: "Undo"; font-size: 9.5px; color: #64748b; horizontal-alignment: center; }
+                                Text { text: "Undo"; font-size: 9.5px; color: Theme.text-muted; horizontal-alignment: center; }
                             }
                             u-touch := TouchArea {}
                         }
@@ -873,7 +883,7 @@ export component AppWindow inherits Window {
                             width: 40px;
                             height: 44px;
                             border-radius: 6px;
-                            background: r-touch.has-hover ? #e2e8f0 : transparent;
+                            background: r-touch.has-hover ? Theme.bg-hover : transparent;
 
                             VerticalLayout {
                                 alignment: center;
@@ -884,25 +894,25 @@ export component AppWindow inherits Window {
                                     image-fit: contain;
                                     source: @image-url("../assets/icons/redo.svg");
                                 }
-                                Text { text: "Redo"; font-size: 9.5px; color: #64748b; horizontal-alignment: center; }
+                                Text { text: "Redo"; font-size: 9.5px; color: Theme.text-muted; horizontal-alignment: center; }
                             }
                             r-touch := TouchArea {}
                         }
                     }
 
-                    // Group 3 (Right): Assemble & Sharing Action Buttons (Primary Royal Blue Suite)
+                    // Group 3 (Right): Assemble & Sharing Action Buttons (Primary Accent Suite)
                     HorizontalLayout {
                         spacing: 6px;
                         alignment: end;
 
-                        // Assemble Button (Primary Solid Royal Blue with Rich Hover/Active Feedback)
+                        // Assemble Button
                         Rectangle {
                             width: 68px;
                             height: 44px;
                             border-radius: 6px;
-                            background: assem-touch.pressed ? #1e40af : (assem-touch.has-hover ? #1d4ed8 : #2563eb);
+                            background: assem-touch.pressed ? Theme.accent-pressed : (assem-touch.has-hover ? Theme.accent-hover : Theme.accent-primary);
                             drop-shadow-blur: assem-touch.has-hover ? 6px : 2px;
-                            drop-shadow-color: #2563eb.with-alpha(0.35);
+                            drop-shadow-color: Theme.accent-primary.with-alpha(0.35);
 
                             VerticalLayout {
                                 alignment: center;
@@ -913,19 +923,19 @@ export component AppWindow inherits Window {
                                     image-fit: contain;
                                     source: @image-url("../assets/icons/package.svg");
                                 }
-                                Text { text: "Assemble"; font-size: 10px; font-weight: 700; color: #ffffff; horizontal-alignment: center; }
+                                Text { text: "Assemble"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; }
                             }
                             assem-touch := TouchArea { clicked => { root.assemble-bundle-clicked(); } }
                         }
 
-                        // Copy Button (Primary Royal Blue Suite)
+                        // Copy Button
                         Rectangle {
                             width: 52px;
                             height: 44px;
                             border-radius: 6px;
-                            background: cp-touch.pressed ? #1e40af : (cp-touch.has-hover ? #1d4ed8 : #2563eb);
+                            background: cp-touch.pressed ? Theme.accent-pressed : (cp-touch.has-hover ? Theme.accent-hover : Theme.accent-primary);
                             drop-shadow-blur: cp-touch.has-hover ? 6px : 2px;
-                            drop-shadow-color: #2563eb.with-alpha(0.35);
+                            drop-shadow-color: Theme.accent-primary.with-alpha(0.35);
 
                             VerticalLayout {
                                 alignment: center;
@@ -936,19 +946,19 @@ export component AppWindow inherits Window {
                                     image-fit: contain;
                                     source: @image-url("../assets/icons/copy-white.svg");
                                 }
-                                Text { text: "Copy"; font-size: 10px; font-weight: 700; color: #ffffff; horizontal-alignment: center; }
+                                Text { text: "Copy"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; }
                             }
                             cp-touch := TouchArea { clicked => { root.copy-image-clicked(); } }
                         }
 
-                        // Share Button (Primary Royal Blue Suite)
+                        // Share Button
                         Rectangle {
                             width: 52px;
                             height: 44px;
                             border-radius: 6px;
-                            background: sh-touch.pressed ? #1e40af : (sh-touch.has-hover ? #1d4ed8 : #2563eb);
+                            background: sh-touch.pressed ? Theme.accent-pressed : (sh-touch.has-hover ? Theme.accent-hover : Theme.accent-primary);
                             drop-shadow-blur: sh-touch.has-hover ? 6px : 2px;
-                            drop-shadow-color: #2563eb.with-alpha(0.35);
+                            drop-shadow-color: Theme.accent-primary.with-alpha(0.35);
 
                             VerticalLayout {
                                 alignment: center;
@@ -959,7 +969,7 @@ export component AppWindow inherits Window {
                                     image-fit: contain;
                                     source: @image-url("../assets/icons/share-white.svg");
                                 }
-                                Text { text: "Share"; font-size: 10px; font-weight: 700; color: #ffffff; horizontal-alignment: center; }
+                                Text { text: "Share"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; }
                             }
                             sh-touch := TouchArea { clicked => { root.share-bundle-clicked(); } }
                         }
@@ -1447,3 +1457,4 @@ export component AppWindow inherits Window {
             }
         }
     }
+}
