@@ -223,55 +223,7 @@ fn load_findings_into_window(
     }
 }
 
-fn register_embedded_fonts() {
-    if let Err(e) = slint::BackendSelector::new().select() {
-        eprintln!("Warning: Failed to initialize backend for font registration: {e}");
-        return;
-    }
-
-    let fonts: [(&str, &'static [u8]); 7] = [
-        (
-            "IBMPlexSans-Medium",
-            include_bytes!("../assets/fonts/IBMPlexSans-Medium.ttf"),
-        ),
-        (
-            "IBMPlexSans-SemiBold",
-            include_bytes!("../assets/fonts/IBMPlexSans-SemiBold.ttf"),
-        ),
-        (
-            "IBMPlexSans-Bold",
-            include_bytes!("../assets/fonts/IBMPlexSans-Bold.ttf"),
-        ),
-        (
-            "IBMPlexMono-Regular",
-            include_bytes!("../assets/fonts/IBMPlexMono-Regular.ttf"),
-        ),
-        (
-            "IBMPlexMono-Medium",
-            include_bytes!("../assets/fonts/IBMPlexMono-Medium.ttf"),
-        ),
-        (
-            "IBMPlexMono-SemiBold",
-            include_bytes!("../assets/fonts/IBMPlexMono-SemiBold.ttf"),
-        ),
-        (
-            "IBMPlexMono-Bold",
-            include_bytes!("../assets/fonts/IBMPlexMono-Bold.ttf"),
-        ),
-    ];
-
-    let mut collection = slint::fontique_010::shared_collection();
-    for (name, bytes) in fonts {
-        let blob = slint::fontique_010::fontique::Blob::new(Arc::new(bytes.to_vec()));
-        let registered = collection.register_fonts(blob, None);
-        if registered.is_empty() {
-            eprintln!("Warning: Failed to register font {name}");
-        }
-    }
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    register_embedded_fonts();
     let main_window = AppWindow::new()?;
     let ctx = Arc::new(AppContext::init());
 
@@ -507,39 +459,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     main_window.run()?;
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_embedded_fonts_register_successfully() {
-        register_embedded_fonts();
-        let mut collection = slint::fontique_010::shared_collection();
-        let mut source_cache = slint::fontique_010::fontique::SourceCache::default();
-        {
-            let mut query = collection.query(&mut source_cache);
-            query.set_families(["IBM Plex Sans"]);
-            let mut matched = false;
-            query.matches_with(|_| {
-                matched = true;
-                slint::fontique_010::fontique::QueryStatus::Stop
-            });
-            assert!(matched, "IBM Plex Sans must resolve in font collection");
-        }
-        {
-            let mut query = collection.query(&mut source_cache);
-            query.set_families(["IBM Plex Mono"]);
-            let mut matched_mono = false;
-            query.matches_with(|_| {
-                matched_mono = true;
-                slint::fontique_010::fontique::QueryStatus::Stop
-            });
-            assert!(
-                matched_mono,
-                "IBM Plex Mono must resolve in font collection"
-            );
-        }
-    }
 }

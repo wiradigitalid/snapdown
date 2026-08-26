@@ -17,7 +17,7 @@ slint-build = "1.9"
 embed-resource = "3.0"
 
 [dependencies]
-slint = { version = "1.9", features = ["unstable-fontique-010"] }
+slint = "1.9"
 snapdown-core = { path = "../../crates/snapdown-core" }
 snapdown-store = { path = "../../crates/snapdown-store" }
 snapdown-capture = { path = "../../crates/snapdown-capture" }
