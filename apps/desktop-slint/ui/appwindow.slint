@@ -506,9 +506,9 @@ export component AppWindow inherits Window {
                 }
             }
 
-            // TOOLBAR & RIBBON ACTION STRIP (Flush & Snug Fit Studio Toolbar - Zero Gap Margin)
+            // TOOLBAR & RIBBON ACTION STRIP (Frameless Fluent Studio Ribbon - Vertical Icon+Text)
             Rectangle {
-                height: 38px;
+                height: 52px;
                 background: #f1f5f9; // Matching Titlebar Slate-Grey
 
                 // Bottom Border Line
@@ -522,176 +522,432 @@ export component AppWindow inherits Window {
                 HorizontalLayout {
                     padding-left: 12px;
                     padding-right: 12px;
+                    padding-top: 4px;
+                    padding-bottom: 4px;
                     spacing: 8px;
                     alignment: space-between;
 
-                    // Group 1 (Left): Library / History & Input Action Buttons (📚 🔴 📂 📥)
+                    // Group 1 (Left): Library / History & Input Actions
                     HorizontalLayout {
-                        spacing: 6px;
+                        spacing: 2px;
                         alignment: start;
 
                         // Snapdown Library / Bundle History
                         Rectangle {
-                            height: 30px;
-                            border-radius: 5px;
-                            border-width: 1px;
-                            border-color: #cbd5e1;
-                            background: lib-touch.has-hover ? #f8fafc : #ffffff;
-                            HorizontalLayout {
-                                padding-left: 8px;
-                                padding-right: 8px;
-                                spacing: 5px;
+                            width: 52px;
+                            height: 44px;
+                            border-radius: 6px;
+                            background: lib-touch.has-hover ? #e2e8f0 : transparent;
+
+                            VerticalLayout {
                                 alignment: center;
-                                Text { text: "📚"; font-size: 11px; vertical-alignment: center; }
-                                Text { text: "Library"; font-size: 11px; font-weight: 700; color: #0f172a; vertical-alignment: center; }
+                                spacing: 3px;
+                                Image {
+                                    width: 17px; height: 17px;
+                                    x: (parent.width - self.width) / 2;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/library.svg");
+                                }
+                                Text {
+                                    text: "Library";
+                                    font-size: 10px;
+                                    font-weight: 600;
+                                    color: #334155;
+                                    horizontal-alignment: center;
+                                }
                             }
                             lib-touch := TouchArea { clicked => { root.library-clicked(); } }
                         }
 
                         // Divider
-                        Rectangle { width: 1px; height: 16px; background: #cbd5e1; y: 7px; }
+                        Rectangle { width: 1px; height: 24px; background: #cbd5e1; y: 10px; }
 
+                        // Capture Button
                         Rectangle {
-                            height: 30px;
-                            border-radius: 5px;
-                            border-width: 1px;
-                            border-color: #cbd5e1;
-                            background: cap-touch.has-hover ? #f8fafc : #ffffff;
-                            HorizontalLayout {
-                                padding-left: 8px;
-                                padding-right: 8px;
-                                spacing: 4px;
+                            width: 54px;
+                            height: 44px;
+                            border-radius: 6px;
+                            background: cap-touch.has-hover ? #e2e8f0 : transparent;
+
+                            VerticalLayout {
                                 alignment: center;
-                                Text { text: "🔴"; font-size: 11px; vertical-alignment: center; }
-                                Text { text: "Capture"; font-size: 11px; font-weight: 700; color: #0f172a; vertical-alignment: center; }
+                                spacing: 3px;
+                                Image {
+                                    width: 17px; height: 17px;
+                                    x: (parent.width - self.width) / 2;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/camera.svg");
+                                }
+                                Text {
+                                    text: "Capture";
+                                    font-size: 10px;
+                                    font-weight: 700;
+                                    color: #e11d48;
+                                    horizontal-alignment: center;
+                                }
                             }
                             cap-touch := TouchArea { clicked => { root.capture-clicked(); } }
                         }
+
+                        // Open File Button
                         Rectangle {
-                            width: 30px; height: 30px; border-radius: 5px; border-width: 1px; border-color: #cbd5e1;
-                            background: open-touch.has-hover ? #f8fafc : #ffffff;
-                            Text { text: "📂"; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                            width: 48px;
+                            height: 44px;
+                            border-radius: 6px;
+                            background: open-touch.has-hover ? #e2e8f0 : transparent;
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 3px;
+                                Image {
+                                    width: 17px; height: 17px;
+                                    x: (parent.width - self.width) / 2;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/folder.svg");
+                                }
+                                Text {
+                                    text: "Open";
+                                    font-size: 10px;
+                                    font-weight: 600;
+                                    color: #334155;
+                                    horizontal-alignment: center;
+                                }
+                            }
                             open-touch := TouchArea { clicked => { root.open-file-clicked(); } }
                         }
+
+                        // Paste Button
                         Rectangle {
-                            width: 30px; height: 30px; border-radius: 5px; border-width: 1px; border-color: #cbd5e1;
-                            background: paste-touch.has-hover ? #f8fafc : #ffffff;
-                            Text { text: "📥"; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
+                            width: 48px;
+                            height: 44px;
+                            border-radius: 6px;
+                            background: paste-touch.has-hover ? #e2e8f0 : transparent;
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 3px;
+                                Image {
+                                    width: 17px; height: 17px;
+                                    x: (parent.width - self.width) / 2;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/clipboard.svg");
+                                }
+                                Text {
+                                    text: "Paste";
+                                    font-size: 10px;
+                                    font-weight: 600;
+                                    color: #334155;
+                                    horizontal-alignment: center;
+                                }
+                            }
                             paste-touch := TouchArea { clicked => { root.paste-clicked(); } }
                         }
                     }
 
-                    // Group 2 (Center): Snug Annotation Palette Strip (🔴 ▢ 💬 ░ ↗ T ✂ ↶ ↷)
-                    Rectangle {
-                        height: 32px;
-                        background: #e2e8f0;
-                        border-radius: 6px;
-                        border-width: 1px;
-                        border-color: #cbd5e1;
+                    // Group 2 (Center): Snug Annotation Palette Strip (Frameless Vertical Items)
+                    HorizontalLayout {
+                        spacing: 2px;
+                        alignment: center;
 
-                        HorizontalLayout {
-                            padding-left: 4px;
-                            padding-right: 4px;
-                            spacing: 2px;
-                            alignment: center;
+                        // Tool 0: Marker
+                        Rectangle {
+                            width: 48px;
+                            height: 44px;
+                            border-radius: 6px;
+                            background: root.active-tool-index == 0 ? #38bdf8.with-alpha(0.25) : (m-touch.has-hover ? #e2e8f0 : transparent);
 
-                            // Tool 0: Marker (🔴)
-                            Rectangle {
-                                width: 26px; height: 26px; border-radius: 4px;
-                                background: root.active-tool-index == 0 ? #2563eb : transparent;
-                                Text { text: "🔴"; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
-                                TouchArea { clicked => { root.active-tool-index = 0; } }
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 3px;
+                                Image {
+                                    width: 16px; height: 16px;
+                                    x: (parent.width - self.width) / 2;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/marker.svg");
+                                }
+                                Text {
+                                    text: "Marker";
+                                    font-size: 9.5px;
+                                    font-weight: root.active-tool-index == 0 ? 800 : 600;
+                                    color: root.active-tool-index == 0 ? #0369a1 : #475569;
+                                    horizontal-alignment: center;
+                                }
                             }
-                            // Tool 1: Shape (▢)
-                            Rectangle {
-                                width: 26px; height: 26px; border-radius: 4px;
-                                background: root.active-tool-index == 1 ? #2563eb : transparent;
-                                Text { text: "▢"; font-size: 13px; font-weight: 700; color: root.active-tool-index == 1 ? #ffffff : #334155; horizontal-alignment: center; vertical-alignment: center; }
-                                TouchArea { clicked => { root.active-tool-index = 1; } }
+                            m-touch := TouchArea { clicked => { root.active-tool-index = 0; } }
+                        }
+
+                        // Tool 1: Shape
+                        Rectangle {
+                            width: 48px;
+                            height: 44px;
+                            border-radius: 6px;
+                            background: root.active-tool-index == 1 ? #38bdf8.with-alpha(0.25) : (s-touch.has-hover ? #e2e8f0 : transparent);
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 3px;
+                                Image {
+                                    width: 16px; height: 16px;
+                                    x: (parent.width - self.width) / 2;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/square.svg");
+                                }
+                                Text {
+                                    text: "Shape";
+                                    font-size: 9.5px;
+                                    font-weight: root.active-tool-index == 1 ? 800 : 600;
+                                    color: root.active-tool-index == 1 ? #0369a1 : #475569;
+                                    horizontal-alignment: center;
+                                }
                             }
-                            // Tool 2: Callout (💬)
-                            Rectangle {
-                                width: 26px; height: 26px; border-radius: 4px;
-                                background: root.active-tool-index == 2 ? #2563eb : transparent;
-                                Text { text: "💬"; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
-                                TouchArea { clicked => { root.active-tool-index = 2; } }
+                            s-touch := TouchArea { clicked => { root.active-tool-index = 1; } }
+                        }
+
+                        // Tool 2: Callout
+                        Rectangle {
+                            width: 48px;
+                            height: 44px;
+                            border-radius: 6px;
+                            background: root.active-tool-index == 2 ? #38bdf8.with-alpha(0.25) : (c-touch.has-hover ? #e2e8f0 : transparent);
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 3px;
+                                Image {
+                                    width: 16px; height: 16px;
+                                    x: (parent.width - self.width) / 2;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/message-square.svg");
+                                }
+                                Text {
+                                    text: "Callout";
+                                    font-size: 9.5px;
+                                    font-weight: root.active-tool-index == 2 ? 800 : 600;
+                                    color: root.active-tool-index == 2 ? #0369a1 : #475569;
+                                    horizontal-alignment: center;
+                                }
                             }
-                            // Tool 3: Blur (░)
-                            Rectangle {
-                                width: 26px; height: 26px; border-radius: 4px;
-                                background: root.active-tool-index == 3 ? #2563eb : transparent;
-                                Text { text: "░"; font-size: 13px; font-weight: 700; color: root.active-tool-index == 3 ? #ffffff : #334155; horizontal-alignment: center; vertical-alignment: center; }
-                                TouchArea { clicked => { root.active-tool-index = 3; } }
+                            c-touch := TouchArea { clicked => { root.active-tool-index = 2; } }
+                        }
+
+                        // Tool 3: Blur
+                        Rectangle {
+                            width: 48px;
+                            height: 44px;
+                            border-radius: 6px;
+                            background: root.active-tool-index == 3 ? #38bdf8.with-alpha(0.25) : (b-touch.has-hover ? #e2e8f0 : transparent);
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 3px;
+                                Image {
+                                    width: 16px; height: 16px;
+                                    x: (parent.width - self.width) / 2;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/blur.svg");
+                                }
+                                Text {
+                                    text: "Blur";
+                                    font-size: 9.5px;
+                                    font-weight: root.active-tool-index == 3 ? 800 : 600;
+                                    color: root.active-tool-index == 3 ? #0369a1 : #475569;
+                                    horizontal-alignment: center;
+                                }
                             }
-                            // Tool 4: Arrow (↗)
-                            Rectangle {
-                                width: 26px; height: 26px; border-radius: 4px;
-                                background: root.active-tool-index == 4 ? #2563eb : transparent;
-                                Text { text: "↗"; font-size: 13px; font-weight: 700; color: root.active-tool-index == 4 ? #ffffff : #334155; horizontal-alignment: center; vertical-alignment: center; }
-                                TouchArea { clicked => { root.active-tool-index = 4; } }
+                            b-touch := TouchArea { clicked => { root.active-tool-index = 3; } }
+                        }
+
+                        // Tool 4: Arrow
+                        Rectangle {
+                            width: 48px;
+                            height: 44px;
+                            border-radius: 6px;
+                            background: root.active-tool-index == 4 ? #38bdf8.with-alpha(0.25) : (a-touch.has-hover ? #e2e8f0 : transparent);
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 3px;
+                                Image {
+                                    width: 16px; height: 16px;
+                                    x: (parent.width - self.width) / 2;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/arrow-up-right.svg");
+                                }
+                                Text {
+                                    text: "Arrow";
+                                    font-size: 9.5px;
+                                    font-weight: root.active-tool-index == 4 ? 800 : 600;
+                                    color: root.active-tool-index == 4 ? #0369a1 : #475569;
+                                    horizontal-alignment: center;
+                                }
                             }
-                            // Tool 5: Text (T)
-                            Rectangle {
-                                width: 26px; height: 26px; border-radius: 4px;
-                                background: root.active-tool-index == 5 ? #2563eb : transparent;
-                                Text { text: "T"; font-size: 12px; font-weight: 800; color: root.active-tool-index == 5 ? #ffffff : #334155; horizontal-alignment: center; vertical-alignment: center; }
-                                TouchArea { clicked => { root.active-tool-index = 5; } }
+                            a-touch := TouchArea { clicked => { root.active-tool-index = 4; } }
+                        }
+
+                        // Tool 5: Text
+                        Rectangle {
+                            width: 48px;
+                            height: 44px;
+                            border-radius: 6px;
+                            background: root.active-tool-index == 5 ? #38bdf8.with-alpha(0.25) : (t-touch.has-hover ? #e2e8f0 : transparent);
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 3px;
+                                Image {
+                                    width: 16px; height: 16px;
+                                    x: (parent.width - self.width) / 2;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/type.svg");
+                                }
+                                Text {
+                                    text: "Text";
+                                    font-size: 9.5px;
+                                    font-weight: root.active-tool-index == 5 ? 800 : 600;
+                                    color: root.active-tool-index == 5 ? #0369a1 : #475569;
+                                    horizontal-alignment: center;
+                                }
                             }
-                            // Divider
-                            Rectangle { width: 1px; height: 16px; background: #cbd5e1; }
-                            // Crop (✂️)
-                            Rectangle {
-                                width: 26px; height: 26px; border-radius: 4px;
-                                background: root.active-tool-index == 6 ? #2563eb : transparent;
-                                Text { text: "✂️"; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
-                                TouchArea { clicked => { root.active-tool-index = 6; } }
+                            t-touch := TouchArea { clicked => { root.active-tool-index = 5; } }
+                        }
+
+                        // Divider
+                        Rectangle { width: 1px; height: 24px; background: #cbd5e1; y: 10px; }
+
+                        // Tool 6: Crop
+                        Rectangle {
+                            width: 48px;
+                            height: 44px;
+                            border-radius: 6px;
+                            background: root.active-tool-index == 6 ? #38bdf8.with-alpha(0.25) : (cr-touch.has-hover ? #e2e8f0 : transparent);
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 3px;
+                                Image {
+                                    width: 16px; height: 16px;
+                                    x: (parent.width - self.width) / 2;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/crop.svg");
+                                }
+                                Text {
+                                    text: "Crop";
+                                    font-size: 9.5px;
+                                    font-weight: root.active-tool-index == 6 ? 800 : 600;
+                                    color: root.active-tool-index == 6 ? #0369a1 : #475569;
+                                    horizontal-alignment: center;
+                                }
                             }
-                            // Divider
-                            Rectangle { width: 1px; height: 16px; background: #cbd5e1; }
-                            // Undo / Redo
-                            Rectangle {
-                                width: 24px; height: 26px;
-                                Text { text: "↶"; font-size: 12px; color: #64748b; horizontal-alignment: center; vertical-alignment: center; }
+                            cr-touch := TouchArea { clicked => { root.active-tool-index = 6; } }
+                        }
+
+                        // Divider
+                        Rectangle { width: 1px; height: 24px; background: #cbd5e1; y: 10px; }
+
+                        // Undo / Redo Actions
+                        Rectangle {
+                            width: 40px;
+                            height: 44px;
+                            border-radius: 6px;
+                            background: u-touch.has-hover ? #e2e8f0 : transparent;
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 3px;
+                                Image {
+                                    width: 16px; height: 16px;
+                                    x: (parent.width - self.width) / 2;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/undo.svg");
+                                }
+                                Text { text: "Undo"; font-size: 9.5px; color: #64748b; horizontal-alignment: center; }
                             }
-                            Rectangle {
-                                width: 24px; height: 26px;
-                                Text { text: "↷"; font-size: 12px; color: #64748b; horizontal-alignment: center; vertical-alignment: center; }
+                            u-touch := TouchArea {}
+                        }
+                        Rectangle {
+                            width: 40px;
+                            height: 44px;
+                            border-radius: 6px;
+                            background: r-touch.has-hover ? #e2e8f0 : transparent;
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 3px;
+                                Image {
+                                    width: 16px; height: 16px;
+                                    x: (parent.width - self.width) / 2;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/redo.svg");
+                                }
+                                Text { text: "Redo"; font-size: 9.5px; color: #64748b; horizontal-alignment: center; }
                             }
+                            r-touch := TouchArea {}
                         }
                     }
 
                     // Group 3 (Right): Assemble & Sharing Action Buttons
                     HorizontalLayout {
-                        spacing: 6px;
+                        spacing: 4px;
                         alignment: end;
 
                         Rectangle {
-                            height: 30px;
-                            background: #2563eb;
-                            border-radius: 5px;
-                            HorizontalLayout {
-                                padding-left: 10px;
-                                padding-right: 10px;
-                                spacing: 4px;
+                            width: 58px;
+                            height: 44px;
+                            border-radius: 6px;
+                            background: assem-touch.has-hover ? #e2e8f0 : transparent;
+
+                            VerticalLayout {
                                 alignment: center;
-                                Text { text: "📦"; font-size: 12px; vertical-alignment: center; }
-                                Text { text: "Assemble"; font-size: 11px; font-weight: 700; color: #ffffff; vertical-alignment: center; }
+                                spacing: 3px;
+                                Image {
+                                    width: 16px; height: 16px;
+                                    x: (parent.width - self.width) / 2;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/package.svg");
+                                }
+                                Text { text: "Assemble"; font-size: 10px; font-weight: 700; color: #0284c7; horizontal-alignment: center; }
                             }
-                            TouchArea { clicked => { root.assemble-bundle-clicked(); } }
+                            assem-touch := TouchArea { clicked => { root.assemble-bundle-clicked(); } }
                         }
+
                         Rectangle {
-                            width: 30px; height: 30px; border-radius: 5px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
-                            Text { text: "📋"; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
-                            TouchArea { clicked => { root.copy-image-clicked(); } }
-                        }
-                        Rectangle {
-                            height: 30px; border-radius: 5px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
-                            HorizontalLayout {
-                                padding-left: 8px; padding-right: 8px;
-                                spacing: 4px;
-                                Text { text: "Share ▼"; font-size: 11px; font-weight: 700; color: #0f172a; vertical-alignment: center; }
+                            width: 48px;
+                            height: 44px;
+                            border-radius: 6px;
+                            background: cp-touch.has-hover ? #e2e8f0 : transparent;
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 3px;
+                                Image {
+                                    width: 16px; height: 16px;
+                                    x: (parent.width - self.width) / 2;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/copy.svg");
+                                }
+                                Text { text: "Copy"; font-size: 10px; font-weight: 600; color: #334155; horizontal-alignment: center; }
                             }
-                            TouchArea { clicked => { root.share-bundle-clicked(); } }
+                            cp-touch := TouchArea { clicked => { root.copy-image-clicked(); } }
+                        }
+
+                        Rectangle {
+                            width: 48px;
+                            height: 44px;
+                            border-radius: 6px;
+                            background: sh-touch.has-hover ? #e2e8f0 : transparent;
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 3px;
+                                Image {
+                                    width: 16px; height: 16px;
+                                    x: (parent.width - self.width) / 2;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/share.svg");
+                                }
+                                Text { text: "Share"; font-size: 10px; font-weight: 600; color: #334155; horizontal-alignment: center; }
+                            }
+                            sh-touch := TouchArea { clicked => { root.share-bundle-clicked(); } }
                         }
                     }
                 }
