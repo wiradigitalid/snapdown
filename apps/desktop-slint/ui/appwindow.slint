@@ -334,9 +334,9 @@ export component AppWindow inherits Window {
             padding: 0px;
             spacing: 0px;
 
-            // TOP SLATE-GREY WINDOW HEADER / TITLE BAR (Window Dragging, Branding, File Title & Window Controls)
+            // TOP SLATE-GREY WINDOW HEADER / TITLE BAR (Native Windows 11 Fluent Standard - 32px)
             titlebar := Rectangle {
-                height: 38px;
+                height: 32px;
                 background: #f1f5f9; // Unified Frame Slate-Grey
 
                 // Bottom Border Line
@@ -359,9 +359,9 @@ export component AppWindow inherits Window {
                 }
 
                 HorizontalLayout {
-                    padding-left: 14px;
-                    padding-right: 8px;
-                    spacing: 12px;
+                    padding-left: 12px;
+                    padding-right: 0px;
+                    spacing: 8px;
                     alignment: space-between;
 
                     // Left: App Branding & Active File Title
@@ -370,71 +370,71 @@ export component AppWindow inherits Window {
                         alignment: start;
                         Text {
                             text: "⚡ Snapdown";
-                            font-size: 13px;
+                            font-size: 12px;
                             font-weight: 800;
                             color: #0f172a;
                             vertical-alignment: center;
                         }
                         Text {
                             text: "|";
-                            font-size: 13px;
+                            font-size: 12px;
                             color: #cbd5e1;
                             vertical-alignment: center;
                         }
                         Text {
                             text: root.current-filename;
-                            font-size: 12px;
+                            font-size: 11px;
                             color: #64748b;
                             font-family: "JetBrains Mono";
                             vertical-alignment: center;
                         }
                     }
 
-                    // Right: Utility icons & Native Window Controls
+                    // Right: Utility icons & Native Windows Controls (46px standard width)
                     HorizontalLayout {
-                        spacing: 4px;
+                        spacing: 0px;
                         alignment: end;
 
                         // Theme Toggle
                         Rectangle {
-                            width: 28px; height: 28px; border-radius: 4px; background: theme-touch.has-hover ? #e2e8f0 : transparent;
-                            Text { text: "🌙"; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                            width: 32px; height: 32px; background: theme-touch.has-hover ? #e2e8f0 : transparent;
+                            Text { text: "🌙"; font-size: 11px; horizontal-alignment: center; vertical-alignment: center; }
                             theme-touch := TouchArea { clicked => { root.theme-toggle-clicked(); } }
                         }
                         // Bundle Drawer Toggle
                         Rectangle {
-                            width: 28px; height: 28px; border-radius: 4px; background: drawer-touch.has-hover ? #e2e8f0 : transparent;
-                            Text { text: "🗂️"; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                            width: 32px; height: 32px; background: drawer-touch.has-hover ? #e2e8f0 : transparent;
+                            Text { text: "🗂️"; font-size: 11px; horizontal-alignment: center; vertical-alignment: center; }
                             drawer-touch := TouchArea { clicked => { root.bundles-drawer-clicked(); } }
                         }
                         // Settings Button
                         Rectangle {
-                            width: 28px; height: 28px; border-radius: 4px; background: settings-touch.has-hover ? #e2e8f0 : transparent;
-                            Text { text: "⚙️"; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                            width: 32px; height: 32px; background: settings-touch.has-hover ? #e2e8f0 : transparent;
+                            Text { text: "⚙️"; font-size: 11px; horizontal-alignment: center; vertical-alignment: center; }
                             settings-touch := TouchArea { clicked => { root.settings-clicked(); } }
                         }
 
-                        // Divider
-                        Rectangle { width: 1px; height: 16px; background: #cbd5e1; y: 6px; }
+                        // Window Control Separator
+                        Rectangle { width: 1px; height: 16px; background: #cbd5e1; y: 8px; }
 
-                        // Window Minimize
+                        // Standard Windows 11 Minimize Button (46px × 32px)
                         Rectangle {
-                            width: 32px; height: 28px; border-radius: 4px; background: min-touch.has-hover ? #e2e8f0 : transparent;
-                            Text { text: "—"; font-size: 11px; font-weight: 700; color: #475569; horizontal-alignment: center; vertical-alignment: center; }
+                            width: 46px; height: 32px; background: min-touch.has-hover ? #e2e8f0 : transparent;
+                            Text { text: "—"; font-size: 10px; font-weight: 700; color: #475569; horizontal-alignment: center; vertical-alignment: center; }
                             min-touch := TouchArea { clicked => { root.minimize-clicked(); } }
                         }
-                        // Window Maximize
+                        // Standard Windows 11 Maximize Button (46px × 32px)
                         Rectangle {
-                            width: 32px; height: 28px; border-radius: 4px; background: max-touch.has-hover ? #e2e8f0 : transparent;
-                            Text { text: "▢"; font-size: 12px; font-weight: 700; color: #475569; horizontal-alignment: center; vertical-alignment: center; }
+                            width: 46px; height: 32px; background: max-touch.has-hover ? #e2e8f0 : transparent;
+                            Text { text: "▢"; font-size: 11px; font-weight: 700; color: #475569; horizontal-alignment: center; vertical-alignment: center; }
                             max-touch := TouchArea { clicked => { root.maximize-clicked(); } }
                         }
-                        // Window Close (Red on hover)
+                        // Standard Windows 11 Close Button (46px × 32px, Red on hover)
                         Rectangle {
-                            width: 32px; height: 28px; border-radius: 4px; background: close-touch.has-hover ? #ef4444 : transparent;
+                            width: 46px; height: 32px; background: close-touch.has-hover ? #e81123 : transparent;
                             Text {
                                 text: "✕";
-                                font-size: 12px;
+                                font-size: 11px;
                                 font-weight: 700;
                                 color: close-touch.has-hover ? #ffffff : #475569;
                                 horizontal-alignment: center;
