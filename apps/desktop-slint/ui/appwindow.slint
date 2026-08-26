@@ -363,29 +363,29 @@ export component AppWindow inherits Window {
                     background: root.border-subtle;
                 }
 
-                // Window Drag Area spanning entire background
+                // Center: Active File Title Badge (Draggable window title)
                 TouchArea {
-                    width: 100%;
-                    height: 100%;
+                    x: (parent.width - 240px) / 2;
+                    y: 0px;
+                    width: 240px;
+                    height: parent.height;
                     pointer-event(event) => {
                         if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
                             root.drag-window-requested();
                         }
                     }
-                }
 
-                // Center: Active File Title Badge
-                Text {
-                    x: (parent.width - self.width) / 2;
-                    y: 0px;
-                    height: parent.height;
-                    text: root.current-filename;
-                    font-size: 11px;
-                    font-weight: 600;
-                    color: root.text-muted;
-                    font-family: "JetBrains Mono";
-                    vertical-alignment: center;
-                    horizontal-alignment: center;
+                    Text {
+                        width: 100%;
+                        height: 100%;
+                        text: root.current-filename;
+                        font-size: 11px;
+                        font-weight: 600;
+                        color: root.text-muted;
+                        font-family: "JetBrains Mono";
+                        vertical-alignment: center;
+                        horizontal-alignment: center;
+                    }
                 }
 
                 HorizontalLayout {
@@ -413,14 +413,33 @@ export component AppWindow inherits Window {
                             }
                         }
 
-                        Text {
-                            text: "Snapdown";
-                            font-size: 12px;
-                            font-weight: 600;
-                            color: root.text-secondary;
-                            vertical-alignment: center;
+                        // App Title Branding with its own Drag Area
+                        Rectangle {
+                            height: 32px;
+                            width: 70px;
+
+                            TouchArea {
+                                width: 100%;
+                                height: 100%;
+                                pointer-event(event) => {
+                                    if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                                        root.drag-window-requested();
+                                    }
+                                }
+                            }
+
+                            Text {
+                                text: "Snapdown";
+                                font-size: 12px;
+                                font-weight: 600;
+                                color: root.text-secondary;
+                                vertical-alignment: center;
+                            }
                         }
                     }
+
+                    // Center Empty Space (Pass-through for titlebar background drag)
+                    Rectangle { horizontal-stretch: 1; }
 
                     // Right: Utility icons & Native Windows Controls (46px standard width)
                     HorizontalLayout {
