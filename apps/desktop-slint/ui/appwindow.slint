@@ -648,12 +648,12 @@ export component AppWindow inherits Window {
                         spacing: 2px;
                         alignment: center;
 
-                        // Tool 0: Marker (Active = Red Fill Icon, Pure White Background, No Border)
+                        // Tool 0: Marker (Active = Primary Blue Background, Crisp White Marker Icon & Text)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 0 ? #ffffff : (m-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 0 ? (m-touch.has-hover ? #1d4ed8 : #2563eb) : (m-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -662,25 +662,25 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: root.active-tool-index == 0 ? @image-url("../assets/icons/marker-active.svg") : @image-url("../assets/icons/marker-inactive.svg");
+                                    source: root.active-tool-index == 0 ? @image-url("../assets/icons/marker-white.svg") : @image-url("../assets/icons/marker-inactive.svg");
                                 }
                                 Text {
                                     text: "Marker";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 0 ? 700 : 500;
-                                    color: root.active-tool-index == 0 ? #0f172a : #64748b;
+                                    color: root.active-tool-index == 0 ? #ffffff : #64748b;
                                     horizontal-alignment: center;
                                 }
                             }
                             m-touch := TouchArea { clicked => { root.active-tool-index = 0; } }
                         }
 
-                        // Tool 1: Shape (Active = Red Outline Icon, Pure White Background, No Border)
+                        // Tool 1: Shape (Active = Primary Blue Background, Crisp White Vector & Text)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 1 ? #ffffff : (s-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 1 ? (s-touch.has-hover ? #1d4ed8 : #2563eb) : (s-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -689,25 +689,25 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: root.active-tool-index == 1 ? @image-url("../assets/icons/square-active.svg") : @image-url("../assets/icons/square.svg");
+                                    source: root.active-tool-index == 1 ? @image-url("../assets/icons/square-white.svg") : @image-url("../assets/icons/square.svg");
                                 }
                                 Text {
                                     text: "Shape";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 1 ? 700 : 500;
-                                    color: root.active-tool-index == 1 ? #0f172a : #64748b;
+                                    color: root.active-tool-index == 1 ? #ffffff : #64748b;
                                     horizontal-alignment: center;
                                 }
                             }
                             s-touch := TouchArea { clicked => { root.active-tool-index = 1; } }
                         }
 
-                        // Tool 2: Callout (Active = Red Outline Icon, Pure White Background, No Border)
+                        // Tool 2: Callout (Active = Primary Blue Background, Crisp White Vector & Text)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 2 ? #ffffff : (c-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 2 ? (c-touch.has-hover ? #1d4ed8 : #2563eb) : (c-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -716,25 +716,25 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: root.active-tool-index == 2 ? @image-url("../assets/icons/message-square-active.svg") : @image-url("../assets/icons/message-square.svg");
+                                    source: root.active-tool-index == 2 ? @image-url("../assets/icons/message-square-white.svg") : @image-url("../assets/icons/message-square.svg");
                                 }
                                 Text {
                                     text: "Callout";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 2 ? 700 : 500;
-                                    color: root.active-tool-index == 2 ? #0f172a : #64748b;
+                                    color: root.active-tool-index == 2 ? #ffffff : #64748b;
                                     horizontal-alignment: center;
                                 }
                             }
                             c-touch := TouchArea { clicked => { root.active-tool-index = 2; } }
                         }
 
-                        // Tool 3: Blur (Active = Red Outline Icon, Pure White Background, No Border)
+                        // Tool 3: Blur (Active = Primary Blue Background, Crisp White Vector & Text)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 3 ? #ffffff : (b-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 3 ? (b-touch.has-hover ? #1d4ed8 : #2563eb) : (b-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -743,25 +743,25 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: root.active-tool-index == 3 ? @image-url("../assets/icons/blur-active.svg") : @image-url("../assets/icons/blur.svg");
+                                    source: root.active-tool-index == 3 ? @image-url("../assets/icons/blur-white.svg") : @image-url("../assets/icons/blur.svg");
                                 }
                                 Text {
                                     text: "Blur";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 3 ? 700 : 500;
-                                    color: root.active-tool-index == 3 ? #0f172a : #64748b;
+                                    color: root.active-tool-index == 3 ? #ffffff : #64748b;
                                     horizontal-alignment: center;
                                 }
                             }
                             b-touch := TouchArea { clicked => { root.active-tool-index = 3; } }
                         }
 
-                        // Tool 4: Arrow (Active = Red Outline Icon, Pure White Background, No Border)
+                        // Tool 4: Arrow (Active = Primary Blue Background, Crisp White Vector & Text)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 4 ? #ffffff : (a-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 4 ? (a-touch.has-hover ? #1d4ed8 : #2563eb) : (a-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -770,25 +770,25 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: root.active-tool-index == 4 ? @image-url("../assets/icons/arrow-up-right-active.svg") : @image-url("../assets/icons/arrow-up-right.svg");
+                                    source: root.active-tool-index == 4 ? @image-url("../assets/icons/arrow-up-right-white.svg") : @image-url("../assets/icons/arrow-up-right.svg");
                                 }
                                 Text {
                                     text: "Arrow";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 4 ? 700 : 500;
-                                    color: root.active-tool-index == 4 ? #0f172a : #64748b;
+                                    color: root.active-tool-index == 4 ? #ffffff : #64748b;
                                     horizontal-alignment: center;
                                 }
                             }
                             a-touch := TouchArea { clicked => { root.active-tool-index = 4; } }
                         }
 
-                        // Tool 5: Text (Active = Red Outline Icon, Pure White Background, No Border)
+                        // Tool 5: Text (Active = Primary Blue Background, Crisp White Vector & Text)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 5 ? #ffffff : (t-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 5 ? (t-touch.has-hover ? #1d4ed8 : #2563eb) : (t-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -797,13 +797,13 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: root.active-tool-index == 5 ? @image-url("../assets/icons/type-active.svg") : @image-url("../assets/icons/type.svg");
+                                    source: root.active-tool-index == 5 ? @image-url("../assets/icons/type-white.svg") : @image-url("../assets/icons/type.svg");
                                 }
                                 Text {
                                     text: "Text";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 5 ? 700 : 500;
-                                    color: root.active-tool-index == 5 ? #0f172a : #64748b;
+                                    color: root.active-tool-index == 5 ? #ffffff : #64748b;
                                     horizontal-alignment: center;
                                 }
                             }
@@ -813,12 +813,12 @@ export component AppWindow inherits Window {
                         // Divider
                         Rectangle { width: 1px; height: 24px; background: #cbd5e1; y: 10px; }
 
-                        // Tool 6: Crop (Active = Red Outline Icon, Pure White Background, No Border)
+                        // Tool 6: Crop (Active = Primary Blue Background, Crisp White Vector & Text)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 6 ? #ffffff : (cr-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 6 ? (cr-touch.has-hover ? #1d4ed8 : #2563eb) : (cr-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -827,13 +827,13 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: root.active-tool-index == 6 ? @image-url("../assets/icons/crop-active.svg") : @image-url("../assets/icons/crop.svg");
+                                    source: root.active-tool-index == 6 ? @image-url("../assets/icons/crop-white.svg") : @image-url("../assets/icons/crop.svg");
                                 }
                                 Text {
                                     text: "Crop";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 6 ? 700 : 500;
-                                    color: root.active-tool-index == 6 ? #0f172a : #64748b;
+                                    color: root.active-tool-index == 6 ? #ffffff : #64748b;
                                     horizontal-alignment: center;
                                 }
                             }
