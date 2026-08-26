@@ -99,3 +99,11 @@ decisions:
     serves: [CAP-1, CAP-6, CAP-7, CAP-8]
     touches: []
     created: "2026-08-26"
+  - id: DEC-008
+    title: The capture overlay is one GPU-rendered window over the whole virtual desktop, built at
+      start-up and reused
+    status: draft
+    file: .control/decisions/DEC-008-capture-overlay-single-window.md
+    serves: [CAP-1]
+    touches: []
+    created: "2026-08-26"
