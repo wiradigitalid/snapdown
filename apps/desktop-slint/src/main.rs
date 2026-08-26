@@ -60,7 +60,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Toggle Dark/Light theme clicked");
     });
 
-    // Bundles Drawer Toggle
+    // Bundles Drawer / Library Toggle
+    main_window.on_library_clicked(|| {
+        println!("Open Snapdown Library / Bundle History clicked");
+    });
     main_window.on_bundles_drawer_clicked(|| {
         println!("Toggle Bundles Drawer clicked");
     });
