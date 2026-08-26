@@ -272,8 +272,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Theme Toggle
-    main_window.on_theme_toggle_clicked(|| {
-        println!("Toggle Dark/Light theme clicked");
+    let win_theme = main_window.as_weak();
+    main_window.on_theme_toggle_clicked(move || {
+        if let Some(win) = win_theme.upgrade() {
+            let cur = win.get_is_dark_theme();
+            println!("Theme toggled. Dark mode is now: {}", !cur);
+        }
     });
 
     // Bundles Drawer / Library Toggle
