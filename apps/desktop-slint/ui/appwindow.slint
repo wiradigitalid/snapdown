@@ -1,4 +1,7 @@
 import { Button, ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+
+export { Theme }
 
 export struct MarkerData {
     id: string,
@@ -282,6 +285,7 @@ export component CaptureOverlayWindow inherits Window {
 
 export component AppWindow inherits Window {
     title: "Snapdown";
+    icon: @image-url("../assets/app-icon.png");
     no-frame: true;
     min-width: 1024px;
     min-height: 720px;
@@ -290,7 +294,9 @@ export component AppWindow inherits Window {
     background: #f8fafc;
     default-font-family: "Plus Jakarta Sans";
 
-    in-out property <bool> is-dark-theme: false;
+    // Theme Toggle State connected to Global Theme
+    in-out property <bool> is-dark-theme <=> Theme.is-dark;
+
     in-out property <string> current-filename: "capture_20260826_041750.png";
     in-out property <int> active-tool-index: 0; // 0: Marker, 1: Shape, 2: Callout, 3: Blur, 4: Arrow, 5: Text, 6: Crop
     in-out property <int> active-tab-index: 0; // 0: Notes, 1: Properties
@@ -327,9 +333,9 @@ export component AppWindow inherits Window {
     Rectangle {
         width: 100%;
         height: 100%;
-        background: #f1f5f9; // Unified Structural Grey Ground (Slate 100)
+        background: root.bg-app; // Unified Structural Grey Ground (Slate 100 / Obsidian)
         border-width: 1px;
-        border-color: #cbd5e1;
+        border-color: root.border-strong;
 
         VerticalLayout {
             padding: 0px;
@@ -338,14 +344,14 @@ export component AppWindow inherits Window {
             // TOP SLATE-GREY WINDOW HEADER / TITLE BAR (Native Windows 11 Fluent Standard - 32px)
             titlebar := Rectangle {
                 height: 32px;
-                background: #f1f5f9; // Unified Frame Slate-Grey
+                background: root.bg-app; // Unified Frame Slate-Grey
 
                 // Bottom Border Line
                 Rectangle {
                     y: parent.height - 1px;
                     width: 100%;
                     height: 1px;
-                    background: #e2e8f0;
+                    background: root.border-subtle;
                 }
 
                 // Window Drag Area spanning entire background
@@ -367,7 +373,7 @@ export component AppWindow inherits Window {
                     text: root.current-filename;
                     font-size: 11px;
                     font-weight: 600;
-                    color: #64748b;
+                    color: root.text-muted;
                     font-family: "JetBrains Mono";
                     vertical-alignment: center;
                     horizontal-alignment: center;
@@ -402,7 +408,7 @@ export component AppWindow inherits Window {
                             text: "Snapdown";
                             font-size: 12px;
                             font-weight: 600;
-                            color: #334155;
+                            color: root.text-secondary;
                             vertical-alignment: center;
                         }
                     }
@@ -415,7 +421,7 @@ export component AppWindow inherits Window {
                         // Theme Toggle Button (Dark / Light SVG Switcher)
                         Rectangle {
                             width: 32px; height: 32px;
-                            background: theme-touch.has-hover ? #e2e8f0 : transparent;
+                            background: theme-touch.has-hover ? root.bg-hover : transparent;
 
                             Image {
                                 width: 15px; height: 15px;
@@ -436,7 +442,7 @@ export component AppWindow inherits Window {
                         // Settings Button (Standard Clean SVG Gear)
                         Rectangle {
                             width: 32px; height: 32px;
-                            background: settings-touch.has-hover ? #e2e8f0 : transparent;
+                            background: settings-touch.has-hover ? root.bg-hover : transparent;
 
                             Image {
                                 width: 15px; height: 15px;
@@ -450,11 +456,11 @@ export component AppWindow inherits Window {
                         }
 
                         // Window Control Separator
-                        Rectangle { width: 1px; height: 16px; background: #cbd5e1; y: 8px; }
+                        Rectangle { width: 1px; height: 16px; background: root.border-strong; y: 8px; }
 
                         // Standard Windows 11 Minimize Button (46px × 32px)
                         Rectangle {
-                            width: 46px; height: 32px; background: min-touch.has-hover ? #e2e8f0 : transparent;
+                            width: 46px; height: 32px; background: min-touch.has-hover ? root.bg-hover : transparent;
 
                             // Native Line Glyphs
                             Rectangle {
@@ -462,13 +468,13 @@ export component AppWindow inherits Window {
                                 y: (parent.height - self.height) / 2;
                                 width: 10px;
                                 height: 1px;
-                                background: #334155;
+                                background: root.text-secondary;
                             }
                             min-touch := TouchArea { clicked => { root.minimize-clicked(); } }
                         }
                         // Standard Windows 11 Maximize Button (46px × 32px)
                         Rectangle {
-                            width: 46px; height: 32px; background: max-touch.has-hover ? #e2e8f0 : transparent;
+                            width: 46px; height: 32px; background: max-touch.has-hover ? root.bg-hover : transparent;
 
                             // Native Square Glyphs
                             Rectangle {
@@ -477,7 +483,7 @@ export component AppWindow inherits Window {
                                 width: 10px;
                                 height: 10px;
                                 border-width: 1px;
-                                border-color: #334155;
+                                border-color: root.text-secondary;
                                 background: transparent;
                             }
                             max-touch := TouchArea { clicked => { root.maximize-clicked(); } }
@@ -493,7 +499,7 @@ export component AppWindow inherits Window {
                                 x: (parent.width - self.width) / 2;
                                 y: (parent.height - self.height) / 2;
                                 stroke-width: 1.2px;
-                                stroke: close-touch.has-hover ? #ffffff : #334155;
+                                stroke: close-touch.has-hover ? #ffffff : root.text-secondary;
                                 MoveTo { x: 0; y: 0; }
                                 LineTo { x: 10; y: 10; }
                                 MoveTo { x: 10; y: 0; }
@@ -508,14 +514,14 @@ export component AppWindow inherits Window {
             // TOOLBAR & RIBBON ACTION STRIP (Frameless Fluent Studio Ribbon - Vertical Icon+Text)
             Rectangle {
                 height: 52px;
-                background: #f1f5f9; // Matching Titlebar Slate-Grey
+                background: root.bg-app; // Matching Titlebar Slate-Grey
 
                 // Bottom Border Line
                 Rectangle {
                     y: parent.height - 1px;
                     width: 100%;
                     height: 1px;
-                    background: #e2e8f0;
+                    background: root.border-subtle;
                 }
 
                 HorizontalLayout {
@@ -648,12 +654,12 @@ export component AppWindow inherits Window {
                         spacing: 2px;
                         alignment: center;
 
-                        // Tool 0: Marker (Active = Primary Blue Background, Crisp White Marker Icon & Text)
+                        // Tool 0: Marker (Active = Red Fill Icon, Pure White Background, No Border)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 0 ? (m-touch.has-hover ? #1d4ed8 : #2563eb) : (m-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 0 ? #ffffff : (m-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -662,25 +668,25 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: root.active-tool-index == 0 ? @image-url("../assets/icons/marker-white.svg") : @image-url("../assets/icons/marker-inactive.svg");
+                                    source: root.active-tool-index == 0 ? @image-url("../assets/icons/marker-active.svg") : @image-url("../assets/icons/marker-inactive.svg");
                                 }
                                 Text {
                                     text: "Marker";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 0 ? 700 : 500;
-                                    color: root.active-tool-index == 0 ? #ffffff : #64748b;
+                                    color: root.active-tool-index == 0 ? #0f172a : #64748b;
                                     horizontal-alignment: center;
                                 }
                             }
                             m-touch := TouchArea { clicked => { root.active-tool-index = 0; } }
                         }
 
-                        // Tool 1: Shape (Active = Primary Blue Background, Crisp White Vector & Text)
+                        // Tool 1: Shape (Active = Red Outline Icon, Pure White Background, No Border)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 1 ? (s-touch.has-hover ? #1d4ed8 : #2563eb) : (s-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 1 ? #ffffff : (s-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -689,25 +695,25 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: root.active-tool-index == 1 ? @image-url("../assets/icons/square-white.svg") : @image-url("../assets/icons/square.svg");
+                                    source: root.active-tool-index == 1 ? @image-url("../assets/icons/square-active.svg") : @image-url("../assets/icons/square.svg");
                                 }
                                 Text {
                                     text: "Shape";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 1 ? 700 : 500;
-                                    color: root.active-tool-index == 1 ? #ffffff : #64748b;
+                                    color: root.active-tool-index == 1 ? #0f172a : #64748b;
                                     horizontal-alignment: center;
                                 }
                             }
                             s-touch := TouchArea { clicked => { root.active-tool-index = 1; } }
                         }
 
-                        // Tool 2: Callout (Active = Primary Blue Background, Crisp White Vector & Text)
+                        // Tool 2: Callout (Active = Red Outline Icon, Pure White Background, No Border)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 2 ? (c-touch.has-hover ? #1d4ed8 : #2563eb) : (c-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 2 ? #ffffff : (c-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -716,25 +722,25 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: root.active-tool-index == 2 ? @image-url("../assets/icons/message-square-white.svg") : @image-url("../assets/icons/message-square.svg");
+                                    source: root.active-tool-index == 2 ? @image-url("../assets/icons/message-square-active.svg") : @image-url("../assets/icons/message-square.svg");
                                 }
                                 Text {
                                     text: "Callout";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 2 ? 700 : 500;
-                                    color: root.active-tool-index == 2 ? #ffffff : #64748b;
+                                    color: root.active-tool-index == 2 ? #0f172a : #64748b;
                                     horizontal-alignment: center;
                                 }
                             }
                             c-touch := TouchArea { clicked => { root.active-tool-index = 2; } }
                         }
 
-                        // Tool 3: Blur (Active = Primary Blue Background, Crisp White Vector & Text)
+                        // Tool 3: Blur (Active = Red Outline Icon, Pure White Background, No Border)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 3 ? (b-touch.has-hover ? #1d4ed8 : #2563eb) : (b-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 3 ? #ffffff : (b-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -743,25 +749,25 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: root.active-tool-index == 3 ? @image-url("../assets/icons/blur-white.svg") : @image-url("../assets/icons/blur.svg");
+                                    source: root.active-tool-index == 3 ? @image-url("../assets/icons/blur-active.svg") : @image-url("../assets/icons/blur.svg");
                                 }
                                 Text {
                                     text: "Blur";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 3 ? 700 : 500;
-                                    color: root.active-tool-index == 3 ? #ffffff : #64748b;
+                                    color: root.active-tool-index == 3 ? #0f172a : #64748b;
                                     horizontal-alignment: center;
                                 }
                             }
                             b-touch := TouchArea { clicked => { root.active-tool-index = 3; } }
                         }
 
-                        // Tool 4: Arrow (Active = Primary Blue Background, Crisp White Vector & Text)
+                        // Tool 4: Arrow (Active = Red Outline Icon, Pure White Background, No Border)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 4 ? (a-touch.has-hover ? #1d4ed8 : #2563eb) : (a-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 4 ? #ffffff : (a-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -770,25 +776,25 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: root.active-tool-index == 4 ? @image-url("../assets/icons/arrow-up-right-white.svg") : @image-url("../assets/icons/arrow-up-right.svg");
+                                    source: root.active-tool-index == 4 ? @image-url("../assets/icons/arrow-up-right-active.svg") : @image-url("../assets/icons/arrow-up-right.svg");
                                 }
                                 Text {
                                     text: "Arrow";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 4 ? 700 : 500;
-                                    color: root.active-tool-index == 4 ? #ffffff : #64748b;
+                                    color: root.active-tool-index == 4 ? #0f172a : #64748b;
                                     horizontal-alignment: center;
                                 }
                             }
                             a-touch := TouchArea { clicked => { root.active-tool-index = 4; } }
                         }
 
-                        // Tool 5: Text (Active = Primary Blue Background, Crisp White Vector & Text)
+                        // Tool 5: Text (Active = Red Outline Icon, Pure White Background, No Border)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 5 ? (t-touch.has-hover ? #1d4ed8 : #2563eb) : (t-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 5 ? #ffffff : (t-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -797,13 +803,13 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: root.active-tool-index == 5 ? @image-url("../assets/icons/type-white.svg") : @image-url("../assets/icons/type.svg");
+                                    source: root.active-tool-index == 5 ? @image-url("../assets/icons/type-active.svg") : @image-url("../assets/icons/type.svg");
                                 }
                                 Text {
                                     text: "Text";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 5 ? 700 : 500;
-                                    color: root.active-tool-index == 5 ? #ffffff : #64748b;
+                                    color: root.active-tool-index == 5 ? #0f172a : #64748b;
                                     horizontal-alignment: center;
                                 }
                             }
@@ -813,12 +819,12 @@ export component AppWindow inherits Window {
                         // Divider
                         Rectangle { width: 1px; height: 24px; background: #cbd5e1; y: 10px; }
 
-                        // Tool 6: Crop (Active = Primary Blue Background, Crisp White Vector & Text)
+                        // Tool 6: Crop (Active = Red Outline Icon, Pure White Background, No Border)
                         Rectangle {
                             width: 48px;
                             height: 44px;
                             border-radius: 6px;
-                            background: root.active-tool-index == 6 ? (cr-touch.has-hover ? #1d4ed8 : #2563eb) : (cr-touch.has-hover ? #e2e8f0 : transparent);
+                            background: root.active-tool-index == 6 ? #ffffff : (cr-touch.has-hover ? #e2e8f0 : transparent);
 
                             VerticalLayout {
                                 alignment: center;
@@ -827,13 +833,13 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: root.active-tool-index == 6 ? @image-url("../assets/icons/crop-white.svg") : @image-url("../assets/icons/crop.svg");
+                                    source: root.active-tool-index == 6 ? @image-url("../assets/icons/crop-active.svg") : @image-url("../assets/icons/crop.svg");
                                 }
                                 Text {
                                     text: "Crop";
                                     font-size: 9.5px;
                                     font-weight: root.active-tool-index == 6 ? 700 : 500;
-                                    color: root.active-tool-index == 6 ? #ffffff : #64748b;
+                                    color: root.active-tool-index == 6 ? #0f172a : #64748b;
                                     horizontal-alignment: center;
                                 }
                             }
@@ -884,16 +890,19 @@ export component AppWindow inherits Window {
                         }
                     }
 
-                    // Group 3 (Right): Assemble & Sharing Action Buttons
+                    // Group 3 (Right): Assemble & Sharing Action Buttons (Primary Royal Blue Suite)
                     HorizontalLayout {
-                        spacing: 4px;
+                        spacing: 6px;
                         alignment: end;
 
+                        // Assemble Button (Primary Solid Royal Blue with Rich Hover/Active Feedback)
                         Rectangle {
-                            width: 58px;
+                            width: 68px;
                             height: 44px;
                             border-radius: 6px;
-                            background: assem-touch.has-hover ? #e2e8f0 : transparent;
+                            background: assem-touch.pressed ? #1e40af : (assem-touch.has-hover ? #1d4ed8 : #2563eb);
+                            drop-shadow-blur: assem-touch.has-hover ? 6px : 2px;
+                            drop-shadow-color: #2563eb.with-alpha(0.35);
 
                             VerticalLayout {
                                 alignment: center;
@@ -904,47 +913,53 @@ export component AppWindow inherits Window {
                                     image-fit: contain;
                                     source: @image-url("../assets/icons/package.svg");
                                 }
-                                Text { text: "Assemble"; font-size: 10px; font-weight: 700; color: #0284c7; horizontal-alignment: center; }
+                                Text { text: "Assemble"; font-size: 10px; font-weight: 700; color: #ffffff; horizontal-alignment: center; }
                             }
                             assem-touch := TouchArea { clicked => { root.assemble-bundle-clicked(); } }
                         }
 
+                        // Copy Button (Primary Royal Blue Suite)
                         Rectangle {
-                            width: 48px;
+                            width: 52px;
                             height: 44px;
                             border-radius: 6px;
-                            background: cp-touch.has-hover ? #e2e8f0 : transparent;
+                            background: cp-touch.pressed ? #1e40af : (cp-touch.has-hover ? #1d4ed8 : #2563eb);
+                            drop-shadow-blur: cp-touch.has-hover ? 6px : 2px;
+                            drop-shadow-color: #2563eb.with-alpha(0.35);
 
                             VerticalLayout {
                                 alignment: center;
                                 spacing: 3px;
                                 Image {
-                                    width: 16px; height: 16px;
+                                    width: 15px; height: 15px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: @image-url("../assets/icons/copy.svg");
+                                    source: @image-url("../assets/icons/copy-white.svg");
                                 }
-                                Text { text: "Copy"; font-size: 10px; font-weight: 600; color: #334155; horizontal-alignment: center; }
+                                Text { text: "Copy"; font-size: 10px; font-weight: 700; color: #ffffff; horizontal-alignment: center; }
                             }
                             cp-touch := TouchArea { clicked => { root.copy-image-clicked(); } }
                         }
 
+                        // Share Button (Primary Royal Blue Suite)
                         Rectangle {
-                            width: 48px;
+                            width: 52px;
                             height: 44px;
                             border-radius: 6px;
-                            background: sh-touch.has-hover ? #e2e8f0 : transparent;
+                            background: sh-touch.pressed ? #1e40af : (sh-touch.has-hover ? #1d4ed8 : #2563eb);
+                            drop-shadow-blur: sh-touch.has-hover ? 6px : 2px;
+                            drop-shadow-color: #2563eb.with-alpha(0.35);
 
                             VerticalLayout {
                                 alignment: center;
                                 spacing: 3px;
                                 Image {
-                                    width: 16px; height: 16px;
+                                    width: 15px; height: 15px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
-                                    source: @image-url("../assets/icons/share.svg");
+                                    source: @image-url("../assets/icons/share-white.svg");
                                 }
-                                Text { text: "Share"; font-size: 10px; font-weight: 600; color: #334155; horizontal-alignment: center; }
+                                Text { text: "Share"; font-size: 10px; font-weight: 700; color: #ffffff; horizontal-alignment: center; }
                             }
                             sh-touch := TouchArea { clicked => { root.share-bundle-clicked(); } }
                         }
@@ -963,7 +978,7 @@ export component AppWindow inherits Window {
                     // Central Image Viewport Canvas (Ultra Clean Bright Stage)
                     Rectangle {
                         vertical-stretch: 1;
-                        background: #ffffff; // Bright Crisp Canvas Ground
+                        background: root.bg-card; // Crisp Canvas Ground
 
                         canvas-viewport := Rectangle {
                             width: 90%;
@@ -1013,12 +1028,12 @@ export component AppWindow inherits Window {
                     // Readout Status Strip
                     Rectangle {
                         height: 28px;
-                        background: #f8fafc;
+                        background: root.bg-subtle;
 
                         // Top Border Line
-                        Rectangle { y: 0px; width: 100%; height: 1px; background: #e2e8f0; }
+                        Rectangle { y: 0px; width: 100%; height: 1px; background: root.border-subtle; }
                         // Bottom Border Line
-                        Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: #e2e8f0; }
+                        Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: root.border-subtle; }
 
                         HorizontalLayout {
                             alignment: center;
@@ -1031,9 +1046,9 @@ export component AppWindow inherits Window {
                                     image-fit: contain;
                                     source: @image-url("../assets/icons/ruler.svg");
                                 }
-                                Text { text: root.resolution-text; font-size: 11px; font-family: "JetBrains Mono"; color: #64748b; vertical-alignment: center; }
+                                Text { text: root.resolution-text; font-size: 11px; font-family: "JetBrains Mono"; color: root.text-muted; vertical-alignment: center; }
                             }
-                            Text { text: "·"; font-size: 11px; color: #cbd5e1; vertical-alignment: center; }
+                            Text { text: "·"; font-size: 11px; color: root.border-strong; vertical-alignment: center; }
                             HorizontalLayout {
                                 spacing: 4px;
                                 alignment: center;
@@ -1042,7 +1057,7 @@ export component AppWindow inherits Window {
                                     image-fit: contain;
                                     source: @image-url("../assets/icons/hard-drive.svg");
                                 }
-                                Text { text: root.size-text; font-size: 11px; font-family: "JetBrains Mono"; color: #64748b; vertical-alignment: center; }
+                                Text { text: root.size-text; font-size: 11px; font-family: "JetBrains Mono"; color: root.text-muted; vertical-alignment: center; }
                             }
                         }
                     }
@@ -1050,7 +1065,7 @@ export component AppWindow inherits Window {
                     // BOTTOM FILMSTRIP TRAY (Thumbnails in Unified Slate Frame)
                     Rectangle {
                         height: 110px;
-                        background: #f1f5f9; // Matching Panels Slate-Grey
+                        background: root.bg-app; // Matching Panels Slate-Grey
 
                         HorizontalLayout {
                             padding: 12px;
@@ -1061,10 +1076,10 @@ export component AppWindow inherits Window {
                             Rectangle {
                                 width: 110px;
                                 height: 86px;
-                                background: #ffffff;
+                                background: root.bg-card;
                                 border-radius: 6px;
                                 border-width: 1px;
-                                border-color: #cbd5e1;
+                                border-color: root.border-strong;
 
                                 VerticalLayout {
                                     alignment: center;
@@ -1073,7 +1088,7 @@ export component AppWindow inherits Window {
                                         text: root.selected-finding-count + " selected";
                                         font-size: 11px;
                                         font-weight: 700;
-                                        color: #0f172a;
+                                        color: root.text-primary;
                                         horizontal-alignment: center;
                                     }
                                     Rectangle {
@@ -1108,7 +1123,7 @@ export component AppWindow inherits Window {
                                 background: #0f172a;
                                 border-radius: 6px;
                                 border-width: thumb.is-active ? 2px : 1px;
-                                border-color: thumb.is-active ? #2563eb : #cbd5e1;
+                                border-color: thumb.is-active ? #2563eb : root.border-strong;
                                 clip: true;
 
                                 Image {
@@ -1141,13 +1156,13 @@ export component AppWindow inherits Window {
                                     y: parent.height - 18px;
                                     width: 100%;
                                     height: 18px;
-                                    background: #ffffff;
+                                    background: root.bg-card;
                                     HorizontalLayout {
                                         padding-left: 6px;
                                         padding-right: 6px;
                                         alignment: space-between;
-                                        Text { text: thumb.time-str; font-size: 9px; font-family: "JetBrains Mono"; color: #475569; vertical-alignment: center; }
-                                        Text { text: thumb.dimensions-str; font-size: 9px; font-family: "JetBrains Mono"; color: #64748b; vertical-alignment: center; }
+                                        Text { text: thumb.time-str; font-size: 9px; font-family: "JetBrains Mono"; color: root.text-secondary; vertical-alignment: center; }
+                                        Text { text: thumb.dimensions-str; font-size: 9px; font-family: "JetBrains Mono"; color: root.text-muted; vertical-alignment: center; }
                                     }
                                 }
 
@@ -1165,10 +1180,10 @@ export component AppWindow inherits Window {
                 // RIGHT PANEL: 440px INSPECTOR WITH [Notes] & [Properties] TABS (Unified Slate-Grey Frame)
                 Rectangle {
                     width: 440px;
-                    background: #f1f5f9; // Matching Titlebar Slate-Grey
+                    background: root.bg-app; // Matching Titlebar Slate-Grey
 
                     // Left Border Line
-                    Rectangle { x: 0px; width: 1px; height: 100%; background: #e2e8f0; }
+                    Rectangle { x: 0px; width: 1px; height: 100%; background: root.border-subtle; }
 
                     VerticalLayout {
                         padding: 0px;
@@ -1177,10 +1192,10 @@ export component AppWindow inherits Window {
                         // TAB HEADERS ([Notes] & [Properties])
                         Rectangle {
                             height: 46px;
-                            background: #f1f5f9;
+                            background: root.bg-app;
 
                             // Bottom Border Line
-                            Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: #e2e8f0; }
+                            Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: root.border-subtle; }
 
                             HorizontalLayout {
                                 padding-left: 16px;
@@ -1214,7 +1229,7 @@ export component AppWindow inherits Window {
                                             text: "Notes";
                                             font-size: 13px;
                                             font-weight: root.active-tab-index == 0 ? 700 : 500;
-                                            color: root.active-tab-index == 0 ? #2563eb : #64748b;
+                                            color: root.active-tab-index == 0 ? #2563eb : root.text-muted;
                                             vertical-alignment: center;
                                         }
                                     }
@@ -1248,7 +1263,7 @@ export component AppWindow inherits Window {
                                             text: "Properties";
                                             font-size: 13px;
                                             font-weight: root.active-tab-index == 1 ? 700 : 500;
-                                            color: root.active-tab-index == 1 ? #2563eb : #94a3b8;
+                                            color: root.active-tab-index == 1 ? #2563eb : root.text-muted;
                                             vertical-alignment: center;
                                         }
                                     }
@@ -1272,15 +1287,15 @@ export component AppWindow inherits Window {
                                         text: "OBSERVATION SUMMARY";
                                         font-size: 11px;
                                         font-weight: 800;
-                                        color: #475569;
+                                        color: root.text-secondary;
                                         letter-spacing: 0.5px;
                                     }
                                     Rectangle {
                                         height: 120px;
                                         border-radius: 6px;
                                         border-width: 1px;
-                                        border-color: #cbd5e1;
-                                        background: #ffffff;
+                                        border-color: root.border-strong;
+                                        background: root.bg-card;
                                         TextEdit {
                                             text <=> root.observation-summary;
                                             font-size: 13px;
@@ -1295,15 +1310,15 @@ export component AppWindow inherits Window {
                                         text: "STEP MARKER NOTES (" + root.markers.length + ")";
                                         font-size: 11px;
                                         font-weight: 800;
-                                        color: #475569;
+                                        color: root.text-secondary;
                                         letter-spacing: 0.5px;
                                     }
 
                                     for marker in root.markers : Rectangle {
                                         border-radius: 6px;
-                                        background: #ffffff;
+                                        background: root.bg-card;
                                         border-width: 1px;
-                                        border-color: #cbd5e1;
+                                        border-color: root.border-strong;
 
                                         VerticalLayout {
                                             padding: 10px;
@@ -1316,23 +1331,23 @@ export component AppWindow inherits Window {
                                                         width: 22px; height: 22px; border-radius: 11px; background: #ef4444;
                                                         Text { text: marker.ordinal; color: #ffffff; font-size: 11px; font-weight: 800; horizontal-alignment: center; vertical-alignment: center; }
                                                     }
-                                                    Text { text: "Marker #" + marker.ordinal; font-size: 12px; font-weight: 700; color: #0f172a; vertical-alignment: center; }
-                                                    Text { text: "(" + round(marker.x * 100) + "%, " + round(marker.y * 100) + "%)"; font-size: 10px; color: #94a3b8; vertical-alignment: center; }
+                                                    Text { text: "Marker #" + marker.ordinal; font-size: 12px; font-weight: 700; color: root.text-primary; vertical-alignment: center; }
+                                                    Text { text: "(" + round(marker.x * 100) + "%, " + round(marker.y * 100) + "%)"; font-size: 10px; color: root.text-muted; vertical-alignment: center; }
                                                 }
                                                 Text {
                                                     text: "✕";
                                                     font-size: 12px;
-                                                    color: #94a3b8;
+                                                    color: root.text-muted;
                                                     vertical-alignment: center;
                                                 }
                                             }
 
                                             Rectangle {
                                                 height: 32px;
-                                                background: #f8fafc;
+                                                background: root.bg-subtle;
                                                 border-radius: 4px;
                                                 border-width: 1px;
-                                                border-color: #e2e8f0;
+                                                border-color: root.border-subtle;
                                                 LineEdit {
                                                     text: marker.comment;
                                                     font-size: 12px;
@@ -1346,9 +1361,9 @@ export component AppWindow inherits Window {
                                 Rectangle {
                                     height: 84px;
                                     border-radius: 8px;
-                                    background: #ffffff;
+                                    background: root.bg-card;
                                     border-width: 1px;
-                                    border-color: #cbd5e1;
+                                    border-color: root.border-strong;
 
                                     VerticalLayout {
                                         padding: 10px;
@@ -1363,7 +1378,7 @@ export component AppWindow inherits Window {
                                                     image-fit: contain;
                                                     source: @image-url("../assets/icons/coins.svg");
                                                 }
-                                                Text { text: "ESTIMATED LLM COST"; font-size: 10px; font-weight: 800; color: #334155; }
+                                                Text { text: "ESTIMATED LLM COST"; font-size: 10px; font-weight: 800; color: root.text-secondary; }
                                             }
                                             Text { text: "~1.217 TK"; font-size: 12px; font-weight: 800; color: #2563eb; }
                                         }
@@ -1377,9 +1392,9 @@ export component AppWindow inherits Window {
                                                     image-fit: contain;
                                                     source: @image-url("../assets/icons/image.svg");
                                                 }
-                                                Text { text: "Image (1020×885)"; font-size: 11px; color: #64748b; }
+                                                Text { text: "Image (1020×885)"; font-size: 11px; color: root.text-muted; }
                                             }
-                                            Text { text: "~1204 tk"; font-size: 11px; color: #64748b; font-family: "JetBrains Mono"; }
+                                            Text { text: "~1204 tk"; font-size: 11px; color: root.text-muted; font-family: "JetBrains Mono"; }
                                         }
                                         HorizontalLayout {
                                             alignment: space-between;
@@ -1391,9 +1406,9 @@ export component AppWindow inherits Window {
                                                     image-fit: contain;
                                                     source: @image-url("../assets/icons/file-lines.svg");
                                                 }
-                                                Text { text: "Notes (46 chars)"; font-size: 11px; color: #64748b; }
+                                                Text { text: "Notes (46 chars)"; font-size: 11px; color: root.text-muted; }
                                             }
-                                            Text { text: "~13 tk"; font-size: 11px; color: #64748b; font-family: "JetBrains Mono"; }
+                                            Text { text: "~13 tk"; font-size: 11px; color: root.text-muted; font-family: "JetBrains Mono"; }
                                         }
                                     }
                                 }
@@ -1407,22 +1422,22 @@ export component AppWindow inherits Window {
                                     text: "ELEMENT PROPERTIES";
                                     font-size: 11px;
                                     font-weight: 800;
-                                    color: #475569;
+                                    color: root.text-secondary;
                                 }
 
                                 Rectangle {
                                     height: 120px;
-                                    background: #ffffff;
+                                    background: root.bg-card;
                                     border-radius: 6px;
                                     border-width: 1px;
-                                    border-color: #cbd5e1;
+                                    border-color: root.border-strong;
 
                                     VerticalLayout {
                                         padding: 12px;
                                         spacing: 8px;
-                                        Text { text: "Font Family"; font-size: 11px; font-weight: 700; color: #64748b; }
+                                        Text { text: "Font Family"; font-size: 11px; font-weight: 700; color: root.text-muted; }
                                         LineEdit { text: "Inter, sans-serif"; }
-                                        Text { text: "Font Size: 14px"; font-size: 11px; font-weight: 700; color: #64748b; }
+                                        Text { text: "Font Size: 14px"; font-size: 11px; font-weight: 700; color: root.text-muted; }
                                     }
                                 }
                             }
@@ -1432,4 +1447,3 @@ export component AppWindow inherits Window {
             }
         }
     }
-}
