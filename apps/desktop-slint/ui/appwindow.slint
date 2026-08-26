@@ -413,61 +413,17 @@ export component AppWindow inherits Window {
                         spacing: 0px;
                         alignment: end;
 
-                        // Theme Toggle Button (Dark / Light Vector Switcher)
+                        // Theme Toggle Button (Dark / Light SVG Switcher)
                         Rectangle {
                             width: 32px; height: 32px;
                             background: theme-touch.has-hover ? #e2e8f0 : transparent;
 
-                            // Light Mode: Vector Crescent Moon
-                            if !root.is-dark-theme : Rectangle {
-                                width: 13px; height: 13px;
+                            Image {
+                                width: 15px; height: 15px;
                                 x: (parent.width - self.width) / 2;
                                 y: (parent.height - self.height) / 2;
-                                border-radius: 6.5px;
-                                border-width: 1.3px;
-                                border-color: #334155;
-                                background: transparent;
-                                clip: true;
-
-                                Rectangle {
-                                    x: 3.5px; y: -3.5px;
-                                    width: 13px; height: 13px;
-                                    border-radius: 6.5px;
-                                    background: theme-touch.has-hover ? #e2e8f0 : #f1f5f9;
-                                }
-                            }
-
-                            // Dark Mode: Vector Sun
-                            if root.is-dark-theme : Rectangle {
-                                width: 14px; height: 14px;
-                                x: (parent.width - self.width) / 2;
-                                y: (parent.height - self.height) / 2;
-
-                                // Sun Rays
-                                Rectangle {
-                                    x: (parent.width - self.width) / 2;
-                                    y: 0px;
-                                    width: 1.4px; height: 14px;
-                                    border-radius: 0.7px;
-                                    background: #334155;
-                                }
-                                Rectangle {
-                                    x: 0px;
-                                    y: (parent.height - self.height) / 2;
-                                    width: 14px; height: 1.4px;
-                                    border-radius: 0.7px;
-                                    background: #334155;
-                                }
-                                // Sun Core
-                                Rectangle {
-                                    x: (parent.width - self.width) / 2;
-                                    y: (parent.height - self.height) / 2;
-                                    width: 7px; height: 7px;
-                                    border-radius: 3.5px;
-                                    border-width: 1.2px;
-                                    border-color: #334155;
-                                    background: theme-touch.has-hover ? #e2e8f0 : #f1f5f9;
-                                }
+                                image-fit: contain;
+                                source: root.is-dark-theme ? @image-url("../assets/icons/sun.svg") : @image-url("../assets/icons/moon.svg");
                             }
 
                             theme-touch := TouchArea {
@@ -478,49 +434,17 @@ export component AppWindow inherits Window {
                             }
                         }
 
-                        // Settings Button (Crisp Native Vector Cog)
+                        // Settings Button (Standard Clean SVG Gear)
                         Rectangle {
                             width: 32px; height: 32px;
                             background: settings-touch.has-hover ? #e2e8f0 : transparent;
 
-                            Rectangle {
-                                width: 14px; height: 14px;
+                            Image {
+                                width: 15px; height: 15px;
                                 x: (parent.width - self.width) / 2;
                                 y: (parent.height - self.height) / 2;
-
-                                // Cog Teeth (Vertical & Horizontal)
-                                Rectangle {
-                                    x: (parent.width - self.width) / 2;
-                                    y: 0px;
-                                    width: 2.6px; height: 14px;
-                                    border-radius: 0.8px;
-                                    background: #334155;
-                                }
-                                Rectangle {
-                                    x: 0px;
-                                    y: (parent.height - self.height) / 2;
-                                    width: 14px; height: 2.6px;
-                                    border-radius: 0.8px;
-                                    background: #334155;
-                                }
-
-                                // Outer Gear Body
-                                Rectangle {
-                                    x: (parent.width - self.width) / 2;
-                                    y: (parent.height - self.height) / 2;
-                                    width: 10px; height: 10px;
-                                    border-radius: 5px;
-                                    background: #334155;
-                                }
-
-                                // Inner Hollow Hub
-                                Rectangle {
-                                    x: (parent.width - self.width) / 2;
-                                    y: (parent.height - self.height) / 2;
-                                    width: 4.4px; height: 4.4px;
-                                    border-radius: 2.2px;
-                                    background: settings-touch.has-hover ? #e2e8f0 : #f1f5f9;
-                                }
+                                image-fit: contain;
+                                source: @image-url("../assets/icons/settings.svg");
                             }
 
                             settings-touch := TouchArea { clicked => { root.settings-clicked(); } }
