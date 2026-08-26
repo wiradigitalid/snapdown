@@ -1232,3 +1232,170 @@ defects:
       permits a fix - it forbids new work, in its own words - so this is not blocked by the freeze.
     related: BUG-19
     status: open
+  - id: BUG-24
+    title: Capture overlay opens at the default window size instead of covering the monitor, so selecting a region never produces a screenshot
+    found: "2026-08-26"
+    found_by: kodesh87, manual capture test after the desktop-slint to apps/desktop migration
+    component: capture
+    severity: high
+    contradicts: [FR-1, FR-2]
+    evidence: |
+      apps/desktop/ui/appwindow.slint, CaptureOverlayWindow: no-frame, always-on-top, background:
+      transparent - but no width/height/full-screen. apps/desktop/src/main.rs:381-501,
+      on_capture_clicked: CaptureOverlayWindow::new() is shown with overlay.show().unwrap() and no
+      call that sizes or positions it to the captured monitor.
+
+      The React/Tauri predecessor did this explicitly -
+      archive/desktop-tauri/src-tauri/src/commands/capture.rs:217: `.fullscreen(true)` on the
+      overlay's WebviewWindowBuilder. The Slint port dropped that call and replaced it with nothing.
+    impact: |
+      Reported symptoms: (a) a brief freeze after clicking Capture, (b) the overlay appears as a
+      small non-fullscreen window with the mouse-follow magnifier loupe dominating it, (c) drawing a
+      selection and clicking Save Finding does not produce a usable screenshot. (a) is the
+      synchronous, blocking RegionCapturer::capture_monitor_image call on the UI thread - expected
+      screen-grab latency, not part of this defect. (b) and (c) share one root cause: the overlay's
+      TouchArea reports mouse-x/mouse-y in the small default-size window's local coordinate space,
+      but on_capture_completed (main.rs:398-401) uses those numbers directly as pixel offsets into
+      the full monitor-resolution RgbaImage, so the crop lands on the wrong, tiny region of the
+      screenshot.
+    why_undetected: |
+      No test drives the capture flow through a real window (BUG-4/5/6 already named this class of
+      gap: a component compiling and unit-testing does not mean the flow that reaches it was
+      exercised). Nothing asserted that the overlay window's geometry matches the captured monitor.
+    fix: |
+      Add `full-screen: true;` to CaptureOverlayWindow in apps/desktop/ui/appwindow.slint - the
+      Slint/winit-native equivalent of the Tauri predecessor's `.fullscreen(true)`. This makes the
+      overlay's logical size and origin match the monitor exactly, so the TouchArea's coordinates
+      line up with the captured image's pixel space with no extra conversion.
+    scenario: N/A - covered by apps/desktop/tests/test_capture_overlay_fullscreen.rs
+    resolved: |
+      2026-08-26. Failing test written first (capture_overlay_window_declares_full_screen, red for
+      the missing `full-screen: true`), then the one-line fix, then green: `cargo test -p
+      snapdown-desktop` (16 tests, all pass). Verified live, not just at the property level: built
+      and ran Snapdown.exe, confirmed via Orca computer-use that Capture now opens a window whose
+      bounds (0,0,3840x2160) exactly match the physical monitor instead of a small default window,
+      then drove a real drag-select + Save Finding through the running app and confirmed a new
+      Finding (capture_20260826_123020.png) was created and loaded into the filmstrip - the full
+      pipeline now completes end to end.
+
+      Not fixed here, filed separately if it surfaces again: the main window is still visible (not
+      hidden) while capture_monitor_image grabs the monitor, unlike the Tauri predecessor which hid
+      it first - out of scope for the three reported symptoms, which are now all resolved.
+    status: resolved
+  - id: BUG-25
+    title: Escape did nothing while the capture overlay was open
+    found: "2026-08-26"
+    found_by: kodesh87, manual capture test
+    component: capture
+    severity: medium
+    contradicts: [FR-1]
+    evidence: |
+      apps/desktop/ui/appwindow.slint, CaptureOverlayWindow had no FocusScope and no key handler
+      at all, while the note popup's own hint text read "Enter to save · Esc to cancel".
+    impact: |
+      The only way out of a full-screen always-on-top overlay was to complete a capture. The
+      overlay itself advertised Escape, so the promise was visible and broken.
+    why_undetected: |
+      No test drives keyboard input against the overlay, and the hint text is a literal string
+      that nothing checks against a binding.
+    fix: |
+      A FocusScope that maps Key.Escape to overlay-cancelled(), and which claims focus itself - a
+      top-level window does not hand keyboard focus to a scope for free, so without self.focus()
+      the key events never arrive. The desktop side also takes OS focus for the overlay.
+    scenario: N/A - covered by apps/desktop/tests/test_capture_overlay_escape_cancels.rs
+    resolved: |
+      2026-08-26, commit 9277ecc. Guarded by capture_overlay_window_binds_escape_to_cancel.
+    status: resolved
+  - id: BUG-26
+    title: One overlay stretched over the whole virtual desktop cannot render a mixed-DPI multi-monitor rig
+    found: "2026-08-26"
+    found_by: kodesh87, manual capture test on a 150% landscape + 175% portrait pair
+    component: capture
+    severity: high
+    contradicts: [FR-1, FR-2]
+    evidence: |
+      The overlay was a single window sized to RegionCapturer's stitched virtual canvas. A Win32
+      window has exactly one DPI (Microsoft's own high-DPI guidance: a window spanning displays of
+      differing scale factors is bitmap-scaled and "appears blurry"), so one window cannot render
+      1:1 on a 150% and a 175% display at once.
+
+      The inflation had a second, sharper cause: set_size(PhysicalSize) divides by the window's
+      CURRENT scale factor, and before the window exists that is 1.0 - so physical numbers were
+      stored as logical ones and then multiplied by the real scale factor once the window was
+      created. The 2160x3840 portrait monitor asked for 2160x3840 logical and got a 3780x6720
+      window.
+    impact: |
+      Reported as "two screens full, but like one big zoomed image". The overlay inflated past the
+      desktop, the capture preview was unusable, and the crosshair guides spanned both monitors
+      instead of the screen the pointer was on.
+    why_undetected: |
+      Every prior test of this path ran on a single monitor at a single scale factor. Nothing
+      asserted the overlay's geometry against the monitor it was meant to cover.
+    fix: |
+      One overlay window per monitor, each created directly on its target monitor through winit's
+      WindowAttributes (via the backend's window-attributes hook) so it is born at that monitor's
+      DPI and never fires WM_DPICHANGED, and sized in LOGICAL pixels derived from that monitor's
+      own scale factor. RegionCapturer::capture_each_monitor replaces the stitched canvas.
+
+      Flameshot reached the same conclusion for the same reasons - mixed DPI, monitor placement and
+      orientation - and abandoned its single stitched canvas in flameshot-org/flameshot#4498, for
+      issue #4495.
+    scenario: N/A - covered by apps/desktop/tests/test_capture_overlay_fullscreen.rs
+    resolved: |
+      2026-08-26, commit 9277ecc. Confirmed by the owner: zoom gone, crosshair confined to one
+      screen, and a region spanning two monitors is impossible by construction. Guarded by
+      one_capture_overlay_is_opened_per_monitor,
+      each_overlay_is_placed_and_sized_to_its_monitor_before_being_shown, and
+      a_selection_is_clamped_to_the_monitor_it_was_started_on.
+    status: resolved
+  - id: BUG-27
+    title: The capture overlay blinks once per capture on the first pointer move
+    found: "2026-08-26"
+    found_by: kodesh87, manual capture test
+    component: capture
+    severity: medium
+    contradicts: [FR-1]
+    evidence: |
+      Reported as the whole overlay blinking black. Originally five blinks per capture: two on
+      open with the pointer still, one on the first pointer move, and one more on first entering
+      each monitor. Reusing the overlay windows removed all but one. What remains is a single
+      stalled frame on the first pointer move of EVERY capture, deterministic and repeatable.
+    impact: |
+      Cosmetic but conspicuous - it is a full-screen flash at the moment the Reviewer starts
+      choosing a region, on every capture.
+    why_undetected: |
+      Nothing here measures frame timing, and a dropped frame is invisible to every test in this
+      repository.
+    fix: |
+      NOT FOUND. Recorded so the ground already covered is not re-trodden.
+
+      Ruled out by experiment, not by reasoning:
+        - Window/renderer creation. SLINT_DEBUG_PERFORMANCE=refresh_lazy,console shows exactly
+          three renderer initialisations (main window + two overlays) and the count does NOT grow
+          across further capture cycles, so the windows and their OpenGL contexts do persist -
+          reuse works, and this is not re-creation.
+        - The magnifier. Hiding the loupe entirely left the stall unchanged, so its magnified
+          source-clip sampling is not the cause.
+        - Filtering mode. `image-rendering: pixelated` on the loupe made it measurably WORSE.
+        - The window's clear colour. Switching the overlay from transparent to opaque black
+          changed only what colour the bad frame showed, not whether it happened.
+        - Element-tree churn. Replacing every `if` gate with `visible` (so no subtree is torn down
+          and rebuilt) removed the per-monitor-entry blinks but not this one.
+        - The software renderer removes the blink entirely, but is not an acceptable fix: it
+          cannot repaint a full-screen 8-megapixel overlay per pointer move, so dragging a region
+          becomes choppy, and optimising that broke visual correctness (a static scrim plus a
+          source-clipped bright cut-out slides against the backdrop, because source-clip is in
+          integer SOURCE pixels while the selection sits at fractional logical coordinates).
+
+      Remaining untested suspicion: a fresh snapshot texture is installed on every capture via
+      set_snapshot_image, and the first draw that samples it may stall. If so the bad frame would
+      show the PREVIOUS capture's screenshot rather than black - not yet confirmed with the owner.
+
+      The structural alternative, which would remove this whole class rather than this instance:
+      a single overlay window over the whole virtual desktop, with each monitor's pixels resampled
+      in Rust to that one window's scale factor. One window means one surface, one warm-up and no
+      cross-window event ordering at all. Cropping would still come from the unresampled originals
+      so saved output stays full quality; only the on-screen preview softens on a monitor whose
+      scale differs. That is a DEC-, not a patch, and it has not been decided.
+    related: BUG-26
+    status: open
