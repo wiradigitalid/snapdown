@@ -289,10 +289,9 @@ export component AppWindow inherits Window {
     min-height: 720px;
     preferred-width: 1366px;
     preferred-height: 860px;
-    background: #f8fafc;
+    background: Theme.bg-app;
     default-font-family: "Plus Jakarta Sans";
 
-    // Theme Toggle State connected to Global Theme
     in-out property <bool> is-dark-theme <=> Theme.is-dark;
 
     // Theme Color Tokens
