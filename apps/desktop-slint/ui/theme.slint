@@ -17,9 +17,12 @@ export global Theme {
     out property <color> text-secondary: is-dark ? #e2e8f0 : #334155; // Label & Button Text (Slate 700 / 200)
     out property <color> text-muted:     is-dark ? #94a3b8 : #64748b; // Subtitle, Timestamp, Dimensions
     out property <color> text-dim:       is-dark ? #64748b : #94a3b8; // Placeholder & Inactive Glyphs
+    out property <color> text-on-accent: #ffffff;                     // Teks putih di atas background aksen
 
     // 4. Accent & Active State Tokens (WCAG AA Compliant)
     out property <color> accent-primary: is-dark ? #38bdf8 : #2563eb; // Primary Actions (Assemble, Tab Active Bar)
+    out property <color> accent-hover:   is-dark ? #0ea5e9 : #1d4ed8; // Primary Action Hover
+    out property <color> accent-pressed: is-dark ? #0284c7 : #1e40af; // Primary Action Pressed
     out property <color> accent-surface: is-dark ? #38bdf8.with-alpha(0.22) : #38bdf8.with-alpha(0.18); // Active Tool Pill
     out property <color> accent-active:  is-dark ? #38bdf8 : #0369a1; // Active Tool Text/Icon Color
 
