@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FindingDetailItemDto } from './FindingsEditor';
 import { MarkerBadge } from './MarkerBadge';
 import { TokenEstimator } from './TokenEstimator';
 import { TextArea } from './TextArea';
-import { VisualAnnotationItem, VisualCalloutAnnotation, VisualTextAnnotation } from './types/annotation';
+import {
+  VisualAnnotationItem,
+  VisualCalloutAnnotation,
+  VisualTextAnnotation,
+} from './types/annotation';
 
 export interface PropertiesPanelProps {
   finding: FindingDetailItemDto | null;
@@ -24,6 +28,8 @@ export interface PropertiesPanelProps {
   style?: React.CSSProperties;
 }
 
+export type PropertiesTab = 'notes' | 'element_properties';
+
 export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   finding,
   noteText,
@@ -40,7 +46,19 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   className = '',
   style,
 }) => {
+  const [activeTab, setActiveTab] = useState<PropertiesTab>('notes');
   const [editingComments, setEditingComments] = useState<Record<string, string>>({});
+
+  const selectedAnnotation = annotations.find((a) => a.id === selectedAnnotationId);
+
+  // Auto-switch to Element Properties tab when an editable element (text or callout) is selected
+  useEffect(() => {
+    if (selectedAnnotation) {
+      if (selectedAnnotation.kind === 'text' || selectedAnnotation.kind === 'callout') {
+        setActiveTab('element_properties');
+      }
+    }
+  }, [selectedAnnotationId, selectedAnnotation]);
 
   if (!finding) {
     return (
@@ -69,7 +87,9 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   }
 
   const markers = finding.markers || [];
-  const selectedAnnotation = annotations.find((a) => a.id === selectedAnnotationId);
+  const markerNotes = markers.map(
+    (m) => (editingComments[m.id] !== undefined ? editingComments[m.id] : m.comment || '')
+  );
 
   return (
     <div
@@ -112,7 +132,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
               color: 'var(--color-text)',
             }}
           >
-            Notes & Properties
+            Finding Inspector
           </span>
         </div>
         <span
@@ -131,7 +151,69 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         </span>
       </div>
 
-      {/* Scrollable Body */}
+      {/* Tabs Header Navigation */}
+      <div
+        data-testid="properties-tabs"
+        style={{
+          display: 'flex',
+          borderBottom: '1px solid var(--color-border)',
+          backgroundColor: 'var(--color-surface-sunken)',
+          padding: '0 var(--space-3)',
+          gap: 'var(--space-1)',
+        }}
+      >
+        <button
+          type="button"
+          data-testid="tab-notes-btn"
+          onClick={() => setActiveTab('notes')}
+          style={{
+            flex: 1,
+            padding: '10px var(--space-2)',
+            backgroundColor: 'transparent',
+            color: activeTab === 'notes' ? 'var(--color-primary)' : 'var(--color-text-muted)',
+            border: 'none',
+            borderBottom: activeTab === 'notes' ? '2.5px solid var(--color-primary)' : '2.5px solid transparent',
+            fontSize: 'var(--text-xs)',
+            fontWeight: activeTab === 'notes' ? 700 : 500,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <span>📋</span>
+          <span>Notes</span>
+        </button>
+
+        <button
+          type="button"
+          data-testid="tab-element-properties-btn"
+          onClick={() => setActiveTab('element_properties')}
+          style={{
+            flex: 1,
+            padding: '10px var(--space-2)',
+            backgroundColor: 'transparent',
+            color: activeTab === 'element_properties' ? 'var(--color-primary)' : 'var(--color-text-muted)',
+            border: 'none',
+            borderBottom: activeTab === 'element_properties' ? '2.5px solid var(--color-primary)' : '2.5px solid transparent',
+            fontSize: 'var(--text-xs)',
+            fontWeight: activeTab === 'element_properties' ? 700 : 500,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <span>🎨</span>
+          <span>Element Properties</span>
+        </button>
+      </div>
+
+      {/* Scrollable Tab Content Body */}
       <div
         style={{
           flex: 1,
@@ -142,366 +224,456 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           gap: 'var(--space-4)',
         }}
       >
-        {/* Contextual Annotation Style Inspector (When a Text or Callout is Selected) */}
-        {selectedAnnotation && (selectedAnnotation.kind === 'text' || selectedAnnotation.kind === 'callout') && (
-          <div
-            data-testid="annotation-style-inspector"
-            style={{
-              padding: 'var(--space-3)',
-              backgroundColor: 'var(--color-surface-sunken)',
-              border: '1px solid var(--color-border-strong, var(--color-primary))',
-              borderRadius: 'var(--radius-md)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 'var(--space-2)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span
-                style={{
-                  fontSize: 'var(--text-xs)',
-                  fontWeight: 800,
-                  color: 'var(--color-text)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                }}
-              >
-                🎨 {selectedAnnotation.kind === 'callout' ? 'Callout Style' : 'Text Typography'}
-              </span>
-              <button
-                type="button"
-                onClick={() => onDeleteAnnotation?.(selectedAnnotation.id)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--color-danger)',
-                  cursor: 'pointer',
-                  fontSize: 'var(--text-xs)',
-                  fontWeight: 600,
-                }}
-              >
-                Delete
-              </button>
-            </div>
-
-            {/* Font Family Selector */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        {activeTab === 'notes' ? (
+          /* TAB 1: NOTES & STEP MARKERS */
+          <>
+            {/* Section 1: Fixed Height ~130px Observation Summary */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
               <label
+                htmlFor="observation-summary-input"
                 style={{
                   fontSize: 'var(--text-2xs)',
-                  color: 'var(--color-text-muted)',
                   fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  color: 'var(--color-text-muted)',
                 }}
               >
-                Font Family
+                Observation Summary
               </label>
-              <select
-                value={selectedAnnotation.fontFamily || 'Inter, sans-serif'}
-                onChange={(e) => {
-                  if (onUpdateAnnotation) {
-                    onUpdateAnnotation({
-                      ...selectedAnnotation,
-                      fontFamily: e.target.value,
-                    } as VisualCalloutAnnotation | VisualTextAnnotation);
-                  }
-                }}
+              <TextArea
+                id="observation-summary-input"
+                data-testid="observation-summary-textarea"
+                value={noteText}
+                onChange={(e) => onNoteChange(e.target.value)}
+                onBlur={onNoteBlur}
+                placeholder="Tuliskan ringkasan keseluruhan temuan di sini..."
+                rows={5}
                 style={{
-                  padding: '4px 8px',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--color-border)',
-                  backgroundColor: 'var(--color-surface)',
-                  color: 'var(--color-text)',
-                  fontSize: 'var(--text-xs)',
-                  outline: 'none',
-                  cursor: 'pointer',
+                  height: '130px',
+                  minHeight: '130px',
+                  maxHeight: '130px',
+                  fontFamily: 'var(--font-ui)',
+                  fontSize: 'var(--text-sm)',
+                  lineHeight: '1.5',
+                  resize: 'none',
+                }}
+              />
+            </div>
+
+            {/* Section 2: Step Marker Notes (Catatan langsung di tiap Step Marker 1, 2, 3...) */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: 'var(--text-2xs)',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  color: 'var(--color-text-muted)',
                 }}
               >
-                <option value="Inter, sans-serif">Inter (Clean Modern)</option>
-                <option value="'JetBrains Mono', monospace">JetBrains Mono (Code/Mono)</option>
-                <option value="'Playfair Display', serif">Playfair Display (Editorial Serif)</option>
-                <option value="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans (UI Sans)</option>
-                <option value="Impact, sans-serif">Impact (Bold Heading)</option>
-                <option value="'Comic Sans MS', cursive, sans-serif">Comic / Casual</option>
-              </select>
-            </div>
+                <span>Step Marker Notes ({markers.length})</span>
+              </div>
 
-            {/* Font Size & Weight Row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label
+              {markers.length === 0 ? (
+                <div
                   style={{
-                    fontSize: 'var(--text-2xs)',
+                    padding: 'var(--space-3)',
+                    backgroundColor: 'var(--color-surface-sunken)',
+                    borderRadius: 'var(--radius-sm)',
                     color: 'var(--color-text-muted)',
-                    fontWeight: 700,
-                  }}
-                >
-                  Font Size ({selectedAnnotation.fontSize || 14}px)
-                </label>
-                <input
-                  type="range"
-                  min={10}
-                  max={36}
-                  step={1}
-                  value={selectedAnnotation.fontSize || 14}
-                  onChange={(e) => {
-                    if (onUpdateAnnotation) {
-                      onUpdateAnnotation({
-                        ...selectedAnnotation,
-                        fontSize: Number(e.target.value),
-                      } as VisualCalloutAnnotation | VisualTextAnnotation);
-                    }
-                  }}
-                  style={{ width: '100%', cursor: 'pointer' }}
-                />
-              </div>
-
-              {/* Bold & Italic Toggles */}
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '100%' }}>
-                <button
-                  type="button"
-                  data-tooltip="Bold"
-                  onClick={() => {
-                    const isBold = selectedAnnotation.fontWeight === 'bold' || selectedAnnotation.fontWeight === '700';
-                    onUpdateAnnotation?.({
-                      ...selectedAnnotation,
-                      fontWeight: isBold ? 'normal' : 'bold',
-                    } as VisualCalloutAnnotation | VisualTextAnnotation);
-                  }}
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor:
-                      selectedAnnotation.fontWeight === 'bold' || selectedAnnotation.fontWeight === '700'
-                        ? 'var(--color-primary)'
-                        : 'var(--color-surface)',
-                    color:
-                      selectedAnnotation.fontWeight === 'bold' || selectedAnnotation.fontWeight === '700'
-                        ? 'var(--color-accent-text)'
-                        : 'var(--color-text)',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
-                >
-                  B
-                </button>
-                <button
-                  type="button"
-                  data-tooltip="Italic"
-                  onClick={() => {
-                    const isItalic = selectedAnnotation.fontStyle === 'italic';
-                    onUpdateAnnotation?.({
-                      ...selectedAnnotation,
-                      fontStyle: isItalic ? 'normal' : 'italic',
-                    } as VisualCalloutAnnotation | VisualTextAnnotation);
-                  }}
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--color-border)',
-                    backgroundColor:
-                      selectedAnnotation.fontStyle === 'italic'
-                        ? 'var(--color-primary)'
-                        : 'var(--color-surface)',
-                    color:
-                      selectedAnnotation.fontStyle === 'italic'
-                        ? 'var(--color-accent-text)'
-                        : 'var(--color-text)',
+                    fontSize: 'var(--text-xs)',
                     fontStyle: 'italic',
-                    fontWeight: 700,
-                    cursor: 'pointer',
+                    textAlign: 'center',
                   }}
                 >
-                  I
-                </button>
-              </div>
+                  Klik pada gambar canvas untuk menempelkan marker nomor (1, 2, 3...)
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                  {markers
+                    .slice()
+                    .sort((a, b) => a.ordinal - b.ordinal)
+                    .map((m) => {
+                      const isSelected = m.id === selectedMarkerId;
+                      const currentComment =
+                        editingComments[m.id] !== undefined ? editingComments[m.id] : m.comment || '';
+
+                      return (
+                        <div
+                          key={m.id}
+                          data-testid={`marker-note-row-${m.ordinal}`}
+                          onClick={() => onSelectMarker(m.id)}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 'var(--space-1)',
+                            padding: 'var(--space-3)',
+                            backgroundColor: isSelected
+                              ? 'var(--color-accent-subtle)'
+                              : 'var(--color-surface-sunken)',
+                            border: isSelected
+                              ? '1px solid var(--color-accent)'
+                              : '1px solid var(--color-border)',
+                            borderRadius: 'var(--radius-sm)',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                              <MarkerBadge number={m.ordinal} isSelected={isSelected} />
+                              <span
+                                style={{
+                                  fontSize: 'var(--text-xs)',
+                                  fontFamily: 'var(--font-mono)',
+                                  color: 'var(--color-text-secondary)',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                Marker #{m.ordinal}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: 'var(--text-2xs)',
+                                  fontFamily: 'var(--font-mono)',
+                                  color: 'var(--color-text-muted)',
+                                }}
+                              >
+                                ({Math.round(m.x * 100)}%, {Math.round(m.y * 100)}%)
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              data-testid={`delete-marker-btn-${m.ordinal}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteMarker(m.id);
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--color-text-muted)',
+                                cursor: 'pointer',
+                                padding: '4px',
+                                fontSize: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                              title="Hapus marker ini"
+                            >
+                              ✕
+                            </button>
+                          </div>
+
+                          <input
+                            type="text"
+                            data-testid={`marker-comment-input-${m.ordinal}`}
+                            value={currentComment}
+                            placeholder={`Catatan spesifik untuk titik ${m.ordinal}...`}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setEditingComments((prev) => ({ ...prev, [m.id]: val }));
+                            }}
+                            onBlur={() => {
+                              if (onUpdateMarkerComment && editingComments[m.id] !== undefined) {
+                                onUpdateMarkerComment(m.id, editingComments[m.id]);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.currentTarget.blur();
+                              }
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '6px 8px',
+                              fontSize: 'var(--text-xs)',
+                              fontFamily: 'var(--font-ui)',
+                              backgroundColor: 'var(--color-surface)',
+                              color: 'var(--color-text)',
+                              border: '1px solid var(--color-border)',
+                              borderRadius: 'var(--radius-sm)',
+                              outline: 'none',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
             </div>
-          </div>
-        )}
-
-        {/* Section 1: Fixed Height ~130px Observation Summary */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
-          <label
-            htmlFor="observation-summary-input"
-            style={{
-              fontSize: 'var(--text-2xs)',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em',
-              color: 'var(--color-text-muted)',
-            }}
-          >
-            Observation Summary
-          </label>
-          <TextArea
-            id="observation-summary-input"
-            data-testid="observation-summary-textarea"
-            value={noteText}
-            onChange={(e) => onNoteChange(e.target.value)}
-            onBlur={onNoteBlur}
-            placeholder="Tuliskan ringkasan keseluruhan temuan di sini..."
-            rows={5}
-            style={{
-              height: '130px',
-              minHeight: '130px',
-              maxHeight: '130px',
-              fontFamily: 'var(--font-ui)',
-              fontSize: 'var(--text-sm)',
-              lineHeight: '1.5',
-              resize: 'none',
-            }}
-          />
-        </div>
-
-        {/* Section 2: Step Marker Notes (Catatan langsung di tiap Step Marker 1, 2, 3...) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              fontSize: 'var(--text-2xs)',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em',
-              color: 'var(--color-text-muted)',
-            }}
-          >
-            <span>Step Marker Notes ({markers.length})</span>
-          </div>
-
-          {markers.length === 0 ? (
-            <div
-              style={{
-                padding: 'var(--space-3)',
-                backgroundColor: 'var(--color-surface-sunken)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--color-text-muted)',
-                fontSize: 'var(--text-xs)',
-                fontStyle: 'italic',
-                textAlign: 'center',
-              }}
-            >
-              Klik pada gambar canvas untuk menempelkan marker nomor (1, 2, 3...)
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              {markers
-                .slice()
-                .sort((a, b) => a.ordinal - b.ordinal)
-                .map((m) => {
-                  const isSelected = m.id === selectedMarkerId;
-                  const currentComment =
-                    editingComments[m.id] !== undefined ? editingComments[m.id] : (m.comment || '');
-
-                  return (
-                    <div
-                      key={m.id}
-                      data-testid={`marker-note-row-${m.ordinal}`}
-                      onClick={() => onSelectMarker(m.id)}
+          </>
+        ) : (
+          /* TAB 2: ELEMENT PROPERTIES */
+          <div data-testid="element-properties-tab" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            {selectedAnnotation ? (
+              selectedAnnotation.kind === 'text' || selectedAnnotation.kind === 'callout' ? (
+                /* Active Text / Callout Inspector */
+                <div
+                  data-testid="annotation-style-inspector"
+                  style={{
+                    padding: 'var(--space-4)',
+                    backgroundColor: 'var(--color-surface-sunken)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-md)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 'var(--space-4)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span
                       style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 'var(--space-1)',
-                        padding: 'var(--space-3)',
-                        backgroundColor: isSelected
-                          ? 'var(--color-accent-subtle)'
-                          : 'var(--color-surface-sunken)',
-                        border: isSelected
-                          ? '1px solid var(--color-accent)'
-                          : '1px solid var(--color-border)',
-                        borderRadius: 'var(--radius-sm)',
-                        transition: 'all 0.15s ease',
+                        fontSize: 'var(--text-xs)',
+                        fontWeight: 800,
+                        color: 'var(--color-text)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                          <MarkerBadge number={m.ordinal} isSelected={isSelected} />
-                          <span
-                            style={{
-                              fontSize: 'var(--text-xs)',
-                              fontFamily: 'var(--font-mono)',
-                              color: 'var(--color-text-secondary)',
-                              fontWeight: 700,
-                            }}
-                          >
-                            Marker #{m.ordinal}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 'var(--text-2xs)',
-                              fontFamily: 'var(--font-mono)',
-                              color: 'var(--color-text-muted)',
-                            }}
-                          >
-                            ({Math.round(m.x * 100)}%, {Math.round(m.y * 100)}%)
-                          </span>
-                        </div>
+                      🎨 {selectedAnnotation.kind === 'callout' ? 'Callout Properties' : 'Text Typography'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteAnnotation?.(selectedAnnotation.id)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--color-danger)',
+                        cursor: 'pointer',
+                        fontSize: 'var(--text-xs)',
+                        fontWeight: 600,
+                      }}
+                    >
+                      Delete Element
+                    </button>
+                  </div>
 
-                        <button
-                          type="button"
-                          data-testid={`delete-marker-btn-${m.ordinal}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteMarker(m.id);
-                          }}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--color-text-muted)',
-                            cursor: 'pointer',
-                            padding: '4px',
-                            fontSize: '12px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                          title="Hapus marker ini"
-                        >
-                          ✕
-                        </button>
-                      </div>
+                  {/* Font Family Selector */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label
+                      style={{
+                        fontSize: 'var(--text-2xs)',
+                        color: 'var(--color-text-muted)',
+                        fontWeight: 700,
+                      }}
+                    >
+                      Font Family
+                    </label>
+                    <select
+                      value={selectedAnnotation.fontFamily || 'Inter, sans-serif'}
+                      onChange={(e) => {
+                        if (onUpdateAnnotation) {
+                          onUpdateAnnotation({
+                            ...selectedAnnotation,
+                            fontFamily: e.target.value,
+                          } as VisualCalloutAnnotation | VisualTextAnnotation);
+                        }
+                      }}
+                      style={{
+                        padding: '6px 8px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--color-border)',
+                        backgroundColor: 'var(--color-surface)',
+                        color: 'var(--color-text)',
+                        fontSize: 'var(--text-xs)',
+                        outline: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <option value="Inter, sans-serif">Inter (Modern Clean)</option>
+                      <option value="'JetBrains Mono', monospace">JetBrains Mono (Code/Mono)</option>
+                      <option value="'Playfair Display', serif">Playfair Display (Serif)</option>
+                      <option value="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans (UI)</option>
+                      <option value="Impact, sans-serif">Impact (Bold Heading)</option>
+                      <option value="'Comic Sans MS', cursive, sans-serif">Casual / Sketch</option>
+                    </select>
+                  </div>
 
-                      <input
-                        type="text"
-                        data-testid={`marker-comment-input-${m.ordinal}`}
-                        value={currentComment}
-                        placeholder={`Catatan spesifik untuk titik ${m.ordinal}...`}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setEditingComments((prev) => ({ ...prev, [m.id]: val }));
+                  {/* Font Size Slider & Readout */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label
+                        style={{
+                          fontSize: 'var(--text-2xs)',
+                          color: 'var(--color-text-muted)',
+                          fontWeight: 700,
                         }}
-                        onBlur={() => {
-                          if (onUpdateMarkerComment && editingComments[m.id] !== undefined) {
-                            onUpdateMarkerComment(m.id, editingComments[m.id]);
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.currentTarget.blur();
-                          }
+                      >
+                        Font Size
+                      </label>
+                      <span style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                        {selectedAnnotation.fontSize || 14}px
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={10}
+                      max={48}
+                      step={1}
+                      value={selectedAnnotation.fontSize || 14}
+                      onChange={(e) => {
+                        if (onUpdateAnnotation) {
+                          onUpdateAnnotation({
+                            ...selectedAnnotation,
+                            fontSize: Number(e.target.value),
+                          } as VisualCalloutAnnotation | VisualTextAnnotation);
+                        }
+                      }}
+                      style={{ width: '100%', cursor: 'pointer' }}
+                    />
+                  </div>
+
+                  {/* Style Toggles (Bold / Italic) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label
+                      style={{
+                        fontSize: 'var(--text-2xs)',
+                        color: 'var(--color-text-muted)',
+                        fontWeight: 700,
+                      }}
+                    >
+                      Font Weight & Style
+                    </label>
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const isBold =
+                            selectedAnnotation.fontWeight === 'bold' || selectedAnnotation.fontWeight === '700';
+                          onUpdateAnnotation?.({
+                            ...selectedAnnotation,
+                            fontWeight: isBold ? 'normal' : 'bold',
+                          } as VisualCalloutAnnotation | VisualTextAnnotation);
                         }}
                         style={{
-                          width: '100%',
-                          padding: '6px 8px',
-                          fontSize: 'var(--text-xs)',
-                          fontFamily: 'var(--font-ui)',
-                          backgroundColor: 'var(--color-surface)',
-                          color: 'var(--color-text)',
-                          border: '1px solid var(--color-border)',
+                          flex: 1,
+                          height: '36px',
                           borderRadius: 'var(--radius-sm)',
-                          outline: 'none',
-                          boxSizing: 'border-box',
+                          border: '1px solid var(--color-border)',
+                          backgroundColor:
+                            selectedAnnotation.fontWeight === 'bold' || selectedAnnotation.fontWeight === '700'
+                              ? 'var(--color-primary)'
+                              : 'var(--color-surface)',
+                          color:
+                            selectedAnnotation.fontWeight === 'bold' || selectedAnnotation.fontWeight === '700'
+                              ? 'var(--color-accent-text)'
+                              : 'var(--color-text)',
+                          fontWeight: 800,
+                          cursor: 'pointer',
                         }}
-                      />
+                      >
+                        Bold
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const isItalic = selectedAnnotation.fontStyle === 'italic';
+                          onUpdateAnnotation?.({
+                            ...selectedAnnotation,
+                            fontStyle: isItalic ? 'normal' : 'italic',
+                          } as VisualCalloutAnnotation | VisualTextAnnotation);
+                        }}
+                        style={{
+                          flex: 1,
+                          height: '36px',
+                          borderRadius: 'var(--radius-sm)',
+                          border: '1px solid var(--color-border)',
+                          backgroundColor:
+                            selectedAnnotation.fontStyle === 'italic'
+                              ? 'var(--color-primary)'
+                              : 'var(--color-surface)',
+                          color:
+                            selectedAnnotation.fontStyle === 'italic'
+                              ? 'var(--color-accent-text)'
+                              : 'var(--color-text)',
+                          fontStyle: 'italic',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Italic
+                      </button>
                     </div>
-                  );
-                })}
-            </div>
-          )}
-        </div>
+                  </div>
+                </div>
+              ) : (
+                /* Element has no customizable typography properties (Shape, Blur, Arrow) */
+                <div
+                  data-testid="element-no-properties-state"
+                  style={{
+                    padding: 'var(--space-6)',
+                    backgroundColor: 'var(--color-surface-sunken)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px dashed var(--color-border)',
+                    textAlign: 'center',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 'var(--space-2)',
+                    color: 'var(--color-text-muted)',
+                  }}
+                >
+                  <span style={{ fontSize: '1.5rem' }}>📐</span>
+                  <span style={{ fontWeight: 700, color: 'var(--color-text)' }}>
+                    {selectedAnnotation.kind.toUpperCase()} Element
+                  </span>
+                  <span style={{ fontSize: 'var(--text-xs)' }}>
+                    Elemen ini tidak memiliki properti tipografi yang dapat disesuaikan. Anda dapat mengubah ukuran dan posisinya langsung pada canvas.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteAnnotation?.(selectedAnnotation.id)}
+                    style={{
+                      marginTop: 'var(--space-2)',
+                      padding: '4px 12px',
+                      backgroundColor: 'transparent',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius-sm)',
+                      color: 'var(--color-danger)',
+                      fontSize: 'var(--text-xs)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Delete Element
+                  </button>
+                </div>
+              )
+            ) : (
+              /* No Element Selected Empty State */
+              <div
+                data-testid="element-properties-empty-state"
+                style={{
+                  padding: 'var(--space-6)',
+                  backgroundColor: 'var(--color-surface-sunken)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px dashed var(--color-border)',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 'var(--space-2)',
+                  color: 'var(--color-text-muted)',
+                }}
+              >
+                <span style={{ fontSize: '1.5rem' }}>🎯</span>
+                <span style={{ fontWeight: 700, color: 'var(--color-text)' }}>
+                  Tidak ada elemen aktif
+                </span>
+                <span style={{ fontSize: 'var(--text-xs)' }}>
+                  Klik elemen Teks atau Callout pada canvas untuk mengubah font family, ukuran font, atau gaya teks.
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Token Estimator Footer */}
@@ -509,7 +681,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         imageWidth={finding.finding.image_width}
         imageHeight={finding.finding.image_height}
         summaryText={noteText}
-        markerNotes={finding.markers.map((m) => m.comment)}
+        markerNotes={markerNotes}
       />
     </div>
   );
