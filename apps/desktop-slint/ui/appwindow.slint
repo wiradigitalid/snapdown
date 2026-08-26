@@ -303,10 +303,9 @@ export component AppWindow inherits Window {
         { id: "m1", ordinal: 1, x: 0.28, y: 0.31, comment: "Marker 1" },
         { id: "m2", ordinal: 2, x: 0.36, y: 0.49, comment: "Marker 2" },
     ];
-    in-out property <[FindingThumb]> filmstrip-items: [
-        { id: "f1", time-str: "11.17", dimensions-str: "1020×885", is-selected: false, is-active: true }
-    ];
+    in-out property <[FindingThumb]> filmstrip-items: [];
 
+    callback finding-selected(string);
     callback library-clicked();
     callback capture-clicked();
     callback open-file-clicked();
@@ -1115,11 +1114,12 @@ export component AppWindow inherits Window {
                                 Image {
                                     width: 100%;
                                     height: 100%;
+                                    image-fit: cover;
                                     source: thumb.image;
                                 }
 
                                 // Active Tag Pill (Editing)
-                                Rectangle {
+                                if thumb.is-active : Rectangle {
                                     y: 36px;
                                     x: (parent.width - self.width) / 2;
                                     width: 70px;
@@ -1148,6 +1148,13 @@ export component AppWindow inherits Window {
                                         alignment: space-between;
                                         Text { text: thumb.time-str; font-size: 9px; font-family: "JetBrains Mono"; color: #475569; vertical-alignment: center; }
                                         Text { text: thumb.dimensions-str; font-size: 9px; font-family: "JetBrains Mono"; color: #64748b; vertical-alignment: center; }
+                                    }
+                                }
+
+                                // Click selection touch area
+                                TouchArea {
+                                    clicked => {
+                                        root.finding-selected(thumb.id);
                                     }
                                 }
                             }
