@@ -39,25 +39,25 @@ const SINGLE_INSTANCE_MUTEX_NAME: &str = "Snapdown-SingleInstance-id.wiradigital
 slint::include_modules!();
 
 thread_local! {
-    /// The capture overlays - one per monitor - kept alive for the life of the process so their
-    /// renderer warm-up is paid once rather than on every capture. See [`LiveOverlay`].
+    /// The capture overlay, kept alive for the life of the process so its renderer warm-up is
+    /// paid once rather than on every capture. See [`LiveOverlay`].
     ///
-    /// They need an owner that outlives the callback that created them, and they are only ever
-    /// touched from the UI thread, so they live here rather than in an `Rc` that would have to
-    /// cross the capture thread (it cannot: `invoke_from_event_loop` requires `Send`). Each
-    /// overlay's own callbacks hold only `Weak` handles, so nothing here is kept alive by a
-    /// reference cycle.
+    /// A `Vec` for one element, because the desktop layout is the reuse key and a changed layout
+    /// replaces the entry wholesale. It needs an owner that outlives the callback that created
+    /// it, and it is only ever touched from the UI thread, so it lives here rather than in an
+    /// `Rc` that would have to cross the capture thread (it cannot: `invoke_from_event_loop`
+    /// requires `Send`). Its callbacks hold only a `Weak` handle, so nothing here is kept alive
+    /// by a reference cycle.
     static LIVE_OVERLAYS: RefCell<Vec<LiveOverlay>> = const { RefCell::new(Vec::new()) };
 
-    /// Where the next overlay window should be *born*, as `(x, y, width, height)` in physical
+    /// Where the overlay window should be *born*, as `(x, y, width, height)` in physical
     /// virtual-desktop pixels.
     ///
     /// Setting geometry after the window exists is not enough. Windows creates a window at the
-    /// primary monitor's DPI; moving it onto a display with a different scale factor then fires
-    /// `WM_DPICHANGED`, which rebuilds the surface and re-derives the size - visible as a brief
-    /// "growing into place" transition on the non-primary monitor only. Feeding the position and
-    /// size into `winit`'s `WindowAttributes` instead means the window is created on its target
-    /// monitor already, so no DPI change ever happens.
+    /// primary monitor's DPI; moving it so it spans a display with a different scale factor then
+    /// fires `WM_DPICHANGED`, which rebuilds the surface and re-derives the size - seen as the
+    /// overlay growing into place. Feeding position and size into `winit`'s `WindowAttributes`
+    /// instead means the window is created covering the desktop already.
     ///
     /// Read and cleared by the window-attributes hook installed on the backend. The hook runs on
     /// the event-loop thread, which is the same thread that sets this, so a thread-local is the
@@ -305,19 +305,18 @@ fn load_findings_into_window(
     }
 }
 
-/// A capture overlay, kept alive between captures.
+/// The capture overlay, kept alive between captures.
 ///
-/// Overlays are deliberately NOT recreated per capture. A GPU renderer builds each window's
-/// surface and shader pipeline lazily, and that first frame gets presented with only the clear
-/// colour and no content - which is the whole-screen black blink. On Windows, Slint's `hide()`
-/// maps to winit's `set_visible(false)` and leaves the native window and its renderer intact (it
-/// only destroys the window on Wayland, or when `SLINT_DESTROY_WINDOW_ON_HIDE` is set), so
-/// holding on to these and re-showing them pays that warm-up once per monitor layout instead of
-/// once per capture.
+/// It is deliberately NOT recreated per capture. A GPU renderer builds a window's surface and
+/// shader pipeline lazily, and that first frame gets presented with only the clear colour and no
+/// content - the whole-screen black blink. On Windows, Slint's `hide()` maps to winit's
+/// `set_visible(false)` and leaves the native window and its renderer intact (it only destroys
+/// the window on Wayland, or when `SLINT_DESTROY_WINDOW_ON_HIDE` is set), so holding on to it and
+/// re-showing pays that warm-up once per desktop layout instead of once per capture.
 struct LiveOverlay {
     window: CaptureOverlayWindow,
     /// `(x, y, width, height)` in physical virtual-desktop pixels. Doubles as the reuse key: if
-    /// the monitor layout still matches, the existing windows are reused untouched.
+    /// the desktop layout still matches, the existing window is reused untouched.
     placement: (i32, i32, u32, u32),
 }
 
@@ -564,26 +563,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Setup Capture callback.
     //
-    // One overlay window per attached monitor, each covering exactly that monitor and showing
-    // only that monitor's own pixels. That is what confines the crosshair to a single screen and
-    // makes a region spanning two monitors impossible to draw, and it is also the only correct
-    // option on Windows: a window has exactly one DPI, so one window spanning displays at 150%
-    // and 175% renders 1:1 on neither, and crossing the boundary fires WM_DPICHANGED which
-    // re-derives its physical size and inflates it.
+    // ONE overlay window covering the whole virtual desktop, reused for every capture.
     //
-    // The windows are created once and then reused for every later capture, which is what keeps
-    // the GPU renderer's per-window warm-up from being visible - see LiveOverlay.
+    // It was one window per monitor, to give each its own DPI. That fixed the mixed-DPI
+    // rendering but bought a class of multi-window defects with it: each window had its own
+    // renderer to warm up, which showed as the overlay blinking on the first pointer move of
+    // every capture, and its own event-loop turn, so hiding them was never simultaneous and
+    // cancelling appeared to clear only one screen. Both are structural to having N windows, and
+    // several attempts to paper over them failed - see BUG-27.
+    //
+    // A single window costs nothing in quality: for a per-monitor-DPI-aware process a window's
+    // surface maps 1:1 onto desktop pixels, so a canvas at native physical resolution drawn
+    // full-bleed into a window sized in physical pixels is pixel-exact on every monitor whatever
+    // their scale factors. Confining the crosshair to one screen, and refusing a region that
+    // spans two, are done in the overlay from the monitor rectangles instead of by geometry.
     let window_weak = main_window.as_weak();
     let ctx_capture = ctx.clone();
     main_window.on_capture_clicked(move || {
-        // The monitor grab is a blocking syscall; run it off the UI thread so the window does
-        // not freeze while it runs, then hop back onto the event loop to build the overlays.
+        // The grab is a blocking syscall; run it off the UI thread so the window does not freeze
+        // while it runs, then hop back onto the event loop to present the overlay.
         let main_weak = window_weak.clone();
         let ctx_inner = ctx_capture.clone();
         std::thread::spawn(move || {
-            let capture_result = RegionCapturer::capture_each_monitor();
+            let capture_result = RegionCapturer::capture_virtual_desktop();
             if let Err(e) = slint::invoke_from_event_loop(move || {
-                let captures = match capture_result {
+                let captured = match capture_result {
                     Ok(c) => c,
                     Err(e) => {
                         eprintln!("Capture failed: {e}");
@@ -591,208 +595,231 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 };
 
-                // Take the overlays out while they are being reconfigured, so nothing else can
-                // borrow the thread-local mid-flight. They go back at the end.
+                let placement = (
+                    captured.origin_x,
+                    captured.origin_y,
+                    captured.width,
+                    captured.height,
+                );
+
                 let mut live: Vec<LiveOverlay> = LIVE_OVERLAYS.with_borrow_mut(std::mem::take);
 
-                let wanted: Vec<(i32, i32, u32, u32)> = captures
-                    .iter()
-                    .map(|c| (c.origin_x, c.origin_y, c.width, c.height))
-                    .collect();
-
-                // Reuse only while the monitor layout is unchanged. If a display was added,
-                // removed, moved or re-scaled, the old windows are the wrong shape and the set is
-                // rebuilt - the warm-up cost is paid again, which is correct: it is a new layout.
-                let layout_unchanged = live.len() == wanted.len()
-                    && live.iter().zip(&wanted).all(|(l, w)| l.placement == *w);
+                // Reuse only while the desktop still has the same shape. A display added,
+                // removed, moved or re-scaled makes the existing window the wrong size, and it is
+                // rebuilt - paying the warm-up again, which is correct for a new layout.
+                let layout_unchanged = live.len() == 1 && live[0].placement == placement;
 
                 if !layout_unchanged {
-                    // Drop the stale windows before creating replacements, so a monitor's overlay
-                    // is never briefly duplicated.
                     live.clear();
-                    for placement in &wanted {
-                        // Publish the placement so the attributes hook can create this window
-                        // directly on its target monitor, at that monitor's DPI.
-                        NEXT_OVERLAY_PLACEMENT.with_borrow_mut(|slot| *slot = Some(*placement));
-                        let overlay = match CaptureOverlayWindow::new() {
-                            Ok(ov) => ov,
-                            Err(e) => {
-                                eprintln!("Failed to create CaptureOverlayWindow: {e}");
-                                continue;
-                            }
-                        };
-                        live.push(LiveOverlay {
-                            window: overlay,
-                            placement: *placement,
-                        });
+                    // Publish the placement so the attributes hook can create the window already
+                    // covering the whole desktop, rather than having it created on the primary
+                    // monitor and then moved - moving across a DPI boundary fires WM_DPICHANGED,
+                    // which rebuilds the surface and re-derives the size.
+                    match CaptureOverlayWindow::new() {
+                        Ok(window) => live.push(LiveOverlay { window, placement }),
+                        Err(e) => eprintln!("Failed to create CaptureOverlayWindow: {e}"),
                     }
-                    NEXT_OVERLAY_PLACEMENT.with_borrow_mut(|slot| *slot = None);
                 }
 
-                if live.is_empty() {
-                    eprintln!("Capture aborted: no overlay window could be created.");
+                let Some(entry) = live.first() else {
+                    eprintln!("Capture aborted: the overlay window could not be created.");
                     return;
-                }
+                };
+                let overlay = &entry.window;
 
-                // Weak handles only, so the callbacks that close every overlay do not keep any
-                // overlay alive.
-                let siblings: Rc<Vec<slint::Weak<CaptureOverlayWindow>>> =
-                    Rc::new(live.iter().map(|l| l.window.as_weak()).collect());
+                // A reused overlay still carries the previous capture's state.
+                overlay.set_has_selection(false);
+                overlay.set_is_narrating(false);
+                overlay.set_is_dragging(false);
+                overlay.set_note_text(slint::SharedString::new());
 
-                for (self_index, (entry, capture)) in live.iter().zip(captures).enumerate() {
-                    let overlay = &entry.window;
-                    let monitor_name = capture.name;
-                    let monitor_image = Rc::new(capture.image);
+                let monitor_rects: Vec<MonitorRectData> = captured
+                    .monitors
+                    .iter()
+                    .map(|m| MonitorRectData {
+                        x: m.x as f32,
+                        y: m.y as f32,
+                        width: m.width as f32,
+                        height: m.height as f32,
+                    })
+                    .collect();
+                overlay.set_monitors(ModelRc::from(Rc::new(VecModel::from(monitor_rects))));
 
-                    // A reused overlay still carries the previous capture's state, so reset it
-                    // before it is shown again.
-                    overlay.set_interactive(true);
-                    overlay.set_has_selection(false);
-                    overlay.set_is_narrating(false);
-                    overlay.set_is_dragging(false);
-                    overlay.set_note_text(slint::SharedString::new());
-                    overlay.set_snapshot_image(slint::Image::from_rgba8(SharedPixelBuffer::<
-                        slint::Rgba8Pixel,
-                    >::clone_from_slice(
-                        monitor_image.as_raw(),
-                        capture.width,
-                        capture.height,
-                    )));
+                overlay.set_snapshot_image(slint::Image::from_rgba8(SharedPixelBuffer::<
+                    slint::Rgba8Pixel,
+                >::clone_from_slice(
+                    captured.image.as_raw(),
+                    captured.width,
+                    captured.height,
+                )));
 
-                    // Belt-and-braces geometry for the case where the attributes hook did not
-                    // apply. The size MUST be given in LOGICAL pixels derived from this monitor's
-                    // own scale factor: set_size(Physical) divides by the window's *current*
-                    // scale factor, which is 1.0 before the window exists, so physical numbers
-                    // would be stored as logical ones and then multiplied by the real scale
-                    // factor - the original "everything is zoomed and grows into place" bug.
+                // Geometry is deliberately NOT set here.
+                //
+                // A newly created window was already born with the right physical position and
+                // size by the attributes hook, and a reused one still has them - `placement` is
+                // the reuse key, so a match means nothing moved. Setting it again can only do
+                // harm, and did: this used to derive a logical size from
+                // `window().scale_factor()`, which returns 1.0 before the window has ever been
+                // realised. On the FIRST capture that produced a 6000x3840 *logical* request,
+                // which the real 1.5 scale factor then turned into a 9000x5760 window - the
+                // overlay came up zoomed on the first capture of every session and was correct
+                // from the second onwards, because by then the window existed and reported its
+                // true scale factor.
+                //
+                // There is no safe way to size this before the window exists other than the hook:
+                // set_size(Physical) also divides by that same not-yet-known scale factor.
+                #[cfg(not(windows))]
+                {
+                    // No attributes hook off Windows, so fall back - correct only because the
+                    // window has been realised by an earlier capture, or is about to be sized by
+                    // the platform anyway.
+                    let scale = overlay.window().scale_factor().max(0.01);
                     overlay
                         .window()
                         .set_position(slint::WindowPosition::Physical(
-                            slint::PhysicalPosition::new(capture.origin_x, capture.origin_y),
+                            slint::PhysicalPosition::new(captured.origin_x, captured.origin_y),
                         ));
                     overlay
                         .window()
                         .set_size(slint::WindowSize::Logical(slint::LogicalSize::new(
-                            capture.width as f32 / capture.scale_factor,
-                            capture.height as f32 / capture.scale_factor,
+                            captured.width as f32 / scale,
+                            captured.height as f32 / scale,
                         )));
-
-                    // Callbacks are reinstalled every capture: a reused overlay's old handlers
-                    // still close over the PREVIOUS capture's image, which would crop this
-                    // capture's region out of a stale screenshot. Setting a handler replaces it.
-                    let close_all = {
-                        let siblings = siblings.clone();
-                        move || {
-                            // Take every overlay off the screen in this one pass, before any
-                            // Slint-level bookkeeping.
-                            //
-                            // `hide()` alone is not enough: Slint applies it per window on that
-                            // window's own event-loop turn, so the overlay that did not have
-                            // focus stayed on screen for a visible beat after the focused one
-                            // vanished - cancelling looked like it only closed one monitor. Going
-                            // straight to winit's set_visible(false) hides them all now, in one
-                            // turn, and the hide() below then keeps Slint's own state in step.
-                            #[cfg(windows)]
-                            {
-                                use i_slint_backend_winit::WinitWindowAccessor;
-                                for sibling in siblings.iter() {
-                                    if let Some(sibling) = sibling.upgrade() {
-                                        sibling.window().with_winit_window(|winit_win| {
-                                            winit_win.set_visible(false)
-                                        });
-                                    }
-                                }
-                            }
-                            for sibling in siblings.iter() {
-                                if let Some(sibling) = sibling.upgrade() {
-                                    if let Err(e) = sibling.hide() {
-                                        eprintln!("Failed to hide a capture overlay: {e}");
-                                    }
-                                }
-                            }
-                        }
-                    };
-
-                    // Selecting on one monitor stands the others down, so only one screen can be
-                    // mid-selection while its note popup is open.
-                    overlay.on_narration_started({
-                        let siblings = siblings.clone();
-                        move || {
-                            for (index, sibling) in siblings.iter().enumerate() {
-                                if index == self_index {
-                                    continue;
-                                }
-                                if let Some(sibling) = sibling.upgrade() {
-                                    sibling.set_interactive(false);
-                                }
-                            }
-                        }
-                    });
-
-                    overlay.on_capture_completed({
-                        let ctx_inner = ctx_inner.clone();
-                        let main_weak = main_weak.clone();
-                        let monitor_image = monitor_image.clone();
-                        let close_all = close_all.clone();
-                        move |x, y, sel_w, sel_h, note| {
-                            let region = (
-                                x.max(0) as u32,
-                                y.max(0) as u32,
-                                sel_w.max(0) as u32,
-                                sel_h.max(0) as u32,
-                            );
-                            let finding_id = persist_finding(
-                                &ctx_inner,
-                                &monitor_image,
-                                region,
-                                &monitor_name,
-                                note.as_str(),
-                            );
-                            close_all();
-                            if let Some(main) = main_weak.upgrade() {
-                                load_findings_into_window(&main, &ctx_inner, finding_id.as_deref());
-                                if let Err(e) = main.show() {
-                                    eprintln!("Failed to reshow the main window: {e}");
-                                }
-                            }
-                        }
-                    });
-
-                    overlay.on_overlay_cancelled({
-                        let main_weak = main_weak.clone();
-                        move || {
-                            close_all();
-                            if let Some(main) = main_weak.upgrade() {
-                                if let Err(e) = main.show() {
-                                    eprintln!("Failed to reshow the main window: {e}");
-                                }
-                            }
-                        }
-                    });
                 }
 
-                // Show them in one tight pass, after every one is fully configured.
-                for entry in &live {
-                    if let Err(e) = entry.window.show() {
-                        eprintln!("Failed to show a capture overlay: {e}");
+                // Handlers are reinstalled every capture: a reused overlay's old handlers close
+                // over the PREVIOUS canvas, so a region would be cropped out of a stale
+                // screenshot. Setting a handler replaces it.
+                let canvas = Rc::new(captured.image);
+                let monitors = Rc::new(captured.monitors);
+                let overlay_weak = overlay.as_weak();
+
+                let close_overlay = {
+                    let overlay_weak = overlay_weak.clone();
+                    let main_weak = main_weak.clone();
+                    move || {
+                        if let Some(overlay) = overlay_weak.upgrade() {
+                            if let Err(e) = overlay.hide() {
+                                eprintln!("Failed to hide the capture overlay: {e}");
+                            }
+                        }
+                        if let Some(main) = main_weak.upgrade() {
+                            if let Err(e) = main.show() {
+                                eprintln!("Failed to reshow the main window: {e}");
+                            }
+                        }
                     }
-                }
+                };
 
-                // The first overlay takes keyboard focus, so Escape works without a click first.
+                overlay.on_capture_completed({
+                    let ctx_inner = ctx_inner.clone();
+                    let main_weak = main_weak.clone();
+                    let canvas = canvas.clone();
+                    let monitors = monitors.clone();
+                    let close_overlay = close_overlay.clone();
+                    // x/y/w/h arrive in CANVAS pixels, not logical ones, so they index the
+                    // snapshot directly.
+                    move |x, y, sel_w, sel_h, note| {
+                        let region = (
+                            x.max(0) as u32,
+                            y.max(0) as u32,
+                            sel_w.max(0) as u32,
+                            sel_h.max(0) as u32,
+                        );
+                        // Attribute the Finding to whichever monitor contains the region's
+                        // top-left, so a capture can still be traced to its screen.
+                        let monitor_name = monitors
+                            .iter()
+                            .find(|m| {
+                                let (mx, my) = (m.x as i64, m.y as i64);
+                                let (rx, ry) = (region.0 as i64, region.1 as i64);
+                                rx >= mx
+                                    && rx < mx + m.width as i64
+                                    && ry >= my
+                                    && ry < my + m.height as i64
+                            })
+                            .map(|m| m.name.clone())
+                            .unwrap_or_else(|| "UNKNOWN".to_string());
+
+                        let finding_id = persist_finding(
+                            &ctx_inner,
+                            &canvas,
+                            region,
+                            &monitor_name,
+                            note.as_str(),
+                        );
+                        close_overlay();
+                        if let Some(main) = main_weak.upgrade() {
+                            load_findings_into_window(&main, &ctx_inner, finding_id.as_deref());
+                        }
+                    }
+                });
+
+                overlay.on_overlay_cancelled({
+                    let close_overlay = close_overlay.clone();
+                    move || close_overlay()
+                });
+
+                // Publish the placement immediately before show(), because show() is when the
+                // native window is actually created and therefore when the attributes hook runs.
+                //
+                // This used to be set around CaptureOverlayWindow::new() and cleared again right
+                // after - so by the time the hook ran there was nothing left to read, the window
+                // was created at a default size, and the overlay came up badly zoomed on every
+                // capture. A `set_size` derived from window().scale_factor() had been masking
+                // that, which is why removing the mask made it worse rather than better.
+                //
+                // On a reused window the hook does not run at all (there is nothing to create),
+                // and nothing needs it to: the geometry already matches, since `placement` is the
+                // reuse key.
+                #[cfg(windows)]
+                NEXT_OVERLAY_PLACEMENT.with_borrow_mut(|slot| *slot = Some(placement));
+                if let Err(e) = overlay.show() {
+                    eprintln!("Failed to show the capture overlay: {e}");
+                }
+                // Native window creation is DEFERRED to the event loop: when show() returns,
+                // the winit window does not exist yet. Measured - with_winit_window() returns
+                // None here, and window().scale_factor() still reports 1.0.
+                //
+                // That single fact is behind every geometry bug this overlay has had. It is why
+                // the attributes hook never took effect (the placement had already been cleared
+                // by the time the loop got round to creating the window), why sizing from
+                // scale_factor() inflated the first capture by exactly the scale factor, and why
+                // the second capture onwards looked fine - by then the window existed.
+                //
+                // So the placement is left in place for the hook to find when the loop does
+                // create the window, and is only cleared on the next turn. That same turn
+                // re-asserts the geometry through winit in device pixels, which needs no scale
+                // factor and so cannot be wrong: belt and braces for the case where the hook did
+                // not fire. Without a correct size the window would otherwise be sized from the
+                // snapshot's intrinsic pixel size treated as LOGICAL - a 6000x3840 canvas asking
+                // for a 9000x5760 window at 150%.
                 #[cfg(windows)]
                 {
-                    use i_slint_backend_winit::WinitWindowAccessor;
-                    if let Some(entry) = live.first() {
-                        entry
-                            .window
-                            .window()
-                            .with_winit_window(|winit_win| winit_win.focus_window());
-                    }
+                    let overlay_weak = overlay.as_weak();
+                    let (x, y, w, h) = placement;
+                    slint::Timer::single_shot(std::time::Duration::from_millis(0), move || {
+                        NEXT_OVERLAY_PLACEMENT.with_borrow_mut(|slot| *slot = None);
+                        let Some(overlay) = overlay_weak.upgrade() else {
+                            return;
+                        };
+                        use i_slint_backend_winit::winit::dpi::{PhysicalPosition, PhysicalSize};
+                        use i_slint_backend_winit::WinitWindowAccessor;
+                        let applied = overlay.window().with_winit_window(|winit_win| {
+                            winit_win.set_outer_position(PhysicalPosition::new(x, y));
+                            let _ = winit_win.request_inner_size(PhysicalSize::new(w, h));
+                            // Keyboard focus too, so Escape works without a click first.
+                            winit_win.focus_window();
+                        });
+                        if applied.is_none() {
+                            eprintln!("Capture overlay still has no winit window; geometry unset.");
+                        }
+                    });
                 }
 
                 LIVE_OVERLAYS.with_borrow_mut(|slot| *slot = live);
             }) {
-                eprintln!("Failed to dispatch the capture overlays to the UI thread: {e}");
+                eprintln!("Failed to dispatch the capture overlay to the UI thread: {e}");
             }
         });
     });

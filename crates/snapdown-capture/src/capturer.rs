@@ -28,6 +28,35 @@ pub struct MonitorCapture {
     pub name: String,
 }
 
+/// Where one monitor sits inside a [`VirtualDesktopCapture`], in that capture's own physical
+/// pixel space (its top-left is the virtual desktop's top-left, so these are never negative).
+///
+/// The overlay uses these to confine the crosshair to the monitor under the pointer and to clamp
+/// a selection to that monitor, which is what keeps a single window from producing a region that
+/// spans two screens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MonitorRect {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    /// The OS display name, recorded on the Finding so a capture can be traced to its screen.
+    pub name: String,
+}
+
+/// The whole virtual desktop as one image, plus the monitors it spans.
+pub struct VirtualDesktopCapture {
+    /// Stitched at native physical resolution - no downscaling, so crops are full quality.
+    pub image: RgbaImage,
+    pub width: u32,
+    pub height: u32,
+    /// Top-left of the virtual desktop in virtual-desktop coordinates. Negative when a monitor
+    /// sits left of, or above, the primary one.
+    pub origin_x: i32,
+    pub origin_y: i32,
+    pub monitors: Vec<MonitorRect>,
+}
+
 pub struct RegionCapturer;
 
 impl RegionCapturer {
@@ -84,6 +113,69 @@ impl RegionCapturer {
         captures.sort_by_key(|c| (c.origin_x, c.origin_y));
 
         Ok(captures)
+    }
+
+    /// Captures the whole virtual desktop as ONE image at native physical resolution, together
+    /// with where each monitor sits inside it.
+    ///
+    /// This exists so the capture overlay can be a single window. Per-monitor overlay windows
+    /// solved the mixed-DPI problem but bought a class of multi-window defects with it - each
+    /// window has its own renderer to warm up (a visible blink) and its own event-loop turn (so
+    /// closing them was not simultaneous).
+    ///
+    /// One window does not have to cost image quality. A window's surface maps 1:1 onto desktop
+    /// pixels for a per-monitor-DPI-aware process, so a canvas at native physical resolution,
+    /// drawn full-bleed into a window sized in physical pixels, is pixel-exact on every monitor
+    /// regardless of their differing scale factors. The earlier attempt looked zoomed because the
+    /// window was sized wrongly (physical numbers stored as logical, then multiplied by the scale
+    /// factor), not because one window cannot represent two DPIs.
+    ///
+    /// Cropping comes straight out of this canvas, so saved output is full quality too.
+    pub fn capture_virtual_desktop() -> Result<VirtualDesktopCapture, CaptureError> {
+        let captures = Self::capture_each_monitor()?;
+
+        let min_x = captures.iter().map(|c| c.origin_x).min().unwrap_or(0);
+        let min_y = captures.iter().map(|c| c.origin_y).min().unwrap_or(0);
+        let max_x = captures
+            .iter()
+            .map(|c| c.origin_x + c.width as i32)
+            .max()
+            .unwrap_or(0);
+        let max_y = captures
+            .iter()
+            .map(|c| c.origin_y + c.height as i32)
+            .max()
+            .unwrap_or(0);
+
+        let total_w = (max_x - min_x).max(1) as u32;
+        let total_h = (max_y - min_y).max(1) as u32;
+
+        let mut canvas = RgbaImage::new(total_w, total_h);
+        let mut monitors = Vec::with_capacity(captures.len());
+
+        for capture in &captures {
+            // Window-local: the overlay's top-left is the virtual desktop's top-left, so a
+            // monitor's offset inside the canvas is its virtual-desktop origin minus that.
+            let local_x = capture.origin_x - min_x;
+            let local_y = capture.origin_y - min_y;
+            image::imageops::overlay(&mut canvas, &capture.image, local_x as i64, local_y as i64);
+            monitors.push(MonitorRect {
+                x: local_x,
+                y: local_y,
+                width: capture.width,
+                height: capture.height,
+                name: capture.name.clone(),
+            });
+        }
+
+        Ok(VirtualDesktopCapture {
+            image: canvas,
+            width: total_w,
+            height: total_h,
+            origin_x: min_x,
+            origin_y: min_y,
+            monitors,
+        })
     }
 
     /// Grabs one monitor, tagging it with its placement, scale factor and display name.

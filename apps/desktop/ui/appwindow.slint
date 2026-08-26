@@ -31,11 +31,29 @@ export struct FindingThumb {
     image: image,
 }
 
-// One overlay window covers exactly one monitor, and one is opened per attached monitor. That
-// is what keeps the crosshair on a single screen and makes a selection spanning two monitors
-// impossible by construction, and it is also required for correctness: a Win32 window has one
-// DPI, so a single window spanning displays at different scale factors (150% and 175%, say) can
-// render 1:1 on neither. See MonitorCapture in crates/snapdown-capture.
+// One monitor's bounds inside the overlay, in the snapshot's own physical pixel space.
+export struct MonitorRectData {
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+}
+
+// ONE overlay window covering the whole virtual desktop.
+//
+// It used to be one window per monitor, to give each its own DPI. That solved the mixed-DPI
+// rendering but bought a class of multi-window defects: each window has its own renderer to warm
+// up (a visible blink on the first pointer move of every capture) and its own event-loop turn, so
+// closing them was never simultaneous - cancelling appeared to clear only one screen.
+//
+// A single window costs nothing in quality. For a per-monitor-DPI-aware process a window's
+// surface maps 1:1 onto desktop pixels, so a snapshot at native physical resolution drawn
+// full-bleed into a window sized in physical pixels is pixel-exact on every monitor, whatever
+// their scale factors. The earlier single-window attempt looked zoomed because the window was
+// sized wrongly, not because one window cannot span two DPIs.
+//
+// What the monitor list is still needed for: confining the crosshair to the screen under the
+// pointer, and clamping a selection to that screen so a region can never span two monitors.
 export component CaptureOverlayWindow inherits Window {
     title: "Snapdown Capture Overlay";
     no-frame: true;
@@ -62,28 +80,72 @@ export component CaptureOverlayWindow inherits Window {
     in-out property <string> note-text: "";
     in-out property <bool> is-narrating: false;
 
-    // Cleared on every other overlay once one of them starts asking for a note, so that only one
-    // monitor at a time can be mid-selection. Without it a second overlay would happily begin a
-    // fresh drag while the first still has an unanswered note popup open.
-    in-out property <bool> interactive: true;
+    // Each monitor's bounds inside the snapshot, in snapshot (physical) pixels.
+    in-out property <[MonitorRectData]> monitors: [];
 
     // Below this drag distance, a press+release is a click, not a region selection.
     property <length> click-threshold: 4px;
 
-    // Source (screenshot) pixels per logical pixel. The snapshot is this monitor's physical
-    // resolution while the window is measured in logical pixels, so this is the monitor's own
-    // DPI scale factor - derived here rather than passed in, so it cannot fall out of step.
+    // Snapshot pixels per logical pixel. The snapshot is the desktop's physical resolution while
+    // the window is measured in logical pixels, so this is the window's scale factor - derived
+    // here rather than passed in, so it cannot fall out of step with the actual geometry.
     property <float> source-scale: (root.width > 0px && root.snapshot-image.width > 0)
         ? root.snapshot-image.width / (root.width / 1px)
         : 1.0;
+
+    // The pointer, in snapshot pixels - the space the monitor rectangles are expressed in.
+    property <float> pointer-src-x: root.mouse-x / 1px * root.source-scale;
+    property <float> pointer-src-y: root.mouse-y / 1px * root.source-scale;
+
+    // Which monitor the pointer is over. Slint's `for` is an element repeater, not a statement
+    // usable inside a function, so the (realistically 1-4 entry) list is probed by index.
+    // Falls back to the whole desktop, so the crosshair is never left invisible.
+    function monitor-holds-pointer(m: MonitorRectData) -> bool {
+        return root.pointer-src-x >= m.x && root.pointer-src-x < m.x + m.width
+            && root.pointer-src-y >= m.y && root.pointer-src-y < m.y + m.height;
+    }
+
+    function active-monitor() -> MonitorRectData {
+        if (root.monitors.length > 0 && monitor-holds-pointer(root.monitors[0])) {
+            return root.monitors[0];
+        }
+        if (root.monitors.length > 1 && monitor-holds-pointer(root.monitors[1])) {
+            return root.monitors[1];
+        }
+        if (root.monitors.length > 2 && monitor-holds-pointer(root.monitors[2])) {
+            return root.monitors[2];
+        }
+        if (root.monitors.length > 3 && monitor-holds-pointer(root.monitors[3])) {
+            return root.monitors[3];
+        }
+        return {
+            x: 0,
+            y: 0,
+            width: root.snapshot-image.width,
+            height: root.snapshot-image.height,
+        };
+    }
+
+    // The active monitor's bounds converted to this window's logical pixels, for laying elements
+    // out against. Held in a property so a drag keeps clamping to the monitor it STARTED on, even
+    // if the pointer wanders onto the neighbouring screen mid-drag.
+    property <MonitorRectData> drag-monitor;
+    property <length> clamp-x: (root.is-dragging ? root.drag-monitor.x : root.active-monitor().x)
+        / root.source-scale * 1px;
+    property <length> clamp-y: (root.is-dragging ? root.drag-monitor.y : root.active-monitor().y)
+        / root.source-scale * 1px;
+    property <length> clamp-w: (root.is-dragging ? root.drag-monitor.width : root.active-monitor().width)
+        / root.source-scale * 1px;
+    property <length> clamp-h: (root.is-dragging ? root.drag-monitor.height : root.active-monitor().height)
+        / root.source-scale * 1px;
     // Side of the source square the magnifier shows. Scaled by source-scale so the loupe reads
     // as the same 3x magnification on every monitor regardless of its DPI.
     property <float> loupe-source-size: 32 * root.source-scale;
 
+    // Selection is reported in SNAPSHOT pixels, not logical ones, so the caller can crop the
+    // canvas directly without needing to know this window's scale factor.
     callback capture-completed(int, int, int, int, string);
     callback overlay-cancelled();
-    // Fired when this overlay opens its note popup, so the app can stand the others down.
-    callback narration-started();
 
     key-handler := FocusScope {
         width: 100%;
@@ -186,10 +248,10 @@ export component CaptureOverlayWindow inherits Window {
                         placeholder-text: "Type finding note...";
                         accepted => {
                             root.capture-completed(
-                                sel-x / 1px,
-                                sel-y / 1px,
-                                sel-w / 1px,
-                                sel-h / 1px,
+                                round(sel-x / 1px * root.source-scale),
+                                round(sel-y / 1px * root.source-scale),
+                                round(sel-w / 1px * root.source-scale),
+                                round(sel-h / 1px * root.source-scale),
                                 root.note-text
                             );
                         }
@@ -207,10 +269,10 @@ export component CaptureOverlayWindow inherits Window {
                             primary: true;
                             clicked => {
                                 root.capture-completed(
-                                    sel-x / 1px,
-                                    sel-y / 1px,
-                                    sel-w / 1px,
-                                    sel-h / 1px,
+                                    round(sel-x / 1px * root.source-scale),
+                                    round(sel-y / 1px * root.source-scale),
+                                    round(sel-w / 1px * root.source-scale),
+                                    round(sel-h / 1px * root.source-scale),
                                     root.note-text
                                 );
                             }
@@ -220,29 +282,27 @@ export component CaptureOverlayWindow inherits Window {
             }
         }
 
-        // The crosshair spans this window, and this window is exactly one monitor - so it is
-        // confined to the screen the pointer is on with no coordinate arithmetic at all. It also
-        // only shows while the pointer is actually inside this overlay, so the idle monitor is
-        // left clean rather than drawing a stale crosshair at the last known position.
+        // The crosshair, confined to the monitor the pointer is over rather than running the full
+        // width and height of the desktop - which is the behaviour the owner asked for, and what
+        // Snagit does.
         //
         // Gated with `visible`, deliberately NOT with `if`. An `if` creates and destroys the
-        // element subtree, so every time the pointer entered or left a monitor this whole group
-        // was rebuilt - and the first paint of a freshly built subtree presented one frame with
-        // the window's clear colour and no image, which is the black blink. `visible` keeps the
-        // elements alive and merely stops drawing them.
+        // element subtree, and the first paint of a freshly built subtree presented one frame
+        // with the window's clear colour and no image, which read as a black blink. `visible`
+        // keeps the elements alive and merely stops drawing them.
         Rectangle {
-            visible: !root.is-narrating && root.interactive && hover-tracker.has-hover;
+            visible: !root.is-narrating && hover-tracker.has-hover;
             Rectangle {
                 x: mouse-x - 0.5px;
-                y: 0px;
+                y: root.clamp-y;
                 width: 1px;
-                height: 100%;
+                height: root.clamp-h;
                 background: Theme.accent-primary.with-alpha(0.8);
             }
             Rectangle {
-                x: 0px;
+                x: root.clamp-x;
                 y: mouse-y - 0.5px;
-                width: 100%;
+                width: root.clamp-w;
                 height: 1px;
                 background: Theme.accent-primary.with-alpha(0.8);
             }
@@ -299,17 +359,20 @@ export component CaptureOverlayWindow inherits Window {
         hover-tracker := TouchArea {
             width: 100%;
             height: 100%;
-            // Once a selection is being narrated, this catch-all must get out of the way: it
+            // Once a selection is being narrated this catch-all must get out of the way: it
             // otherwise sits on top of the note popup in z-order and swallows every click meant
-            // for the note field or the Save Finding button. `interactive` does the same for the
-            // overlays on the *other* monitors while this one is narrating.
-            enabled: !root.is-narrating && root.interactive;
+            // for the note field or the Save Finding button.
+            enabled: !root.is-narrating;
 
             pointer-event(event) => {
                 root.mouse-x = self.mouse-x;
                 root.mouse-y = self.mouse-y;
 
                 if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                    // Pin the monitor the drag starts on. Every later clamp uses this one, so
+                    // dragging onto the neighbouring screen cannot extend the region there - a
+                    // capture combining two monitors is not allowed.
+                    root.drag-monitor = root.active-monitor();
                     root.is-dragging = true;
                     root.drag-start-x = self.mouse-x;
                     root.drag-start-y = self.mouse-y;
@@ -320,13 +383,6 @@ export component CaptureOverlayWindow inherits Window {
                 }
                 if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) {
                     root.is-dragging = false;
-                    // Clamp to this overlay, i.e. to this one monitor. A drag released past the
-                    // edge (Windows keeps delivering moves to the window that took the press)
-                    // must not produce a region reaching onto the neighbouring screen.
-                    root.sel-x = clamp(min(root.drag-start-x, root.drag-current-x), 0px, root.width);
-                    root.sel-y = clamp(min(root.drag-start-y, root.drag-current-y), 0px, root.height);
-                    root.sel-w = clamp(abs(root.drag-current-x - root.drag-start-x), 0px, root.width - root.sel-x);
-                    root.sel-h = clamp(abs(root.drag-current-y - root.drag-start-y), 0px, root.height - root.sel-y);
                     // A plain click - no meaningful drag distance - is not a region selection.
                     if (root.sel-w < root.click-threshold || root.sel-h < root.click-threshold) {
                         root.has-selection = false;
@@ -334,7 +390,6 @@ export component CaptureOverlayWindow inherits Window {
                     } else {
                         root.has-selection = true;
                         root.is-narrating = true;
-                        root.narration-started();
                     }
                 }
                 if (event.kind == PointerEventKind.cancel) {
@@ -344,8 +399,10 @@ export component CaptureOverlayWindow inherits Window {
 
             moved => {
                 if (root.is-dragging) {
-                    root.drag-current-x = clamp(self.mouse-x, 0px, root.width);
-                    root.drag-current-y = clamp(self.mouse-y, 0px, root.height);
+                    // Clamped to the monitor the drag started on, in that monitor's own logical
+                    // bounds.
+                    root.drag-current-x = clamp(self.mouse-x, root.clamp-x, root.clamp-x + root.clamp-w);
+                    root.drag-current-y = clamp(self.mouse-y, root.clamp-y, root.clamp-y + root.clamp-h);
                     root.sel-x = min(root.drag-start-x, root.drag-current-x);
                     root.sel-y = min(root.drag-start-y, root.drag-current-y);
                     root.sel-w = abs(root.drag-current-x - root.drag-start-x);
