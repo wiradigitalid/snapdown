@@ -386,9 +386,9 @@ export component AppWindow inherits Window {
                 }
             }
 
-            // TOOLBAR & RIBBON ACTION STRIP (Matching Unified Slate-Grey Header & Panels)
+            // TOOLBAR & RIBBON ACTION STRIP (Compact & Dense Professional Studio Layout)
             Rectangle {
-                height: 56px;
+                height: 44px;
                 background: #f1f5f9; // Matching Titlebar Slate-Grey
 
                 // Bottom Border Line
@@ -400,140 +400,146 @@ export component AppWindow inherits Window {
                 }
 
                 HorizontalLayout {
-                    padding-left: 14px;
-                    padding-right: 14px;
-                    spacing: 12px;
-                    alignment: space-between;
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    spacing: 8px;
+                    alignment: start;
 
-                    // Left: Input Buttons (🔴 📂 📥)
+                    // Group 1: Source & Input Controls (🔴 📂 📥)
                     HorizontalLayout {
-                        spacing: 8px;
+                        spacing: 4px;
                         alignment: start;
                         Rectangle {
-                            width: 38px; height: 38px; border-radius: 6px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
-                            Text { text: "🔴"; font-size: 15px; horizontal-alignment: center; vertical-alignment: center; }
+                            width: 32px; height: 32px; border-radius: 5px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
+                            Text { text: "🔴"; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
                             TouchArea { clicked => { root.capture-clicked(); } }
                         }
                         Rectangle {
-                            width: 38px; height: 38px; border-radius: 6px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
-                            Text { text: "📂"; font-size: 15px; horizontal-alignment: center; vertical-alignment: center; }
+                            width: 32px; height: 32px; border-radius: 5px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
+                            Text { text: "📂"; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
                             TouchArea { clicked => { root.open-file-clicked(); } }
                         }
                         Rectangle {
-                            width: 38px; height: 38px; border-radius: 6px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
-                            Text { text: "📥"; font-size: 15px; horizontal-alignment: center; vertical-alignment: center; }
+                            width: 32px; height: 32px; border-radius: 5px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
+                            Text { text: "📥"; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
                             TouchArea { clicked => { root.paste-clicked(); } }
                         }
                     }
 
-                    // Center: Annotation Palette Strip (🔴 ▢ 💬 ░ ↗ T ✂ ↶ ↷)
+                    // Vertical Divider
+                    Rectangle { width: 1px; height: 20px; background: #cbd5e1; y: 6px; }
+
+                    // Group 2: Annotation Palette Strip (🔴 ▢ 💬 ░ ↗ T ✂ ↶ ↷)
                     Rectangle {
-                        height: 42px;
-                        background: #e2e8f0; // Subtle contrast inside slate toolbar
-                        border-radius: 8px;
+                        height: 34px;
+                        background: #e2e8f0;
+                        border-radius: 6px;
                         border-width: 1px;
                         border-color: #cbd5e1;
 
                         HorizontalLayout {
-                            padding-left: 6px;
-                            padding-right: 6px;
-                            spacing: 4px;
+                            padding-left: 4px;
+                            padding-right: 4px;
+                            spacing: 2px;
                             alignment: center;
 
                             // Tool 0: Marker (🔴)
                             Rectangle {
-                                width: 34px; height: 34px; border-radius: 6px;
+                                width: 28px; height: 28px; border-radius: 4px;
                                 background: root.active-tool-index == 0 ? #2563eb : transparent;
-                                Text { text: "🔴"; font-size: 14px; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: "🔴"; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
                                 TouchArea { clicked => { root.active-tool-index = 0; } }
                             }
                             // Tool 1: Shape (▢)
                             Rectangle {
-                                width: 34px; height: 34px; border-radius: 6px;
+                                width: 28px; height: 28px; border-radius: 4px;
                                 background: root.active-tool-index == 1 ? #2563eb : transparent;
-                                Text { text: "▢"; font-size: 16px; font-weight: 700; color: root.active-tool-index == 1 ? #ffffff : #334155; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: "▢"; font-size: 14px; font-weight: 700; color: root.active-tool-index == 1 ? #ffffff : #334155; horizontal-alignment: center; vertical-alignment: center; }
                                 TouchArea { clicked => { root.active-tool-index = 1; } }
                             }
                             // Tool 2: Callout (💬)
                             Rectangle {
-                                width: 34px; height: 34px; border-radius: 6px;
+                                width: 28px; height: 28px; border-radius: 4px;
                                 background: root.active-tool-index == 2 ? #2563eb : transparent;
-                                Text { text: "💬"; font-size: 14px; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: "💬"; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
                                 TouchArea { clicked => { root.active-tool-index = 2; } }
                             }
                             // Tool 3: Blur (░)
                             Rectangle {
-                                width: 34px; height: 34px; border-radius: 6px;
+                                width: 28px; height: 28px; border-radius: 4px;
                                 background: root.active-tool-index == 3 ? #2563eb : transparent;
-                                Text { text: "░"; font-size: 16px; font-weight: 700; color: root.active-tool-index == 3 ? #ffffff : #334155; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: "░"; font-size: 14px; font-weight: 700; color: root.active-tool-index == 3 ? #ffffff : #334155; horizontal-alignment: center; vertical-alignment: center; }
                                 TouchArea { clicked => { root.active-tool-index = 3; } }
                             }
                             // Tool 4: Arrow (↗)
                             Rectangle {
-                                width: 34px; height: 34px; border-radius: 6px;
+                                width: 28px; height: 28px; border-radius: 4px;
                                 background: root.active-tool-index == 4 ? #2563eb : transparent;
-                                Text { text: "↗"; font-size: 16px; font-weight: 700; color: root.active-tool-index == 4 ? #ffffff : #334155; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: "↗"; font-size: 14px; font-weight: 700; color: root.active-tool-index == 4 ? #ffffff : #334155; horizontal-alignment: center; vertical-alignment: center; }
                                 TouchArea { clicked => { root.active-tool-index = 4; } }
                             }
                             // Tool 5: Text (T)
                             Rectangle {
-                                width: 34px; height: 34px; border-radius: 6px;
+                                width: 28px; height: 28px; border-radius: 4px;
                                 background: root.active-tool-index == 5 ? #2563eb : transparent;
-                                Text { text: "T"; font-size: 15px; font-weight: 800; color: root.active-tool-index == 5 ? #ffffff : #334155; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: "T"; font-size: 13px; font-weight: 800; color: root.active-tool-index == 5 ? #ffffff : #334155; horizontal-alignment: center; vertical-alignment: center; }
                                 TouchArea { clicked => { root.active-tool-index = 5; } }
                             }
                             // Divider
-                            Rectangle { width: 1px; height: 20px; background: #cbd5e1; }
+                            Rectangle { width: 1px; height: 16px; background: #cbd5e1; }
                             // Crop (✂️)
                             Rectangle {
-                                width: 34px; height: 34px; border-radius: 6px;
+                                width: 28px; height: 28px; border-radius: 4px;
                                 background: root.active-tool-index == 6 ? #2563eb : transparent;
-                                Text { text: "✂️"; font-size: 14px; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { text: "✂️"; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
                                 TouchArea { clicked => { root.active-tool-index = 6; } }
                             }
                             // Divider
-                            Rectangle { width: 1px; height: 20px; background: #cbd5e1; }
+                            Rectangle { width: 1px; height: 16px; background: #cbd5e1; }
                             // Undo / Redo
                             Rectangle {
-                                width: 30px; height: 34px;
-                                Text { text: "↶"; font-size: 15px; color: #64748b; horizontal-alignment: center; vertical-alignment: center; }
+                                width: 26px; height: 28px;
+                                Text { text: "↶"; font-size: 13px; color: #64748b; horizontal-alignment: center; vertical-alignment: center; }
                             }
                             Rectangle {
-                                width: 30px; height: 34px;
-                                Text { text: "↷"; font-size: 15px; color: #64748b; horizontal-alignment: center; vertical-alignment: center; }
+                                width: 26px; height: 28px;
+                                Text { text: "↷"; font-size: 13px; color: #64748b; horizontal-alignment: center; vertical-alignment: center; }
                             }
                         }
                     }
 
-                    // Right: Assemble Bundle, Copy, and Share Buttons
+                    // Flexible Spacer pushing Output group to the right
+                    Rectangle { horizontal-stretch: 1; }
+
+                    // Group 3: Output & Sharing Actions (📦 Assemble, 📋 Copy, Share ▼)
                     HorizontalLayout {
-                        spacing: 8px;
+                        spacing: 6px;
                         alignment: end;
                         Rectangle {
-                            height: 38px;
+                            height: 32px;
                             background: #2563eb;
-                            border-radius: 6px;
+                            border-radius: 5px;
                             HorizontalLayout {
-                                padding-left: 14px;
-                                padding-right: 14px;
-                                spacing: 6px;
+                                padding-left: 10px;
+                                padding-right: 10px;
+                                spacing: 4px;
                                 alignment: center;
-                                Text { text: "📦"; font-size: 14px; vertical-alignment: center; }
-                                Text { text: "Assemble"; font-size: 13px; font-weight: 700; color: #ffffff; vertical-alignment: center; }
+                                Text { text: "📦"; font-size: 12px; vertical-alignment: center; }
+                                Text { text: "Assemble"; font-size: 12px; font-weight: 700; color: #ffffff; vertical-alignment: center; }
                             }
                             TouchArea { clicked => { root.assemble-bundle-clicked(); } }
                         }
                         Rectangle {
-                            width: 38px; height: 38px; border-radius: 6px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
-                            Text { text: "📋"; font-size: 15px; horizontal-alignment: center; vertical-alignment: center; }
+                            width: 32px; height: 32px; border-radius: 5px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
+                            Text { text: "📋"; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; }
                             TouchArea { clicked => { root.copy-image-clicked(); } }
                         }
                         Rectangle {
-                            height: 38px; border-radius: 6px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
+                            height: 32px; border-radius: 5px; border-width: 1px; border-color: #cbd5e1; background: #ffffff;
                             HorizontalLayout {
-                                padding-left: 12px; padding-right: 12px;
+                                padding-left: 10px; padding-right: 10px;
                                 spacing: 4px;
-                                Text { text: "Share ▼"; font-size: 12px; font-weight: 700; color: #0f172a; vertical-alignment: center; }
+                                Text { text: "Share ▼"; font-size: 11px; font-weight: 700; color: #0f172a; vertical-alignment: center; }
                             }
                             TouchArea { clicked => { root.share-bundle-clicked(); } }
                         }
