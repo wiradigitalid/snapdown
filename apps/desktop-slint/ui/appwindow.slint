@@ -290,6 +290,7 @@ export component AppWindow inherits Window {
     background: #f8fafc;
     default-font-family: "Plus Jakarta Sans";
 
+    in-out property <bool> is-dark-theme: false;
     in-out property <string> current-filename: "capture_20260826_041750.png";
     in-out property <int> active-tool-index: 0; // 0: Marker, 1: Shape, 2: Callout, 3: Blur, 4: Arrow, 5: Text, 6: Crop
     in-out property <int> active-tab-index: 0; // 0: Notes, 1: Properties
@@ -306,6 +307,7 @@ export component AppWindow inherits Window {
         { id: "f1", time-str: "11.17", dimensions-str: "1020×885", is-selected: false, is-active: true }
     ];
 
+    callback library-clicked();
     callback capture-clicked();
     callback open-file-clicked();
     callback paste-clicked();
@@ -411,22 +413,116 @@ export component AppWindow inherits Window {
                         spacing: 0px;
                         alignment: end;
 
-                        // Theme Toggle
+                        // Theme Toggle Button (Dark / Light Vector Switcher)
                         Rectangle {
-                            width: 32px; height: 32px; background: theme-touch.has-hover ? #e2e8f0 : transparent;
-                            Text { text: "🌙"; font-size: 11px; horizontal-alignment: center; vertical-alignment: center; }
-                            theme-touch := TouchArea { clicked => { root.theme-toggle-clicked(); } }
+                            width: 32px; height: 32px;
+                            background: theme-touch.has-hover ? #e2e8f0 : transparent;
+
+                            // Light Mode: Vector Crescent Moon
+                            if !root.is-dark-theme : Rectangle {
+                                width: 13px; height: 13px;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                                border-radius: 6.5px;
+                                border-width: 1.3px;
+                                border-color: #334155;
+                                background: transparent;
+                                clip: true;
+
+                                Rectangle {
+                                    x: 3.5px; y: -3.5px;
+                                    width: 13px; height: 13px;
+                                    border-radius: 6.5px;
+                                    background: theme-touch.has-hover ? #e2e8f0 : #f1f5f9;
+                                }
+                            }
+
+                            // Dark Mode: Vector Sun
+                            if root.is-dark-theme : Rectangle {
+                                width: 14px; height: 14px;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+
+                                // Sun Rays
+                                Rectangle {
+                                    x: (parent.width - self.width) / 2;
+                                    y: 0px;
+                                    width: 1.4px; height: 14px;
+                                    border-radius: 0.7px;
+                                    background: #334155;
+                                }
+                                Rectangle {
+                                    x: 0px;
+                                    y: (parent.height - self.height) / 2;
+                                    width: 14px; height: 1.4px;
+                                    border-radius: 0.7px;
+                                    background: #334155;
+                                }
+                                // Sun Core
+                                Rectangle {
+                                    x: (parent.width - self.width) / 2;
+                                    y: (parent.height - self.height) / 2;
+                                    width: 7px; height: 7px;
+                                    border-radius: 3.5px;
+                                    border-width: 1.2px;
+                                    border-color: #334155;
+                                    background: theme-touch.has-hover ? #e2e8f0 : #f1f5f9;
+                                }
+                            }
+
+                            theme-touch := TouchArea {
+                                clicked => {
+                                    root.is-dark-theme = !root.is-dark-theme;
+                                    root.theme-toggle-clicked();
+                                }
+                            }
                         }
-                        // Bundle Drawer Toggle
+
+                        // Settings Button (Crisp Native Vector Cog)
                         Rectangle {
-                            width: 32px; height: 32px; background: drawer-touch.has-hover ? #e2e8f0 : transparent;
-                            Text { text: "🗂️"; font-size: 11px; horizontal-alignment: center; vertical-alignment: center; }
-                            drawer-touch := TouchArea { clicked => { root.bundles-drawer-clicked(); } }
-                        }
-                        // Settings Button
-                        Rectangle {
-                            width: 32px; height: 32px; background: settings-touch.has-hover ? #e2e8f0 : transparent;
-                            Text { text: "⚙️"; font-size: 11px; horizontal-alignment: center; vertical-alignment: center; }
+                            width: 32px; height: 32px;
+                            background: settings-touch.has-hover ? #e2e8f0 : transparent;
+
+                            Rectangle {
+                                width: 14px; height: 14px;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+
+                                // Cog Teeth (Vertical & Horizontal)
+                                Rectangle {
+                                    x: (parent.width - self.width) / 2;
+                                    y: 0px;
+                                    width: 2.6px; height: 14px;
+                                    border-radius: 0.8px;
+                                    background: #334155;
+                                }
+                                Rectangle {
+                                    x: 0px;
+                                    y: (parent.height - self.height) / 2;
+                                    width: 14px; height: 2.6px;
+                                    border-radius: 0.8px;
+                                    background: #334155;
+                                }
+
+                                // Outer Gear Body
+                                Rectangle {
+                                    x: (parent.width - self.width) / 2;
+                                    y: (parent.height - self.height) / 2;
+                                    width: 10px; height: 10px;
+                                    border-radius: 5px;
+                                    background: #334155;
+                                }
+
+                                // Inner Hollow Hub
+                                Rectangle {
+                                    x: (parent.width - self.width) / 2;
+                                    y: (parent.height - self.height) / 2;
+                                    width: 4.4px; height: 4.4px;
+                                    border-radius: 2.2px;
+                                    background: settings-touch.has-hover ? #e2e8f0 : #f1f5f9;
+                                }
+                            }
+
                             settings-touch := TouchArea { clicked => { root.settings-clicked(); } }
                         }
 
@@ -505,10 +601,31 @@ export component AppWindow inherits Window {
                     spacing: 8px;
                     alignment: space-between;
 
-                    // Group 1 (Left): Input Action Buttons (🔴 📂 📥)
+                    // Group 1 (Left): Library / History & Input Action Buttons (📚 🔴 📂 📥)
                     HorizontalLayout {
-                        spacing: 4px;
+                        spacing: 6px;
                         alignment: start;
+
+                        // Snapdown Library / Bundle History
+                        Rectangle {
+                            height: 30px;
+                            border-radius: 5px;
+                            border-width: 1px;
+                            border-color: #cbd5e1;
+                            background: lib-touch.has-hover ? #f8fafc : #ffffff;
+                            HorizontalLayout {
+                                padding-left: 8px;
+                                padding-right: 8px;
+                                spacing: 5px;
+                                alignment: center;
+                                Text { text: "📚"; font-size: 11px; vertical-alignment: center; }
+                                Text { text: "Library"; font-size: 11px; font-weight: 700; color: #0f172a; vertical-alignment: center; }
+                            }
+                            lib-touch := TouchArea { clicked => { root.library-clicked(); } }
+                        }
+
+                        // Divider
+                        Rectangle { width: 1px; height: 16px; background: #cbd5e1; y: 7px; }
 
                         Rectangle {
                             height: 30px;
