@@ -1571,6 +1571,67 @@ defects:
       same symptom, and whether ~150ms still reads as "cukup lama" is the owner's eyes to judge,
       not a number.
     related: BUG-27
+    measurement_2026_08_27: |
+      The remaining latency is now bounded and attributed, measured in a release build on this
+      desktop - two 4K monitors, one portrait, 16.59 Mpx and 63.3 MB of pixels in total. Three rounds
+      after a warm-up round:
+
+        Monitor::all() enumeration          0.022 - 0.064 ms   negligible
+        capture_each_monitor (2 threads)  104 - 137 ms         THE cost
+        capture_virtual_desktop           105 - 119 ms
+        blit_into a fresh Vec              22 - 24 ms          NOT comparable, see below
+
+      The enumeration being 22 us settles one suspicion outright: `Monitor::all()` is called three
+      times per capture - once by `capture_each_monitor` and once inside each per-monitor thread - and
+      that costs nothing worth removing.
+
+      The 22-24 ms `blit_into` reading is a measurement artefact and is recorded so it is not quoted
+      as a regression. The probe blitted into `vec![0u8; n]`, whose pages are lazy zero pages, so it
+      is timing 63 MB of first-touch page faults on top of the copy. BUG-28's own in-process figure
+      of 4.3-5.4 ms - into a `SharedPixelBuffer` that has already been touched - is the real one.
+      `AGENTS.md` records this exact trap; it caught me again here, one round later.
+    dead_end_wgc: |
+      2026-08-27. xcap's `wgc` feature - Windows Graphics Capture - was the one idea this row named
+      as next. It is REFUTED by measurement, and for a reason nobody had written down.
+
+        GDI (current)   grab_all 137 / 104 / 122 ms    capture_virtual_desktop 119 / 116 / 105 ms
+        wgc             grab_all 314 / 181 / 132 ms    capture_virtual_desktop 145 / 168 / 165 ms
+
+      Slower, and much more variable. The first call costs 314 ms. WGC creates a capture session per
+      call - a D3D device, a frame pool, an event wait - and for a SINGLE frame that setup dominates.
+      WGC is the right API for continuous capture and the wrong one for a one-shot.
+
+      The three risks this row previously recorded against `wgc` all turn out to be handled in 0.9.8
+      on this OS, so none of them is the reason: it calls `SetIsBorderRequired(false)` (Windows 11,
+      and this machine is build 26200), it calls `SetIsCursorCaptureEnabled(false)` - which is what
+      this product WANTS, since it hides the cursor and draws its own crosshair - and the
+      `recv_timeout(3000ms)` is a ceiling on failure rather than a cost on success. The old note was
+      written without reading the version in the lockfile.
+    remaining: |
+      The grab is at or near the floor for a one-shot full-desktop capture through this API set. What
+      is left inside it, from reading xcap 0.9.8's GDI path:
+
+        BitBlt          desktop DC -> memory DC, a GPU-to-system-memory readback of 63.3 MB
+        GetDIBits       into a freshly zeroed Vec, so page faults are included
+        bgra_to_rgba    a SCALAR loop over 8.3 Mpx per monitor: `swap(0, 2)` plus a branch on
+                        `src[3] == 0 && is_old_version` per pixel, on a machine where
+                        `is_old_version` is constantly false
+
+      Only the last of those is ours to remove, and only by owning the GDI capture path: a
+      `BITMAPINFOHEADER` with `BI_BITFIELDS` and explicit channel masks makes `GetDIBits` write RGBA
+      directly, so the swap disappears rather than being vectorised. Estimated saving is roughly
+      15-25 ms per monitor of a ~116 ms grab, and because the monitors are captured on separate
+      threads that is 15-25 ms of the wall clock, not double.
+
+      The cost is real and is why this has not been done: roughly 80 lines of unsafe Win32 inside the
+      single component every other part of the product depends on, replacing a working third-party
+      implementation, to take ~150 ms to ~130 ms. That is a judgement about whether 20 ms is worth
+      owning, and it belongs to the owner rather than to the agent that would write it.
+
+      Rejected without measuring, and the reasons are worth keeping: showing the overlay before the
+      grab finishes would present the PREVIOUS capture's pixels, which is wrong content rather than
+      slow content; and presenting one monitor as soon as it is ready buys nothing here, because both
+      monitors are 4K and are captured concurrently, so they finish together.
     status: open
   - id: BUG-29
     title: Enter did nothing unless the note field already had keyboard focus
@@ -3007,3 +3068,74 @@ defects:
       The instrumentation has been removed. `LiveOverlay`'s `Drop` impl stays, without the counter:
       hiding the outgoing window is a correctness improvement in its own right.
     status: resolved
+  - id: BUG-54
+    title: theme.slint fails WCAG AA on six pairings, including every primary button label in dark mode
+    found: "2026-08-27"
+    found_by: agent, the contrast gate required by DEC-009
+    component: capture
+    severity: high
+    contradicts: [NFR-17]
+    root_cause: code
+    measurement: |
+      Measured over `theme.slint`, both themes, WCAG 2.1 relative contrast:
+
+        DARK   text-on-accent  on accent-primary   3.20   needs 4.5   <-- every primary button label
+        DARK   text-on-accent  on accent-hover     2.59   needs 4.5   <-- ...under the pointer
+        LIGHT  text-muted      on bg-app           4.34   needs 4.5
+        LIGHT  text-dim        on bg-app           2.34   needs 3.0
+        DARK   text-dim        on bg-card          2.99   needs 3.0
+        LIGHT  text-dim        on bg-card          2.56   needs 3.0
+
+      Everything else passes, most of it comfortably: `text-primary` runs 14-18, `text-secondary`
+      9-10, the focus ring 3.7-6.2.
+
+      `accent-pressed` is NOT on this list: white on the dark theme's `#3a72e0` measures 4.50 and
+      clears AA by a hair. It was listed on the first draft of the gate and the gate's own release
+      check rejected it immediately.
+    evidence: |
+      `text-on-accent` is `#ffffff` and the dark theme's `accent-primary` is `#4c8dff` - white on a
+      light blue. That pairing is Save Finding, Assemble, Copy, Share, and the capture overlay's Full
+      Screen control: every primary action in the product, in dark mode.
+
+      `theme.slint`'s own section heading reads "4. Accent & Active State Tokens (WCAG AA Compliant)".
+      That claim is false for the dark column and has been since the palette was written.
+    impact: |
+      Reduced legibility on every primary action in dark mode, worst at 2.59 on hover - the moment
+      the Reviewer is looking at the button. `text-dim` is placeholder text, so a field's prompt is
+      the hardest thing on the panel to read, which is the opposite of what a placeholder is for.
+
+      No user has reported it. That is not evidence it does not matter; it is evidence that nobody
+      was checking, which is the point of the gate.
+    why_undetected: |
+      `NFR-17`'s stated enforcement is a lint plus `contrast.test.ts`, and both cover
+      `web/ui/src/styles/tokens.css`. `web/ui` builds nothing in the active workspace (`OQ-27`), so
+      the file being checked is not the file that ships. `theme.slint` had no check at all until
+      `DEC-009`'s study went looking for one.
+
+      The palette also ASSERTS its own compliance in a comment, which is the most effective way to
+      stop anyone verifying it.
+    fix: |
+      NOT DONE, deliberately, and the reason is scope rather than difficulty.
+
+      The gate is built: `apps/desktop/tests/test_theme_contrast.rs` parses `theme.slint`, checks
+      seventeen pairings in both themes, and lists these six as EXCEPTIONS with their measured ratio
+      and this defect id. It therefore passes today, fails if any of them gets worse, and fails when
+      this defect is closed without the list being updated. Five mutants killed, including one that
+      breaks the parser so every assertion would pass by vacuity.
+
+      What is left is a visible change to the product's colour, and the options are costed rather
+      than chosen:
+
+        (a) Darken the dark theme's accents so white keeps working:
+            #2563eb / #1d4ed8 / #1e40af gives 5.17 / 6.70 / 8.72. Deeper buttons in dark mode;
+            hover and pressed get darker rather than lighter, which several systems do.
+        (b) Keep the light accents and make `text-on-accent` theme-aware - near-black in dark mode:
+            #0f172a gives 5.58 on primary and 6.88 on hover, but only 3.96 on pressed, so
+            `accent-pressed` would have to lighten too. This is Material 3's shape.
+        (c) text-dim: dark #8e8f95 (5.27 / 4.86), light #6f7c91 (3.86 / 4.23).
+            text-muted light: #5d6d84 (4.81 on bg-app, 5.27 on bg-card).
+
+      (c) is small and hard to object to. (a) and (b) both repaint every primary button in dark mode,
+      and choosing between them is a design decision the owner has corrected the agent on five times
+      in this component already. It is put here with numbers rather than taken.
+    status: open
