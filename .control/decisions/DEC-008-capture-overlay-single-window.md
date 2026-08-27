@@ -87,10 +87,17 @@ desktop's bounding box, and the parts no monitor covers were never written to.
 
 ## Cost
 
-- **Latency gets worse, and this is the accepted price.** A single window needs a stitched canvas
-  the per-monitor design did not: on a 6000x3840 desktop that is a ~92MB allocation plus a blit per
-  monitor, then a copy into a Slint buffer and a texture upload. The owner reports the overlay takes
-  a visible moment to appear. Recorded as `BUG-28`, deliberately left open.
+- **Latency gets worse, and this is the accepted price.** A single window needs the whole desktop in
+  one buffer, which the per-monitor design did not — on a 6000x3840 desktop, 92MB of it. The owner
+  reports the overlay takes a visible moment to appear. Recorded as `BUG-28`, deliberately left open.
+
+  Corrected after the fact, because the first version of this bullet named a cost that has since
+  been removed: it read "a ~92MB allocation plus a blit per monitor, then a copy into a Slint
+  buffer". There is no longer a stitched canvas at all — the monitors are blitted straight into the
+  buffer that gets presented, which took preparation from 83-91ms to 36-38ms. What survives of the
+  cost is the buffer itself: 33-37ms of that 36-38ms is `SharedPixelBuffer::new` alone. So the cost
+  this decision incurs is *a full-desktop buffer*, not *a stitch*. `BUG-28` holds the measurements
+  and what is still open.
 - **Two behaviours that used to be free now need explicit arithmetic.** With one window per monitor,
   confining the crosshair and preventing a cross-monitor region were properties of the geometry —
   each window *was* one monitor. Both now depend on monitor rectangles carried into the overlay and
@@ -121,10 +128,14 @@ desktop's bounding box, and the parts no monitor covers were never written to.
 
 Any of these makes revisiting correct:
 
-- `BUG-28`'s latency proves unacceptable in real use and every cheaper remedy is exhausted — the
-  redundant buffer copy, skipping the stitch when only one monitor is attached, a faster grab path
-  than xcap's. Dropping the stitch means dropping the single window, so this decision is what would
-  have to give.
+- `BUG-28`'s latency proves unacceptable in real use and every cheaper remedy is exhausted. Read
+  `BUG-28` for what those are before concluding this decision is the thing that has to give — the
+  original version of this trigger asserted that "dropping the stitch means dropping the single
+  window", and that turned out to be **false**: the stitch was removed while the single window
+  stayed, for a 47-53ms saving. Reusing one buffer across captures (measured at 4.3-4.6ms against
+  the 36-38ms now shipping) and enabling xcap's `wgc` feature are both still untaken, and the grab
+  itself — 132-167ms — now dominates what remains. This decision is the last thing to reconsider
+  here, not the first.
 - A monitor arrangement appears where the bounding-box canvas is mostly empty — widely separated or
   diagonally offset displays — making the stitch allocate far more than it captures.
 - Slint gains a shared renderer across windows, or an atomic multi-window show/hide. Both costs this

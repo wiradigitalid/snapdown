@@ -90,19 +90,34 @@ There is a comment in the `.slint` saying so; leave it there.
 
 ## What is open
 
-**`BUG-28` — the overlay takes a visible moment to appear.** This is the main thing left. The cost
-is preparing the image, not the overlay: two ~8.3-megapixel grabs (already parallelised, one thread
-per monitor), a ~92MB stitched canvas, a copy into a Slint `SharedPixelBuffer`, then a texture
-upload. Single-window made this **worse** — the per-monitor design needed no stitch — and that was
-a deliberate trade. Untried ideas, cheapest first:
+**`BUG-28` — the overlay takes a visible moment to appear.** Still open, but substantially reduced
+since this brief was first written. **Read `BUG-28` itself rather than this summary** — it carries the
+measurement table and the reasoning, and it is the authority.
 
-1. Kill the extra copy: keep one `SharedPixelBuffer` and overwrite its pixels between captures
-   instead of building a new `slint::Image` each time. A new texture per capture is also the last
-   untested suspicion in `BUG-27`.
-2. Skip the stitch when there is only one monitor — the common case for most users.
-3. A faster grab than xcap's (DXGI Desktop Duplication).
-4. Show the overlay before the image is ready and fill it in. Changes the UX contract (the screen
-   would no longer freeze instantly) — needs the owner's decision, do not just do it.
+Already done (so do not redo it): the stitched canvas is gone. `capture_virtual_desktop` returns the
+per-monitor grabs plus the desktop geometry, and `blit_into` writes them straight into the
+`SharedPixelBuffer` that gets presented, which removed the canvas allocation, the blend and the copy
+together. The blend was the surprise — `image::imageops::overlay` is a per-pixel
+get/blend/put loop whose answer, for an opaque source over an untouched destination, is already the
+source pixel. Preparation went 83-91ms to 36-38ms, total to overlay ~225ms to ~175ms. Preparation
+also moved off the event loop, since `SharedPixelBuffer<Rgba8Pixel>` is `Send`.
+
+Still open, in the order the measurements put them:
+
+1. **Reuse one buffer across captures** — 4.3-4.6ms against the 36-38ms now shipping, so worth more
+   than everything already taken. Not a line change: the buffer must be uniquely owned when
+   `make_mut_bytes` is called, and a stray clone silently copies 92MB instead (37-44ms, worse than
+   before the fix). `LiveOverlay`'s `placement` reuse key is already the buffer's validity condition.
+2. **A faster grab** — the grab is now the dominant cost at 132-167ms. xcap is compiled without its
+   `wgc` feature, so the active path is GDI. Enabling it is one line but not a free win; it must be
+   A/B measured. `BUG-28` records the specific catches.
+3. **Show the overlay before the image is ready.** Changes the UX contract (the screen would no
+   longer freeze instantly) — needs the owner's decision, do not just do it.
+
+One correction worth carrying, because it was made the honest way: an earlier version of `BUG-28`'s
+numbers was measured with `vec![0u8; n]`, which Rust turns into `alloc_zeroed` and Windows serves as
+lazy zero pages — so it benchmarked a stand-in for the allocator rather than the allocator. The entry
+says so itself. Measure the thing that ships.
 
 Smaller things noticed and never chased:
 
