@@ -109,8 +109,11 @@ fn the_golden_bundle_markdown_is_regenerated_from_real_image_output() {
     };
 
     // 5. Serialize bundle and compare byte-for-byte with inline golden reference (AD-4, AD-9, BUG-21)
-    let doc =
-        MarkdownSerializer::serialize_bundle("Release Quality Gate Assessment", &[(&item1, &f1)]);
+    let doc = MarkdownSerializer::serialize_bundle(
+        "Release Quality Gate Assessment",
+        "",
+        &[(&item1, &f1)],
+    );
 
     let expected_golden = "# Release Quality Gate Assessment\n\
 \n\
@@ -118,13 +121,11 @@ fn the_golden_bundle_markdown_is_regenerated_from_real_image_output() {
 \n\
 ![Finding 1](./bundles/b-golden/finding_1_burned.png)\n\
 \n\
-- **Captured:** 2026-08-23T10:00:00Z\n\
-- **Resolution:** 1920 \u{00D7} 1080 px\n\
-- **Monitor:** DISPLAY1\n\
+### Notes\n\
 \n\
 The submit button has incorrect margin on narrow viewports.\n\
 \n\
-### Annotations\n\
+### Marker Notes\n\
 \n\
 1. Button overlap with input field\n\
 2. Footer text clipped\n\

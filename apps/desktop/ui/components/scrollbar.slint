@@ -1,0 +1,85 @@
+// Copyright © Wira Digital Indonesia
+//
+// ONE scrollbar for the whole product.
+//
+// Slint's own is a 2px hairline that is invisible against a dark canvas until hovered, so this
+// product has always drawn its own. What it did NOT have was one drawing: the canvas had a pair, the
+// filmstrip had a third, the Marker list a fourth and the Assemble preview a fifth - five copies of
+// the same twenty lines, and they had already drifted. Two of them could be dragged and three could
+// only be looked at, which is what the owner reported: "scroll yang ada di canvas gak bisa di klik
+// and drag".
+//
+// A bar is a control, not a readout. All five are now this component, so a drag works everywhere and
+// the geometry cannot differ between them.
+
+import { Theme } from "../theme.slint";
+
+export component SdScrollBar inherits Rectangle {
+    // Which way it runs. A vertical bar is a tall 8px strip; a horizontal one is a wide 8px strip.
+    in property <bool> vertical: true;
+    // The scrolled content's full extent, and how much of it is on screen. Both come from the
+    // ScrollView this bar belongs to.
+    in property <length> viewport-extent;
+    in property <length> visible-extent;
+    // How far the content is scrolled, POSITIVE. Slint's `viewport-x`/`viewport-y` are negative
+    // offsets; converting at the boundary keeps the arithmetic in here readable.
+    in property <length> offset;
+
+    // A new positive offset, already clamped to what there is to scroll.
+    callback scrolled(length);
+
+    // What there is to scroll. Zero when the content fits, which is when the caller should not be
+    // showing a bar at all - the guard is the caller's `if`, and this is the arithmetic's guard.
+    property <length> range: max(0px, root.viewport-extent - root.visible-extent);
+
+    function seek(position: length) {
+        root.scrolled(clamp(position / (root.vertical ? root.height : root.width) * root.range, 0px, root.range));
+    }
+
+    in property <length> thickness: 8px;
+
+    // Both are the thickness, and the CALL SITE overrides the long one - a binding set where the
+    // component is used replaces the one written here. So a vertical bar's caller sets `height` and
+    // keeps this `width`, and a horizontal bar's caller does the reverse.
+    //
+    // Written this way rather than as `root.vertical ? ... : self.width` because reading `self` in
+    // its own binding is a loop, and a component's root cannot read `parent` in Slint at all. The
+    // long edge and the placement belong to the caller anyway: where a bar sits depends on what it
+    // is scrolling - inset from a canvas's edge, flush under a filmstrip.
+    width: root.thickness;
+    height: root.thickness;
+
+    // Declared before the thumb so the thumb draws over it. A TouchArea does not need to be on top
+    // to receive a press - nothing above it here is interactive.
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.default;
+        moved => {
+            if (self.pressed) {
+                root.seek(root.vertical ? self.mouse-y : self.mouse-x);
+            }
+        }
+        // Jump to where the bar was clicked, then keep following the pointer. One gesture, whether
+        // the Reviewer clicks the track or grabs the thumb.
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                root.seek(root.vertical ? self.mouse-y : self.mouse-x);
+            }
+        }
+    }
+
+    Rectangle {
+        border-radius: 4px;
+        background: touch.has-hover || touch.pressed ? Theme.text-dim : Theme.border-strong;
+
+        // Never smaller than 28px, or a long strip leaves nothing to grab.
+        width: root.vertical
+            ? root.width
+            : max(28px, root.width * (root.visible-extent / max(1px, root.viewport-extent)));
+        height: root.vertical
+            ? max(28px, root.height * (root.visible-extent / max(1px, root.viewport-extent)))
+            : root.height;
+
+        x: root.vertical ? 0px : (root.width - self.width) * (root.offset / max(1px, root.range));
+        y: root.vertical ? (root.height - self.height) * (root.offset / max(1px, root.range)) : 0px;
+    }
+}

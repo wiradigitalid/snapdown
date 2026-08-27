@@ -23,6 +23,14 @@ export component SdTextField inherits Rectangle {
     // `TextInput::layout_info` in i-slint-core consults `wrap()` without regard for `single_line()`.
     in property <bool> commit-on-enter: false;
     in property <length> pad: 10px;
+    // FLAT: no fill, and no border until it is hovered or focused.
+    //
+    // For a field that lives inside a rendered document rather than on a form. The Assemble preview
+    // shows the handoff as the agent will read it, and a boxed input in the middle of that reads as
+    // a form control in a document - the owner's words were "kenapa harus dikotakin". It is still
+    // the same component, so the type scale, the caret colour and the placeholder behaviour cannot
+    // drift from the boxed one.
+    in property <bool> flat: false;
 
     in-out property <string> text <=> input.text;
     out property <bool> has-focus: input.has-focus;
@@ -35,15 +43,23 @@ export component SdTextField inherits Rectangle {
         input.focus();
     }
 
-    background: Theme.bg-app;
+    background: root.flat
+        ? (input.has-focus ? Theme.bg-app : (touch.has-hover ? Theme.bg-hover : transparent))
+        : Theme.bg-app;
     border-radius: Theme.radius-sharp;
     // The border is the only thing focus changes. The fill, the border and the placeholder are all
     // visible BEFORE any interaction, because the styled widget this replaces only looked like
     // somewhere you could type once it already had focus - so the first thing the Reviewer saw was a
     // blank strip they had no reason to click.
-    border-width: input.has-focus ? 2px : 1px;
+    border-width: root.flat ? (input.has-focus ? 2px : 0px) : (input.has-focus ? 2px : 1px);
     border-color: input.has-focus ? Theme.border-focus : Theme.border-strong;
     clip: true;
+
+    // Only so a flat field can show it is one when the pointer is over it. A TouchArea declared
+    // before the TextInput does not take the click away from it.
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.text;
+    }
 
     input := TextInput {
         x: root.pad;

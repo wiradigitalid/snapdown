@@ -1,5 +1,5 @@
-use image::codecs::png::PngEncoder;
-use image::{ExtendedColorType, ImageEncoder};
+use image::codecs::png::{CompressionType, FilterType, PngEncoder};
+use image::{ExtendedColorType, ImageEncoder, RgbaImage};
 use snapdown_core::domain::image::ImageDimensions;
 use snapdown_core::domain::setting::{QualityBudget, ResolvedPair};
 use snapdown_core::error::CoreError;
@@ -10,6 +10,50 @@ pub struct ReducedImageResult {
     pub dimensions: ImageDimensions,
     pub thumbnail_bytes: Option<Vec<u8>>,
     pub thumbnail_dimensions: Option<ImageDimensions>,
+}
+
+/// Writes an `RgbaImage` as a PNG, at the settings this product has measured rather than the
+/// encoder's defaults, and without an alpha channel when there is no transparency to keep.
+///
+/// `PngEncoder::new` uses `CompressionType::Fast`, and on a real capture that is not a small
+/// difference. Measured in a RELEASE build on three files out of the owner's own Vault:
+///
+///   1460x1042 UI capture   155 KB -> 88 KB   (-43%),  18 ms
+///   1254x1254 photo import  1951 KB -> 1537 KB (-21%), 381 ms
+///   486x308 small capture     7 KB ->  2 KB   (-71%),   1 ms
+///
+/// The middle row is the one the owner reported: a 1.5 MB file came back from an import at 1.9 MB,
+/// and 1537 KB is the size it started at. Two causes, both here - `Fast` compression, and an alpha
+/// channel written for an image that has none.
+///
+/// `CompressionType::Best` was measured too and rejected: 3% smaller for four times the time
+/// (1442 ms on that same import). `BG-3` is about bytes reaching an agent, and 3% does not buy a
+/// second of the Reviewer's wait.
+///
+/// Note the first measurement was taken in a DEBUG build and read 596 ms for what is 18 ms in
+/// release. `AGENTS.md` records that trap about this repository; it caught this decision too.
+pub(crate) fn encode_png(image: &RgbaImage, width: u32, height: u32) -> Result<Vec<u8>, CoreError> {
+    let mut out = Vec::new();
+    let encoder =
+        PngEncoder::new_with_quality(&mut out, CompressionType::Default, FilterType::Adaptive);
+
+    // A capture is always opaque, so this is the normal path rather than an optimisation for an
+    // unusual case. An imported PNG that really has transparency keeps it.
+    let opaque = image.pixels().all(|px| px.0[3] == u8::MAX);
+    if opaque {
+        let mut rgb = Vec::with_capacity((width as usize) * (height as usize) * 3);
+        for px in image.pixels() {
+            rgb.extend_from_slice(&px.0[..3]);
+        }
+        encoder
+            .write_image(&rgb, width, height, ExtendedColorType::Rgb8)
+            .map_err(|e| CoreError::Validation(format!("Failed to encode PNG: {e}")))?;
+    } else {
+        encoder
+            .write_image(image.as_raw(), width, height, ExtendedColorType::Rgba8)
+            .map_err(|e| CoreError::Validation(format!("Failed to encode PNG: {e}")))?;
+    }
+    Ok(out)
 }
 
 pub struct ImageReducer;
@@ -41,16 +85,7 @@ impl ImageReducer {
             decoded_rgba
         };
 
-        let mut out_bytes = Vec::new();
-        let encoder = PngEncoder::new(&mut out_bytes);
-        encoder
-            .write_image(
-                target_image.as_raw(),
-                target_dims.width,
-                target_dims.height,
-                ExtendedColorType::Rgba8,
-            )
-            .map_err(|e| CoreError::Validation(format!("Failed to encode PNG: {e}")))?;
+        let out_bytes = encode_png(&target_image, target_dims.width, target_dims.height)?;
 
         let (thumb_bytes, thumb_dims) = if generate_thumbnail {
             let t_dims = target_dims.compute_thumbnail_dimensions(320);
@@ -60,18 +95,7 @@ impl ImageReducer {
                 t_dims.height,
                 image::imageops::FilterType::Lanczos3,
             );
-            let mut t_bytes = Vec::new();
-            let thumb_encoder = PngEncoder::new(&mut t_bytes);
-            thumb_encoder
-                .write_image(
-                    thumb_img.as_raw(),
-                    t_dims.width,
-                    t_dims.height,
-                    ExtendedColorType::Rgba8,
-                )
-                .map_err(|e| {
-                    CoreError::Validation(format!("Failed to encode thumbnail PNG: {e}"))
-                })?;
+            let t_bytes = encode_png(&thumb_img, t_dims.width, t_dims.height)?;
             (Some(t_bytes), Some(t_dims))
         } else {
             (None, None)

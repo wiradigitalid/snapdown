@@ -82,11 +82,24 @@ fn a_bundle_copies_the_same_bytes_as_the_finding_it_came_from() {
         "   \t\n ".into(),
     )
     .unwrap();
+    // SCN-04's Marker with no note line. It IS drawn - point 1 of the scenario reads "Marker 2 stays
+    // on the image, at its position, numbered 2" - so the Bundle's copy is NOT byte-identical here.
+    // Byte identity belongs to the zero-marker case above and to that case only.
+    //
+    // This block asserted the opposite until 2026-08-27, citing the same scenario.
     let scn04_copy = MarkerBurner::burn_markers(&source_bytes, &dims, &[empty_marker])
         .expect("burn_markers with SCN-04 whitespace-only marker must succeed");
-    assert_eq!(
+    assert_ne!(
         scn04_copy, source_bytes,
-        "Bundle copy with whitespace-only comment marker must return source bytes unchanged"
+        "a Marker with no note line is still burned onto the Bundle's copy (SCN-04 point 1)"
+    );
+    let scn04_decoded = image::load_from_memory(&scn04_copy)
+        .expect("the SCN-04 copy must decode")
+        .to_rgba8();
+    assert_eq!(
+        (scn04_decoded.width(), scn04_decoded.height()),
+        (width, height),
+        "and it must keep the source dimensions (AD-4)"
     );
 
     // ------------------------------------------------------------------------

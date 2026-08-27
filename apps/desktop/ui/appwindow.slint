@@ -11,6 +11,7 @@ import { ReticleMarker } from "components/reticle-marker.slint";
 import { CornerBrackets } from "components/corner-brackets.slint";
 import { IconButton } from "components/icon-button.slint";
 import { SdTextField } from "components/text-field.slint";
+import { SdScrollBar } from "components/scrollbar.slint";
 import { SdActionButton, SdSectionLabel, SdCaption } from "components/action-button.slint";
 
 import "../assets/fonts/IBMPlexSans-Medium.ttf";
@@ -29,6 +30,28 @@ export struct MarkerData {
     x: float,
     y: float,
     comment: string,
+}
+
+// ONE BLOCK of the handoff document, as the Assemble preview shows it.
+//
+// A flat list rather than a Finding with nested notes and markers, because Slint carries a model
+// inside a struct through a repeater badly - and because both views walk the same sequence. Preview
+// renders each block; Code prints its markup and then the same editable text. That is what makes
+// "edit in Code" work: the two are one document with two skins, not a render and a source dump.
+//
+// `kind` is one of: title · bundle-notes · finding · image · note · marker
+export struct DocBlock {
+    kind: string,
+    finding-id: string,
+    marker-id: string,
+    // A Finding's position, or a Marker's ordinal.
+    ordinal: int,
+    text: string,
+    // The image's Markdown reference, for the Code view.
+    path: string,
+    image: image,
+    // True on the first Marker of a Finding, so `### Marker Notes` prints once above the list.
+    starts-section: bool,
 }
 
 export struct FindingThumb {
@@ -957,7 +980,7 @@ export component CaptureOverlayWindow inherits Window {
                 // upper case. It was 11px/700 in sentence case: two dialects for one idea, and
                 // invisible until the two panels are seen side by side.
                 SdSectionLabel {
-                    text: "WHAT IS WRONG HERE?";
+                    text: "NOTES";
                 }
                 // The product's one text field. It was drawn by hand here first, which is
                 // how the palette problem was found; it now lives in
@@ -1051,21 +1074,64 @@ export component AppWindow inherits Window {
     // No placeholder default. It used to read "test\n1. Marker 1\n2. Marker 2", which is content a
     // reader cannot tell from a real note - so a binding that never delivered looked like a note
     // that had been saved wrong. An empty default makes that failure visible instead (`BUG-45`).
-    in-out property <string> observation-summary: "";
+    // The Finding's general note. Called the "Observation Summary" until 2026-08-27, in the
+    // inspector and nowhere else - the document called it Notes, the capture panel asked "what is
+    // wrong here?", and the per-Marker remarks were "Marker notes" in one place and "Marker
+    // observations" in another. Four names for two things. The comments further down this file that
+    // still say "Observation Summary" are describing what happened when it was called that, which is
+    // history and stays true.
+    in-out property <string> finding-note: "";
     // Which Finding the panel is showing, so an edit can be written to the right row.
     in-out property <string> active-finding-id: "";
     in-out property <int> selected-finding-count: 0;
+    // The cost card's real inputs. The note's own length is read live in Slint with
+    // `character-count`; these two cannot be, so Rust sets them: a sum over the Marker model has
+    // no fold in Slint, and the image estimate needs the stored dimensions rather than the readout.
+    in-out property <int> marker-char-count: 0;
+    in-out property <int> image-token-estimate: 0;
     in-out property <string> resolution-text: "1020 × 885  px";
     in-out property <string> size-text: "119.5  KB";
     in-out property <image> active-image;
-    in-out property <[MarkerData]> markers: [
-        { id: "m1", ordinal: 1, x: 0.28, y: 0.31, comment: "Marker 1" },
-        { id: "m2", ordinal: 2, x: 0.36, y: 0.49, comment: "Marker 2" },
-    ];
+    // No demo Markers. Two fake ones used to ship as the default, for the same reason the
+    // Observation Summary once shipped placeholder prose - and with the same consequence: a reader
+    // cannot tell invented content from stored content, so a binding that never delivered looked
+    // like data that had been saved wrong (`BUG-45`).
+    in-out property <[MarkerData]> markers: [];
     in-out property <[FindingThumb]> filmstrip-items: [];
 
-    callback finding-selected(string);
-    callback observation-edited(string);
+    // A transient result line for an action whose outcome is otherwise invisible. Assembling a
+    // Bundle writes image files, a Markdown file and a database row and changes nothing on screen;
+    // without this the owner cannot tell a success from a silent failure, which is exactly the
+    // class of defect `BUG-19` and `BUG-23` are.
+    in-out property <string> toast-text: "";
+    in-out property <bool> toast-is-error: false;
+
+    // THE ASSEMBLE PREVIEW.
+    //
+    // Assembling used to write the Bundle the instant the tile was clicked: files on disk, a database
+    // row, a generated name, and the first sight of any of it was a folder in the Vault. `UC-9`'s own
+    // screen - `04-bundle-assembly-modal.html` in `.how/bundle/01-ux/assets/` - has always specified
+    // a review step, and the owner asked for it by name.
+    //
+    // Everything here is computed WITHOUT writing anything. `plan_bundle` already produced the whole
+    // document in memory before touching the disk, so the preview is that plan shown rather than a
+    // second rendering path that could disagree with it.
+    in-out property <bool> bundle-preview-open: false;
+    // Preview by default. Code shows the same document with its markup visible - and still editable,
+    // which is the point of having it.
+    in-out property <bool> bundle-preview-shows-code: false;
+    in-out property <[DocBlock]> bundle-preview-blocks: [];
+    // For the header's readout only. The document itself is `bundle-preview-blocks`.
+    in-out property <int> bundle-preview-finding-count: 0;
+    // Text only, and the label says so. An image costs an agent far more than its Markdown reference
+    // and this cannot know how much, so it does not pretend to.
+    in-out property <int> bundle-preview-text-tokens: 0;
+
+    // id, ctrl held, shift held. One callback rather than two, because a click on a card is one
+    // gesture whose MEANING depends on the modifiers - splitting it into "selected" and "toggled"
+    // put the interpretation in the UI, where the anchor for a Shift range does not live.
+    callback finding-clicked(string, bool, bool);
+    callback finding-note-edited(string);
     callback library-clicked();
     callback capture-clicked();
     callback open-file-clicked();
@@ -1075,6 +1141,12 @@ export component AppWindow inherits Window {
     callback share-bundle-clicked();
     callback marker-placed(float, float);
     callback delete-marker-clicked(string);
+    callback marker-comment-edited(string, string);
+    callback bundle-preview-confirmed();
+    callback bundle-preview-cancelled();
+    // kind, finding-id, marker-id, text. One callback rather than four, because the document is one
+    // sequence of blocks and which store a block writes to is Rust's business, not the layout's.
+    callback bundle-block-edited(string, string, string, string);
     callback drag-window-requested();
     callback theme-toggle-clicked();
     callback bundles-drawer-clicked();
@@ -1234,7 +1306,7 @@ export component AppWindow inherits Window {
                         }
 
                         Rectangle {
-                            width: 46px; height: 32px; background: close-touch.has-hover ? #e81123 : transparent;
+                            width: 46px; height: 32px; background: close-touch.has-hover ? Theme.chrome-close-hover : transparent;
 
                             Path {
                                 width: 10px;
@@ -1242,7 +1314,7 @@ export component AppWindow inherits Window {
                                 x: (parent.width - self.width) / 2;
                                 y: (parent.height - self.height) / 2;
                                 stroke-width: 1.2px;
-                                stroke: close-touch.has-hover ? #ffffff : root.text-secondary;
+                                stroke: close-touch.has-hover ? Theme.text-on-accent : root.text-secondary;
                                 MoveTo { x: 0; y: 0; }
                                 LineTo { x: 10; y: 10; }
                                 MoveTo { x: 10; y: 0; }
@@ -1293,7 +1365,7 @@ export component AppWindow inherits Window {
                             height: 44px;
                             icon: @image-url("../assets/icons/camera.svg");
                             text: "Capture";
-                            custom-text-color: #e11d48;
+                            custom-text-color: Theme.accent-capture;
                             clicked => { root.capture-clicked(); }
                         }
 
@@ -1504,10 +1576,10 @@ export component AppWindow inherits Window {
                                 y: max(24px, (parent.height - self.height) / 2);
                                 width: root.active-image.width * 1px;
                                 height: root.active-image.height * 1px;
-                                background: #0f172a;
+                                background: Theme.canvas-ground;
                                 border-radius: Theme.radius-sharp;
                                 drop-shadow-blur: 20px;
-                                drop-shadow-color: #000000.with-alpha(0.18);
+                                drop-shadow-color: Theme.shadow-soft;
                                 visible: root.active-image.width > 0;
 
                                 main-img := Image {
@@ -1531,9 +1603,15 @@ export component AppWindow inherits Window {
                                     ordinal: m.ordinal;
                                 }
 
+                                // Only the Marker tool places a Marker. The other six tools are
+                                // registered and unimplemented, and placing a Marker for them would
+                                // answer a click that asked for an arrow or a crop with a reticle.
                                 TouchArea {
+                                    mouse-cursor: root.active-tool-index == 0 ? MouseCursor.crosshair : MouseCursor.default;
                                     clicked => {
-                                        root.marker-placed(self.mouse-x / parent.width, self.mouse-y / parent.height);
+                                        if (root.active-tool-index == 0) {
+                                            root.marker-placed(self.mouse-x / parent.width, self.mouse-y / parent.height);
+                                        }
                                     }
                                 }
                             }
@@ -1542,34 +1620,26 @@ export component AppWindow inherits Window {
                         // Custom high-contrast scrollbar overlay
                         // (the native fluent-style scrollbar is a 2px hairline that is
                         // effectively invisible against the dark canvas until hovered)
-                        if scroll-view.viewport-height > scroll-view.visible-height : Rectangle {
+                        if scroll-view.viewport-height > scroll-view.visible-height : SdScrollBar {
+                            vertical: true;
+                            viewport-extent: scroll-view.viewport-height;
+                            visible-extent: scroll-view.visible-height;
+                            offset: -scroll-view.viewport-y;
+                            scrolled(position) => { scroll-view.viewport-y = -position; }
                             x: parent.width - self.width - 3px;
                             y: 4px;
-                            width: 8px;
                             height: parent.height - 8px - (scroll-view.viewport-width > scroll-view.visible-width ? 12px : 0px);
-
-                            Rectangle {
-                                width: 100%;
-                                border-radius: 4px;
-                                background: Theme.border-strong;
-                                height: max(28px, parent.height * (scroll-view.visible-height / scroll-view.viewport-height));
-                                y: (parent.height - self.height) * (-scroll-view.viewport-y / max(1px, scroll-view.viewport-height - scroll-view.visible-height));
-                            }
                         }
 
-                        if scroll-view.viewport-width > scroll-view.visible-width : Rectangle {
+                        if scroll-view.viewport-width > scroll-view.visible-width : SdScrollBar {
+                            vertical: false;
+                            viewport-extent: scroll-view.viewport-width;
+                            visible-extent: scroll-view.visible-width;
+                            offset: -scroll-view.viewport-x;
+                            scrolled(position) => { scroll-view.viewport-x = -position; }
                             x: 4px;
                             y: parent.height - self.height - 3px;
-                            height: 8px;
                             width: parent.width - 8px - (scroll-view.viewport-height > scroll-view.visible-height ? 12px : 0px);
-
-                            Rectangle {
-                                height: 100%;
-                                border-radius: 4px;
-                                background: Theme.border-strong;
-                                width: max(28px, parent.width * (scroll-view.visible-width / scroll-view.viewport-width));
-                                x: (parent.width - self.width) * (-scroll-view.viewport-x / max(1px, scroll-view.viewport-width - scroll-view.visible-width));
-                            }
                         }
                     }
 
@@ -1609,142 +1679,205 @@ export component AppWindow inherits Window {
                     }
 
                     // BOTTOM FILMSTRIP TRAY
-                    // The filmstrip scrolls horizontally, and that is not a nicety.
                     //
-                    // Its cards are a fixed 120px, so a bare `HorizontalLayout` reports a minimum
-                    // width of roughly 132px per Finding. That minimum propagates all the way up
-                    // through the workspace layout, so after a dozen captures the left column
-                    // demanded more width than the window had and squeezed the 440px
-                    // Notes/Properties panel down to nothing. It read as "the canvas keeps
-                    // growing"; what was actually growing was this strip's appetite. A ScrollView
-                    // has no such appetite - it clips rather than demanding - so the panel keeps
-                    // its width and the strip scrolls.
+                    // The strip scrolls horizontally, and that is not a nicety. Its cards are a fixed
+                    // 120px, so a bare `HorizontalLayout` reports a minimum width of roughly 132px
+                    // per Finding, and that minimum propagates up through the workspace layout - after
+                    // a dozen captures the left column demanded more width than the window had and
+                    // squeezed the 440px inspector to nothing. It read as "the canvas keeps growing";
+                    // what was growing was this strip's appetite. A ScrollView has no appetite.
+                    //
+                    // The Assemble tile is declared OUTSIDE the ScrollView and the strip is inset to
+                    // the right of it, so the tile is sticky: it used to be the first child of the
+                    // scrolling row and slid off the left edge as soon as there were a few Findings.
                     Rectangle {
-                        // 110px of cards plus room for the scrollbar underneath them.
+                        // 110px of cards plus room for the bar underneath them.
                         height: 124px;
                         background: root.bg-app;
 
-                        filmstrip-scroll := ScrollView {
-                            width: 100%;
+                        // 12px margin + the 110px tile + 12px gap.
+                        Rectangle {
+                            x: 134px;
+                            width: parent.width - 134px;
                             height: 100%;
-                            vertical-scrollbar-policy: always-off;
-                            // Always on, not `as-needed`. A vertical wheel does not scroll a
-                            // horizontal-only view, so without a bar on screen there was no way to
-                            // reach the later Findings at all - the strip clipped them and offered
-                            // no handle.
-                            horizontal-scrollbar-policy: always-on;
-                            // 12px padding each side, the 110px Assemble tile, then one 120px card
-                            // plus 12px of spacing per Finding.
-                            viewport-width: 24px + 110px + root.filmstrip-items.length * 132px;
-                            viewport-height: self.visible-height;
 
-                        HorizontalLayout {
-                            width: filmstrip-scroll.viewport-width;
-                            height: 110px;
-                            padding: 12px;
-                            spacing: 12px;
-                            alignment: start;
+                            filmstrip-scroll := ScrollView {
+                                width: 100%;
+                                height: 100%;
+                                vertical-scrollbar-policy: always-off;
+                                // Both native bars off, and a bar of our own below - the same
+                                // arrangement the canvas uses, so the two read as one product. The
+                                // native fluent bar is a 2px hairline that is invisible until hovered.
+                                horizontal-scrollbar-policy: always-off;
+                                viewport-width: max(self.visible-width, root.filmstrip-items.length * 132px + 12px);
+                                viewport-height: self.visible-height;
 
-                            Rectangle {
-                                width: 110px;
-                                height: 86px;
-                                background: root.bg-card;
-                                border-radius: Theme.radius-sharp;
-                                border-width: 1px;
-                                border-color: root.border-strong;
+                                HorizontalLayout {
+                                    width: filmstrip-scroll.viewport-width;
+                                    height: 110px;
+                                    padding-top: 12px;
+                                    padding-right: 12px;
+                                    spacing: 12px;
+                                    alignment: start;
 
-                                VerticalLayout {
-                                    alignment: center;
-                                    spacing: 6px;
-                                    Text {
-                                        text: root.selected-finding-count + " selected";
-                                        font-size: 11px;
-                                        font-weight: 700;
-                                        color: root.text-primary;
-                                        horizontal-alignment: center;
-                                        font-family: "IBM Plex Sans";
-                                    }
-                                    Rectangle {
-                                        height: 26px;
-                                        width: 86px;
+                                    for thumb in root.filmstrip-items : Rectangle {
+                                        width: 120px;
+                                        height: 86px;
+                                        background: root.bg-subtle;
                                         border-radius: Theme.radius-sharp;
-                                        background: Theme.accent-primary;
-                                        HorizontalLayout {
-                                            spacing: 4px;
-                                            alignment: center;
-                                            Image {
-                                                width: 12px; height: 12px;
-                                                image-fit: contain;
-                                                source: @image-url("../assets/icons/package.svg");
+                                        // Selection reads the way a file manager's does: an accent
+                                        // outline plus a wash over the thumbnail. The checkbox that
+                                        // used to sit in the corner is gone - it was a second
+                                        // vocabulary for the same idea, and nothing else in this
+                                        // product asks to be ticked.
+                                        border-width: thumb.is-selected || thumb.is-active ? 2px : 1px;
+                                        border-color: thumb.is-selected || thumb.is-active
+                                            ? Theme.accent-primary
+                                            : root.border-strong;
+                                        clip: true;
+
+                                        Image {
+                                            width: 100%;
+                                            height: 100%;
+                                            image-fit: cover;
+                                            source: thumb.image;
+                                        }
+
+                                        if thumb.is-selected : Rectangle {
+                                            width: 100%;
+                                            height: 100%;
+                                            background: Theme.accent-surface;
+                                        }
+
+                                        Rectangle {
+                                            y: parent.height - 18px;
+                                            width: 100%;
+                                            height: 18px;
+                                            background: root.bg-card;
+                                            HorizontalLayout {
+                                                padding-left: 6px;
+                                                padding-right: 6px;
+                                                alignment: space-between;
+                                                Text { text: thumb.time-str; font-size: 9px; font-family: "IBM Plex Mono"; color: root.text-secondary; vertical-alignment: center; }
+                                                Text { text: thumb.dimensions-str; font-size: 9px; font-family: "IBM Plex Mono"; color: root.text-muted; vertical-alignment: center; }
                                             }
-                                            Text {
-                                                text: "Assemble";
-                                                font-size: 10px;
-                                                font-weight: 700;
-                                                color: #ffffff;
-                                                vertical-alignment: center;
-                                                font-family: "IBM Plex Sans";
+                                        }
+
+                                        // WHICH ONE IS ON THE CANVAS.
+                                        //
+                                        // Was a pill reading "● Editing", which cost 70px of a 120px
+                                        // card and covered the thing it was describing. This is the
+                                        // accent bar the tab header already uses for the same idea -
+                                        // `theme.slint` names `accent-primary` "Primary Actions
+                                        // (Assemble, Tab Active Bar)" - so it needs no words.
+                                        if thumb.is-active : Rectangle {
+                                            y: 0px;
+                                            width: 100%;
+                                            height: 4px;
+                                            background: Theme.accent-primary;
+                                        }
+
+                                        TouchArea {
+                                            mouse-cursor: MouseCursor.pointer;
+                                            // `pointer-event` rather than `clicked`, because
+                                            // `clicked` carries no modifiers and Ctrl and Shift are
+                                            // the whole point: one click means open, Ctrl+click means
+                                            // add or remove, Shift+click means through to here.
+                                            pointer-event(event) => {
+                                                if (event.kind == PointerEventKind.down
+                                                    && event.button == PointerEventButton.left) {
+                                                    root.finding-clicked(
+                                                        thumb.id,
+                                                        event.modifiers.control,
+                                                        event.modifiers.shift);
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
 
-                            for thumb in root.filmstrip-items : Rectangle {
-                                width: 120px;
-                                height: 86px;
-                                background: #0f172a;
-                                border-radius: Theme.radius-sharp;
-                                border-width: thumb.is-active ? 2px : 1px;
-                                border-color: thumb.is-active ? Theme.accent-primary : root.border-strong;
-                                clip: true;
+                            // The same bar as the canvas: 8px, `border-strong`, 4px radius, minimum
+                            // 28px, and only present while there is something to scroll.
+                            //
+                            // Draggable, unlike the canvas's, because it has to be: a vertical wheel
+                            // does not scroll a horizontal-only view, so with no native bar and no
+                            // handle there would be no way to reach the later Findings at all.
+                            if filmstrip-scroll.viewport-width > filmstrip-scroll.visible-width : SdScrollBar {
+                                vertical: false;
+                                viewport-extent: filmstrip-scroll.viewport-width;
+                                visible-extent: filmstrip-scroll.visible-width;
+                                offset: -filmstrip-scroll.viewport-x;
+                                scrolled(position) => { filmstrip-scroll.viewport-x = -position; }
+                                x: 0px;
+                                y: parent.height - self.height - 3px;
+                                width: parent.width - 12px;
+                            }
+                        }
 
-                                Image {
-                                    width: 100%;
-                                    height: 100%;
-                                    image-fit: cover;
-                                    source: thumb.image;
+                        // STICKY: the Assemble tile. Declared after the strip so it draws over it,
+                        // and outside the ScrollView so it does not move.
+                        Rectangle {
+                            x: 12px;
+                            y: 12px;
+                            width: 110px;
+                            height: 86px;
+                            background: root.bg-card;
+                            border-radius: Theme.radius-sharp;
+                            border-width: 1px;
+                            border-color: root.border-strong;
+
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 6px;
+                                Text {
+                                    text: root.selected-finding-count + " selected";
+                                    font-size: 11px;
+                                    font-weight: 700;
+                                    color: root.text-primary;
+                                    horizontal-alignment: center;
+                                    font-family: "IBM Plex Sans";
                                 }
-
-                                if thumb.is-active : Rectangle {
-                                    y: 36px;
-                                    x: (parent.width - self.width) / 2;
-                                    width: 70px;
-                                    height: 20px;
-                                    border-radius: Theme.radius-pill;
-                                    background: Theme.semantic-success-bg;
-                                    Text {
-                                        text: "● Editing";
-                                        font-size: 10px;
-                                        font-weight: 800;
-                                        color: Theme.semantic-success;
-                                        horizontal-alignment: center;
-                                        vertical-alignment: center;
-                                        font-family: "IBM Plex Sans";
-                                    }
-                                }
-
                                 Rectangle {
-                                    y: parent.height - 18px;
-                                    width: 100%;
-                                    height: 18px;
-                                    background: root.bg-card;
-                                    HorizontalLayout {
-                                        padding-left: 6px;
-                                        padding-right: 6px;
-                                        alignment: space-between;
-                                        Text { text: thumb.time-str; font-size: 9px; font-family: "IBM Plex Mono"; color: root.text-secondary; vertical-alignment: center; }
-                                        Text { text: thumb.dimensions-str; font-size: 9px; font-family: "IBM Plex Mono"; color: root.text-muted; vertical-alignment: center; }
+                                    height: 26px;
+                                    width: 86px;
+                                    border-radius: Theme.radius-sharp;
+                                    assemble-touch := TouchArea {
+                                        mouse-cursor: root.selected-finding-count > 0 ? MouseCursor.pointer : MouseCursor.not-allowed;
+                                        clicked => {
+                                            if (root.selected-finding-count > 0) {
+                                                root.assemble-bundle-clicked();
+                                            }
+                                        }
                                     }
-                                }
-
-                                TouchArea {
-                                    clicked => {
-                                        root.finding-selected(thumb.id);
+                                    // Nothing selected is not a failure to report, it is an action
+                                    // that is not available yet, so the tile says so rather than
+                                    // taking the click and explaining afterwards.
+                                    background: root.selected-finding-count == 0
+                                        ? root.bg-hover
+                                        : (assemble-touch.pressed
+                                            ? Theme.accent-pressed
+                                            : (assemble-touch.has-hover ? Theme.accent-hover : Theme.accent-primary));
+                                    HorizontalLayout {
+                                        spacing: 4px;
+                                        alignment: center;
+                                        Image {
+                                            width: 12px; height: 12px;
+                                            image-fit: contain;
+                                            source: @image-url("../assets/icons/package.svg");
+                                            colorize: root.selected-finding-count == 0 ? root.text-dim : Theme.text-on-accent;
+                                        }
+                                        Text {
+                                            text: "Assemble";
+                                            font-size: 10px;
+                                            font-weight: 700;
+                                            color: root.selected-finding-count == 0 ? root.text-dim : Theme.text-on-accent;
+                                            vertical-alignment: center;
+                                            font-family: "IBM Plex Sans";
+                                        }
                                     }
                                 }
                             }
-                        }
                         }
                     }
                 }
@@ -1794,7 +1927,7 @@ export component AppWindow inherits Window {
                                 // reads the same ones - which is the only thing that keeps the two
                                 // equal as either changes.
                                 SdSectionLabel {
-                                    text: "OBSERVATION SUMMARY";
+                                    text: "NOTES";
                                 }
                                 // The same component the capture note uses.
                                 //
@@ -1811,13 +1944,13 @@ export component AppWindow inherits Window {
                                 SdTextField {
                                     height: 120px;
                                     placeholder: "No note on this Finding.";
-                                    text <=> root.observation-summary;
+                                    text <=> root.finding-note;
                                     edited => {
                                         // Written through on every edit. A Finding's note used to be
                                         // held only in this property, so selecting another Finding
                                         // overwrote it and the edit was gone - silent data loss, and
                                         // the sort a Reviewer only discovers later.
-                                        root.observation-edited(root.observation-summary);
+                                        root.finding-note-edited(root.finding-note);
                                     }
                                 }
                             }
@@ -1923,155 +2056,706 @@ export component AppWindow inherits Window {
                             }
                         }
 
-                        ScrollView {
+                        if root.active-tab-index == 0 : VerticalLayout {
                             vertical-stretch: 1;
+                            padding: 16px;
+                            spacing: 12px;
 
-                            if root.active-tab-index == 0 : VerticalLayout {
-                                padding: 16px;
-                                spacing: 16px;
+                            SdSectionLabel {
+                                text: "MARKER NOTES (" + root.markers.length + ")";
+                            }
 
-                                // Section 2: Step Marker Notes
-                                VerticalLayout {
-                                    spacing: 8px;
-                                    Text {
-                                        text: "STEP MARKER NOTES (" + root.markers.length + ")";
-                                        font-size: 11px;
-                                        font-weight: 800;
-                                        color: root.text-secondary;
-                                        letter-spacing: 0.5px;
-                                        font-family: "IBM Plex Sans";
-                                    }
+                            // The Marker list gets a BOUNDED area of its own, and `vertical-stretch`
+                            // gives it whatever the label above and the card below do not take.
+                            //
+                            // Both tabs used to sit inside one ScrollView, which meant the cost card
+                            // was the last thing in a scrolling column: with a few Markers it slid
+                            // off the bottom of the panel and had to be scrolled back to. A running
+                            // total that has to be hunted for is not a running total.
+                            Rectangle {
+                                vertical-stretch: 1;
 
-                                    for marker in root.markers : Rectangle {
-                                        border-radius: Theme.radius-sharp;
-                                        background: root.bg-card;
-                                        border-width: 1px;
-                                        border-color: root.border-strong;
+                                marker-scroll := ScrollView {
+                                    width: 100%;
+                                    height: 100%;
+                                    vertical-scrollbar-policy: always-off;
+                                    horizontal-scrollbar-policy: always-off;
+                                    viewport-width: self.visible-width;
 
-                                        VerticalLayout {
-                                            padding: 10px;
-                                            spacing: 6px;
-                                            HorizontalLayout {
-                                                alignment: space-between;
+                                    VerticalLayout {
+                                        spacing: 8px;
+                                        alignment: start;
+
+    for marker in root.markers : Rectangle {
+                                            border-radius: Theme.radius-sharp;
+                                            background: root.bg-card;
+                                            border-width: 1px;
+                                            border-color: root.border-strong;
+
+                                            VerticalLayout {
+                                                padding: 10px;
+                                                spacing: 6px;
                                                 HorizontalLayout {
-                                                    spacing: 8px;
-                                                    ReticleMarker {
-                                                        ordinal: marker.ordinal;
+                                                    alignment: space-between;
+                                                    HorizontalLayout {
+                                                        spacing: 8px;
+                                                        ReticleMarker {
+                                                            ordinal: marker.ordinal;
+                                                        }
+                                                        Text { text: "Marker #" + marker.ordinal; font-size: 12px; font-weight: 700; color: root.text-primary; vertical-alignment: center; font-family: "IBM Plex Sans"; }
+                                                        Text { text: "(" + round(marker.x * 100) + "%, " + round(marker.y * 100) + "%)"; font-size: 10px; color: root.text-muted; vertical-alignment: center; font-family: "IBM Plex Mono"; }
                                                     }
-                                                    Text { text: "Marker #" + marker.ordinal; font-size: 12px; font-weight: 700; color: root.text-primary; vertical-alignment: center; font-family: "IBM Plex Sans"; }
-                                                    Text { text: "(" + round(marker.x * 100) + "%, " + round(marker.y * 100) + "%)"; font-size: 10px; color: root.text-muted; vertical-alignment: center; font-family: "IBM Plex Mono"; }
+                                                    // The delete affordance. It was a bare glyph with
+                                                    // nothing behind it - it LOOKED like a button and
+                                                    // removed nothing. The TouchArea is declared before
+                                                    // the glyph because an id resolves backwards only,
+                                                    // and a Text does not consume a click.
+                                                    Rectangle {
+                                                        width: 20px;
+                                                        height: 20px;
+                                                        border-radius: Theme.radius-sharp;
+                                                        del-touch := TouchArea {
+                                                            mouse-cursor: MouseCursor.pointer;
+                                                            clicked => { root.delete-marker-clicked(marker.id); }
+                                                        }
+                                                        background: del-touch.has-hover ? root.bg-hover : transparent;
+                                                        // A drawn icon, not a glyph. `✕` fell back to
+                                                        // whatever the font had, sat off-centre, and
+                                                        // said "close" rather than "delete".
+                                                        Image {
+                                                            x: (parent.width - self.width) / 2;
+                                                            y: (parent.height - self.height) / 2;
+                                                            width: 13px;
+                                                            height: 13px;
+                                                            image-fit: contain;
+                                                            source: @image-url("../assets/icons/trash.svg");
+                                                            colorize: del-touch.has-hover ? Theme.semantic-error : root.text-muted;
+                                                        }
+                                                    }
                                                 }
-                                                Text {
-                                                    text: "✕";
-                                                    font-size: 12px;
-                                                    color: root.text-muted;
-                                                    vertical-alignment: center;
-                                                }
-                                            }
 
-                                            // The product's one text field, like every other one.
-                                            // This was a `LineEdit` in a bare Rectangle - the same
-                                            // two faults as the Observation Summary, unseen only
-                                            // because this list has always been empty.
-                                            SdTextField {
-                                                height: 32px;
-                                                pad: 8px;
-                                                text-size: 12px;
-                                                text: marker.comment;
+                                                // The product's one text field, like every other one.
+                                                // This was a `LineEdit` in a bare Rectangle - the same
+                                                // two faults as the Observation Summary, unseen only
+                                                // because this list has always been empty.
+                                                // Grows with the note rather than clipping it,
+                                                // exactly as the capture field does. A Marker's
+                                                // note is prose, and a fixed 32px hid everything
+                                                // past the first line.
+                                                SdTextField {
+                                                    height: max(32px, self.content-height + 16px);
+                                                    pad: 8px;
+                                                    text-size: 12px;
+                                                    placeholder: "What is wrong here?";
+                                                    text: marker.comment;
+                                                    edited => { root.marker-comment-edited(marker.id, self.text); }
+                                                }
                                             }
                                         }
                                     }
                                 }
 
-                                // Section 3: Estimated LLM Cost Card
-                                Rectangle {
-                                    height: 84px;
-                                    border-radius: Theme.radius-sharp;
-                                    background: root.bg-card;
-                                    border-width: 1px;
-                                    border-color: root.border-strong;
+                                // The canvas's bar, third time. Indicator only, like the canvas's
+                                // own: a vertical wheel scrolls a vertical view natively, so there
+                                // is nothing here for a handle to do that the wheel does not - the
+                                // filmstrip's bar is draggable only because a vertical wheel cannot
+                                // scroll a horizontal view.
+                                if marker-scroll.viewport-height > marker-scroll.visible-height : SdScrollBar {
+                                    vertical: true;
+                                    viewport-extent: marker-scroll.viewport-height;
+                                    visible-extent: marker-scroll.visible-height;
+                                    offset: -marker-scroll.viewport-y;
+                                    scrolled(position) => { marker-scroll.viewport-y = -position; }
+                                    x: parent.width - self.width;
+                                    y: 0px;
+                                    height: parent.height;
+                                }
+                            }
 
-                                    VerticalLayout {
-                                        padding: 10px;
-                                        spacing: 4px;
+                            // STICKY: the cost estimate. Outside the scrolling area, so it stays on
+                            // screen however long the Marker list gets.
+                            //
+                            // And the numbers are REAL now. They were "~1.217 TK", "Image
+                            // (1020x885) ~1204 tk", "Notes (46 chars) ~13 tk" - hard-coded, and
+                            // pinning invented figures to the bottom of the panel where they are
+                            // always in view is worse than letting them scroll away. The image
+                            // figure uses w*h/750, which is where the 1204 came from in the first
+                            // place; the text figures are characters/4, the rule of thumb every
+                            // tokeniser lands near for English prose.
+                            Rectangle {
+                                height: 84px;
+                                border-radius: Theme.radius-sharp;
+                                background: root.bg-card;
+                                border-width: 1px;
+                                border-color: root.border-strong;
+
+                                VerticalLayout {
+                                    padding: 10px;
+                                    spacing: 4px;
+                                    HorizontalLayout {
+                                        alignment: space-between;
                                         HorizontalLayout {
-                                            alignment: space-between;
-                                            HorizontalLayout {
-                                                spacing: 6px;
-                                                alignment: start;
-                                                Image {
-                                                    width: 13px; height: 13px;
-                                                    image-fit: contain;
-                                                    source: @image-url("../assets/icons/coins.svg");
-                                                }
-                                                Text { text: "ESTIMATED LLM COST"; font-size: 10px; font-weight: 800; color: root.text-secondary; font-family: "IBM Plex Sans"; }
+                                            spacing: 6px;
+                                            alignment: start;
+                                            Image {
+                                                width: 13px; height: 13px;
+                                                image-fit: contain;
+                                                source: @image-url("../assets/icons/coins.svg");
                                             }
-                                            Text { text: "~1.217 TK"; font-size: 12px; font-weight: 800; color: Theme.accent-primary; font-family: "IBM Plex Mono"; }
+                                            Text { text: "ESTIMATED LLM COST"; font-size: 10px; font-weight: 800; color: root.text-secondary; font-family: "IBM Plex Sans"; }
                                         }
-                                        HorizontalLayout {
-                                            alignment: space-between;
-                                            HorizontalLayout {
-                                                spacing: 6px;
-                                                alignment: start;
-                                                Image {
-                                                    width: 12px; height: 12px;
-                                                    image-fit: contain;
-                                                    source: @image-url("../assets/icons/image.svg");
-                                                }
-                                                Text { text: "Image (1020×885)"; font-size: 11px; color: root.text-muted; font-family: "IBM Plex Sans"; }
-                                            }
-                                            Text { text: "~1204 tk"; font-size: 11px; color: root.text-muted; font-family: "IBM Plex Mono"; }
+                                        Text {
+                                            text: "~" + (root.image-token-estimate + round(root.finding-note.character-count / 4) + round(root.marker-char-count / 4)) + " tk";
+                                            font-size: 12px;
+                                            font-weight: 800;
+                                            color: Theme.accent-primary;
+                                            font-family: "IBM Plex Mono";
                                         }
+                                    }
+                                    HorizontalLayout {
+                                        alignment: space-between;
                                         HorizontalLayout {
-                                            alignment: space-between;
-                                            HorizontalLayout {
-                                                spacing: 6px;
-                                                alignment: start;
-                                                Image {
-                                                    width: 12px; height: 12px;
-                                                    image-fit: contain;
-                                                    source: @image-url("../assets/icons/file-lines.svg");
-                                                }
-                                                Text { text: "Notes (46 chars)"; font-size: 11px; color: root.text-muted; font-family: "IBM Plex Sans"; }
+                                            spacing: 6px;
+                                            alignment: start;
+                                            Image {
+                                                width: 12px; height: 12px;
+                                                image-fit: contain;
+                                                source: @image-url("../assets/icons/image.svg");
                                             }
-                                            Text { text: "~13 tk"; font-size: 11px; color: root.text-muted; font-family: "IBM Plex Mono"; }
+                                            Text { text: "Image (" + root.resolution-text + ")"; font-size: 11px; color: root.text-muted; font-family: "IBM Plex Sans"; }
+                                        }
+                                        Text { text: "~" + root.image-token-estimate + " tk"; font-size: 11px; color: root.text-muted; font-family: "IBM Plex Mono"; }
+                                    }
+                                    HorizontalLayout {
+                                        alignment: space-between;
+                                        HorizontalLayout {
+                                            spacing: 6px;
+                                            alignment: start;
+                                            Image {
+                                                width: 12px; height: 12px;
+                                                image-fit: contain;
+                                                source: @image-url("../assets/icons/file-lines.svg");
+                                            }
+                                            Text {
+                                                text: "Notes (" + root.finding-note.character-count + " chars) + " + root.markers.length + " marker" + (root.markers.length == 1 ? "" : "s");
+                                                font-size: 11px;
+                                                color: root.text-muted;
+                                                font-family: "IBM Plex Sans";
+                                            }
+                                        }
+                                        Text {
+                                            text: "~" + (round(root.finding-note.character-count / 4) + round(root.marker-char-count / 4)) + " tk";
+                                            font-size: 11px;
+                                            color: root.text-muted;
+                                            font-family: "IBM Plex Mono";
                                         }
                                     }
                                 }
                             }
+                        }
 
-                            if root.active-tab-index == 1 : VerticalLayout {
-                                padding: 16px;
-                                spacing: 12px;
+                        if root.active-tab-index == 1 : ScrollView {
+                            vertical-stretch: 1;
 
+                                VerticalLayout {
+                                    padding: 16px;
+                                    spacing: 12px;
+
+                                    Text {
+                                        text: "ELEMENT PROPERTIES";
+                                        font-size: 11px;
+                                        font-weight: 800;
+                                        color: root.text-secondary;
+                                        font-family: "IBM Plex Sans";
+                                    }
+
+                                    Rectangle {
+                                        height: 120px;
+                                        background: root.bg-card;
+                                        border-radius: Theme.radius-sharp;
+                                        border-width: 1px;
+                                        border-color: root.border-strong;
+
+                                        VerticalLayout {
+                                            padding: 12px;
+                                            spacing: 8px;
+                                            Text { text: "Font Family"; font-size: 11px; font-weight: 700; color: root.text-muted; font-family: "IBM Plex Sans"; }
+                                            SdTextField {
+                                                height: 32px;
+                                                pad: 8px;
+                                                text-size: 12px;
+                                                text: "IBM Plex Sans, sans-serif";
+                                            }
+                                            Text { text: "Font Size: 14px"; font-size: 11px; font-weight: 700; color: root.text-muted; font-family: "IBM Plex Sans"; }
+                                        }
+                                    }
+                                }
+                        }
+
+                    }
+                }
+            }
+        }
+        // RESULT LINE - last declared, so it draws over everything.
+        //
+        // Assembling a Bundle writes image files, a Markdown file and a database row, and changes
+        // nothing at all on screen. Without a line that says so, a success and a silent failure look
+        // identical from the Editor - and a silent failure on exactly this path is what BUG-19 and
+        // BUG-23 both are. The semantic colour is carried by the border and the dot rather than by
+        // the text, because a red or green body on a tinted plate does not clear AA in both themes.
+        if root.toast-text != "" : Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: parent.height - self.height - 28px;
+            width: min(560px, parent.width - 64px);
+            height: 42px;
+            border-radius: Theme.radius-sharp;
+            background: root.bg-card;
+            border-width: 1px;
+            border-color: root.toast-is-error ? Theme.semantic-error : Theme.semantic-success;
+            drop-shadow-blur: 18px;
+            drop-shadow-color: Theme.overlay-shadow;
+
+            HorizontalLayout {
+                padding-left: 14px;
+                padding-right: 14px;
+                spacing: 10px;
+                alignment: start;
+
+                Rectangle {
+                    width: 8px;
+                    height: 8px;
+                    y: (parent.height - self.height) / 2;
+                    border-radius: Theme.radius-pill;
+                    background: root.toast-is-error ? Theme.semantic-error : Theme.semantic-success;
+                }
+
+                Text {
+                    text: root.toast-text;
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: root.text-primary;
+                    vertical-alignment: center;
+                    wrap: word-wrap;
+                    font-family: "IBM Plex Sans";
+                }
+            }
+        }
+
+        // Clears itself. A result line that stays forever becomes furniture, and the next result is
+        // then indistinguishable from the last one.
+        Timer {
+            interval: 7s;
+            running: root.toast-text != "";
+            triggered => { root.toast-text = ""; }
+        }
+
+        // ASSEMBLE & REVIEW - the last thing declared, so it is above everything including the
+        // result line.
+        //
+        // A RENDERED document, not the raw CommonMark. The first version showed the Markdown source
+        // in a monospace pane beside a list of contents with a remove button on each row; the owner's
+        // reading of it was that this screen is a final look at what the agent will get, so it should
+        // look like what the agent will get - headings as headings, and the image actually visible.
+        // The contents list and the per-item removal went with that: choosing what goes in is the
+        // filmstrip's job, and doing it in two places is two places to disagree.
+        //
+        // The UX asset's third column - Copy Markdown, Local MCP Bridge, Publish - is still absent.
+        // None of the three exists: no clipboard dependency, `BUG-59` for the Bridge's endpoints,
+        // `DEC-005` for publishing. Drawing them would be `BUG-57` again.
+        if root.bundle-preview-open : Rectangle {
+            width: 100%;
+            height: 100%;
+            background: Theme.overlay-scrim;
+
+            // Swallows every click that misses the panel, so the Editor behind is inert.
+            TouchArea { }
+
+            // Escape closes it. Declared before the panel and focused on creation, so it holds the
+            // keyboard until the Reviewer clicks into a field.
+            preview-keys := FocusScope {
+                init => { self.focus(); }
+                key-pressed(event) => {
+                    if (event.text == Key.Escape) {
+                        root.bundle-preview-cancelled();
+                        return accept;
+                    }
+                    return reject;
+                }
+            }
+
+            // A PAGE, not a dialog: it grows with the window and keeps A4's 1:1.414 portrait ratio,
+            // because what it holds is a document and a document has a comfortable measure. At
+            // 880x640 it was landscape and far wider than any line of prose wants to be - the
+            // owner's words were "kenapa saya merasa kelebaran".
+            //
+            // Height drives width, one direction only, so there is no circular layout.
+            preview-panel := Rectangle {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                height: max(420px, parent.height - 64px);
+                width: min(parent.width - 64px, max(520px, self.height / 1.414));
+                background: root.bg-app;
+                border-radius: Theme.radius-sharp;
+                border-width: 1px;
+                border-color: root.border-strong;
+                drop-shadow-blur: 32px;
+                drop-shadow-color: Theme.overlay-shadow;
+
+                VerticalLayout {
+                    padding: 0px;
+                    spacing: 0px;
+
+                    // HEADER
+                    Rectangle {
+                        height: 52px;
+                        background: root.bg-card;
+                        Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: root.border-subtle; }
+
+                        HorizontalLayout {
+                            padding-left: 16px;
+                            padding-right: 12px;
+                            spacing: 10px;
+                            alignment: space-between;
+
+                            HorizontalLayout {
+                                spacing: 8px;
+                                alignment: start;
+                                Image {
+                                    y: (parent.height - self.height) / 2;
+                                    width: 15px;
+                                    height: 15px;
+                                    image-fit: contain;
+                                    source: @image-url("../assets/icons/package.svg");
+                                    colorize: Theme.accent-primary;
+                                }
                                 Text {
-                                    text: "ELEMENT PROPERTIES";
-                                    font-size: 11px;
+                                    text: "Assemble & Review";
+                                    font-size: 13px;
                                     font-weight: 800;
-                                    color: root.text-secondary;
+                                    color: root.text-primary;
+                                    vertical-alignment: center;
                                     font-family: "IBM Plex Sans";
                                 }
+                            }
 
+                            HorizontalLayout {
+                                spacing: 12px;
+                                alignment: end;
+                                Text {
+                                    text: root.bundle-preview-finding-count + " Finding" + (root.bundle-preview-finding-count == 1 ? "" : "s") + "  ·  ~" + root.bundle-preview-text-tokens + " tk";
+                                    font-size: 11px;
+                                    font-weight: 700;
+                                    color: Theme.accent-primary;
+                                    vertical-alignment: center;
+                                    font-family: "IBM Plex Mono";
+                                }
+
+                                // PREVIEW / CODE. Preview is the default because the question this
+                                // screen answers is "is this the right handoff", and that is a
+                                // question about the document rather than about its source.
                                 Rectangle {
-                                    height: 120px;
-                                    background: root.bg-card;
+                                    y: (parent.height - self.height) / 2;
+                                    width: 132px;
+                                    height: 26px;
                                     border-radius: Theme.radius-sharp;
+                                    background: root.bg-subtle;
                                     border-width: 1px;
                                     border-color: root.border-strong;
 
-                                    VerticalLayout {
-                                        padding: 12px;
-                                        spacing: 8px;
-                                        Text { text: "Font Family"; font-size: 11px; font-weight: 700; color: root.text-muted; font-family: "IBM Plex Sans"; }
-                                        SdTextField {
-                                            height: 32px;
-                                            pad: 8px;
-                                            text-size: 12px;
-                                            text: "IBM Plex Sans, sans-serif";
+                                    HorizontalLayout {
+                                        padding: 2px;
+                                        spacing: 2px;
+
+                                        Rectangle {
+                                            border-radius: Theme.radius-sharp;
+                                            preview-tab := TouchArea {
+                                                mouse-cursor: MouseCursor.pointer;
+                                                clicked => { root.bundle-preview-shows-code = false; }
+                                            }
+                                            background: !root.bundle-preview-shows-code
+                                                ? Theme.accent-primary
+                                                : (preview-tab.has-hover ? root.bg-hover : transparent);
+                                            Text {
+                                                text: "Preview";
+                                                font-size: 10px;
+                                                font-weight: 700;
+                                                color: !root.bundle-preview-shows-code ? Theme.text-on-accent : root.text-secondary;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                                font-family: "IBM Plex Sans";
+                                            }
                                         }
-                                        Text { text: "Font Size: 14px"; font-size: 11px; font-weight: 700; color: root.text-muted; font-family: "IBM Plex Sans"; }
+
+                                        Rectangle {
+                                            border-radius: Theme.radius-sharp;
+                                            code-tab := TouchArea {
+                                                mouse-cursor: MouseCursor.pointer;
+                                                clicked => { root.bundle-preview-shows-code = true; }
+                                            }
+                                            background: root.bundle-preview-shows-code
+                                                ? Theme.accent-primary
+                                                : (code-tab.has-hover ? root.bg-hover : transparent);
+                                            Text {
+                                                text: "Code";
+                                                font-size: 10px;
+                                                font-weight: 700;
+                                                color: root.bundle-preview-shows-code ? Theme.text-on-accent : root.text-secondary;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                                font-family: "IBM Plex Mono";
+                                            }
+                                        }
                                     }
                                 }
+                                Rectangle {
+                                    y: (parent.height - self.height) / 2;
+                                    width: 26px;
+                                    height: 26px;
+                                    border-radius: Theme.radius-sharp;
+                                    close-preview := TouchArea {
+                                        mouse-cursor: MouseCursor.pointer;
+                                        clicked => { root.bundle-preview-cancelled(); }
+                                    }
+                                    background: close-preview.has-hover ? root.bg-hover : transparent;
+                                    // A drawn icon. The bare `✕` glyph fell back to whatever the
+                                    // font had and rendered wrong - the same fault as the Marker
+                                    // delete affordance, in the same session.
+                                    Image {
+                                        x: (parent.width - self.width) / 2;
+                                        y: (parent.height - self.height) / 2;
+                                        width: 13px;
+                                        height: 13px;
+                                        image-fit: contain;
+                                        source: @image-url("../assets/icons/x.svg");
+                                        colorize: close-preview.has-hover ? root.text-primary : root.text-muted;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // THE DOCUMENT, and the only place any of it is edited.
+                    //
+                    // The name and the Bundle note used to have their own fields above this, so each
+                    // appeared TWICE - once as a form field and once as content - and only the form
+                    // copy could be changed. The owner's note was that everything should be editable
+                    // and asked for the right UX. This is it: the document IS the editor. One place
+                    // per thing, and the thing is where you would expect to find it.
+                    //
+                    // Code shows the same blocks with their markup printed above them, still
+                    // editable. A Finding's heading and its image reference are NOT editable in
+                    // either view: they are generated from the Finding and the plan, and typing over
+                    // them would mean the document no longer describes what is being written.
+                    Rectangle {
+                        vertical-stretch: 1;
+                        background: root.bg-app;
+
+                        preview-scroll := ScrollView {
+                            width: 100%;
+                            height: 100%;
+                            vertical-scrollbar-policy: always-off;
+                            horizontal-scrollbar-policy: always-off;
+                            viewport-width: self.visible-width;
+
+                            VerticalLayout {
+                                padding-left: 22px;
+                                padding-right: 30px;
+                                padding-top: 16px;
+                                padding-bottom: 22px;
+                                spacing: 10px;
+                                alignment: start;
+
+                                for block in root.bundle-preview-blocks : VerticalLayout {
+                                    spacing: 4px;
+                                    alignment: start;
+
+                                    // --- the Bundle's title -------------------------------------
+                                    if block.kind == "title" && root.bundle-preview-shows-code : Text {
+                                        text: "# ";
+                                        font-size: 11px;
+                                        color: Theme.accent-primary;
+                                        font-family: "IBM Plex Mono";
+                                    }
+                                    if block.kind == "title" : SdTextField {
+                                        flat: true;
+                                        height: max(30px, self.content-height + 10px);
+                                        pad: 2px;
+                                        text-size: root.bundle-preview-shows-code ? 12px : 19px;
+                                        placeholder: "Name this handoff";
+                                        text: block.text;
+                                        edited => { root.bundle-block-edited(block.kind, "", "", self.text); }
+                                    }
+
+                                    // --- the Bundle's own note ----------------------------------
+                                    if block.kind == "bundle-notes" && root.bundle-preview-shows-code : Text {
+                                        text: "## Bundle Notes";
+                                        font-size: 11px;
+                                        color: Theme.accent-primary;
+                                        font-family: "IBM Plex Mono";
+                                    }
+                                    if block.kind == "bundle-notes" && !root.bundle-preview-shows-code : SdSectionLabel {
+                                        text: "BUNDLE NOTES";
+                                    }
+                                    if block.kind == "bundle-notes" : SdTextField {
+                                        flat: true;
+                                        height: max(38px, self.content-height + 12px);
+                                        pad: 2px;
+                                        text-size: 12px;
+                                        placeholder: "What is this handoff about? The agent reads this first.";
+                                        text: block.text;
+                                        edited => { root.bundle-block-edited(block.kind, "", "", self.text); }
+                                    }
+
+                                    // --- a Finding's heading ------------------------------------
+                                    if block.kind == "finding" : Text {
+                                        text: (root.bundle-preview-shows-code ? "## " : "") + "Finding " + block.ordinal;
+                                        font-size: root.bundle-preview-shows-code ? 12px : 15px;
+                                        font-weight: 800;
+                                        color: root.text-primary;
+                                        font-family: root.bundle-preview-shows-code ? "IBM Plex Mono" : "IBM Plex Sans";
+                                    }
+
+                                    // --- the image ----------------------------------------------
+                                    if block.kind == "image" && root.bundle-preview-shows-code : Text {
+                                        text: "![Finding " + block.ordinal + "](" + block.path + ")";
+                                        font-size: 11px;
+                                        color: root.text-muted;
+                                        wrap: word-wrap;
+                                        font-family: "IBM Plex Mono";
+                                    }
+                                    if block.kind == "image" && !root.bundle-preview-shows-code : HorizontalLayout {
+                                        alignment: start;
+                                        Rectangle {
+                                            // HALF the page at most, at the owner's direction: the
+                                            // notes are what this screen is for, and a full-measure
+                                            // screenshot buries them.
+                                            //
+                                            // Bounded by the PANEL's width, not by `parent.width`.
+                                            // Reading the parent here is a binding loop - the
+                                            // layout's width comes from its content, and this is
+                                            // that content. The panel's width comes from its own
+                                            // height, so it is outside the loop.
+                                            width: min((preview-panel.width - 52px) * 0.5, block.image.width * 1px);
+                                            height: block.image.width > 0
+                                                ? self.width * (block.image.height / block.image.width)
+                                                : 0px;
+                                            Image {
+                                                width: 100%;
+                                                height: 100%;
+                                                image-fit: contain;
+                                                source: block.image;
+                                            }
+                                        }
+                                    }
+
+                                    // --- a Finding's note ---------------------------------------
+                                    if block.kind == "note" && root.bundle-preview-shows-code : Text {
+                                        text: "### Notes";
+                                        font-size: 11px;
+                                        color: Theme.accent-primary;
+                                        font-family: "IBM Plex Mono";
+                                    }
+                                    if block.kind == "note" && !root.bundle-preview-shows-code : SdSectionLabel {
+                                        text: "NOTES";
+                                    }
+                                    if block.kind == "note" : SdTextField {
+                                        flat: true;
+                                        height: max(30px, self.content-height + 12px);
+                                        pad: 2px;
+                                        text-size: 12px;
+                                        text: block.text;
+                                        edited => { root.bundle-block-edited(block.kind, block.finding-id, "", self.text); }
+                                    }
+
+                                    // --- one Marker's note --------------------------------------
+                                    if block.kind == "marker" && block.starts-section && root.bundle-preview-shows-code : Text {
+                                        text: "### Marker Notes";
+                                        font-size: 11px;
+                                        color: Theme.accent-primary;
+                                        font-family: "IBM Plex Mono";
+                                    }
+                                    if block.kind == "marker" && block.starts-section && !root.bundle-preview-shows-code : SdSectionLabel {
+                                        text: "MARKER NOTES";
+                                    }
+                                    if block.kind == "marker" : HorizontalLayout {
+                                        spacing: 6px;
+                                        alignment: start;
+                                        Text {
+                                            text: block.ordinal + ".";
+                                            font-size: 12px;
+                                            font-weight: 700;
+                                            color: root.text-muted;
+                                            vertical-alignment: top;
+                                            font-family: root.bundle-preview-shows-code ? "IBM Plex Mono" : "IBM Plex Sans";
+                                        }
+                                        SdTextField {
+                                            flat: true;
+                                            horizontal-stretch: 1;
+                                            height: max(26px, self.content-height + 8px);
+                                            pad: 2px;
+                                            text-size: 12px;
+                                            placeholder: "What is wrong at this point?";
+                                            text: block.text;
+                                            edited => { root.bundle-block-edited(block.kind, block.finding-id, block.marker-id, self.text); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if preview-scroll.viewport-height > preview-scroll.visible-height : SdScrollBar {
+                            vertical: true;
+                            viewport-extent: preview-scroll.viewport-height;
+                            visible-extent: preview-scroll.visible-height;
+                            offset: -preview-scroll.viewport-y;
+                            scrolled(position) => { preview-scroll.viewport-y = -position; }
+                            x: parent.width - self.width - 8px;
+                            y: 4px;
+                            height: parent.height - 8px;
+                        }
+                    }
+
+                    // FOOTER
+                    Rectangle {
+                        height: 60px;
+                        background: root.bg-card;
+                        Rectangle { y: 0px; width: 100%; height: 1px; background: root.border-subtle; }
+
+                        HorizontalLayout {
+                            padding-left: 16px;
+                            padding-right: 16px;
+                            spacing: 10px;
+                            alignment: end;
+
+                            Rectangle {
+                                y: (parent.height - self.height) / 2;
+                                width: 86px;
+                                height: 32px;
+                                border-radius: Theme.radius-sharp;
+                                border-width: 1px;
+                                border-color: root.border-strong;
+                                cancel-touch := TouchArea {
+                                    mouse-cursor: MouseCursor.pointer;
+                                    clicked => { root.bundle-preview-cancelled(); }
+                                }
+                                background: cancel-touch.has-hover ? root.bg-hover : transparent;
+                                Text {
+                                    text: "Cancel";
+                                    font-size: 11px;
+                                    font-weight: 700;
+                                    color: root.text-secondary;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                    font-family: "IBM Plex Sans";
+                                }
+                            }
+
+                            SdActionButton {
+                                y: (parent.height - self.height) / 2;
+                                label: "Assemble & Save";
+                                icon: @image-url("../assets/icons/package.svg");
+                                enabled: root.bundle-preview-finding-count > 0;
+                                clicked => { root.bundle-preview-confirmed(); }
                             }
                         }
                     }

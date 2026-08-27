@@ -1,5 +1,4 @@
-use image::codecs::png::PngEncoder;
-use image::{ExtendedColorType, ImageEncoder, Rgba, RgbaImage};
+use image::{Rgba, RgbaImage};
 use snapdown_core::domain::finding::{AnnotationShape, Marker, VisualAnnotation};
 use snapdown_core::domain::image::ImageDimensions;
 use snapdown_core::error::CoreError;
@@ -56,12 +55,27 @@ impl MarkerBurner {
             )));
         }
 
-        let active_markers: Vec<&Marker> = markers
-            .iter()
-            .filter(|m| !m.comment.trim().is_empty())
-            .collect();
-
-        if active_markers.is_empty() && annotations.is_empty() {
+        // EVERY Marker is drawn. There is no filter here, and there must not be one.
+        //
+        // This used to skip any Marker whose comment was empty or whitespace, citing `SCN-04`. That
+        // is a misreading of the scenario, and `SCN-04` says so in its own words:
+        //
+        //   1. "Marker 2 stays on the image, at its position, numbered 2."
+        //   4. "The image shows nothing unusual. A badge is a badge."
+        //
+        // and under "Why point 4 is not an oversight": "A 'this marker has no line' ANNOTATION on
+        // the image would be a permanent artifact of a temporary editing state."
+        //
+        // So the scenario forbids drawing anything EXTRA for a Marker with no note line. It requires
+        // the badge itself. The named test is `a_marker_with_no_line_is_not_annotated_on_the_image`,
+        // and it was implemented as "is never drawn" - one word, opposite behaviour.
+        //
+        // The owner found it from the other end: Markers placed on the canvas were missing from the
+        // Assemble preview. A Marker is placed before it is described, so a freshly placed one has
+        // no comment yet - which is most of them, most of the time.
+        if markers.is_empty() && annotations.is_empty() {
+            // The byte-identity promise of `AD-9`, and it still holds: with nothing to draw, the
+            // Bundle's copy is the Finding's bytes.
             return Ok(input_bytes.to_vec());
         }
 
@@ -143,23 +157,18 @@ impl MarkerBurner {
         }
 
         // 3. Burn Numbered Markers on top
-        for marker in active_markers {
+        for marker in markers {
             let cx = (marker.x * (dimensions.width as f64)).round() as i32;
             let cy = (marker.y * (dimensions.height as f64)).round() as i32;
 
             Self::draw_badge(&mut image_rgba, cx, cy, marker.ordinal);
         }
 
-        let mut output_bytes = Vec::new();
-        let encoder = PngEncoder::new(&mut output_bytes);
-        encoder
-            .write_image(
-                image_rgba.as_raw(),
-                dimensions.width,
-                dimensions.height,
-                ExtendedColorType::Rgba8,
-            )
-            .map_err(|e| CoreError::Validation(format!("Failed to encode burned PNG: {e}")))?;
+        // The same encoder the capture path uses. A burned copy is what actually reaches the agent,
+        // so it is the one place in the product where bytes matter most - see `encode_png` for the
+        // measurements and for why `CompressionType::Best` was rejected.
+        let output_bytes =
+            crate::image::pipeline::encode_png(&image_rgba, dimensions.width, dimensions.height)?;
 
         Ok(output_bytes)
     }
@@ -484,6 +493,8 @@ impl MarkerBurner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use image::codecs::png::PngEncoder;
+    use image::{ExtendedColorType, ImageEncoder};
 
     fn make_test_png(w: u32, h: u32, color: Rgba<u8>) -> Vec<u8> {
         let img = RgbaImage::from_pixel(w, h, color);

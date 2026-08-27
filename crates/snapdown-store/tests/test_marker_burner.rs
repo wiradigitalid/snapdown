@@ -129,26 +129,65 @@ fn a_burned_image_keeps_the_dimensions_of_its_source() {
 }
 
 #[test]
-fn a_marker_with_no_note_line_is_never_drawn_on_the_image() {
+fn a_marker_with_no_note_line_is_drawn_as_an_ordinary_badge() {
+    // SCN-04, in its own words:
+    //
+    //   1. "Marker 2 stays on the image, at its position, numbered 2."
+    //   4. "The image shows nothing unusual. A badge is a badge."
+    //
+    // and: "A 'this marker has no line' ANNOTATION on the image would be a permanent artifact of a
+    // temporary editing state."
+    //
+    // So the scenario forbids drawing anything EXTRA for such a Marker. It requires the badge.
+    // This test used to be called `..._is_never_drawn_on_the_image` and asserted the opposite - one
+    // word away from the scenario's own named test, `a_marker_with_no_line_is_not_annotated_on_the_
+    // image`, and the whole behaviour inverted. The owner found it from the other end: Markers
+    // placed on the canvas were missing from the Assemble preview, because a Marker is placed
+    // before it is described.
     let dims = ImageDimensions::new(300, 300).unwrap();
     let bg_color = Rgba([80, 80, 80, 255]);
     let source_bytes = make_test_png(300, 300, bg_color);
 
-    // Markers with empty or whitespace-only comments under SCN-04
     let empty_marker = Marker::new("m-empty".into(), "f-1".into(), 1, 0.5, 0.5, "".into()).unwrap();
-    let ws_marker =
-        Marker::new("m-ws".into(), "f-1".into(), 2, 0.3, 0.3, "   \t\n  ".into()).unwrap();
+    let ws_marker = Marker::new(
+        "m-ws".into(),
+        "f-1".into(),
+        2,
+        0.3,
+        0.3,
+        "   	
+  "
+        .into(),
+    )
+    .unwrap();
 
     let burned_bytes =
         MarkerBurner::burn_markers(&source_bytes, &dims, &[empty_marker, ws_marker]).unwrap();
+    let burned = image::load_from_memory(&burned_bytes).unwrap().to_rgba8();
 
-    // Under AD-9, returning identical bytes byte-for-byte
-    assert_eq!(
-        burned_bytes, source_bytes,
-        "Burning only markers with no note line must return source bytes unchanged"
+    // Marker 1 at (0.5, 0.5) -> (150, 150)
+    assert_ne!(
+        burned.get_pixel(150, 150),
+        &bg_color,
+        "a Marker with an empty note line must still be drawn: SCN-04 point 1"
+    );
+    // Marker 2 at (0.3, 0.3) -> (90, 90)
+    assert_ne!(
+        burned.get_pixel(90, 90),
+        &bg_color,
+        "a whitespace-only note line is still no line, and the badge is still a badge"
     );
 
-    // Mixed test: one empty comment marker and one active marker
+    // And nothing extra anywhere else: the corner is untouched, so no warning glyph or overlay has
+    // been added for the ragged sequence. That is the half of SCN-04 point 4 that DOES forbid
+    // something.
+    assert_eq!(
+        burned.get_pixel(4, 4),
+        &bg_color,
+        "no extra annotation may be drawn for a Marker with no line - that is what SCN-04 forbids"
+    );
+
+    // Mixed: a described Marker and an undescribed one, both drawn.
     let active_marker = Marker::new(
         "m-active".into(),
         "f-1".into(),
@@ -163,21 +202,17 @@ fn a_marker_with_no_note_line_is_never_drawn_on_the_image() {
 
     let mixed_burned =
         MarkerBurner::burn_markers(&source_bytes, &dims, &[empty_marker2, active_marker]).unwrap();
-
     let mixed_img = image::load_from_memory(&mixed_burned).unwrap().to_rgba8();
 
-    // Marker 3 at (0.8, 0.8) -> (240, 240) should be drawn
     assert_ne!(
         mixed_img.get_pixel(240, 240),
         &bg_color,
-        "Active marker must be drawn"
+        "the described Marker must be drawn"
     );
-
-    // Marker 4 at (0.2, 0.2) -> (60, 60) should NOT be drawn
-    assert_eq!(
+    assert_ne!(
         mixed_img.get_pixel(60, 60),
         &bg_color,
-        "Marker with no note line must NOT be drawn"
+        "and so must the one that has not been described yet"
     );
 }
 

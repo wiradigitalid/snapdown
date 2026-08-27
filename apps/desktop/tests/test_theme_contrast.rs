@@ -143,6 +143,21 @@ const PAIRS: &[(&str, &str, f64, &str)] = &[
     ("border-focus", "bg-app", 3.0, "the focus ring"),
     ("border-focus", "bg-card", 3.0, "the focus ring on a panel"),
     ("accent-active", "bg-card", 4.5, "an active tool's label"),
+    // Added when `accent-capture` became a token. Its inline value was #e11d48, which measures
+    // 4.29 on `bg-app` and misses AA for a 10px label - found by asserting it rather than by anyone
+    // looking at it.
+    (
+        "accent-capture",
+        "bg-app",
+        4.5,
+        "the Capture action's label",
+    ),
+    (
+        "accent-capture",
+        "bg-card",
+        4.5,
+        "the Capture action's label on a panel",
+    ),
     ("semantic-success", "bg-card", 4.5, "the Editing tag"),
     ("semantic-error", "bg-card", 3.0, "a Marker pin"),
 ];
@@ -270,5 +285,73 @@ fn a_decorative_border_is_not_held_to_a_text_requirement() {
             .any(|(fg, bg, want, _)| *fg == "border-focus" && *bg == "bg-app" && *want == 3.0),
         "the focus ring must still be asserted at 3:1 - that is the case WCAG's non-text \
          requirement is actually about"
+    );
+}
+
+/// Colour lives in `theme.slint` and nowhere else, and this is what says so for the Slint surfaces.
+///
+/// `NFR-17` puts colour in one file and names a lint as the enforcement - a lint that covers
+/// `web/ui/src/styles/tokens.css`, which builds nothing in the active workspace (`OQ-27`). The
+/// Slint files had no equivalent, and on 2026-08-27 nine literals were found across them: a close
+/// button's hover red, a white glyph, the canvas ground twice, two shadows, a filmstrip card ground,
+/// and the Capture label at #e11d48 - which turned out to miss AA on `bg-app` and was only measured
+/// because turning it into a token brought it into the gate above.
+///
+/// A literal is not merely untidy: it exists in exactly one theme. Every one of those nine painted
+/// the same pixels in dark mode as in light.
+#[test]
+fn colour_lives_only_in_theme_slint() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("ui");
+    let mut files = vec![root.join("appwindow.slint")];
+    let components = root.join("components");
+    let mut component_files: Vec<_> = fs::read_dir(&components)
+        .unwrap_or_else(|e| panic!("Failed to list {components:?}: {e}"))
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .filter(|path| path.extension().is_some_and(|ext| ext == "slint"))
+        .collect();
+    component_files.sort();
+    assert!(
+        !component_files.is_empty(),
+        "no component .slint files found - this test would then only cover one file"
+    );
+    files.append(&mut component_files);
+
+    let mut offenders: Vec<String> = Vec::new();
+    for path in &files {
+        let source =
+            fs::read_to_string(path).unwrap_or_else(|e| panic!("Failed to read {path:?}: {e}"));
+        for (number, line) in source.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            // Only the colour syntax, and only outside a comment on the same line.
+            let code = trimmed.split("//").next().unwrap_or("");
+            let mut rest = code;
+            while let Some(at) = rest.find('#') {
+                let after = &rest[at + 1..];
+                let hex: String = after
+                    .chars()
+                    .take_while(|c| c.is_ascii_hexdigit())
+                    .collect();
+                if hex.len() == 3 || hex.len() == 6 || hex.len() == 8 {
+                    offenders.push(format!(
+                        "{}:{}: #{hex}",
+                        path.file_name().unwrap_or_default().to_string_lossy(),
+                        number + 1
+                    ));
+                }
+                rest = &after[hex.len()..];
+            }
+        }
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "{} colour literal(s) outside theme.slint. Add a token to theme.slint - with a comment          saying why, if it is deliberately theme-invariant - and reference it instead:
+  {}",
+        offenders.len(),
+        offenders.join("
+  ")
     );
 }

@@ -31,6 +31,38 @@ export global Theme {
     out property <color> semantic-success: is-dark ? #4ade80 : #166534; // Tag Status Editing Green
     out property <color> semantic-success-bg: is-dark ? #166534.with-alpha(0.3) : #ffffff.with-alpha(0.92);
 
+    // 5b. Editor Chrome Tokens
+    //
+    // These four were colour literals sitting in `appwindow.slint`. The rule is that colour lives in
+    // this file and nowhere else, and a literal in a component is how the two themes drift apart
+    // without anything noticing - so each is here, and each says why it is the value it is.
+
+    // The Windows shell paints its own close button this exact red on hover. Matching it is what
+    // makes the titlebar read as a titlebar rather than as our approximation of one, and it is
+    // deliberately NOT `semantic-error`: that one is ours to change, this one is not.
+    out property <color> chrome-close-hover: #e81123;
+
+    // The ground behind a Finding's image, in both themes. A light plate under a screenshot makes a
+    // white-backed capture invisible at its own edges, which is the whole reason a canvas has a
+    // ground at all.
+    out property <color> canvas-ground: #0f172a;
+
+    // A lift under a document surface. Softer than `overlay-shadow`, which floats a panel over a
+    // screenshot rather than a page over a desk.
+    out property <color> shadow-soft: #000000.with-alpha(0.18);
+
+    // The lift under a Marker badge. A Marker is drawn over a captured screenshot, so like the
+    // overlay group below it does not follow the theme - the thing behind it is not our surface.
+    out property <color> marker-shadow: #000000.with-alpha(0.35);
+
+    // The Capture action's label. It is the one control deliberately outside the accent blue - it is
+    // the product's primary verb, and it reads as its own thing on the toolbar.
+    //
+    // Was `#e11d48` inline, which measures 4.29:1 on `bg-app` and misses AA for a 10px label. The
+    // light value is a step darker for that reason, and the pairing is now asserted in
+    // `test_theme_contrast.rs` rather than trusted.
+    out property <color> accent-capture: is-dark ? #fb7185 : #be123c;
+
     // 6. Capture Overlay Tokens
     //
     // The overlay is drawn over a frozen screenshot of the operator's desktop, not over app

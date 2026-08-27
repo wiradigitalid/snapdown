@@ -21,6 +21,7 @@ export component SdActionButton inherits Rectangle {
     in property <string> label;
     in property <image> icon;
     in property <bool> primary: true;
+    in property <bool> enabled: true;
     in property <length> label-size: 11px;
 
     callback clicked();
@@ -30,12 +31,14 @@ export component SdActionButton inherits Rectangle {
     // does not get clipped and a short one does not float in a wide slab.
     min-width: body.min-width + 24px;
     border-radius: Theme.radius-sharp;
-    background: root.primary
-        ? (touch.pressed ? Theme.accent-pressed : (touch.has-hover ? Theme.accent-hover : Theme.accent-primary))
-        : (touch.has-hover ? Theme.bg-hover : Theme.bg-card);
+    background: !root.enabled
+        ? Theme.bg-hover
+        : (root.primary
+            ? (touch.pressed ? Theme.accent-pressed : (touch.has-hover ? Theme.accent-hover : Theme.accent-primary))
+            : (touch.has-hover ? Theme.bg-hover : Theme.bg-card));
     border-width: root.primary ? 0px : 1px;
     border-color: Theme.border-strong;
-    drop-shadow-blur: root.primary ? (touch.has-hover ? 6px : 2px) : 0px;
+    drop-shadow-blur: (root.primary && root.enabled) ? (touch.has-hover ? 6px : 2px) : 0px;
     drop-shadow-color: Theme.accent-primary.with-alpha(0.35);
 
     body := HorizontalLayout {
@@ -50,21 +53,26 @@ export component SdActionButton inherits Rectangle {
             y: (parent.height - self.height) / 2;
             image-fit: contain;
             source: root.icon;
-            colorize: root.primary ? Theme.text-on-accent : Theme.text-secondary;
+            colorize: !root.enabled ? Theme.text-dim : (root.primary ? Theme.text-on-accent : Theme.text-secondary);
         }
         Text {
             text: root.label;
             font-size: root.label-size;
             font-weight: 700;
             font-family: "IBM Plex Sans";
-            color: root.primary ? Theme.text-on-accent : Theme.text-secondary;
+            color: !root.enabled ? Theme.text-dim : (root.primary ? Theme.text-on-accent : Theme.text-secondary);
             vertical-alignment: center;
         }
     }
 
     touch := TouchArea {
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.not-allowed;
         clicked => {
-            root.clicked();
+            // A disabled action does not fire. Reporting "nothing to do" after taking the click is
+            // the shape BUG-57 is about.
+            if (root.enabled) {
+                root.clicked();
+            }
         }
     }
 }

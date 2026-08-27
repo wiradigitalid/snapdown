@@ -105,10 +105,22 @@ fn the_product_has_exactly_one_text_entry_component() {
              Painting from Slint's own palette is what made the Observation Summary invisible"
         );
     }
+    // The DEFAULT field is visible before it is focused - fill, border and placeholder - because the
+    // styled widget it replaces only looked like somewhere you could type once it already had focus.
     assert!(
-        field.contains("border-width: input.has-focus ? 2px : 1px"),
+        field.contains("(input.has-focus ? 2px : 1px)"),
         "the fill, the border and the placeholder must all be visible BEFORE focus; focus may only \
          change the border"
+    );
+    // `flat` is the one deliberate exception, for a field that lives inside a rendered document
+    // rather than on a form. It still answers the pointer, so it stays discoverable.
+    assert!(
+        field.contains("in property <bool> flat: false;"),
+        "the flat variant must be a property of the ONE field, not a second component"
+    );
+    assert!(
+        field.contains("touch.has-hover ? Theme.bg-hover : transparent"),
+        "and a flat field must still answer the pointer, or it is not discoverable at all"
     );
     assert!(
         field.contains("if root.text == \"\" : Text"),
@@ -391,9 +403,106 @@ fn the_filmstrip_scrolls_instead_of_widening_the_workspace() {
          as Findings accumulate"
     );
     assert!(
-        region.contains("viewport-width: 24px + 110px + root.filmstrip-items.length * 132px"),
-        "the filmstrip's viewport must be sized from the number of Findings, or the strip cannot \
-         scroll to reach the later ones"
+        region.contains("root.filmstrip-items.length * 132px"),
+        "the filmstrip's viewport must be sized from the NUMBER of Findings, or the strip cannot \
+         scroll to reach the later ones. The constant offsets around it may change - what may not \
+         is the viewport growing with the model"
+    );
+}
+
+/// The Assemble tile stays put while the strip moves under it.
+///
+/// It used to be the first child of the scrolling row, so after a few captures it slid off the left
+/// edge and the only way back to it was to scroll all the way home.
+#[test]
+fn the_assemble_tile_does_not_scroll_with_the_filmstrip() {
+    let source = code("ui/appwindow.slint");
+    let start = source
+        .find("export component AppWindow")
+        .expect("AppWindow not found");
+    let app = &source[start..];
+
+    let scroll = app
+        .find("filmstrip-scroll := ScrollView")
+        .expect("the filmstrip ScrollView must exist");
+    // Anchored on the tile's own readout, not on `assemble-bundle-clicked` - the toolbar fires that
+    // callback too, and from further up the file, so `find` would have located the wrong element and
+    // this test would have failed while describing something true.
+    let tile = app
+        .find("root.selected-finding-count + \" selected\"")
+        .expect("the Assemble tile must show how many Findings are selected");
+
+    assert!(
+        tile > scroll,
+        "the Assemble tile must be declared after the filmstrip ScrollView, so it draws over the \
+         strip rather than scrolling inside it"
+    );
+    // Declared after is not the same as declared outside. The scrollbar block sits between the two,
+    // and it is a sibling of the ScrollView - so anything after it is out of the scrolling subtree.
+    let between = &app[scroll..tile];
+    assert!(
+        between.contains("filmstrip-scroll.viewport-width > filmstrip-scroll.visible-width"),
+        "the scrollbar block must sit between the ScrollView and the Assemble tile - that is what \
+         puts the tile outside the scrolling subtree rather than at the end of it"
+    );
+}
+
+/// Every scrollbar in the product is the same scrollbar.
+///
+/// There were five hand-drawn copies of the same twenty lines - two on the canvas, one under the
+/// filmstrip, one beside the Marker list, one in the Assemble preview - and they had already drifted:
+/// two could be dragged and three could only be looked at. The owner reported the three: "scroll yang
+/// ada di canvas gak bisa di klik and drag".
+#[test]
+fn every_scrollbar_in_the_product_is_the_same_component() {
+    let bar = code("ui/components/scrollbar.slint");
+
+    // The geometry lives here, once.
+    assert!(
+        bar.contains("in property <length> thickness: 8px;"),
+        "the bar's thickness must be the component's, not each caller's"
+    );
+    assert!(
+        bar.contains("border-radius: 4px;") && bar.contains("Theme.border-strong"),
+        "and so must its radius and its colour"
+    );
+    assert!(
+        bar.contains("max(28px,"),
+        "and the 28px minimum, or a long strip leaves nothing to grab"
+    );
+    // A bar is a control, not a readout - and DRAGGING is the half that was missing. Asserted on the
+    // `moved` handler specifically: a first version checked that `root.seek(` appeared anywhere in
+    // the file, and an empty `moved => { }` survived it on the strength of the click handler.
+    assert!(
+        bar.contains("touch := TouchArea"),
+        "the bar must have a hit area at all"
+    );
+    let moved_at = bar
+        .find("moved =>")
+        .expect("every bar must follow the pointer while it is held");
+    let moved_body = &bar[moved_at..(moved_at + 200).min(bar.len())];
+    assert!(
+        moved_body.contains("self.pressed") && moved_body.contains("root.seek("),
+        "dragging must move the viewport: three of the five bars could only be looked at"
+    );
+    let click_at = bar
+        .find("pointer-event(event)")
+        .expect("and a click on the track must jump to it");
+    assert!(
+        bar[click_at..].contains("root.seek("),
+        "clicking the track must seek as well, so one gesture covers grabbing the thumb and          clicking past it"
+    );
+
+    // And nothing draws its own any more.
+    let app = code("ui/appwindow.slint");
+    assert!(
+        !app.contains("border-radius: 4px;"),
+        "no surface may draw its own scrollbar - that is how five copies drifted apart"
+    );
+    let uses = app.matches("SdScrollBar {").count();
+    assert!(
+        uses >= 5,
+        "all five scrolling surfaces must use it; found {uses}"
     );
 }
 
@@ -863,7 +972,7 @@ fn the_observation_summary_is_visible_persistent_and_outside_the_tab_body() {
         .expect("AppWindow must exist");
     let app = &source[start..];
 
-    let field = app.find("text <=> root.observation-summary;").expect(
+    let field = app.find("text <=> root.finding-note;").expect(
         "the Observation Summary must be linked two-way. A one-way `text:` binding is severed \
              the first time the widget writes to itself, after which a newly selected Finding's \
              note never appears (BUG-45)",
@@ -888,7 +997,7 @@ fn the_observation_summary_is_visible_persistent_and_outside_the_tab_body() {
         "and it must be given an explicit height"
     );
     assert!(
-        body.contains("root.observation-edited(root.observation-summary)"),
+        body.contains("root.finding-note-edited(root.finding-note)"),
         "an edit must be pushed out to be SAVED. Held only in this property, it was overwritten the \
          moment another Finding was selected - silent data loss"
     );
@@ -899,7 +1008,7 @@ fn the_observation_summary_is_visible_persistent_and_outside_the_tab_body() {
          arrive\" looked identical, and that is what made BUG-45 hard to read"
     );
     assert!(
-        !source.contains(r#"observation-summary: "test"#),
+        !source.contains(r#"finding-note: "test"#),
         "the property must not default to placeholder content: a reader cannot tell fake content \
          from a real note, so a binding that never delivered looked like a note saved wrong (BUG-45)"
     );
@@ -1042,30 +1151,29 @@ fn selecting_a_finding_does_not_rebuild_the_filmstrip() {
     let main = code("src/main.rs");
 
     let handler = main
-        .find("on_finding_selected")
-        .expect("the filmstrip's selection handler must exist");
+        .find("on_finding_clicked")
+        .expect("the filmstrip's click handler must exist");
     let body = &main[handler..(handler + 400).min(main.len())];
     assert!(
-        body.contains("select_active_finding"),
-        "selection must go through the path that updates rows in place. Calling \
-         `load_findings_into_window` here re-decodes every image in the library on every click"
+        body.contains("click_finding"),
+        "a click must go through the path that updates rows in place. Calling          `load_findings_into_window` here re-decodes every image in the library on every click"
     );
     assert!(
         !body.contains("load_findings_into_window"),
-        "the selection handler must not rebuild the whole strip - that is the 310 ms"
+        "the click handler must not rebuild the whole strip - that is the 310 ms"
     );
 
     let fast = main
-        .find("fn select_active_finding")
-        .expect("select_active_finding must exist");
-    let fast_body = &main[fast..(fast + 1400).min(main.len())];
+        .find("fn click_finding")
+        .expect("click_finding must exist");
+    let fast_body = &main[fast..(fast + 3000).min(main.len())];
     assert!(
         fast_body.contains("set_row_data"),
         "the active flag must be moved by writing the affected rows, not by rebuilding the model"
     );
     assert!(
         fast_body.contains("load_active_detail"),
-        "and the selected Finding's own detail must still be loaded"
+        "and the clicked Finding's own detail must still be loaded"
     );
 
     // The capture path DOES have to rebuild, because a new Finding changes the set.
@@ -1188,7 +1296,7 @@ fn an_edited_observation_summary_is_written_to_the_store() {
     let main = code("src/main.rs");
 
     let handler = main
-        .find("on_observation_edited")
+        .find("on_finding_note_edited")
         .expect("an edit handler must exist, or the note is only ever held in a UI property");
     let body = &main[handler..(handler + 700).min(main.len())];
     assert!(
@@ -1409,5 +1517,438 @@ fn the_reviewer_can_walk_outward_to_a_whole_window() {
     assert!(
         main.contains("overlay.on_target_count_at"),
         "which needs the count from Rust; the .slint has no loop to compute it"
+    );
+}
+
+/// A Marker on the canvas is a numbered dot and nothing else.
+///
+/// It used to carry four crosshair ticks and a 2px `bg-hover` ring. Over a real screenshot the ring
+/// read as a white halo and the ticks as damage to the image underneath - the owner reported both.
+#[test]
+fn a_canvas_marker_has_no_ring_and_no_crosshair() {
+    let marker = code("ui/components/reticle-marker.slint");
+
+    assert!(
+        !marker.contains("border-color: Theme.bg-hover"),
+        "the contrast ring must be gone: over a captured image it reads as a white halo, and the \
+         drop shadow already keeps the dot legible"
+    );
+    assert!(
+        !marker.contains("with-alpha(0.60)"),
+        "the four crosshair ticks must be gone - they draw over the pixels the Marker is pointing at"
+    );
+    assert!(
+        marker.contains("Theme.marker-shadow"),
+        "the shadow must stay: it is what makes the dot legible over a light capture, and it is the \
+         reason the ring is not needed"
+    );
+    // Exactly one Rectangle left - the dot. Any more and something has crept back.
+    let rectangles = marker
+        .lines()
+        .filter(|line| line.trim_start().starts_with("Rectangle {"))
+        .count();
+    assert_eq!(
+        rectangles, 1,
+        "the Marker must be one Rectangle - the dot. Found {rectangles}"
+    );
+}
+
+/// The Marker list starts at the top, scrolls inside a bounded area, and the cost card stays put.
+///
+/// Two separate reports, one structure. Slint stretches a VerticalLayout's children into the space
+/// it has, so a short list was pushed to the BOTTOM of the panel - Marker 1 appeared last on screen
+/// while being first in the list. And both tabs shared one ScrollView, which made the cost card the
+/// last thing in a scrolling column: a few Markers and it slid off the bottom. A running total that
+/// has to be scrolled back to is not a running total.
+#[test]
+fn the_marker_list_scrolls_inside_a_bounded_area_below_a_pinned_cost_card() {
+    let source = code("ui/appwindow.slint");
+    let tab = source
+        .find("if root.active-tab-index == 0 : VerticalLayout")
+        .expect("the Marker Notes tab body must exist");
+    let tab_end = source[tab..]
+        .find("if root.active-tab-index == 1")
+        .map(|rel| tab + rel)
+        .expect("the Properties tab must follow it");
+    let body = &source[tab..tab_end];
+
+    let scroll = body
+        .find("marker-scroll := ScrollView")
+        .expect("the Marker list must have a ScrollView of its own, not share the tab body's");
+    let card = body
+        .find("ESTIMATED LLM COST")
+        .expect("the cost card must be in this tab");
+    assert!(
+        card > scroll,
+        "the cost card must be declared after the Marker list's ScrollView"
+    );
+
+    // Declared after is not the same as declared outside. The scroll host closes before the card,
+    // and the bar block is what sits between them.
+    let between = &body[scroll..card];
+    assert!(
+        between.contains("marker-scroll.viewport-height > marker-scroll.visible-height"),
+        "the Marker list's own scrollbar must sit between the list and the cost card - that is what          puts the card outside the scrolling subtree instead of at the end of it"
+    );
+
+    // And inside the scroll, the list still starts at the top.
+    let list = &body[scroll..card];
+    assert!(
+        list.contains("alignment: start;"),
+        "the Marker list must align to the top inside its scroll area, or one Marker floats to the          middle of it"
+    );
+
+    // A Marker's note is prose, so its field grows with the wrapped text. A fixed height hid
+    // everything past the first line, and the field wraps rather than scrolling sideways.
+    let marker_field = body
+        .find("placeholder: \"What is wrong here?\"")
+        .expect("the Marker note field must be in this tab");
+    let field_block = &body[marker_field.saturating_sub(400)..marker_field];
+    assert!(
+        field_block.contains("self.content-height"),
+        "the Marker note field must size itself from its content, like the capture note field does"
+    );
+
+    // The estimate must be derived, not typed. These were hard-coded before, pinned where they are
+    // always in view.
+    assert!(
+        !body.contains("~1.217 TK") && !body.contains("~1204 tk") && !body.contains("~13 tk"),
+        "the cost card must not carry hard-coded figures. Invented numbers in a panel that is now          always on screen are worse than ones that scroll away"
+    );
+    assert!(
+        body.contains("root.image-token-estimate") && body.contains("character-count"),
+        "the cost card must read the real image estimate and the real note length"
+    );
+}
+
+/// Assembling shows the Reviewer the document before anything is written.
+///
+/// `UC-9`'s own screen - `.how/bundle/01-ux/assets/04-bundle-assembly-modal.html` - has always had a
+/// review step. Assemble used to write the files, the Markdown and the database row on the click,
+/// and the first sight of any of it was a folder in the Vault.
+#[test]
+fn assembling_previews_before_it_writes() {
+    let main = code("src/main.rs");
+
+    let click = main
+        .find("on_assemble_bundle_clicked")
+        .expect("the Assemble handler must exist");
+    let click_body = &main[click..(click + 700).min(main.len())];
+    assert!(
+        click_body.contains("prepare_bundle"),
+        "the Assemble click must PREPARE a Bundle, not write one"
+    );
+    assert!(
+        !click_body.contains("write_bundle"),
+        "the Assemble click must not write. That is what the confirm step is for"
+    );
+
+    let confirm = main
+        .find("on_bundle_preview_confirmed")
+        .expect("the preview's confirm handler must exist");
+    let confirm_body = &main[confirm..(confirm + 900).min(main.len())];
+    assert!(
+        confirm_body.contains("write_bundle"),
+        "confirming the preview is the only thing that may write the Bundle"
+    );
+
+    // And the plan really is held rather than re-derived, or the document shown and the document
+    // written could differ.
+    assert!(
+        main.contains("struct PendingBundle"),
+        "the prepared Bundle must be held between the preview and the confirm, so what is written \
+         is what was shown"
+    );
+    let cancel = main
+        .find("on_bundle_preview_cancelled")
+        .expect("the preview must be cancellable");
+    let cancel_body = &main[cancel..(cancel + 500).min(main.len())];
+    assert!(
+        !cancel_body.contains("write_blob") && !cancel_body.contains("create_bundle"),
+        "cancelling must write nothing at all - planning in memory first is what makes that free"
+    );
+}
+
+/// A Finding that has been handed over leaves the strip.
+#[test]
+fn a_bundled_finding_leaves_the_filmstrip() {
+    let main = code("src/main.rs");
+    let build = main
+        .find("fn load_findings_into_window")
+        .expect("the filmstrip builder must exist");
+    let body = &main[build..(build + 1600).min(main.len())];
+
+    assert!(
+        body.contains("list_bundles"),
+        "the strip must ask which Findings a Bundle already holds"
+    );
+    assert!(
+        body.contains("!bundled.contains"),
+        "and it must filter them out, so the strip stays the queue of what has not been handed over"
+    );
+}
+
+/// The Assemble preview is the document as the agent will see it, and it is where the document is
+/// edited.
+///
+/// The first version showed raw CommonMark beside a contents list with a remove button per row. The
+/// second put the title and the Bundle note in their own fields above the document, so each appeared
+/// twice and only the form copy could be changed. This one has one place per thing.
+#[test]
+fn the_assemble_preview_is_the_document_and_the_editor() {
+    let source = code("ui/appwindow.slint");
+    let main = code("src/main.rs");
+
+    // The image the agent fetches is the burned copy, and the preview shows that one - the Markers
+    // exist nowhere else.
+    let show = main
+        .find("fn bundle_doc_blocks")
+        .expect("the document builder must exist");
+    let show_body = &main[show..(show + 3000).min(main.len())];
+    assert!(
+        show_body.contains(".blobs") && show_body.contains("load_from_memory"),
+        "the preview image must be decoded from the burned bytes about to be written, not from the \
+         Finding's clean image"
+    );
+    assert!(
+        show_body.contains("PREVIEW_MAX_EDGE"),
+        "and it must be bounded: five full-resolution decodes held open is the mistake BUG-41 was"
+    );
+
+    // Nothing in the preview removes a Finding.
+    assert!(
+        !source.contains("bundle-preview-item-removed"),
+        "the preview must not carry a per-item removal: what goes into a Bundle is settled in the \
+         filmstrip, and two places to settle it is two places to disagree"
+    );
+
+    // One place per thing: no separate name or note field outside the document.
+    assert!(
+        !source.contains("SdSectionLabel { text: \"BUNDLE NAME\"; }"),
+        "the title must be edited in the document, not in a second field above it - it appeared \
+         twice and only one copy was editable"
+    );
+
+    // An absent section is absent: no block is built for an empty note.
+    assert!(
+        main.contains("if !detail.note.body.trim().is_empty() {"),
+        "an empty note must produce NO block - showing the heading would promise a section the \
+         agent never sees"
+    );
+
+    // Generated content is not editable in either view.
+    let finding_block = source
+        .find("block.kind == \"finding\"")
+        .expect("a Finding heading block must exist");
+    let heading = &source[finding_block..(finding_block + 400).min(source.len())];
+    assert!(
+        !heading.contains("SdTextField"),
+        "a Finding's heading is generated from its position and must not be typed over"
+    );
+
+    // Drawn icons, not font glyphs.
+    let modal = source
+        .find("if root.bundle-preview-open : Rectangle")
+        .expect("the preview must exist");
+    assert!(
+        !source[modal..].contains("text: \"✕\""),
+        "the close control must be a drawn icon: a bare glyph falls back to whatever the font has"
+    );
+}
+
+/// One vocabulary for the two kinds of note.
+///
+/// The owner reported four names for two things: "Observation summary" in the inspector against
+/// "Notes" in the document, and "Marker notes" in the tab against "Marker observations" in the
+/// document - plus "What is wrong here?" on the capture panel. `AGENTS.md` states the rule: one
+/// thing, one name.
+#[test]
+fn the_two_kinds_of_note_have_one_name_each() {
+    let ui = read("ui/appwindow.slint");
+    let markdown = read("../../crates/snapdown-core/src/domain/markdown.rs");
+
+    for stale in [
+        "OBSERVATION SUMMARY",
+        "STEP MARKER NOTES",
+        "WHAT IS WRONG HERE?",
+    ] {
+        assert!(
+            !ui.contains(&format!("text: \"{stale}\"")),
+            "`{stale}` is a second name for something this product already names. The general note \
+             is NOTES and a Marker's is MARKER NOTES, in every surface"
+        );
+    }
+    assert!(
+        !markdown.contains("### Marker Observations"),
+        "the handed-over document must use the same two names the UI does"
+    );
+    assert!(
+        markdown.contains("### Notes") && markdown.contains("### Marker Notes"),
+        "and it must use both of them"
+    );
+
+    // The property carries the name too, so a reader of the code meets one word as well.
+    assert!(
+        !ui.contains("observation-summary") && !ui.contains("observation-edited"),
+        "the property and the callback must carry the product's word, not the one it replaced"
+    );
+}
+
+/// The Assemble preview is shaped like a page and grows with the window.
+///
+/// It was 880x640 with both dimensions capped, so it was landscape, wider than any line of prose
+/// wants to be, and it stopped growing while the Editor kept going.
+#[test]
+fn the_assemble_preview_is_a_page_that_grows_with_the_window() {
+    let source = code("ui/appwindow.slint");
+    let panel = source.find("preview-panel := Rectangle").expect(
+        "the preview panel must be nameable - the document's contents are measured from it",
+    );
+    let geom = &source[panel..(panel + 400).min(source.len())];
+
+    assert!(
+        geom.contains("parent.height - 64px"),
+        "the panel's height must follow the window's, or the document stops growing while the \
+         Editor keeps going"
+    );
+    assert!(
+        geom.contains("/ 1.414"),
+        "and its width must come from its height at A4's portrait ratio - what it holds is a \
+         document, and a document has a comfortable measure"
+    );
+    // Width from height, one direction only. The other way round is a Slint binding loop, and this
+    // file already hit one on the image inside it.
+    let width_line = geom
+        .lines()
+        .find(|line| line.trim_start().starts_with("width:"))
+        .expect("the panel must set a width");
+    assert!(
+        width_line.contains("self.height"),
+        "width must be derived from height, not the reverse"
+    );
+}
+
+/// Preview and Code, with Preview the default - and Code still editable, which is the point of it.
+#[test]
+fn the_code_view_shows_the_markup_and_still_takes_an_edit() {
+    let source = code("ui/appwindow.slint");
+    let main = code("src/main.rs");
+
+    assert!(
+        source.contains("in-out property <bool> bundle-preview-shows-code: false;"),
+        "the view toggle must default to the rendered document: the question this screen answers is \
+         whether the handoff is right, not what its source looks like"
+    );
+    assert!(
+        main.contains("set_bundle_preview_shows_code(false)"),
+        "and it must be reset every time the preview opens - a checking view that is sticky becomes \
+         the default by accident"
+    );
+
+    // Code prints the markup and then the SAME editable field, rather than dumping a read-only
+    // string. "Itulah tujuan code" - the owner's words - is that you can still work in it.
+    for markup in [
+        "\"# \"",
+        "\"## Bundle Notes\"",
+        "\"### Notes\"",
+        "\"### Marker Notes\"",
+    ] {
+        assert!(
+            source.contains(markup),
+            "the Code view must print {markup} above the field it belongs to"
+        );
+    }
+    let edits = source.matches("root.bundle-block-edited(").count();
+    assert!(
+        edits >= 4,
+        "the title, the Bundle note, a Finding's note and a Marker's must all be editable - in \
+         either view, because the fields are the same fields. Found {edits} edit sites"
+    );
+}
+
+/// The Bundle's own note - what the handoff is about - exists, is written in the document, and is
+/// absent from the output when empty.
+#[test]
+fn a_bundle_carries_a_note_of_its_own() {
+    let source = code("ui/appwindow.slint");
+    let main = code("src/main.rs");
+    let core = read("../../crates/snapdown-core/src/domain/markdown.rs");
+
+    assert!(
+        source.contains("block.kind == \"bundle-notes\""),
+        "the document must carry a block for the Bundle's own note: nothing else in the product says \
+         what a set of Findings is FOR"
+    );
+    assert!(
+        main.contains("\"bundle-notes\" => pending.notes = text.to_string(),"),
+        "and editing it must reach the pending Bundle"
+    );
+    assert!(
+        core.contains("out.push_str(\"## Bundle Notes"),
+        "it must reach the document under a heading that names its scope. `## Notes` beside a \
+         Finding's `### Notes` was ambiguous to everyone who does not read outlines for a living"
+    );
+    assert!(
+        core.contains("if !intro.trim().is_empty()"),
+        "an empty Bundle note must be absent from the output, the same rule the Findings' notes follow"
+    );
+}
+
+/// A picture in a document sits on the page, left-aligned, and takes half the measure at most.
+#[test]
+fn the_preview_image_is_left_aligned_on_nothing_and_takes_half_the_page() {
+    let source = code("ui/appwindow.slint");
+    let image_at = source
+        .find("source: block.image;")
+        .expect("the preview must show the Finding's image");
+    let around = &source[image_at.saturating_sub(1100)..image_at];
+
+    assert!(
+        around.contains("alignment: start;"),
+        "the image must be left-aligned: a document's figures start at the measure, they do not \
+         float in the middle of it"
+    );
+    assert!(
+        !around.contains("Theme.canvas-ground"),
+        "and it must sit on nothing. The dark plate behind it was chrome around a picture in a \
+         document that has no other chrome in it"
+    );
+    assert!(
+        around.contains("* 0.5,"),
+        "and it must take half the page at most - the notes are what this screen is for, and a \
+         full-measure screenshot buries them"
+    );
+    assert!(
+        around.contains("preview-panel.width"),
+        "its width must be bounded by the PANEL, not by its own parent layout - reading the parent \
+         here is a Slint binding loop, and this exact line caused one"
+    );
+}
+
+/// Dragging a maximized window restores it first, and a refused drag says so.
+///
+/// The titlebar simply stopped responding after the owner had been resizing the Editor. Windows
+/// refuses `SC_MOVE` for a maximized window, so `drag_window` returned an error - into a `let _ =`,
+/// which is the swallowed-Result class `AGENTS.md` records. The symptom had no trace at all.
+#[test]
+fn dragging_a_maximized_window_restores_it_first() {
+    let main = code("src/main.rs");
+    let at = main
+        .find("on_drag_window_requested")
+        .expect("the titlebar drag must be handled");
+    let body = &main[at..(at + 900).min(main.len())];
+
+    assert!(
+        body.contains("is_maximized()") && body.contains("set_maximized(false)"),
+        "a maximized window cannot be moved, so the drag must restore it first - every window \
+         manager does this, and without it the titlebar is simply dead"
+    );
+    assert!(
+        !body.contains("let _ = winit_win.drag_window()"),
+        "the drag's Result must not be swallowed: it swallowed the reason the titlebar was dead"
+    );
+    assert!(
+        body.contains("eprintln!") || body.contains("if let Err("),
+        "a refused drag must leave something to read"
     );
 }

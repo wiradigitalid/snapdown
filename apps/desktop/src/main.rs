@@ -12,16 +12,22 @@ use std::sync::{Arc, Mutex};
 
 use global_hotkey::hotkey::HotKey;
 use global_hotkey::{GlobalHotKeyEvent, HotKeyState};
-use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, VecModel};
+use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, SharedString, VecModel};
 use snapdown_capture::{CaptureTarget, RegionCapturer};
-use snapdown_core::domain::finding::{Finding, Note, Region};
+use snapdown_core::domain::bundle::{Bundle, BundleItem};
+use snapdown_core::domain::finding::{Finding, FindingDetail, Note, Region};
 use snapdown_core::domain::image::ImageDimensions;
+use snapdown_core::domain::markdown::MarkdownSerializer;
 use snapdown_core::domain::setting::{
     HotkeyAction, QualityBudget, Setting, SettingKey, SettingValue,
 };
-use snapdown_core::ports::{BlobStore, Clock, EntropySource, FindingStore, SettingsStore};
-use snapdown_store::image::ImageReducer;
-use snapdown_store::sqlite::{SqliteFindingStore, SqliteSettingsStore};
+use snapdown_core::error::CoreError;
+use snapdown_core::ports::{
+    BlobStore, BundleStore, Clock, EntropySource, FindingStore, SettingsStore,
+};
+use snapdown_core::util::id::id_from_parts;
+use snapdown_store::image::{ImageReducer, MarkerBurner};
+use snapdown_store::sqlite::{SqliteBundleStore, SqliteFindingStore, SqliteSettingsStore};
 use snapdown_store::system::{SystemClock, SystemEntropySource};
 use snapdown_store::vault::VaultBlobStore;
 
@@ -134,6 +140,13 @@ struct AppContext {
     vault_path: PathBuf,
     finding_store: Arc<SqliteFindingStore>,
     settings_store: Arc<SqliteSettingsStore>,
+    /// `None` when the Bundle tables could not be opened.
+    ///
+    /// Deliberately not an in-memory fallback, unlike the two stores above: an in-memory Bundle
+    /// library would accept an Assemble, report success, and lose the row on exit. A `None` that
+    /// refuses out loud is the honest state, and it is the shape `BUG-12` argues for - the Reviewer
+    /// sees a sentence rather than a process that has already died.
+    bundle_store: Option<Arc<SqliteBundleStore>>,
 }
 
 impl AppContext {
@@ -179,11 +192,23 @@ impl AppContext {
             }
         };
 
+        let bundle_store = match SqliteBundleStore::open(&db_path) {
+            Ok(store) => Some(Arc::new(store)),
+            Err(e) => {
+                eprintln!(
+                    "Failed to open the Bundle library at {db_path:?}: {e}. Assembling a Bundle \
+                     will refuse rather than pretend."
+                );
+                None
+            }
+        };
+
         Self {
             vault_store,
             vault_path,
             finding_store,
             settings_store,
+            bundle_store,
         }
     }
 }
@@ -222,8 +247,38 @@ fn load_findings_into_window(
     ctx: &AppContext,
     active_finding_id: Option<&str>,
 ) {
-    let findings = ctx.finding_store.list_findings().unwrap_or_default();
+    let all_findings = ctx.finding_store.list_findings().unwrap_or_default();
+
+    // The strip is the queue of Findings not yet handed over, so anything a Bundle already holds
+    // leaves it. Read from the Bundle rows rather than tracked on the Finding: the Bundle items are
+    // the fact, and a duplicate flag on the Finding would be a second copy of it to go wrong.
+    let bundled: std::collections::HashSet<String> = ctx
+        .bundle_store
+        .as_ref()
+        .and_then(|store| store.list_bundles().ok())
+        .map(|bundles| {
+            bundles
+                .iter()
+                .flat_map(|detail| detail.items.iter().map(|item| item.finding_id.clone()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let findings: Vec<FindingDetail> = all_findings
+        .into_iter()
+        .filter(|detail| !bundled.contains(&detail.finding.id))
+        .collect();
+
     let mut filmstrip: Vec<FindingThumb> = Vec::new();
+
+    // A capture rebuilds the strip, and the Reviewer may be halfway through ticking Findings for a
+    // Bundle. Rebuilding with `is_selected: false` would silently discard that.
+    let already_ticked: Vec<String> = window
+        .get_filmstrip_items()
+        .iter()
+        .filter(|t| t.is_selected)
+        .map(|t| t.id.to_string())
+        .collect();
 
     let target_active_id = active_finding_id
         .map(|s| s.to_string())
@@ -263,7 +318,7 @@ fn load_findings_into_window(
             id: f.id.clone().into(),
             time_str: time_str.into(),
             dimensions_str: dim_str.into(),
-            is_selected: false,
+            is_selected: already_ticked.iter().any(|t| t == &f.id),
             is_active,
             image: loaded_img,
         });
@@ -271,6 +326,7 @@ fn load_findings_into_window(
 
     let model = Rc::new(VecModel::from(filmstrip));
     window.set_filmstrip_items(ModelRc::from(model));
+    refresh_selection_count(window);
 
     if let Some(active_id) = target_active_id {
         load_active_detail(window, ctx, &active_id);
@@ -362,7 +418,7 @@ fn load_active_detail(window: &AppWindow, ctx: &AppContext, active_id: &str) {
         );
     }
 
-    window.set_observation_summary(detail.note.body.clone().into());
+    window.set_finding_note(detail.note.body.clone().into());
 
     let slint_markers: Vec<MarkerData> = detail
         .markers
@@ -376,40 +432,516 @@ fn load_active_detail(window: &AppWindow, ctx: &AppContext, active_id: &str) {
         })
         .collect();
     window.set_markers(ModelRc::from(Rc::new(VecModel::from(slint_markers))));
+
+    // The cost card's two inputs Slint cannot derive: a sum over the Marker model (Slint has no
+    // fold) and an image estimate from the STORED dimensions rather than the readout string.
+    //
+    // `w * h / 750` is the ratio the card's own hard-coded "~1204 tk" was computed with for a
+    // 1020x885 image, so making it real does not move the number - it just stops it being a
+    // number about one particular capture from months ago.
+    window.set_marker_char_count(
+        detail
+            .markers
+            .iter()
+            .map(|m| m.comment.chars().count())
+            .sum::<usize>() as i32,
+    );
+    window.set_image_token_estimate(
+        (u64::from(f.image_width) * u64::from(f.image_height) / 750) as i32,
+    );
 }
 
-/// Selects a Finding already present in the filmstrip.
+/// The settings key the theme choice is stored under.
 ///
-/// Loads its detail and moves the `is_active` flag by writing the two affected rows in place. What it
-/// deliberately does NOT do is rebuild the filmstrip model, because building that model re-decodes
-/// every image in the library - 310 ms of the 321 ms a click used to cost here, and rising with each
-/// capture. The set of Findings has not changed, so neither has the strip.
-fn select_active_finding(window: &AppWindow, ctx: &AppContext, id: &str) {
+/// A function rather than two string literals at the two call sites: a typo in one of them would
+/// store the choice and never read it back, and nothing would fail.
+fn theme_setting_key() -> SettingKey {
+    SettingKey::Custom("theme_dark".to_string())
+}
+
+/// Puts one sentence on screen, in the Editor's result line.
+///
+/// Written before the action's own logging rather than instead of it: `eprintln!` reaches a console
+/// a release build on Windows does not have, so it is the developer's copy, not the Reviewer's.
+fn toast(window: &AppWindow, message: impl Into<SharedString>, is_error: bool) {
+    window.set_toast_is_error(is_error);
+    // Cleared first so a second result within the dismissal window restarts the timer instead of
+    // inheriting the remainder of the first one's.
+    window.set_toast_text(SharedString::new());
+    window.set_toast_text(message.into());
+}
+
+/// The Findings the Reviewer has ticked for a Bundle, in the strip's own order.
+///
+/// The strip's order is the Bundle's order, and that is deliberate: the position a Finding takes in
+/// the composed Markdown is the one it was seen in, not one this function invents.
+fn selected_finding_ids(window: &AppWindow) -> Vec<String> {
+    window
+        .get_filmstrip_items()
+        .iter()
+        .filter(|t| t.is_selected)
+        .map(|t| t.id.to_string())
+        .collect()
+}
+
+/// Re-derives the count the Assemble tile reads, so it is never a second copy that can disagree
+/// with the ticks themselves.
+fn refresh_selection_count(window: &AppWindow) {
+    let count = window
+        .get_filmstrip_items()
+        .iter()
+        .filter(|t| t.is_selected)
+        .count();
+    window.set_selected_finding_count(count as i32);
+}
+
+/// One click on a filmstrip card, read the way a file manager reads one.
+///
+/// - plain: this Finding alone is selected, and it becomes the anchor;
+/// - Ctrl: this Finding's selection flips, the rest keep theirs, and it becomes the anchor;
+/// - Shift: everything from the ANCHOR through this Finding is selected, replacing what was there.
+///   The anchor does not move;
+/// - Ctrl+Shift: the same range, added to what is already selected. The anchor does not move.
+///
+/// The clicked card is ALWAYS the one the canvas then shows, whatever the modifiers did to the
+/// selection.
+///
+/// **The anchor is the whole point of this function, and the first version got it wrong.** It used
+/// the ACTIVE card as the anchor - the one on the canvas - which moves on every click including a
+/// Shift-click. So a Shift-click extended from the previous Shift-click rather than from where the
+/// Reviewer started, and reversing direction extended away from the anchor instead of shrinking the
+/// range back through it. A file manager keeps a separate anchor for exactly this reason: it is what
+/// makes Shift reversible.
+///
+/// Rewritten in place rather than by rebuilding the strip: a rebuild decodes and rescales every
+/// thumbnail, which measured 320 ms on the owner's library and is why `BUG-41` exists.
+fn click_finding(
+    window: &AppWindow,
+    ctx: &AppContext,
+    anchor_id: &RefCell<String>,
+    id: &str,
+    ctrl: bool,
+    shift: bool,
+) {
     let items = window.get_filmstrip_items();
-    if let Some(vec_model) = items.as_any().downcast_ref::<VecModel<FindingThumb>>() {
-        for row in 0..vec_model.row_count() {
-            let Some(thumb) = vec_model.row_data(row) else {
-                continue;
-            };
-            let should_be_active = thumb.id == id;
-            if thumb.is_active != should_be_active {
-                vec_model.set_row_data(
-                    row,
-                    FindingThumb {
-                        is_active: should_be_active,
-                        ..thumb
-                    },
-                );
-            }
-        }
-    } else {
-        // The model is not the one this function knows how to update in place. Falling back to the
-        // full rebuild is slow rather than wrong, and silently doing nothing would be wrong.
+    let Some(vec_model) = items.as_any().downcast_ref::<VecModel<FindingThumb>>() else {
+        // Not the model this function knows how to update in place. A full rebuild is slow rather
+        // than wrong; doing nothing would be wrong.
         load_findings_into_window(window, ctx, Some(id));
         return;
+    };
+
+    let rows: Vec<FindingThumb> = (0..vec_model.row_count())
+        .filter_map(|row| vec_model.row_data(row))
+        .collect();
+    let Some(clicked) = rows.iter().position(|thumb| thumb.id == id) else {
+        return;
+    };
+
+    // The anchor is held by id, not by index: a capture rebuilds the strip and every index moves.
+    // An anchor that is no longer in the strip - it went into a Bundle, say - falls back to the
+    // click, which makes Shift behave like a plain click rather than selecting a wild range.
+    let anchor = {
+        let held = anchor_id.borrow();
+        rows.iter()
+            .position(|thumb| thumb.id.as_str() == held.as_str())
+            .unwrap_or(clicked)
+    };
+    let (lo, hi) = if anchor <= clicked {
+        (anchor, clicked)
+    } else {
+        (clicked, anchor)
+    };
+
+    for (row, thumb) in rows.into_iter().enumerate() {
+        let selected = if shift {
+            // Ctrl+Shift adds the range to what is there; Shift alone REPLACES. Replacing is what
+            // makes reversing direction work: the cards on the far side of the anchor fall out of
+            // the range and are therefore deselected, with no separate step to deselect them.
+            (lo..=hi).contains(&row) || (ctrl && thumb.is_selected)
+        } else if ctrl {
+            if row == clicked {
+                !thumb.is_selected
+            } else {
+                thumb.is_selected
+            }
+        } else {
+            row == clicked
+        };
+        let active = row == clicked;
+
+        if selected != thumb.is_selected || active != thumb.is_active {
+            vec_model.set_row_data(
+                row,
+                FindingThumb {
+                    is_selected: selected,
+                    is_active: active,
+                    ..thumb
+                },
+            );
+        }
     }
 
+    if !shift {
+        *anchor_id.borrow_mut() = id.to_string();
+    }
+
+    refresh_selection_count(window);
     load_active_detail(window, ctx, id);
+}
+
+/// Everything one Bundle is about to write, worked out before anything is written.
+struct PlannedBundle {
+    markdown: String,
+    markdown_path: String,
+    items: Vec<BundleItem>,
+    /// Relative Vault path to burned bytes, in position order.
+    blobs: Vec<(String, Vec<u8>)>,
+}
+
+/// Hand-written rather than derived: a derived `Debug` would dump every burned pixel of every image
+/// into the output of the one test that prints it.
+impl std::fmt::Debug for PlannedBundle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "PlannedBundle {{ markdown_path: {:?}, markdown: {} bytes, blobs: [",
+            self.markdown_path,
+            self.markdown.len()
+        )?;
+        for (index, (path, bytes)) in self.blobs.iter().enumerate() {
+            if index > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{path} ({} bytes)", bytes.len())?;
+        }
+        write!(f, "] }}")
+    }
+}
+
+/// Turns the ticked ids into Findings, refusing the whole Bundle if any of them cannot be resolved.
+///
+/// `UC-9` is all-or-nothing. `BUG-22` is this loop written as `if let Some(detail)` with no else: a
+/// Reviewer who selected five Findings and whose library had lost one got a four-Finding Bundle that
+/// reported success, with the positions renumbered silently around the gap.
+fn resolve_bundle_findings<F>(ids: &[String], get: F) -> Result<Vec<FindingDetail>, String>
+where
+    F: Fn(&str) -> Result<Option<FindingDetail>, CoreError>,
+{
+    let mut details = Vec::with_capacity(ids.len());
+    for id in ids {
+        match get(id) {
+            Ok(Some(detail)) => details.push(detail),
+            Ok(None) => {
+                return Err(format!(
+                    "Finding {id} is no longer in the library. Nothing was written."
+                ))
+            }
+            Err(e) => {
+                return Err(format!(
+                    "Could not read Finding {id}: {e}. Nothing was written."
+                ))
+            }
+        }
+    }
+    Ok(details)
+}
+
+/// Burns every Finding's Markers into a copy of its image and composes the Markdown that references
+/// those copies - all in memory, so a refusal leaves nothing on disk to clean up.
+///
+/// Two defects in the archived Tauri caller are answered here by construction:
+///
+/// - `BUG-19`: it recorded `BundleItem.image_path` and never wrote a file there. Every path this
+///   returns arrives with the bytes that belong at it, so the caller cannot record one without the
+///   other;
+/// - `BUG-23`: it read each image inside `if let Ok(bytes)` with no else, dropped the item, and
+///   proceeded - putting a Publication live without it. A read failure refuses the Bundle.
+fn plan_bundle<R>(
+    bundle_id: &str,
+    name: &str,
+    notes: &str,
+    details: &[FindingDetail],
+    read_image: R,
+) -> Result<PlannedBundle, String>
+where
+    R: Fn(&str) -> Result<Vec<u8>, CoreError>,
+{
+    let mut items: Vec<BundleItem> = Vec::with_capacity(details.len());
+    let mut blobs: Vec<(String, Vec<u8>)> = Vec::with_capacity(details.len());
+
+    for (index, detail) in details.iter().enumerate() {
+        let position = (index + 1) as u32;
+        let f = &detail.finding;
+
+        let source_bytes = read_image(&f.image_path).map_err(|e| {
+            format!(
+                "Could not read the image for Finding {position} ({}): {e}. Nothing was written.",
+                f.image_path
+            )
+        })?;
+
+        let dims = ImageDimensions {
+            width: f.image_width,
+            height: f.image_height,
+        };
+        let burned_bytes = MarkerBurner::burn_markers(&source_bytes, &dims, &detail.markers)
+            .map_err(|e| {
+                format!(
+                    "Could not draw the Markers for Finding {position}: {e}. Nothing was written."
+                )
+            })?;
+
+        let image_path = format!("bundles/{bundle_id}/finding_{position}_burned.png");
+        // A deterministic item id. `id_from_parts` would hand every item in this loop the same
+        // millisecond, and the ids would collide.
+        let item_id = format!("{bundle_id}-item-{position}");
+        items.push(
+            BundleItem::new(
+                item_id,
+                bundle_id.to_string(),
+                f.id.clone(),
+                position,
+                image_path.clone(),
+            )
+            .map_err(|e| format!("Could not record Finding {position} in the Bundle: {e}"))?,
+        );
+        blobs.push((image_path, burned_bytes));
+    }
+
+    let md_items: Vec<(&BundleItem, &FindingDetail)> = items.iter().zip(details.iter()).collect();
+
+    Ok(PlannedBundle {
+        markdown: MarkdownSerializer::serialize_bundle(name, notes, &md_items),
+        markdown_path: format!("bundles/{bundle_id}/bundle.md"),
+        items,
+        blobs,
+    })
+}
+
+/// A Bundle worked out but not yet written, while the Reviewer looks at it.
+///
+/// `UC-9`'s own screen has always specified a review step, and until now Assemble wrote the files
+/// the instant the tile was clicked - the first sight of the document was a folder in the Vault.
+/// Everything here is the output of `plan_bundle`, held rather than written.
+struct PendingBundle {
+    bundle_id: String,
+    name: String,
+    /// The Bundle's own note - what this handoff is about. Written in the preview, because it exists
+    /// nowhere else in the product: the Findings each describe their own image, and nothing until now
+    /// said what the set of them was for.
+    notes: String,
+    /// Kept beside the plan because the Markdown has to be re-composed when the name changes, and
+    /// re-composing needs the Findings that the burned copies came from.
+    details: Vec<FindingDetail>,
+    planned: PlannedBundle,
+}
+
+/// Prepares a Bundle from what is ticked, without writing anything.
+fn prepare_bundle(window: &AppWindow, ctx: &AppContext) -> Result<PendingBundle, String> {
+    if ctx.bundle_store.is_none() {
+        return Err("The Bundle library could not be opened, so nothing can be assembled.".into());
+    }
+
+    let ids = selected_finding_ids(window);
+    if ids.is_empty() {
+        return Err("Tick at least one Finding in the strip first.".into());
+    }
+
+    let clock = SystemClock::new();
+    let entropy = SystemEntropySource::new();
+    let bundle_id = id_from_parts(clock.now_unix_millis(), entropy.random_bytes_10());
+    let name = format!("Review {}", chrono::Local::now().format("%Y-%m-%d %H:%M"));
+
+    let details = resolve_bundle_findings(&ids, |id| ctx.finding_store.get_finding(id))?;
+    let planned = plan_bundle(&bundle_id, &name, "", &details, |path| {
+        ctx.vault_store.read_blob(path)
+    })?;
+
+    Ok(PendingBundle {
+        bundle_id,
+        name,
+        notes: String::new(),
+        details,
+        planned,
+    })
+}
+
+/// Re-composes only the Markdown, for a name change. The name is the document's H1 and nothing else,
+/// so re-burning every image on each keystroke would be absurd.
+fn recompose_markdown(pending: &mut PendingBundle) {
+    let pairs: Vec<(&BundleItem, &FindingDetail)> = pending
+        .planned
+        .items
+        .iter()
+        .zip(pending.details.iter())
+        .collect();
+    pending.planned.markdown =
+        MarkdownSerializer::serialize_bundle(&pending.name, &pending.notes, &pairs);
+}
+
+/// The widest a preview image is ever drawn, so the modal does not hold five full-resolution decodes
+/// at once.
+///
+/// The page is at most ~640px wide and the image takes half of that, so 900 covers it on a HiDPI
+/// display. Without a bound, five 1500x1500 Findings would be 45 MB of RGBA held for as long as the
+/// modal is open, which is the mistake the filmstrip already made once (`BUG-41`).
+const PREVIEW_MAX_EDGE: u32 = 900;
+
+/// The handoff document as a flat sequence of blocks.
+///
+/// Flat rather than nested because both views walk the same sequence: Preview renders each block,
+/// Code prints its markup and then the same editable field. That is what lets a note be edited in
+/// the Code view - the two are one document with two skins, not a render beside a source dump.
+fn bundle_doc_blocks(pending: &PendingBundle) -> Vec<DocBlock> {
+    let mut blocks = Vec::new();
+
+    blocks.push(DocBlock {
+        kind: "title".into(),
+        text: pending.name.clone().into(),
+        ..Default::default()
+    });
+    blocks.push(DocBlock {
+        kind: "bundle-notes".into(),
+        text: pending.notes.clone().into(),
+        ..Default::default()
+    });
+
+    for (index, (item, detail)) in pending
+        .planned
+        .items
+        .iter()
+        .zip(pending.details.iter())
+        .enumerate()
+    {
+        let position = item.position as i32;
+
+        blocks.push(DocBlock {
+            kind: "finding".into(),
+            finding_id: detail.finding.id.clone().into(),
+            ordinal: position,
+            ..Default::default()
+        });
+
+        // The BURNED copy, decoded from the bytes about to be written - not the Finding's clean
+        // image. This screen is the last look at what the agent will fetch, and the Markers exist
+        // nowhere but the burned copy.
+        let image = pending
+            .planned
+            .blobs
+            .get(index)
+            .and_then(|(_, bytes)| image::load_from_memory(bytes).ok())
+            .map(|decoded| {
+                rgba_to_slint_image(
+                    &decoded
+                        .thumbnail(PREVIEW_MAX_EDGE, PREVIEW_MAX_EDGE)
+                        .to_rgba8(),
+                )
+            })
+            .unwrap_or_default();
+
+        blocks.push(DocBlock {
+            kind: "image".into(),
+            finding_id: detail.finding.id.clone().into(),
+            ordinal: position,
+            path: format!("./{}", item.image_path.trim_start_matches('/')).into(),
+            image,
+            ..Default::default()
+        });
+
+        // An empty note gets no block, because it gets no section in the document either. There is
+        // nothing to review and nothing to print.
+        if !detail.note.body.trim().is_empty() {
+            blocks.push(DocBlock {
+                kind: "note".into(),
+                finding_id: detail.finding.id.clone().into(),
+                text: detail.note.body.trim().to_string().into(),
+                ..Default::default()
+            });
+        }
+
+        for (marker_index, marker) in detail.markers.iter().enumerate() {
+            blocks.push(DocBlock {
+                kind: "marker".into(),
+                finding_id: detail.finding.id.clone().into(),
+                marker_id: marker.id.clone().into(),
+                ordinal: marker.ordinal as i32,
+                text: marker.comment.trim().to_string().into(),
+                // The heading prints once, above the first Marker.
+                starts_section: marker_index == 0,
+                ..Default::default()
+            });
+        }
+    }
+
+    blocks
+}
+
+/// Pushes a pending Bundle into the preview's properties.
+fn show_bundle_preview(window: &AppWindow, pending: &PendingBundle) {
+    let blocks = bundle_doc_blocks(pending);
+    window.set_bundle_preview_blocks(ModelRc::from(Rc::new(VecModel::from(blocks))));
+    window.set_bundle_preview_finding_count(pending.planned.items.len() as i32);
+    window.set_bundle_preview_text_tokens((pending.planned.markdown.len() / 4) as i32);
+    // Preview, every time it opens. The Code view is for checking, and a checking view that is
+    // sticky becomes the default by accident.
+    window.set_bundle_preview_shows_code(false);
+    window.set_bundle_preview_open(true);
+}
+
+fn close_bundle_preview(window: &AppWindow) {
+    window.set_bundle_preview_open(false);
+    // The blocks hold every decoded preview image. Dropping them on close is what keeps the modal's
+    // cost bounded to the time it is open.
+    window.set_bundle_preview_blocks(ModelRc::from(Rc::new(VecModel::from(
+        Vec::<DocBlock>::new(),
+    ))));
+}
+
+/// Writes a Bundle the Reviewer has now seen: the burned copies, the Markdown, and the row.
+///
+/// The sentence it returns is the one the Reviewer reads, on either branch.
+fn write_bundle(ctx: &AppContext, pending: &PendingBundle) -> Result<String, String> {
+    let Some(bundle_store) = ctx.bundle_store.as_ref() else {
+        return Err("The Bundle library could not be opened, so nothing was written.".into());
+    };
+    if pending.planned.items.is_empty() {
+        return Err("Every Finding was removed, so there was nothing to write.".into());
+    }
+
+    let planned = &pending.planned;
+
+    // Only from here does anything reach disk. A failure now can leave a burned image without its
+    // Markdown; those are orphan blobs, which the Vault sweeper already owns.
+    for (path, bytes) in &planned.blobs {
+        ctx.vault_store
+            .write_blob(path, bytes)
+            .map_err(|e| format!("Could not write {path}: {e}"))?;
+    }
+    ctx.vault_store
+        .write_blob(&planned.markdown_path, planned.markdown.as_bytes())
+        .map_err(|e| format!("Could not write {}: {e}", planned.markdown_path))?;
+
+    let count = planned.items.len();
+    let bundle = Bundle::new(
+        pending.bundle_id.clone(),
+        pending.name.clone(),
+        planned.markdown.clone(),
+        planned.markdown_path.clone(),
+        SystemClock::new().now_rfc3339(),
+    )
+    .map_err(|e| format!("Could not record the Bundle: {e}"))?;
+
+    bundle_store
+        .create_bundle(&bundle, &planned.items)
+        .map_err(|e| format!("The Bundle files were written but the row was not: {e}"))?;
+
+    Ok(format!(
+        "{} - {count} Finding{} written to {}",
+        pending.name,
+        if count == 1 { "" } else { "s" },
+        planned.markdown_path
+    ))
 }
 
 thread_local! {
@@ -798,15 +1330,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(windows)]
     prewarm_capture_overlay();
 
+    // The stored theme, before the window is shown, so it does not repaint in front of the
+    // Reviewer.
+    if let Ok(Some(Setting {
+        value: SettingValue::Boolean(dark),
+        ..
+    })) = ctx.settings_store.get(&theme_setting_key())
+    {
+        main_window.set_is_dark_theme(dark);
+    }
+
     // Populate initial Filmstrip from Vault
     load_findings_into_window(&main_window, &ctx, None);
 
-    // Finding selection from Filmstrip
+    // Filmstrip clicks, with file-manager semantics. See `click_finding`.
+    //
+    // The Shift anchor lives here rather than in the UI: Slint has the click, but the anchor is a
+    // piece of interaction STATE that has to survive a click without being changed by it, and the
+    // repeater has nowhere to keep one.
+    let selection_anchor: Rc<RefCell<String>> = Rc::new(RefCell::new(String::new()));
     let win_weak_sel = main_window.as_weak();
     let ctx_sel = ctx.clone();
-    main_window.on_finding_selected(move |id| {
+    let anchor_sel = selection_anchor.clone();
+    main_window.on_finding_clicked(move |id, ctrl, shift| {
         if let Some(win) = win_weak_sel.upgrade() {
-            select_active_finding(&win, &ctx_sel, &id);
+            click_finding(&win, &ctx_sel, &anchor_sel, &id, ctrl, shift);
         }
     });
 
@@ -819,7 +1367,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // second place for the text to be lost.
     let win_weak_note = main_window.as_weak();
     let ctx_note = ctx.clone();
-    main_window.on_observation_edited(move |body| {
+    main_window.on_finding_note_edited(move |body| {
         let Some(win) = win_weak_note.upgrade() else {
             return;
         };
@@ -833,17 +1381,283 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // MARKERS.
+    //
+    // The reticle overlay, the numbered badge, the Marker Notes list and the seven tool buttons were
+    // all built and none of them was connected: `marker-placed` and `delete-marker-clicked` were
+    // declared in the UI and handled by nothing, so a click on the canvas placed nothing and the
+    // list was permanently empty. Same shape as `BUG-4`, `BUG-5`, `BUG-6` and `BUG-19` - every part
+    // present, the join absent - which `AGENTS.md` calls this repository's signature failure.
+    let win_weak_mkp = main_window.as_weak();
+    let ctx_mkp = ctx.clone();
+    main_window.on_marker_placed(move |x, y| {
+        let Some(win) = win_weak_mkp.upgrade() else {
+            return;
+        };
+        let finding_id = win.get_active_finding_id().to_string();
+        if finding_id.is_empty() {
+            toast(
+                &win,
+                "Open a Finding first - a Marker belongs to an image.",
+                true,
+            );
+            return;
+        }
+        let clock = SystemClock::new();
+        let entropy = SystemEntropySource::new();
+        let marker_id = id_from_parts(clock.now_unix_millis(), entropy.random_bytes_10());
+        match ctx_mkp.finding_store.add_marker(
+            &finding_id,
+            &marker_id,
+            f64::from(x),
+            f64::from(y),
+            "",
+        ) {
+            // Reloaded from the store rather than pushed into the model: the ordinal is the store's
+            // to assign (`AD-1` ties it to the Markdown line number), so the UI must be told what it
+            // became instead of guessing.
+            Ok(_) => load_active_detail(&win, &ctx_mkp, &finding_id),
+            Err(e) => toast(&win, format!("Could not place the Marker: {e}"), true),
+        }
+    });
+
+    let win_weak_mkd = main_window.as_weak();
+    let ctx_mkd = ctx.clone();
+    main_window.on_delete_marker_clicked(move |marker_id| {
+        let Some(win) = win_weak_mkd.upgrade() else {
+            return;
+        };
+        let finding_id = win.get_active_finding_id().to_string();
+        if finding_id.is_empty() || marker_id.is_empty() {
+            return;
+        }
+        // The store renumbers the survivors inside the same transaction, so the reload is what keeps
+        // the badges and the Markdown line numbers agreeing.
+        match ctx_mkd.finding_store.delete_marker(&finding_id, &marker_id) {
+            Ok(()) => load_active_detail(&win, &ctx_mkd, &finding_id),
+            Err(e) => toast(&win, format!("Could not delete the Marker: {e}"), true),
+        }
+    });
+
+    // A Marker's own note, written through on every edit for the same reason the Observation Summary
+    // is: the alternative is a blur event that may never fire.
+    //
+    // It deliberately does NOT reload the detail afterwards. A reload rebuilds the Marker Notes list,
+    // which would take the field out from under the caret mid-sentence.
+    let win_weak_mkc = main_window.as_weak();
+    let ctx_mkc = ctx.clone();
+    main_window.on_marker_comment_edited(move |marker_id, body| {
+        let Some(win) = win_weak_mkc.upgrade() else {
+            return;
+        };
+        let finding_id = win.get_active_finding_id().to_string();
+        if finding_id.is_empty() || marker_id.is_empty() {
+            return;
+        }
+        // `update_marker` takes the coordinates too, and they are already on screen. Reading them
+        // from the model rather than the database keeps this one write instead of a read and a write.
+        let Some(marker) = win.get_markers().iter().find(|m| m.id == marker_id) else {
+            return;
+        };
+        if let Err(e) = ctx_mkc.finding_store.update_marker(
+            &finding_id,
+            marker_id.as_str(),
+            f64::from(marker.x),
+            f64::from(marker.y),
+            body.as_str(),
+        ) {
+            eprintln!("Could not save the note for Marker {marker_id}: {e}");
+            return;
+        }
+        // The cost card is on screen while this is being typed, so its Marker total has to follow.
+        // Summed from the UI model rather than re-read from the store: the model is what the
+        // Reviewer is looking at, and the store has just been told the same thing.
+        let total: usize = win
+            .get_markers()
+            .iter()
+            .map(|m| {
+                if m.id == marker_id {
+                    body.chars().count()
+                } else {
+                    m.comment.chars().count()
+                }
+            })
+            .sum();
+        win.set_marker_char_count(total as i32);
+    });
+
+    // BUNDLE ASSEMBLY.
+    // The Bundle being reviewed. One at a time, and it lives only as long as the preview is open.
+    let pending_bundle: Rc<RefCell<Option<PendingBundle>>> = Rc::new(RefCell::new(None));
+
+    let win_weak_asm = main_window.as_weak();
+    let ctx_asm = ctx.clone();
+    let pending_asm = pending_bundle.clone();
+    main_window.on_assemble_bundle_clicked(move || {
+        let Some(win) = win_weak_asm.upgrade() else {
+            return;
+        };
+        match prepare_bundle(&win, &ctx_asm) {
+            Ok(pending) => {
+                show_bundle_preview(&win, &pending);
+                *pending_asm.borrow_mut() = Some(pending);
+            }
+            Err(message) => {
+                eprintln!("Assemble refused: {message}");
+                toast(&win, message, true);
+            }
+        }
+    });
+
+    let win_weak_pc = main_window.as_weak();
+    let ctx_pc = ctx.clone();
+    let pending_pc = pending_bundle.clone();
+    main_window.on_bundle_preview_confirmed(move || {
+        let Some(win) = win_weak_pc.upgrade() else {
+            return;
+        };
+        let Some(pending) = pending_pc.borrow_mut().take() else {
+            return;
+        };
+        close_bundle_preview(&win);
+        match write_bundle(&ctx_pc, &pending) {
+            Ok(message) => {
+                // The Findings that went in leave the strip - `load_findings_into_window` filters
+                // out anything a Bundle already holds. The strip is the queue of what has not been
+                // handed over yet, which is what makes "N selected" mean something.
+                load_findings_into_window(&win, &ctx_pc, None);
+                toast(&win, message, false);
+            }
+            Err(message) => {
+                eprintln!("Assemble failed: {message}");
+                toast(&win, message, true);
+            }
+        }
+    });
+
+    let win_weak_px = main_window.as_weak();
+    let pending_px = pending_bundle.clone();
+    main_window.on_bundle_preview_cancelled(move || {
+        // Nothing was written, so nothing has to be undone. That is the whole point of planning in
+        // memory first.
+        *pending_px.borrow_mut() = None;
+        if let Some(win) = win_weak_px.upgrade() {
+            close_bundle_preview(&win);
+        }
+    });
+
+    // EVERY edit in the preview comes through here, and which store it reaches depends on the
+    // block's kind. One callback rather than four: the document is one sequence of blocks, and
+    // deciding where a block is persisted is Rust's business rather than the layout's.
+    //
+    // None of these refresh the block model afterwards. Rebuilding the repeater would take the field
+    // out from under the caret - and it would also re-decode every preview image on a keystroke.
+    // Only the composed document and the token readout move.
+    let win_weak_be = main_window.as_weak();
+    let ctx_be = ctx.clone();
+    let pending_be = pending_bundle.clone();
+    main_window.on_bundle_block_edited(move |kind, finding_id, marker_id, text| {
+        let Some(win) = win_weak_be.upgrade() else {
+            return;
+        };
+        let mut slot = pending_be.borrow_mut();
+        let Some(pending) = slot.as_mut() else {
+            return;
+        };
+
+        match kind.as_str() {
+            // The Bundle's name and its note have no row of their own. They become part of the
+            // composed document, which IS stored - `bundle.markdown` is a column, and
+            // `SDD-bundle.md` says the document is composed once and stored, not regenerated.
+            "title" => pending.name = text.to_string(),
+            "bundle-notes" => pending.notes = text.to_string(),
+
+            // A Finding's note and a Marker's are the Finding's own, so they are written through to
+            // it. Editing them here is editing the same note the inspector edits.
+            "note" => {
+                let now = SystemClock::new().now_rfc3339();
+                if let Err(e) =
+                    ctx_be
+                        .finding_store
+                        .update_note(finding_id.as_str(), text.as_str(), &now)
+                {
+                    eprintln!("Could not save the note for Finding {finding_id}: {e}");
+                    return;
+                }
+                for detail in pending.details.iter_mut() {
+                    if detail.finding.id == finding_id.as_str() {
+                        detail.note.body = text.to_string();
+                        detail.note.updated_at = now.clone();
+                    }
+                }
+            }
+            "marker" => {
+                // `update_marker` takes the coordinates too, and the plan already holds them - so
+                // this stays one write rather than a read and a write.
+                let coords = pending
+                    .details
+                    .iter()
+                    .filter(|d| d.finding.id == finding_id.as_str())
+                    .flat_map(|d| d.markers.iter())
+                    .find(|m| m.id == marker_id.as_str())
+                    .map(|m| (m.x, m.y));
+                let Some((x, y)) = coords else {
+                    return;
+                };
+                if let Err(e) = ctx_be.finding_store.update_marker(
+                    finding_id.as_str(),
+                    marker_id.as_str(),
+                    x,
+                    y,
+                    text.as_str(),
+                ) {
+                    eprintln!("Could not save the note for Marker {marker_id}: {e}");
+                    return;
+                }
+                for detail in pending.details.iter_mut() {
+                    for marker in detail.markers.iter_mut() {
+                        if marker.id == marker_id.as_str() {
+                            marker.comment = text.to_string();
+                        }
+                    }
+                }
+            }
+            other => {
+                // `finding` and `image` are generated from the plan and are not editable in either
+                // view, so nothing should be able to send them here.
+                eprintln!("A preview block of kind `{other}` reported an edit; ignoring it.");
+                return;
+            }
+        }
+
+        recompose_markdown(pending);
+        win.set_bundle_preview_text_tokens((pending.planned.markdown.len() / 4) as i32);
+    });
+
     // Native Window Dragging on Titlebar
     #[cfg(windows)]
     {
         use i_slint_backend_winit::WinitWindowAccessor;
         let win_drag = main_window.as_weak();
         main_window.on_drag_window_requested(move || {
-            if let Some(win) = win_drag.upgrade() {
-                win.window().with_winit_window(|winit_win| {
-                    let _ = winit_win.drag_window();
-                });
+            let Some(win) = win_drag.upgrade() else {
+                return;
+            };
+            // A maximized window cannot be moved. Windows refuses `SC_MOVE` for one, so
+            // `drag_window` returns an error and the titlebar simply stops responding - which is
+            // what the owner reported after resizing the Editor to test something else. Every window
+            // manager's answer is the same: dragging a maximized window restores it first.
+            if win.window().is_maximized() {
+                win.window().set_maximized(false);
             }
+            win.window().with_winit_window(|winit_win| {
+                // NOT `let _ =`. This is the class `AGENTS.md` records: a swallowed Result an
+                // invariant depends on. It swallowed the reason the titlebar was dead and left
+                // nothing to read.
+                if let Err(e) = winit_win.drag_window() {
+                    eprintln!("The titlebar drag was refused by the window manager: {e}");
+                }
+            });
         });
     }
 
@@ -871,12 +1685,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // Theme Toggle
+    // Theme Toggle.
+    //
+    // The UI flips `is-dark-theme` itself before firing this, so the repaint is not this handler's
+    // job - persisting the choice is. It used to print the value it was about to lose, so the Editor
+    // reopened in light mode every time however many times the Reviewer had switched.
+    //
+    // `SettingKey::Custom` rather than a new enum variant: a new variant reaches the domain, the
+    // store and the migration, which is a lot of surface for one boolean.
     let win_theme = main_window.as_weak();
+    let ctx_theme = ctx.clone();
     main_window.on_theme_toggle_clicked(move || {
-        if let Some(win) = win_theme.upgrade() {
-            let cur = win.get_is_dark_theme();
-            println!("Theme toggled. Dark mode is now: {}", !cur);
+        let Some(win) = win_theme.upgrade() else {
+            return;
+        };
+        let setting = Setting {
+            key: theme_setting_key(),
+            value: SettingValue::Boolean(win.get_is_dark_theme()),
+            updated_at: SystemClock::new().now_rfc3339(),
+        };
+        if let Err(e) = ctx_theme.settings_store.set(&setting) {
+            eprintln!("Could not remember the theme choice: {e}");
         }
     });
 
@@ -1403,12 +2232,66 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     });
 
-    main_window.on_open_file_clicked(|| {
-        if let Some(path) = rfd::FileDialog::new()
+    // Importing an image file as a Finding.
+    //
+    // The dialog used to open, filter, let the Reviewer choose - and then print the path and discard
+    // it. Every visible part worked, which is what made it look implemented.
+    //
+    // An import goes through the SAME `persist_finding` a capture does: decode to RGBA, apply the
+    // active Quality Budget, write to the Vault, record the Finding and its note. An imported image
+    // is therefore not a second kind of Finding with its own rules - the region is simply the whole
+    // image.
+    let win_weak_open = main_window.as_weak();
+    let ctx_open = ctx.clone();
+    main_window.on_open_file_clicked(move || {
+        let Some(win) = win_weak_open.upgrade() else {
+            return;
+        };
+        let Some(path) = rfd::FileDialog::new()
             .add_filter("Images", &["png", "jpg", "jpeg", "webp"])
             .pick_file()
-        {
-            println!("Selected file: {:?}", path);
+        else {
+            // Cancelled. Not a failure, and not worth a line on screen.
+            return;
+        };
+
+        let label = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "the chosen file".to_string());
+
+        let dyn_img = match image::open(&path) {
+            Ok(img) => img,
+            Err(e) => {
+                toast(&win, format!("Could not read {label}: {e}"), true);
+                return;
+            }
+        };
+
+        let rgba = dyn_img.to_rgba8();
+        let (width, height) = (rgba.width(), rgba.height());
+
+        match persist_finding(
+            &ctx_open,
+            rgba.as_raw(),
+            (width, height),
+            (0, 0, width, height),
+            &format!("Imported: {label}"),
+            "",
+        ) {
+            Some(id) => {
+                load_findings_into_window(&win, &ctx_open, Some(&id));
+                toast(
+                    &win,
+                    format!("{label} imported as a Finding ({width} x {height})"),
+                    false,
+                );
+            }
+            None => toast(
+                &win,
+                format!("Could not import {label}. The Vault write or the database insert failed."),
+                true,
+            ),
         }
     });
 
@@ -1590,5 +2473,216 @@ mod tests {
         assert_eq!(parse_region_field("419,344,1020"), None);
         assert_eq!(parse_region_field("419,344,1020,885,7"), None);
         assert_eq!(parse_region_field("419,344,wide,tall"), None);
+    }
+
+    // ---- Bundle assembly -----------------------------------------------------
+    //
+    // These test the two pure halves against real bytes. `plan_bundle` DECODES nothing itself, so
+    // every assertion below decodes the planned output: an image test that checks a signature and a
+    // dimension is a test a 17-byte fake header passes, and this repository has already shipped one
+    // for five waves.
+
+    use image::ImageEncoder;
+    use snapdown_core::domain::finding::Marker;
+
+    /// A real PNG of a recognisable gradient, so a burned copy can be told apart from a blank one.
+    fn png_fixture(width: u32, height: u32) -> Vec<u8> {
+        let mut img = image::RgbaImage::new(width, height);
+        for (x, y, px) in img.enumerate_pixels_mut() {
+            *px = image::Rgba([
+                (x * 255 / width.max(1)) as u8,
+                (y * 255 / height.max(1)) as u8,
+                128,
+                255,
+            ]);
+        }
+        let mut bytes: Vec<u8> = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut bytes)
+            .write_image(img.as_raw(), width, height, image::ExtendedColorType::Rgba8)
+            .expect("the fixture encoder must succeed");
+        bytes
+    }
+
+    fn detail(id: &str, width: u32, height: u32, markers: Vec<Marker>) -> FindingDetail {
+        FindingDetail {
+            finding: Finding {
+                id: id.to_string(),
+                image_path: format!("findings/{id}.png"),
+                image_width: width,
+                image_height: height,
+                captured_at: "2026-08-27T10:00:00Z".to_string(),
+                source_monitor: "\\\\.\\DISPLAY1".to_string(),
+                region: format!("0,0,{width},{height}"),
+                resolved_long_edge: None,
+                resolved_encoder_quality: None,
+                budget_name: None,
+            },
+            note: Note {
+                id: format!("note-{id}"),
+                finding_id: id.to_string(),
+                body: "the header overlaps the logo".to_string(),
+                updated_at: "2026-08-27T10:00:00Z".to_string(),
+            },
+            markers,
+            visual_annotations: Vec::new(),
+        }
+    }
+
+    fn marker(id: &str, finding_id: &str, ordinal: u32, comment: &str) -> Marker {
+        Marker {
+            id: id.to_string(),
+            finding_id: finding_id.to_string(),
+            ordinal,
+            x: 0.4,
+            y: 0.6,
+            comment: comment.to_string(),
+        }
+    }
+
+    #[test]
+    fn a_planned_bundle_carries_bytes_for_every_path_it_records() {
+        let details = vec![
+            detail("f1", 40, 30, vec![marker("m1", "f1", 1, "this button")]),
+            detail("f2", 24, 24, vec![]),
+        ];
+        let planned = plan_bundle("b1", "Bundle One", "", &details, |path| {
+            Ok(png_fixture_for(path))
+        })
+        .expect("planning must succeed");
+
+        assert_eq!(planned.items.len(), 2);
+        assert_eq!(planned.blobs.len(), 2);
+
+        // BUG-19 was a recorded path with no file behind it. Every path is paired with its bytes
+        // here, and the bytes are a decodable image at the Finding's own dimensions.
+        for (index, item) in planned.items.iter().enumerate() {
+            let (path, bytes) = &planned.blobs[index];
+            assert_eq!(
+                &item.image_path, path,
+                "item {} records a path the plan has no bytes for",
+                item.position
+            );
+            let decoded = image::load_from_memory(bytes)
+                .unwrap_or_else(|e| panic!("burned copy {path} does not decode: {e}"));
+            assert_eq!(
+                (decoded.width(), decoded.height()),
+                (
+                    details[index].finding.image_width,
+                    details[index].finding.image_height
+                ),
+                "AD-4: a Bundle's image is the Finding's image at the SAME dimensions"
+            );
+        }
+
+        // A copy that decodes at the right size is NOT proof the Markers were drawn - that is the
+        // signature-and-dimension trap this repository already fell into for five waves, wearing a
+        // different hat. f1 carries an active Marker and MUST differ from its source; f2 carries
+        // none and MUST be byte-identical, which is AD-9's promise for that case.
+        let f1_source = png_fixture_for("findings/f1.png");
+        assert_ne!(
+            planned.blobs[0].1, f1_source,
+            "Finding 1 has an active Marker, so its burned copy cannot be the source unchanged"
+        );
+        let f2_source = png_fixture_for("findings/f2.png");
+        assert_eq!(
+            planned.blobs[1].1, f2_source,
+            "AD-9: a Finding with nothing to draw is copied byte-for-byte"
+        );
+    }
+
+    #[test]
+    fn a_planned_bundle_points_its_markdown_at_the_burned_copy_not_the_finding() {
+        let details = vec![detail("f1", 40, 30, vec![marker("m1", "f1", 1, "here")])];
+        let planned = plan_bundle("b7", "Bundle Seven", "", &details, |path| {
+            Ok(png_fixture_for(path))
+        })
+        .expect("planning must succeed");
+
+        // BUG-21: the composed Markdown referenced `finding.image_path`, so a reader following it
+        // landed on the clean image and FR-8 stayed unmet even once the burn was written.
+        assert!(
+            planned.markdown.contains("bundles/b7/finding_1_burned.png"),
+            "the Markdown must reference the Bundle's own burned copy:\n{}",
+            planned.markdown
+        );
+        assert!(
+            !planned.markdown.contains("findings/f1.png"),
+            "the Markdown must NOT reference the Finding's clean image:\n{}",
+            planned.markdown
+        );
+    }
+
+    #[test]
+    fn a_planned_bundle_refuses_an_image_it_cannot_read() {
+        let details = vec![detail("f1", 40, 30, vec![]), detail("f2", 40, 30, vec![])];
+        let err = plan_bundle("b2", "Bundle Two", "", &details, |path| {
+            if path.contains("f2") {
+                Err(CoreError::NotFound(format!("no blob at {path}")))
+            } else {
+                Ok(png_fixture_for(path))
+            }
+        })
+        .expect_err("an unreadable image must refuse the whole Bundle");
+
+        // BUG-23: the archived caller swallowed this and put the Publication live without the image.
+        assert!(
+            err.contains("findings/f2.png"),
+            "the error must name the file: {err}"
+        );
+        assert!(
+            err.contains("Nothing was written"),
+            "the error must say the Bundle was refused, not partially written: {err}"
+        );
+    }
+
+    #[test]
+    fn a_planned_bundle_refuses_an_image_whose_recorded_dimensions_are_wrong() {
+        // The stored row says 40x30; the blob is 10x10. AD-4 cannot be satisfied for it, and the
+        // burner's dimension check is what says so.
+        let details = vec![detail("f1", 40, 30, vec![])];
+        let err = plan_bundle("b3", "Bundle Three", "", &details, |_| {
+            Ok(png_fixture(10, 10))
+        })
+        .expect_err("a dimension mismatch must refuse the Bundle");
+        assert!(
+            err.contains("Nothing was written"),
+            "a mismatch must refuse rather than write: {err}"
+        );
+    }
+
+    #[test]
+    fn resolving_findings_refuses_an_id_the_library_has_lost() {
+        let ids = vec!["f1".to_string(), "gone".to_string(), "f3".to_string()];
+        let err = resolve_bundle_findings(&ids, |id| {
+            if id == "gone" {
+                Ok(None)
+            } else {
+                Ok(Some(detail(id, 8, 8, vec![])))
+            }
+        })
+        .expect_err("UC-9 is all-or-nothing: an unresolvable id must refuse the Bundle");
+
+        // BUG-22: the archived caller skipped it and renumbered silently around the gap.
+        assert!(err.contains("gone"), "the error must name the id: {err}");
+    }
+
+    #[test]
+    fn resolving_findings_keeps_the_order_it_was_given() {
+        // The position in the Markdown is the position in the strip. If this ever sorts, AD-1's tie
+        // between a Marker ordinal and a Markdown line number is being read against the wrong image.
+        let ids = vec!["c".to_string(), "a".to_string(), "b".to_string()];
+        let details = resolve_bundle_findings(&ids, |id| Ok(Some(detail(id, 8, 8, vec![]))))
+            .expect("resolution must succeed");
+        let got: Vec<&str> = details.iter().map(|d| d.finding.id.as_str()).collect();
+        assert_eq!(got, vec!["c", "a", "b"]);
+    }
+
+    /// The fixture reader: a real PNG at whatever size the path's Finding was declared with.
+    fn png_fixture_for(path: &str) -> Vec<u8> {
+        if path.contains("f2") && path.contains("findings") {
+            png_fixture(24, 24)
+        } else {
+            png_fixture(40, 30)
+        }
     }
 }
