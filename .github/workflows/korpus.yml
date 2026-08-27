@@ -57,6 +57,24 @@ jobs:
           fi
           echo "No forbidden content tracked."
 
+      - name: Refuse a drifted defect-registry vocabulary
+        shell: bash
+        run: |
+          set -e
+          # `status` in defects.yaml had THREE values at once on 2026-08-27: `resolved` (38 rows),
+          # `fixed` (9) and `resolved-pending-product-verification` (3). That is not untidiness.
+          # V20 in validate.py recognises only `fixed` as closed, so every `resolved` row with
+          # root_cause `requirement` or `architecture` escaped its check entirely - a validator
+          # defeated by a synonym. AGENTS.md already states the rule: one thing, one name.
+          bad=$(grep -nE '^    status: ' .control/registry/defects.yaml                 | grep -vE '^[0-9]+:    status: (open|fixed)$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::defects.yaml uses a status value other than open/fixed."
+            echo "$bad"
+            echo "Pick one of the two. A synonym here silently disables V20."
+            exit 1
+          fi
+          echo "defects.yaml status vocabulary is open/fixed only."
+
       - name: Install uv
         # No cache: there is no uv.lock in this repository and there will not be. validate.py is a
         # PEP-723 script with inline dependencies, not a uv project, and `enable-cache: true` fails

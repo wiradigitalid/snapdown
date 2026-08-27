@@ -47,7 +47,7 @@ defects:
       tests that did not exist in this repository before -
       deleting_a_finding_leaves_its_bundle_item_in_place is the first test here that asserts a cascade
       does NOT fire, and deleting_a_bundle_still_cascades_to_its_items holds the other side.
-    status: resolved
+    status: fixed
   - id: BUG-2
     title: Three `sharing` screens are recorded as delivered and do not exist in the repository
     found: "2026-08-23"
@@ -146,7 +146,7 @@ defects:
 
       NOT FIXED, and named so it is not lost: store.go joins the slug into a filesystem path
       unfiltered, which is a path-traversal seam. Recorded as a non-goal in the W7 SPEC.
-    status: resolved
+    status: fixed
   - id: BUG-4
     title: The capture overlay is never mounted; pressing the capture hotkey shows the Settings shell
     found: "2026-08-23"
@@ -203,7 +203,16 @@ defects:
       The deeper fix named below is still outstanding: .how/finding/02-contracts/ still says nothing
       about how a window chooses its root component, so the seam that produced this defect still has
       no owner.
-    status: resolved-pending-product-verification
+    verified: |
+      The verification this row was waiting for could never arrive: it was pending against
+      `apps/desktop/src/App.tsx`, and `DEC-007` archived that surface. What replaced it is verified
+      instead, and more strongly - the owner has driven the Slint capture overlay live across this
+      whole session, and eleven guards in `test_capture_overlay_fullscreen.rs` and
+      `test_capture_interaction.rs` cover its reachability, its geometry and its lifetime.
+
+      The reachability question this row asked is now asked mechanically for the WHOLE UI by
+      `test_ui_callbacks_reach_rust.rs`, which is what this row's class needed all along.
+    status: fixed
   - id: BUG-5
     title: The Editor never renders a Finding's image, and Markers cannot be placed at all
     found: "2026-08-23"
@@ -247,7 +256,15 @@ defects:
       tests assert presence in the MOUNTED surface rather than in isolation.
       Still unproven in a RUNNING application - see BUG-11. jsdom does not fetch images, so the test
       passes on a mocked convertFileSrc either way.
-    status: resolved-pending-product-verification
+    verified: |
+      Pending against `apps/desktop/src/components/FindingsView.tsx`, which no longer exists.
+      And the honest reading is worse than a stale row: the React fix was real, the Slint rewrite
+      dropped the wiring again, and nothing noticed for a month. The Marker canvas rendered, the
+      Marker Notes panel rendered, and `marker-placed` reached no handler.
+
+      That regression is `BUG-55`, and it is fixed with the wiring, six unit tests and six killed
+      mutants. This row is closed as history; `BUG-55` is the live record.
+    status: fixed
   - id: BUG-6
     title: The orphan report is built, tested, and unreachable — no screen ever mounts it
     found: "2026-08-23"
@@ -281,7 +298,17 @@ defects:
     resolved: |
       W6-S7, 2026-08-23. OrphanReportView is mounted behind a viewMode on FindingsView and reachable
       from the image-missing state. FR-15 and UC-8 are reachable again.
-    status: resolved
+    stale_reference: |
+      The fix this row records was `OrphanReportView.tsx` being mounted, and `DEC-007` deleted that
+      surface. THE FEATURE IS ABSENT AGAIN: `apps/desktop/ui/appwindow.slint` contains no orphan
+      report - a case-insensitive search for `orphan` across the whole Slint UI returns nothing - so
+      `FR-15` and `UC-8` are unmet in the shipping binary.
+
+      The report itself still exists and still works: `crates/snapdown-store/src/vault/sweeper.rs`,
+      with its own tests. Same shape as this row's original finding, one layer up. Tracked as a
+      surface gap on `BUG-59`; this row stays closed because the defect it names - a React screen not
+      mounting a React component - cannot recur.
+    status: fixed
 
 # SYSTEMIC — the shape shared by BUG-4, BUG-5 and BUG-6, written 2026-08-23
 #
@@ -393,6 +420,13 @@ defects:
       Either way it goes through wdi-blueprint intent `platform`, which owns `containers` and the C4.
     related: [BUG-2, OQ-22]
     blocked_by: DEC-005, which freezes `sharing`.
+    stale_reference: |
+      OPEN, and the row's own reasoning still holds - but the entry-point file it names above as a
+      counter-example never existed, and `web/ui` now consumes nothing at all (`OQ-27`). `DEC-007`
+      makes the answer easier than when this was written: there is no React surface in the product,
+      so `web-ui` as a deployable container is not a thing that was left unbuilt, it is a thing the
+      architecture no longer has. Withdrawing the container is the cheap and probably correct move,
+      and it changes a C4 drawing, so it goes through the architecture skill rather than a patch.
     status: open
   - id: BUG-9
     title: "Bundle composition and deletion swallow every filesystem and unpublish Result"
@@ -471,7 +505,17 @@ defects:
       Verified by the coordinator, exit codes read directly: cargo test --workspace 0, cargo fmt 0,
       cargo clippy --all-targets -D warnings 0. The test that matters now runs and passes:
       deleting_a_published_bundle_whose_unpublish_fails_aborts_and_reports.
-    status: resolved
+    stale_reference: |
+      `apps/desktop/src-tauri/src/commands/bundle.rs` was archived by `DEC-007`. Half of what this
+      row was about is answered in the replacement and half has no code to be wrong in:
+
+      - COMPOSITION: `assemble_bundle` in `apps/desktop/src/main.rs` propagates every filesystem
+        Result with `?` and puts the failure on screen. `BUG-55` covers the wiring and `BUG-19`,
+        `BUG-22` and `BUG-23` cover what it refuses;
+      - DELETION and UNPUBLISH: there is no Slint caller at all. `bundle_store.delete_bundle` and the
+        Publication path are unreachable from the running application, so `FR-14`, `BR-20` and
+        `BR-23` are unmet rather than mishandled. Tracked on `BUG-59`.
+    status: fixed
   - id: BUG-10
     title: "The MCP bridge can hand an agent an error with an empty message"
     found: "2026-08-23"
@@ -528,7 +572,7 @@ defects:
 
       Verified by the coordinator: 3 unit + 3 integration tests pass, and by MUTATION - replacing the
       synthesised message with String::new() turns two of the three unit tests red.
-    status: resolved
+    status: fixed
   - id: BUG-11
     title: "There is no reproducible way to build the desktop application"
     found: "2026-08-23"
@@ -610,7 +654,15 @@ defects:
       for the cause; it is not the manual check. `manual::a_freshly_built_binary_loads_its_bundled_frontend_not_devurl`
       remains unrun, and BUG-4, BUG-5 and BUG-12 stay unproven in a running product until it is.
       What changed is that running it is now possible for the first time.
-    status: resolved-pending-product-verification
+    verified: |
+      This row recorded that no bundled `Snapdown.exe` had ever been verified to run - every UI
+      claim had been made against a Vite dev server. `DEC-007` retired the premise entirely: there is
+      no webview and no dev server, and the release binary is the only thing there is to run.
+
+      The owner has launched and driven `target/release/Snapdown.exe` repeatedly across this session,
+      reporting live memory figures from the running process. `desktop_crate_declares_exactly_one_
+      binary_named_snapdown` keeps the second-binary confusion (`FR-27`) from returning.
+    status: fixed
   - id: BUG-12
     title: "A corrupt or unreadable library.db makes the application vanish on launch"
     found: "2026-08-23"
@@ -694,7 +746,16 @@ defects:
       claim about code at a moment, and it goes stale silently. Read the code before planning against
       a defect row. W7-S1 was re-scoped rather than cancelled - BUG-15/16/17 are real and they are
       what it now carries.
-    status: resolved
+    stale_reference: |
+      `apps/desktop/src-tauri/src/lib.rs` was archived by `DEC-007`, AND THE FIX WENT WITH IT. This
+      row is closed and its behaviour has regressed - see `BUG-60`, which is the live record.
+
+      Re-read against `apps/desktop/src/main.rs`: `AppContext::init` no longer panics, which is the
+      half that improved. It falls back to an IN-MEMORY store and reports the reason with
+      `eprintln!`, and a release binary on Windows has no console. So a corrupt `library.db` now
+      produces an empty Library with no explanation, and every Finding made in that session is lost
+      on exit. There is no error dialog anywhere in the Slint app.
+    status: fixed
 
   - id: BUG-13
     title: "The new CI guard counts every .exe, but FR-27 promises one DESKTOP executable"
@@ -757,7 +818,7 @@ defects:
 
       A new workspace binary now requires adding its name to the list in that step, which is the
       right friction: a second executable appearing unannounced is what the guard is for.
-    status: resolved
+    status: fixed
 
   - id: BUG-14
     title: "Snapdown does not take screenshots. The capture path writes a 17-byte placeholder."
@@ -766,6 +827,7 @@ defects:
     component: finding
     severity: critical
     contradicts: [BG-1, FR-1, FR-2, FR-5, FR-6, FR-8, UC-1, UC-2, AD-2, NFR-18]
+    root_cause: code
     evidence: |
       apps/desktop/src-tauri/src/commands/capture.rs:197 — the whole of what is written to the Vault:
 
@@ -847,7 +909,18 @@ defects:
       real defect that would still be there. What W6 could not do is notice that the core was hollow,
       because nothing in its scope decoded an image either.
     related: BUG-4
-    status: open
+    verified: |
+      Re-read against the code, not against this row. `generate_placeholder_image` does not exist
+      anywhere in the repository - a case-insensitive search for it, and for the 17-byte header's own
+      bytes, returns nothing. The capture path is `apps/desktop/src/main.rs`: `xcap` grabs the virtual
+      desktop, the region is cropped out of the canvas, `PngEncoder` writes it, `ImageReducer` applies
+      the Quality Budget, and `VaultBlobStore::write_blob` stores it. The file this row describes -
+      `apps/desktop/src-tauri/src/commands/capture.rs` - was archived by `DEC-007` and is out of the
+      Cargo workspace.
+
+      `every_image_producing_path_decodes_its_own_output` is the guard that keeps the fabrication from
+      coming back, and it decodes rather than checking a signature and a dimension.
+    status: fixed
 
   - id: BUG-15
     title: "Opening a store switches it to WAL before checking it, so a corrupt store IS written to"
@@ -919,7 +992,7 @@ defects:
       the time the assertion runs. It is belt-and-braces, NOT a guard. The invariant it appears to
       cover is held by the two tests above. Counting it as protection would be the literal-assert
       mistake wearing a different hat.
-    status: resolved
+    status: fixed
 
   - id: BUG-16
     title: "A store failure exits by panic through the very `.expect()` BUG-12 excused from its sweep"
@@ -954,7 +1027,16 @@ defects:
       RESOLVED 2026-08-24. The .expect() at lib.rs:347 is replaced by a matched exit, so a store
       failure reports and then exits rather than panicking. Covered by
       a_store_failure_exits_without_panicking.
-    status: resolved
+    stale_reference: |
+      The `.expect()` this row names was at `apps/desktop/src-tauri/src/lib.rs:347`, archived by
+      `DEC-007`. The CLASS returned with the Slint startup path: three `unwrap`s on the startup path
+      of `apps/desktop/src/main.rs` (two `open_in_memory()`, one `VaultBlobStore::new` on the
+      fallback), each of which takes the whole product down with it under `AD-11`.
+
+      Recorded on `BUG-60` rather than reopened here: this row's own sweep exclusion is what
+      `AGENTS.md` already cites as the pattern of a premise quietly stopping holding, and re-using
+      the row would hide that it happened a second time by a different route.
+    status: fixed
 
   - id: BUG-17
     title: "The startup error dialog has no owner and no foreground flag, so it can open behind other windows"
@@ -993,7 +1075,12 @@ defects:
       passed would test a copy of the input - the literal-assert failure this repository has landed
       three times. It stays a MANUAL check, and OQ-24 records that this project has no working way to
       run one.
-    status: resolved
+    stale_reference: |
+      Archived with `apps/desktop/src-tauri/src/lib.rs`. There is now no startup error dialog to own
+      or to raise - a search for `MessageBox`, `MessageDialog` and `show_error` across
+      `apps/desktop/src/` returns nothing. `BR-118` is unmet rather than imperfectly met, and that is
+      `BUG-60`'s scope.
+    status: fixed
 
   - id: BUG-18
     title: "The capture overlay never asks for a Note, so half of UC-1 does not exist"
@@ -1002,6 +1089,7 @@ defects:
     component: finding
     severity: high
     contradicts: [FR-2, UC-1, "LC-029"]
+    root_cause: code
     evidence: |
       apps/desktop/src/components/CaptureOverlay.tsx:76-100 - handleMouseUp measures the region and
       calls captureScreenRegion IMMEDIATELY. There is no Note field anywhere in the file: a grep for
@@ -1038,7 +1126,17 @@ defects:
       capture leaving no Finding. Add `note` to CaptureRegionInput and write it with the Finding.
     scheduled: W8-S4
     related: BUG-14
-    status: open
+    verified: |
+      The capture overlay asks for the Note before the Finding is written, and has since the Slint
+      overlay was built. `persist_finding` takes `note_body` and stores it on the Note record in the
+      same call that creates the Finding.
+
+      Six guards in `apps/desktop/tests/test_capture_interaction.rs` cover it, including
+      `the_note_field_takes_focus_when_the_popup_opens`,
+      `enter_saves_from_the_window_not_only_from_the_note_field` and
+      `the_note_field_wraps_while_staying_single_line`. The file this row cites -
+      `apps/desktop/src/components/CaptureOverlay.tsx` - no longer exists.
+    status: fixed
 
   - id: BUG-19
     title: "Bundle export records a burned image path and never writes the file; MarkerBurner is called from nowhere"
@@ -1047,6 +1145,7 @@ defects:
     component: bundle
     severity: high
     contradicts: [FR-8, "AD-2", "LC-013"]
+    root_cause: code
     evidence: |
       apps/desktop/src-tauri/src/commands/bundle.rs:41-48 builds a path for every item -
       `bundles/{bundle_id}/finding_{pos}_burned.webp` - and stores it as BundleItem.image_path.
@@ -1088,7 +1187,20 @@ defects:
       Note the extension: the recorded path says .webp while the burner emits PNG. Whichever is
       right, the two currently disagree and the corpus has to be read before choosing.
     related: BUG-14
-    status: open
+    verified: |
+      The caller this row describes was deleted with the Tauri app (`DEC-007`), and the Slint caller
+      that replaces it cannot reproduce the defect by construction: `plan_bundle` returns
+      `(path, bytes)` PAIRS, so a recorded `BundleItem.image_path` and the bytes that belong at it are
+      produced by the same line and cannot be separated. `MarkerBurner::burn_markers` is called from
+      it, so the burn is no longer unreachable from the running application.
+
+      `a_planned_bundle_carries_bytes_for_every_path_it_records` asserts the pairing, DECODES every
+      burned copy at the Finding's own recorded dimensions, and - the part that matters - asserts a
+      Finding WITH an active Marker differs from its source while one with none is byte-identical.
+      A copy that decodes at the right size is not proof the Markers were drawn, which is this
+      repository's own recorded trap wearing a different hat. Mutation: replacing the burn with a
+      passthrough of the source bytes is KILLED.
+    status: fixed
 
   - id: BUG-20
     title: "The marker burn's no-markers fast path returns a corrupt source as success, having never decoded it"
@@ -1097,6 +1209,7 @@ defects:
     component: bundle
     severity: medium
     contradicts: ["AD-4"]
+    root_cause: code
     evidence: |
       crates/snapdown-store/src/image/burner.rs:48-50 - burn_markers returns before any decode when
       no Marker carries a Note line:
@@ -1137,7 +1250,15 @@ defects:
       garbage never reaches the code under test - it is rejected at the decoder's front door.
     related: BUG-19
     scheduled: W8-S6
-    status: open
+    verified: |
+      Already fixed in the live crate, and this row went stale without anyone noticing - the same
+      failure mode `AGENTS.md` records about `BUG-12`. `crates/snapdown-store/src/image/burner.rs`
+      now runs `image::load_from_memory` and the dimension check BEFORE the no-markers fast path, so
+      a corrupt or mis-sized blob is refused rather than returned as `Ok`.
+
+      Covered end to end by `a_planned_bundle_refuses_an_image_whose_recorded_dimensions_are_wrong`,
+      which drives it through the new Bundle caller rather than the burner alone.
+    status: fixed
 
   - id: BUG-21
     title: "The composed Markdown references the Finding's clean image, not the Bundle's burned copy"
@@ -1146,6 +1267,7 @@ defects:
     component: bundle
     severity: high
     contradicts: [FR-8, "AD-4"]
+    root_cause: code
     evidence: |
       crates/snapdown-core/src/domain/markdown.rs:30:
 
@@ -1179,7 +1301,15 @@ defects:
       is proven to still fail when it should.
     related: BUG-19
     scheduled: W8-S6
-    status: open
+    verified: |
+      `crates/snapdown-core/src/domain/markdown.rs` reads `item.image_path` - the Bundle's own burned
+      copy - and its doc comment now carries `AD-4` as a named invariant.
+
+      `a_planned_bundle_points_its_markdown_at_the_burned_copy_not_the_finding` asserts BOTH halves:
+      the burned path is present and the Finding's clean path is absent. Only asserting the first
+      would pass against a document that referenced both. Mutation: restoring
+      `detail.finding.image_path` is KILLED.
+    status: fixed
 
   - id: BUG-22
     title: "Bundle composition silently skips a Finding id it cannot resolve"
@@ -1188,6 +1318,7 @@ defects:
     component: bundle
     severity: medium
     contradicts: ["UC-9"]
+    root_cause: code
     evidence: |
       apps/desktop/src-tauri/src/commands/bundle.rs:34-38 - `if let Some(detail) = ... get_finding(fid)`
       with no else branch. A finding_id that resolves to None is skipped and composition continues.
@@ -1202,7 +1333,17 @@ defects:
       Refuse the composition and name the unresolvable id, per UC-9. Confirm against UC-9's own text
       before choosing between refusing outright and reporting a partial - this is a promise question,
       not a code-style one.
-    status: open
+    verified: |
+      `resolve_bundle_findings` in `apps/desktop/src/main.rs` resolves every ticked id BEFORE
+      anything is burned or written, and returns an error naming the id it could not find. `UC-9`'s
+      all-or-nothing shape is therefore structural: there is no point in the flow at which a partial
+      Bundle exists.
+
+      Two guards: `resolving_findings_refuses_an_id_the_library_has_lost` and
+      `resolving_findings_keeps_the_order_it_was_given` - the second because a resolution step that
+      sorted would break `AD-1`'s tie between a Marker ordinal and a Markdown line number. Mutation:
+      turning the `Ok(None)` arm back into a skip is KILLED.
+    status: fixed
 
   - id: BUG-23
     title: "Publishing swallows a failed image read and puts the Publication live without it"
@@ -1231,6 +1372,18 @@ defects:
       Fail the publish and name the file that could not be read. DEC-005 freezes `sharing` but
       permits a fix - it forbids new work, in its own words - so this is not blocked by the freeze.
     related: BUG-19
+    rescoped: |
+      The line this row quotes - `sharing.rs:116` - was archived with the Tauri app by `DEC-007` and
+      is out of the Cargo workspace, so the swallow itself no longer runs. That does NOT close the
+      row, and the distinction matters: the defect was a broken promise, and the promise is now
+      unmet for a larger reason. Publishing has no Slint caller at all. `share-bundle-clicked` is
+      declared in `appwindow.slint` and handled by nothing, recorded in
+      `test_ui_callbacks_reach_rust.rs` as deliberately unhandled while `DEC-005` holds.
+
+      The CLASS is answered for the Bundle half: `plan_bundle` refuses a Bundle whose image cannot be
+      read rather than dropping the item, and `a_planned_bundle_refuses_an_image_it_cannot_read`
+      proves it by mutation. When the Publication path is rebuilt in Slint it must read the same way,
+      and this row is what says so.
     status: open
   - id: BUG-24
     title: Capture overlay opens at the default window size instead of covering the monitor, so selecting a region never produces a screenshot
@@ -1281,7 +1434,12 @@ defects:
       Not fixed here, filed separately if it surfaces again: the main window is still visible (not
       hidden) while capture_monitor_image grabs the monitor, unlike the Tauri predecessor which hid
       it first - out of scope for the three reported symptoms, which are now all resolved.
-    status: resolved
+    stale_reference: |
+      `src-tauri/src/commands/capture.rs` was archived by `DEC-007`. Genuinely superseded rather
+      than regressed: the Slint overlay is one window sized to the whole virtual desktop, its
+      geometry is asserted by eleven guards in `test_capture_overlay_fullscreen.rs`, and the owner has
+      driven it live throughout this session across two monitors and repeated resolution changes.
+    status: fixed
   - id: BUG-25
     title: Escape did nothing while the capture overlay was open
     found: "2026-08-26"
@@ -1305,7 +1463,7 @@ defects:
     scenario: N/A - covered by apps/desktop/tests/test_capture_overlay_escape_cancels.rs
     resolved: |
       2026-08-26, commit 9277ecc. Guarded by capture_overlay_window_binds_escape_to_cancel.
-    status: resolved
+    status: fixed
   - id: BUG-26
     title: One overlay stretched over the whole virtual desktop cannot render a mixed-DPI multi-monitor rig
     found: "2026-08-26"
@@ -1347,7 +1505,7 @@ defects:
       one_capture_overlay_is_opened_per_monitor,
       each_overlay_is_placed_and_sized_to_its_monitor_before_being_shown, and
       a_selection_is_clamped_to_the_monitor_it_was_started_on.
-    status: resolved
+    status: fixed
   - id: BUG-27
     title: The capture overlay blinks once per capture on the first pointer move
     found: "2026-08-26"
@@ -1435,7 +1593,7 @@ defects:
       API for it. Neither is worth the risk against a one-frame transition on the first capture of a
       session that the owner has looked at and accepted. If it ever becomes worth revisiting, the
       thing to change is the hook, not the timer.
-    status: resolved
+    status: fixed
   - id: BUG-28
     title: The capture overlay takes a visible moment to appear
     found: "2026-08-26"
@@ -1658,7 +1816,7 @@ defects:
     resolved: |
       2026-08-27. Guarded by enter_saves_from_the_window_not_only_from_the_note_field, verified by
       mutation.
-    status: resolved
+    status: fixed
   - id: BUG-30
     title: An intermittent failure of Enter, caused by focus being claimed once for an overlay reused forever
     found: "2026-08-27"
@@ -1682,7 +1840,7 @@ defects:
       capture rather than relying on `init`.
     resolved: |
       2026-08-27. Guarded by keyboard_focus_is_reclaimed_on_every_capture, verified by mutation.
-    status: resolved
+    status: fixed
   - id: BUG-31
     title: The note was never captured at all, because nothing gave the note field focus
     found: "2026-08-27"
@@ -1711,7 +1869,7 @@ defects:
       creation and the moment the Reviewer should be typing are the same event.
     resolved: |
       2026-08-27. Guarded by the_note_field_takes_focus_when_the_popup_opens, verified by mutation.
-    status: resolved
+    status: fixed
   - id: BUG-32
     title: A plain click re-armed the previous drag's region instead of taking the container under the pointer
     found: "2026-08-27"
@@ -1736,7 +1894,7 @@ defects:
     resolved: |
       2026-08-27, confirmed by the owner. Guarded by a_press_clears_the_previous_selection_size,
       verified by mutation.
-    status: resolved
+    status: fixed
   - id: BUG-33
     title: Container suggestions included cloaked windows, off-screen panes, and windows behind other windows
     found: "2026-08-27"
@@ -1765,7 +1923,7 @@ defects:
     resolved: |
       2026-08-27, confirmed by the owner. Guarded by detection_ignores_what_is_not_actually_on_screen,
       verified by mutation - including a mutant that swaps the sort keys.
-    status: resolved
+    status: fixed
   - id: BUG-34
     title: Snapdown appeared in its own screenshot, and hiding it could not be timed reliably
     found: "2026-08-27"
@@ -1799,7 +1957,7 @@ defects:
     resolved: |
       2026-08-27, confirmed by the owner. Guarded by
       the_editor_is_excluded_from_the_capture_rather_than_hidden, verified by mutation.
-    status: resolved
+    status: fixed
   - id: BUG-35
     title: The filmstrip's fixed-width cards pushed the Notes and Properties panel off screen
     found: "2026-08-27"
@@ -1828,7 +1986,7 @@ defects:
     resolved: |
       2026-08-27, confirmed by the owner. Guarded by
       the_filmstrip_scrolls_instead_of_widening_the_workspace, verified by mutation.
-    status: resolved
+    status: fixed
   - id: BUG-36
     title: The note popup's fixed height pushed its own hint text and Save button outside it
     found: "2026-08-27"
@@ -1855,7 +2013,7 @@ defects:
     resolved: |
       2026-08-27. Owner's verdict: "cukup baik" on layout, with the look-and-feel objection filed
       separately as BUG-37.
-    status: resolved
+    status: fixed
   - id: BUG-37
     title: The capture overlay does not follow the Editor's design system, and does not follow dark mode
     found: "2026-08-27"
@@ -2005,7 +2163,7 @@ defects:
 
       Guarded by the_note_panel_is_kept_inside_the_monitor_holding_the_selection, verified by
       mutation - including a mutant that restores the `root.height` comparison.
-    status: resolved
+    status: fixed
   - id: BUG-39
     title: A suggested container is outlined but still dimmed, so it does not read as selectable the way a dragged region does
     found: "2026-08-27"
@@ -2034,7 +2192,7 @@ defects:
       The translucent wash is gone: hovering now previews exactly what selecting will look like.
       Guarded by a_hovered_container_cuts_the_scrim_rather_than_being_washed_over, verified by
       mutation.
-    status: resolved
+    status: fixed
   - id: BUG-40
     title: A selection cannot be replaced by clicking elsewhere; it takes Escape and a fresh capture
     found: "2026-08-27"
@@ -2073,7 +2231,7 @@ defects:
       expressed in two coordinate spaces at once.
 
       Guarded by clicking_elsewhere_starts_a_new_selection_without_escape, verified by mutation.
-    status: resolved
+    status: fixed
   - id: BUG-41
     title: Selecting a Finding in the filmstrip takes a visible moment to reach the canvas
     found: "2026-08-27"
@@ -2120,7 +2278,7 @@ defects:
       full rebuild rather than doing nothing, because slow is a defect and silent is a mystery.
 
       Guarded by selecting_a_finding_does_not_rebuild_the_filmstrip, verified by mutation.
-    status: resolved
+    status: fixed
   - id: BUG-42
     title: FR-1's one-click full-screen affordance does not exist on the monitor under the pointer
     found: "2026-08-27"
@@ -2202,7 +2360,7 @@ defects:
       Rebuilt in the Editor's own idiom: 32px, `radius-sharp`, no border, and the same three-part
       shape the Assemble action uses - 13px glyph, 8px gap, 11px/700 label, hairline divider, mono
       readout. The readout's number was also wrong; that is BUG-49.
-    status: resolved
+    status: fixed
   - id: BUG-43
     title: FR-1's "pixel loupe" shows no pixel grid
     found: "2026-08-27"
@@ -2419,7 +2577,7 @@ defects:
       Guarded by the_loupe_shows_source_pixels_as_pixels and
       the_lens_sits_beside_the_pointer_and_waits_for_it_to_settle, verified by mutation - including
       one that restores the fractional cell and one that returns the line to a logical pixel.
-    status: resolved
+    status: fixed
   - id: BUG-44
     title: detect_element_at_point is dead code
     found: "2026-08-27"
@@ -2444,7 +2602,7 @@ defects:
     resolved: |
       2026-08-27. Deleted - 8,111 bytes. Nothing referenced it, and it could not have worked under
       the overlay. Guarded by the_point_based_detection_is_deleted.
-    status: resolved
+    status: fixed
   - id: BUG-45
     title: A typed Note is stored but does not appear in the Editor's Observation Summary
     found: "2026-08-27"
@@ -2579,7 +2737,7 @@ defects:
 
       Guarded by the_product_has_exactly_one_text_entry_component and
       the_observation_summary_is_visible_persistent_and_outside_the_tab_body, verified by mutation.
-    status: resolved
+    status: fixed
   - id: BUG-46
     title: The capture note field is single-line, so a longer note scrolls out of sight as it is typed
     found: "2026-08-27"
@@ -2618,7 +2776,7 @@ defects:
       `accepted`. The Ctrl+Enter alternative this row recommended is not needed.
 
       Guarded by the_note_field_wraps_while_staying_single_line, verified by mutation.
-    status: resolved
+    status: fixed
   - id: BUG-47
     title: An edited Observation Summary is discarded when another Finding is selected
     found: "2026-08-27"
@@ -2650,7 +2808,7 @@ defects:
       to whichever row happened to be first.
 
       Guarded by an_edited_observation_summary_is_written_to_the_store, verified by mutation.
-    status: resolved
+    status: fixed
   - id: BUG-48
     title: The filmstrip retains every Finding's image at full resolution to fill 120x86 cards
     found: "2026-08-27"
@@ -2690,7 +2848,7 @@ defects:
       capture.
 
       Guarded by filmstrip_thumbnails_are_downscaled_before_they_are_retained, verified by mutation.
-    status: resolved
+    status: fixed
   - id: BUG-49
     title: The overlay reports region and screen sizes in logical pixels while everything downstream is physical
     found: "2026-08-27"
@@ -2745,7 +2903,7 @@ defects:
       Now parsed by parse_region_field, unit-tested in main.rs against that exact string plus the JSON
       form the first attempt assumed - which must NOT parse, or the caller is guessing again. Both
       verified by mutation.
-    status: resolved
+    status: fixed
   - id: BUG-50
     title: A whole window cannot be selected, because the tightest container under the pointer always wins
     found: "2026-08-27"
@@ -2781,7 +2939,7 @@ defects:
       panels before windows, so a Reviewer wanting the window has no reason to try the wheel.
 
       Guarded by the_reviewer_can_walk_outward_to_a_whole_window, verified by mutation.
-    status: resolved
+    status: fixed
   - id: BUG-51
     title: The capture overlay retains two full-desktop canvases for the life of the process
     found: "2026-08-27"
@@ -2895,7 +3053,7 @@ defects:
       is `OQ-19` and `DEC-003`'s own named reversal trigger, and it is the owner's decision, not a
       defect. For scale: Snagit idles at ~261 MB across three processes; this is 64 MB before use and
       185 MB after, in one.
-    status: resolved
+    status: fixed
   - id: BUG-52
     title: The mouse cursor disappears once a region is selected, because it is hidden unconditionally
     found: "2026-08-27"
@@ -2927,7 +3085,7 @@ defects:
       Guarded by the_lens_sits_beside_the_pointer_and_waits_for_it_to_settle, which now asserts both
       halves: hidden while the crosshair stands in for it, and restored once it does not. Verified by
       mutation, including one that hides it unconditionally again.
-    status: resolved
+    status: fixed
   - id: BUG-53
     title: Changing the display resolution takes the process to 363 MB
     found: "2026-08-27"
@@ -3067,7 +3225,7 @@ defects:
 
       The instrumentation has been removed. `LiveOverlay`'s `Drop` impl stays, without the counter:
       hiding the outgoing window is a correctness improvement in its own right.
-    status: resolved
+    status: fixed
   - id: BUG-54
     title: theme.slint fails WCAG AA on six pairings, including every primary button label in dark mode
     found: "2026-08-27"
@@ -3139,3 +3297,684 @@ defects:
       and choosing between them is a design decision the owner has corrected the agent on five times
       in this component already. It is put here with numbers rather than taken.
     status: open
+
+  - id: BUG-55
+    title: Six UI callbacks were declared, fired by the interface, and handled by nothing
+    found: "2026-08-27"
+    found_by: the owner, asking what feature work was actually outstanding
+    component: finding
+    severity: critical
+    contradicts: [FR-8, UC-2, UC-9, "AD-1", "AD-4"]
+    root_cause: code
+    evidence: |
+      Cross-referencing every `callback` in `apps/desktop/ui/appwindow.slint` against `main.rs`
+      returned six with no handler:
+
+        marker-placed             fired by the canvas TouchArea      no on_marker_placed
+        delete-marker-clicked     never fired - no affordance at all no on_delete_marker_clicked
+        assemble-bundle-clicked   fired by nothing - the tile had no TouchArea
+        copy-image-clicked        fired by the toolbar               no handler
+        share-bundle-clicked      fired by the toolbar               no handler
+        paste-clicked             fired by the toolbar               no handler
+
+      A seventh, found by the guard written for this row: `on_open_file_clicked` opened a real file
+      dialog, filtered for images, let the Reviewer choose one, and printed the path.
+
+      So the Editor could annotate nothing and assemble nothing. The seven tool buttons set
+      `active-tool-index` and drew their own selected state, which is the whole of what they did. The
+      Marker Notes panel read "STEP MARKER NOTES (0)" permanently, and the two demo Markers shipped as
+      the property's default were the only ones that had ever appeared.
+    impact: |
+      The product's core loop stopped after capture. `FR-8` promises a handed-over Bundle carrying its
+      Markers on the image; nothing could place a Marker and nothing could compose a Bundle. `UC-2`
+      and `UC-9` had no implementation in the shipping binary at all.
+
+      Every part needed already existed and was tested: `FindingStore::add_marker`,
+      `delete_marker`, `update_marker`, `reorder_markers`, `MarkerBurner`, `MarkdownSerializer`,
+      `BundleStore::create_bundle`, `SqlitePublicationStore`. The Slint app imported none of them
+      except the Finding and Settings stores.
+    why_undetected: |
+      SEVENTH instance of this repository's signature failure, after `BUG-4`, `BUG-5`, `BUG-6`, the
+      `EmptyState` sweep, `BUG-19` and `BUG-21`: a part built, unit-tested, and joined to nothing.
+      `V12` checks that an `LC` is REGISTERED, not that it is REACHED, and `OQ-23` records that there
+      is no composition test class.
+
+      `DEC-007` said this would happen, in its own Cost section: the Slint rewrite "reset the desktop
+      UI surface to a fraction of what DEC-005 had allowed to be built", and listed the screens with
+      no Slint implementation. What it did not say - and what nothing tracked - is that the UI for
+      several of them was drawn anyway, so from the screen they looked delivered. A drawn button is
+      more misleading than an absent one.
+    fix: |
+      fastpath, done. `apps/desktop/src/main.rs`:
+
+        - `on_marker_placed`, guarded so only the Marker tool places one, and reloading from the store
+          so the ordinal is the store's to assign (`AD-1`);
+        - `on_delete_marker_clicked`, with a real hit area behind the glyph that only looked like a
+          button. The store renumbers the survivors in the same transaction;
+        - `on_marker_comment_edited`, written through on every edit and deliberately NOT reloading -
+          a reload rebuilds the list and takes the field out from under the caret;
+        - `on_finding_selection_toggled` and a checkbox on each filmstrip card, in place rather than
+          by rebuilding the strip (`BUG-41`);
+        - `on_assemble_bundle_clicked` -> `resolve_bundle_findings` -> `plan_bundle` -> write. See
+          `BUG-19`, `BUG-21` and `BUG-22` for what those two functions refuse and why;
+        - `on_open_file_clicked` now imports through the SAME `persist_finding` a capture uses, so an
+          imported image is not a second kind of Finding with its own rules.
+
+      And a result line, because assembling a Bundle writes files and a database row and changes
+      nothing on screen: `toast()` plus a self-clearing banner. A silent success and a silent failure
+      looked identical before it.
+    verified: |
+      `apps/desktop/tests/test_ui_callbacks_reach_rust.rs` - the cheapest useful form of the
+      composition test class `OQ-23` asks for. It parses every declared callback and requires either a
+      handler or an entry in `DELIBERATELY_UNHANDLED` with a stated reason; the ratchet releases in
+      both directions, so an excused callback that gets wired must leave the list. A second test
+      refuses a handler that does nothing but print. Three of the six remain deliberately unhandled -
+      clipboard in, clipboard out, and publishing under `DEC-005` - and each says why.
+
+      Six unit tests over the two pure halves of assembly, plus six mutants, all KILLED: skip an
+      unresolvable id, swallow an unreadable image, return the source instead of a burned copy,
+      reference the Finding's clean image, delete the `on_marker_placed` registration, reduce the
+      Assemble handler to a println.
+    status: fixed
+
+  - id: BUG-56
+    title: Nine colour literals lived outside theme.slint, and one of them misses WCAG AA
+    found: "2026-08-27"
+    found_by: agent, while replacing the two literals the Bundle work touched
+    component: capture
+    severity: medium
+    contradicts: [NFR-17]
+    root_cause: code
+    evidence: |
+      `NFR-17` puts colour in one file and names a lint plus `contrast.test.ts` as the enforcement.
+      Both cover `web/ui/src/styles/tokens.css`, which builds nothing in the active workspace
+      (`OQ-27`). The Slint files had no equivalent, and held nine:
+
+        appwindow.slint      #e81123          the close button's hover red
+        appwindow.slint      #ffffff          its glyph
+        appwindow.slint      #e11d48          the Capture action's label
+        appwindow.slint      #0f172a  x2      the canvas ground and a filmstrip card's ground
+        appwindow.slint      #000000 a=0.18   the canvas lift
+        appwindow.slint      #ffffff          the Assemble tile's label
+        reticle-marker.slint #000000 a=0.35   a Marker badge's lift
+        reticle-marker.slint #ffffff          its numeral
+    impact: |
+      A literal exists in exactly one theme. All nine painted the same pixels in dark mode as in
+      light, which is the drift `NFR-17` exists to prevent.
+
+      One is a real legibility failure rather than a tidiness one: `#e11d48` on `bg-app` measures
+      4.29:1, and it is a 10px label on the Capture button - the product's primary verb. It was found
+      only because turning it into a token brought it into the contrast gate.
+    why_undetected: |
+      Same root as `BUG-54`: the file being checked was not the file that ships. `theme.slint` gained
+      a contrast gate under `DEC-009` but nothing asserted that colour LIVED there, so the gate
+      covered the tokens and not their absence.
+    fix: |
+      fastpath, done. Five tokens added to `theme.slint`, each with the reason it is the value it is:
+      `chrome-close-hover` (the Windows shell paints its own close button that exact red, and it is
+      deliberately not `semantic-error`), `canvas-ground`, `shadow-soft`, `marker-shadow`, and
+      `accent-capture: is-dark ? #fb7185 : #be123c` - the light value a step darker than the inline
+      one, giving 5.74 on `bg-app` and 6.29 on `bg-card`. The other four became existing tokens.
+
+      `appwindow.slint` and every file in `ui/components/` now hold zero colour literals.
+    verified: |
+      `colour_lives_only_in_theme_slint` in `apps/desktop/tests/test_theme_contrast.rs` scans
+      `appwindow.slint` and every component, skipping comments, and fails on any `#rgb`, `#rrggbb` or
+      `#rrggbbaa`. It asserts the component list is non-empty first, so it cannot pass by finding
+      nothing to check. Two mutants KILLED: a literal restored in `appwindow.slint`, and one
+      introduced in a component.
+
+      `accent-capture` is now two rows in the gate's `PAIRS`, on `bg-app` and `bg-card`.
+    status: fixed
+
+  - id: BUG-57
+    title: Three toolbar buttons accept a click, print to a console a release build does not have, and report nothing
+    found: "2026-08-27"
+    found_by: the guard written for BUG-55, on its first run
+    component: finding
+    severity: medium
+    contradicts: [FR-15, FR-21]
+    root_cause: code
+    evidence: |
+      `main.rs` handlers whose entire body is a `println!`:
+
+        on_library_clicked          "Open Snapdown Library / Bundle History clicked"
+        on_bundles_drawer_clicked   "Toggle Bundles Drawer clicked"
+        on_settings_clicked         "Open Settings clicked"
+
+      A Tauri release binary on Windows has no console, so the print reaches nobody. The button
+      highlights on hover, depresses on click, and nothing happens.
+    impact: |
+      Three visible controls that do nothing. Worse than an absent control, because the Reviewer
+      cannot tell the difference between "not built" and "broken" - and the tray's Settings item
+      invokes `settings-clicked` too, so the same dead end is reachable from two places.
+
+      The Settings surface is `DEC-007`'s own recorded cost, so its absence is expected. Its being
+      presented as a working button is not.
+    why_undetected: |
+      A `println!` handler satisfies every mechanical check that asks whether a callback is handled -
+      including, until it was extended, the guard written for `BUG-55`. It reads as work in progress
+      and survives review for the same reason.
+    fix: |
+      NOT DONE. Each needs a surface built, not a handler written, and `DEC-007` records that the
+      Slint app has none of them yet. Recorded in `KNOWN_STUBS` in
+      `apps/desktop/tests/test_ui_callbacks_reach_rust.rs` with what is missing behind each, and that
+      list releases: a stub that starts doing real work must leave it.
+
+      Until they exist, the honest interim is to disable the buttons or say "not built yet" on screen
+      rather than accept the click. That is a product decision and it is left to the owner.
+    status: open
+
+  - id: BUG-58
+    title: The theme choice was thrown away on every restart
+    found: "2026-08-27"
+    found_by: agent, reading on_theme_toggle_clicked while classifying the println stubs
+    component: settings
+    severity: low
+    contradicts: [FR-21]
+    root_cause: code
+    evidence: |
+      `appwindow.slint` flips `is-dark-theme` itself, so the repaint always worked and the toggle
+      looked complete. The Rust handler's whole body was:
+
+        let cur = win.get_is_dark_theme();
+        println!("Theme toggled. Dark mode is now: {}", !cur);
+
+      It printed the value it was about to lose. Nothing read a stored theme at startup because
+      nothing had stored one.
+    impact: |
+      The Editor reopened in light mode every time, however many times the Reviewer had switched. Also
+      why `BUG-54`'s dark-mode contrast failures were easy to miss: reaching dark mode took a click
+      every session, so most sessions never saw it.
+    why_undetected: |
+      The visible half of the feature - the repaint - is in the UI and works. Persistence is the
+      invisible half, and no test drove a second launch.
+    fix: |
+      fastpath, done. The handler stores `SettingValue::Boolean` under `SettingKey::Custom("theme_dark")`,
+      and startup reads it before the window is shown so it does not repaint in front of the Reviewer.
+      `Custom` rather than a new enum variant deliberately: a variant reaches the domain, the store and
+      a migration, which is a lot of surface for one boolean.
+
+      One `theme_setting_key()` function rather than the string at two call sites - a typo in one of
+      them would store the choice, never read it back, and fail nothing.
+    status: fixed
+
+  - id: BUG-59
+    title: The Local API does not exist, so the MCP Bridge cannot reach the product at all
+    found: "2026-08-27"
+    found_by: agent, cleaning up stale registry rows at the owner's request and checking each store method for a caller
+    component: agent-access
+    severity: critical
+    contradicts: [FR-20, FR-21, FR-19, FR-22, "CAP-7", "BG-3"]
+    root_cause: code
+    evidence: |
+      `crates/snapdown-bridge` - a shipped executable, built by CI, with its own tests - talks to:
+
+        client.rs:27   base_url = http://127.0.0.1:{port}
+        client.rs:44   GET /v1/health
+        client.rs:59   GET /v1/bundles
+        client.rs:87   GET /v1/bundles/{bundle_id}
+        client.rs:120  GET /v1/bundles/{bundle_id}/images/{filename}
+
+      Nothing serves any of them. `inventory.py` says it in one line: "UNREAD
+      apps/desktop/src/server.rs not found - the Slint app has no local HTTP server yet", and all four
+      endpoint rows come back "planned but not read in code".
+
+      `tiny_http` is still a workspace dependency. The Tauri app had the server; `DEC-007` archived
+      it and nothing in `apps/desktop/src/` replaced it - a search for `tiny_http`, `bind` and
+      `server` across the four Slint source files returns nothing.
+    impact: |
+      This is the product's whole reason for existing. `BG-3` is about handing a review to a coding
+      agent for as few tokens as possible, and `CAP-7` is the local path for doing it. The Bridge
+      installs, starts, and fails every call.
+
+      `FR-19` and `FR-22` - issue and revoke an Access Key - are unreachable for the same reason plus
+      a second one: there is no Agent access surface either, so a key cannot be created even if
+      something were listening. `SqliteAccessKeyStore` exists and is tested and has no caller.
+
+      Worth stating plainly: a Reviewer can capture, annotate and assemble a Bundle, and then has no
+      way to give it to an agent except by opening the Vault folder by hand.
+    why_undetected: |
+      The Bridge's own tests pass, because they test the Bridge against a stub. The server's absence
+      is only visible from the other side of the socket, and nothing in the workspace looks from
+      there.
+
+      `DEC-007`'s Cost section listed the SCREENS that had no Slint implementation. The server is not
+      a screen, so it was not on that list, and nothing else tracked it.
+    fix: |
+      NOT DONE. It is the largest single feature gap in the product and it is a wave, not a fastpath:
+      an HTTP server inside the desktop process (`AD-11` keeps it in-process), the four endpoints,
+      Access Key issue/verify/revoke, and the Agent access surface to create a key from.
+
+      The pieces that already exist: `SqliteAccessKeyStore`, `SqliteBundleStore`, `VaultBlobStore`,
+      the `tiny_http` dependency, and the Bridge itself - which means the contract is already written
+      down in `client.rs` and does not have to be designed.
+    status: open
+
+  - id: BUG-60
+    title: A corrupt library.db now produces a silently empty Library, and the session's work is lost on exit
+    found: "2026-08-27"
+    found_by: agent, re-reading BUG-12/BUG-16/BUG-17 against the Slint startup path
+    component: settings
+    severity: high
+    contradicts: [BR-118, "AD-11", "DEC-003"]
+    root_cause: code
+    evidence: |
+      `BUG-12`, `BUG-16` and `BUG-17` were all fixed in `apps/desktop/src-tauri/src/lib.rs`, and
+      `DEC-007` archived that file. The Slint startup path was written fresh and has none of it.
+
+      `apps/desktop/src/main.rs`, `AppContext::init`:
+
+        - a failed `SqliteFindingStore::open` falls back to `open_in_memory()`, reporting the reason
+          with `eprintln!`;
+        - the same for `SqliteSettingsStore`;
+        - a failed `VaultBlobStore::new` falls back to the default path.
+
+      A release binary on Windows has no console, so all three messages reach nobody. And each
+      fallback ends in an `unwrap`:
+
+        main.rs:162  SqliteFindingStore::open_in_memory().unwrap()
+        main.rs:173  SqliteSettingsStore::open_in_memory().unwrap()
+        main.rs:191  VaultBlobStore::new(&fallback).unwrap()
+
+      There is no error dialog anywhere in the Slint app: `MessageBox`, `MessageDialog`, `show_error`
+      and `error_dialog` return nothing across `apps/desktop/src/`.
+    impact: |
+      Two failures, and the first is worse than what `BUG-12` originally recorded.
+
+      `BUG-12` was "the application vanishes on launch" - visibly broken, and the Reviewer knows
+      something is wrong. What happens now is that Snapdown opens normally with an EMPTY Library, says
+      nothing, and every Finding captured in that session is written to an in-memory database that is
+      discarded on exit. Silent data loss beats a visible crash for damage every time.
+
+      `BR-118` requires the Reviewer to be told. Nothing tells them.
+
+      Second: three `unwrap`s on the startup path, under `AD-11`'s one-process rule, so each takes the
+      tray, the hotkeys, the overlay and the Editor with it. `DEC-003` accepted that coupling in
+      writing; it did not accept unreported panics on top of it.
+    why_undetected: |
+      Third time this exact thing has happened, and `AGENTS.md` already names the pattern twice: a
+      premise is written into an exclusion, the code the premise described changes, and nobody
+      re-reads the exclusion. Here the whole FILE the fixes lived in was deleted, which is the most
+      complete version of it.
+
+      No test covers a second launch or a corrupt store on the Slint path. Every store test uses a
+      writable temp directory where the open always succeeds - `AGENTS.md` records that too.
+    fix: |
+      NOT DONE, and deliberately kept out of this cleanup so it is not buried in it. What it needs:
+
+      1. a startup failure the Reviewer can see - a native dialog, owned and foregrounded, which is
+         `BUG-17`'s original finding and now has no code at all;
+      2. refusing to run on an in-memory fallback rather than accepting work it will discard, or
+         labelling the window unmistakably if it does;
+      3. the three `unwrap`s replaced with a reported exit, per `BUG-12`'s original sweep.
+
+      The corrupt-store fixture rule from `AGENTS.md` applies: garbage bytes are rejected at
+      `Connection::open` before a pragma runs, so the fixture must be a valid header with corrupt
+      pages, and the guard must be mutation-verified - `a_failed_open_leaves_no_wal_or_shm_file` is
+      already recorded as insensitive to its own defect.
+    related: BUG-12, BUG-16, BUG-17
+    status: open
+
+  - id: BUG-61
+    title: Nine promised Editor surfaces have no Slint implementation, and seven store operations have no caller
+    found: "2026-08-27"
+    found_by: agent, at the owner's request to find the bugs that are really features
+    component: finding
+    severity: high
+    contradicts: [FR-9, FR-10, FR-13, FR-14, FR-15, FR-16, FR-17, FR-23, FR-25, "UC-7", "UC-8", "UC-10", "UC-11"]
+    root_cause: code
+    evidence: |
+      Store operations that exist, are tested, and are called from nowhere in `apps/desktop/src`:
+
+        FindingStore::delete_finding        - no Finding can be deleted
+        FindingStore::reorder_markers       - Markers cannot be reordered
+        FindingStore::update_finding_image  - a burned-in edit cannot be saved back
+        BundleStore::list_bundles           - assembled Bundles cannot be listed
+        BundleStore::get_bundle             - or opened
+        BundleStore::update_bundle_markdown - or edited
+        BundleStore::delete_bundle          - or deleted
+        SqliteAccessKeyStore (whole store)  - see BUG-59
+        VaultSweeper orphan report          - see BUG-6
+
+      Surfaces the corpus promises with no Slint file and no equivalent inside `appwindow.slint`:
+
+        /findings                    Findings list and management     UC-3, UC-4, UC-6  (partial: the
+                                     filmstrip shows them; nothing manages them)
+        /findings/delete             Delete confirmation              UC-7
+        /findings/orphans            Orphan report                    UC-8, FR-15
+        /bundles                     Bundles list                     UC-10, UC-11
+        /bundles/:id                 Bundle detail                    UC-11, UC-12
+        /bundles/compose             Compose Bundle                   UC-9  -- BUILT 2026-08-27:
+                                     the Assemble & Review modal, from the UX asset's own three
+                                     columns minus the handoff column, whose three channels do not
+                                     exist yet (no clipboard dependency, BUG-59, DEC-005)
+        /bundles/:id/publish         Publish and unpublish            UC-20, UC-22, FR-23, FR-25
+        /settings                    Settings                         UC-13 to UC-16
+        /settings/agent-access       Agent access                     UC-17, UC-19
+
+      The Properties tab is not a Settings surface: it holds decorative fields ("Font Family",
+      "Font Size: 14px") and no Vault path, Quality Budget or hotkey control. A search of the whole
+      Slint UI for `Vault`, `Quality` and `hotkey` returns nothing, so every setting can only be
+      changed by editing `library.db` by hand.
+    impact: |
+      A Bundle can be assembled and then never seen again from the product. A Finding cannot be
+      deleted, which makes `BG-5` - "a review is disposable, findings and their files leave
+      together" - unreachable by design rather than by defect. A hotkey cannot be rebound. An orphan
+      cannot be found.
+
+      What works end to end today: capture, note, marker, assemble, import, theme. That is the
+      product's spine and it is real. Everything either side of it is absent.
+    why_undetected: |
+      It is not undetected - `DEC-007`'s Cost section lists most of it, and `inventory.py` reports 18
+      plan-versus-code gaps on every run. What was missing is a single place that says which of them
+      are still true, in one list, with the store methods that are already built beside them. A gap
+      spread across a decision's prose, a script's output and eleven "UNREAD" lines is a gap nobody
+      reads.
+
+      Two of the eleven UNREAD lines were also FALSE: the Marker canvas is built, inside
+      `appwindow.slint`, and the reader looked for `components/marker-layer.slint`. That is fixed in
+      `.constitution/project/inventory-readers.py` so this row's list is trustworthy.
+    fix: |
+      NOT DONE. This row is a backlog, not a task, and it is deliberately one row rather than nine:
+      the ordering is a product decision and it belongs to the owner.
+
+      What the ordering probably wants to respect:
+
+      - `BUG-59` (the Local API) is the one that makes the product do what it is for, and it needs a
+        surface from this list anyway - Agent access, to make a key;
+      - deletion (`UC-7`) and the orphan report (`UC-8`) are `BG-5`, and the store side of both is
+        already built and tested. Cheapest real value on the list;
+      - a Bundles list and detail (`UC-10`, `UC-11`) closes the loop that `BUG-55` opened - a Bundle
+        that can be made but not opened is half a feature;
+      - Settings (`UC-13` to `UC-16`) is what stops "edit library.db by hand" being the answer;
+      - publish (`FR-23`, `FR-25`) stays behind `DEC-005` until the owner lifts it.
+    status: open
+
+  - id: BUG-62
+    title: Every image the product writes used Fast compression and a redundant alpha channel
+    found: "2026-08-27"
+    found_by: the owner, noticing a 1.5 MB file coming back from an import at 1.9 MB
+    component: finding
+    severity: medium
+    contradicts: ["BG-3", NFR-1]
+    root_cause: code
+    measurement: |
+      Measured in a RELEASE build on three real files out of the owner's own Vault, comparing the
+      product's output against the settings it should have been using:
+
+        1460x1042 UI capture     155 KB -> 88 KB   (-43%)   18 ms
+        1254x1254 photo import  1951 KB -> 1537 KB (-21%)  381 ms
+        486x308 small capture      7 KB ->  2 KB   (-71%)    1 ms
+
+      The middle row is the one reported. 1537 KB is what the file weighed BEFORE the import - so the
+      import was not adding information, it was spending 400 KB to store the same pixels worse.
+
+      `CompressionType::Best` was measured too and rejected: 1493 KB against Default's 1537 KB - 3%
+      for four times the time (1442 ms against 381 ms).
+    evidence: |
+      `crates/snapdown-store/src/image/pipeline.rs` called `PngEncoder::new`, which is
+      `CompressionType::Fast`, and always wrote `ExtendedColorType::Rgba8`.
+
+      A screen capture is fully opaque, always, so the alpha channel was a quarter of the raw bytes
+      carrying one repeated value. `MarkerBurner` did the same, and its output is the copy that
+      actually reaches the agent.
+    impact: |
+      Every Finding and every burned Bundle image in the product is roughly 20-70% larger than it
+      needs to be. `BG-3` is "a handoff costs as few agent tokens as it can", and a fetched image is
+      the largest thing in a handoff.
+
+      Visible to the owner only on an import, because an import is the one case where there is an
+      original to compare against. Every capture had the same overhead and nothing to compare it to.
+    why_undetected: |
+      `PngEncoder::new` looks like the neutral choice. Nothing in the name says it picks the fastest
+      and worst compression, and nothing in the product asserted a size - the image tests check that
+      output DECODES, which is the right thing to check and says nothing about this.
+
+      The `encoder_quality` half of the QualityBudget is also inert: PNG is lossless, so the number
+      the Reviewer can set has no effect on it at all. That is not this defect, but it is why nobody
+      looked here - the budget appeared to be in charge of size.
+    fix: |
+      fastpath, done. One `encode_png` in `pipeline.rs` now owns how this product writes a PNG:
+      `CompressionType::Default` with `FilterType::Adaptive`, and `Rgb8` when every pixel is opaque.
+      `MarkerBurner` calls the same function rather than keeping its own encoder.
+    verified: |
+      `crates/snapdown-store/tests/test_png_encoding.rs`, five tests, four mutants KILLED: always
+      write RGBA, always drop alpha, revert to Fast, and a size assertion that the alpha fix alone
+      could satisfy.
+
+      Two things that made the tests honest, both worth keeping in mind:
+
+      - the compression test first used a RANDOM fixture and failed by 20 bytes. Random data is
+        incompressible, so `Default` spends more effort than `Fast` for slightly more overhead and
+        genuinely loses. A screenshot is mostly flat regions, so the fixture is now shaped like one;
+      - the first version of the size assertion compared RGBA against RGB output, so a mutant that
+        reverted the compression SURVIVED - the alpha fix alone kept it green. Two changes landed
+        together and one assertion cannot hold both ends.
+
+      And the first measurement was taken in a DEBUG build, where Default reads 596 ms for what is
+      18 ms in release. That is the trap `AGENTS.md` records about this repository, hit again.
+    status: fixed
+
+  - id: BUG-63
+    title: The Quality Budget's encoder_quality does nothing, because the product writes PNG and the corpus designed for WebP
+    found: "2026-08-27"
+    found_by: the owner, asking why an imported file was not compressed after BUG-62 was fixed
+    component: finding
+    severity: medium
+    contradicts: [FR-5, FR-6, "BG-3", "CAP-3"]
+    root_cause: architecture
+    violates: [FR-5, FR-6]
+    measurement: |
+      Measured in a RELEASE build on the owner's own files, all three fully opaque:
+
+        1254x1254 photographic import
+          PNG  Default/Adaptive RGB     1537 KB   389 ms   <-- what the product writes
+          WebP lossless (pure Rust)     1468 KB    13 ms
+          JPEG q90                       204 KB    26 ms
+          JPEG q82                       143 KB    25 ms
+          JPEG q75                       119 KB    25 ms
+
+        1460x1042 UI capture
+          PNG  Default/Adaptive RGB       88 KB    19 ms   <-- what the product writes
+          WebP lossless (pure Rust)      102 KB     6 ms
+          JPEG q90                       177 KB    32 ms
+          JPEG q82                       139 KB    25 ms
+
+      Read those two blocks together, because they point opposite ways. On PHOTOGRAPHIC content a
+      lossless format is 10x worse than a lossy one. On a UI SCREENSHOT - flat panels, hard edges,
+      text - PNG beats every JPEG setting, and JPEG would add ringing around the text as well.
+    evidence: |
+      `QualityBudget` resolves to a `ResolvedPair { max_long_edge, encoder_quality }`. The presets are
+      Sharp 90, Balanced 75, Small 50, and `derive_auto_budget` picks 92, 82 or 70 by region size.
+
+      `encoder_quality` is read by NOTHING that encodes. `ImageReducer::reduce_image` takes the pair,
+      uses `max_long_edge` to decide the resize, and writes PNG - which is lossless, so a quality
+      number has no meaning for it. A grep for `encoder_quality` outside tests finds only the field's
+      own definition, the presets, and the column it is stored in.
+
+      The corpus designed for WebP throughout. `.how/settings/01-ux/assets/06d-settings-about.html`
+      says "Rust Core + WebP Codec"; `.how/finding/01-ux/assets/02-capture-overlay.html` shows
+      "520 x 320 px (WebP ~460 tokens)"; the bundle assembly asset references
+      `bundles/item_1_burned.webp`. The archived Tauri paths were `.webp` too. The Slint rewrite
+      writes PNG, and nothing recorded that the quality half of the budget went inert with it.
+    impact: |
+      `FR-5` and `FR-6` are the Quality Budget: the Reviewer picks Sharp, Balanced or Small, and
+      three of those four settings differ ONLY in `encoder_quality` once the long edge is the same.
+      Balanced and Auto share a 1600px long edge; between them the quality number is the whole
+      difference, and it does nothing.
+
+      For UI screenshots - the product's main content - the current PNG is genuinely the right
+      choice, and `BUG-62` already took 20-70% off it. So this is not "images are too big" across
+      the board. It is that the lever the corpus promises is not connected, and on photographic
+      content that costs 10x.
+    why_undetected: |
+      Nothing asserted a size, and the image tests check that output DECODES - which is the right
+      thing to check and says nothing about this. The budget also LOOKS like it is in charge: it
+      resolves a quality, stores it on the Finding as `resolved_encoder_quality`, and reports it in
+      the Editor. Every part of the chain exists except the one that would use it.
+
+      Eighth instance of this repository's signature shape, and the first one where the missing join
+      is a NUMBER rather than a call.
+    fix: |
+      NOT DONE. It needs a decision, and the decision is the owner's because it changes a dependency.
+
+        (a) Real lossy WebP. What the corpus specifies, and the right answer for both content types -
+            it handles flat UI and photographs well. Needs the `webp` crate over `libwebp-sys`, which
+            is a C dependency built with `cc`. New build surface on CI and on every machine here.
+        (b) JPEG, which `image` can already encode with a quality parameter and no new dependency.
+            REJECTED unless the owner wants it: it is 2x WORSE than PNG on the product's main content
+            and puts ringing around text, which is the thing a Reviewer is pointing at.
+        (c) Pick the format per image - PNG for flat content, lossy for photographic. Correct in
+            principle and the detection is real work; also two formats in the Vault.
+        (d) Keep PNG and retire the quality half of the budget from the corpus: `FR-5`/`FR-6` become
+            a long-edge budget only, and the three presets differ by resolution alone. Cheapest, and
+            honest, but it withdraws a promise rather than meeting it.
+
+      `root_cause` is `architecture` rather than `code` because no amount of code fixes it: the
+      format is the decision. It stays open until a `DEC-` says which of the four holds.
+    related: BUG-62
+    status: open
+
+  - id: BUG-64
+    title: A Marker with no note line was never burned onto the Bundle's image, which is the opposite of what SCN-04 requires
+    found: "2026-08-27"
+    found_by: the owner, noticing Markers missing from the Assemble preview
+    component: bundle
+    severity: high
+    contradicts: ["SCN-04", "AD-1", FR-8]
+    root_cause: code
+    evidence: |
+      `crates/snapdown-store/src/image/burner.rs` filtered before drawing:
+
+        let active_markers: Vec<&Marker> = markers
+            .iter()
+            .filter(|m| !m.comment.trim().is_empty())
+            .collect();
+
+      and drew only those. `SCN-04` says the opposite in its own words:
+
+        1. "Marker 2 stays on the image, at its position, numbered 2."
+        4. "The image shows nothing unusual. A badge is a badge."
+
+      and under "Why point 4 is not an oversight": "A 'this marker has no line' ANNOTATION on the
+      image would be a permanent artifact of a temporary editing state."
+
+      So the scenario forbids drawing anything EXTRA for such a Marker. It requires the badge. The
+      test the scenario names is `a_marker_with_no_line_is_not_annotated_on_the_image`; the test that
+      was written is `a_marker_with_no_note_line_is_never_drawn_on_the_image`. One word, and the
+      whole behaviour inverted - then asserted, so the misreading was locked in.
+    impact: |
+      A Marker is placed before it is described. So the Markers most likely to be missing from a
+      handoff were the ones just added - which is how the owner found it, looking at the Assemble
+      preview and seeing fewer badges than they had placed.
+
+      Worse than a missing badge: the Markdown listed the Marker as `*(No annotation text)*` while
+      the image had no badge for it, so the document pointed at something the reader could not find.
+      `AD-1` ties a Marker ordinal to a line number, and this broke the tie in the one artifact that
+      leaves the machine.
+    why_undetected: |
+      It was asserted. Two tests encoded the misreading - one in `test_marker_burner.rs`, one in
+      `test_bundle_image_copy.rs` with an `SCN-04` comment beside it - so the behaviour was not
+      merely wrong, it was protected.
+
+      This is a new failure mode for this register: not a missing join, but a test that reads a
+      scenario's title and not its body. Nothing mechanical catches that; a person reading the
+      scenario does.
+    fix: |
+      fastpath, done. The filter is gone and every Marker is drawn. The byte-identity fast path now
+      triggers only when there are NO markers and no annotations, which is the case `AD-9` is
+      actually about.
+    verified: |
+      `a_marker_with_no_note_line_is_drawn_as_an_ordinary_badge` - renamed from its inverse - decodes
+      the output and asserts a badge at each Marker's centre, INCLUDING one with an empty comment and
+      one with whitespace. It also asserts the image corner is untouched, which is the half of
+      `SCN-04` point 4 that genuinely forbids something: no extra annotation for a ragged sequence.
+
+      `test_bundle_image_copy.rs` now asserts the Bundle copy DIFFERS from the source for that case,
+      and keeps byte identity for the zero-marker case only.
+
+      Two mutants KILLED: restoring the comment filter in the draw loop, and restoring it in the
+      fast-path condition.
+    related: BUG-19
+    status: fixed
+
+  - id: BUG-65
+    title: The titlebar could not be dragged while the window was maximized, and the refusal was swallowed
+    found: "2026-08-27"
+    found_by: the owner, after resizing the Editor to test the Assemble preview
+    component: settings
+    severity: medium
+    contradicts: [FR-26]
+    root_cause: code
+    evidence: |
+      `apps/desktop/src/main.rs`, the titlebar handler:
+
+        win.window().with_winit_window(|winit_win| {
+            let _ = winit_win.drag_window();
+        });
+
+      Windows refuses `SC_MOVE` for a maximized window, so `drag_window` returns `Err` - into a
+      `let _ =`. The titlebar highlighted, took the press, and did nothing, with no trace anywhere.
+
+      The window is frameless (`FR-26`), so this IS the only way to move it. There is no system
+      titlebar to fall back on.
+    impact: |
+      A maximized window could not be un-maximized by dragging, which is how everyone does it. The
+      double-click on the titlebar still worked, so the window was not stuck - but the gesture that
+      every other application accepts was dead, and nothing said why.
+    why_undetected: |
+      The `let _ =` class `AGENTS.md` already records, and this is the cleanest example of it yet:
+      the swallowed value was not data, it was the ERROR MESSAGE explaining the symptom. Five
+      instances of this class were found on 2026-08-23 and this one was not among them.
+
+      No test drove the titlebar - a drag is a UI gesture, and the guard added with the fix asserts
+      the code's shape rather than the gesture.
+    fix: |
+      fastpath, done. The handler restores a maximized window before dragging - which is what every
+      window manager does - and reports a refusal instead of discarding it.
+    verified: |
+      `dragging_a_maximized_window_restores_it_first`. Two mutants KILLED: removing the restore, and
+      restoring the `let _ =`.
+    status: fixed
+
+  - id: BUG-66
+    title: Three of the five scrollbars could not be dragged, because there were five of them
+    found: "2026-08-27"
+    found_by: the owner - "scroll yang ada di canvas gak bisa di klik and drag"
+    component: capture
+    severity: medium
+    contradicts: [NFR-17, "AD-10"]
+    root_cause: code
+    evidence: |
+      Slint's own scrollbar is a 2px hairline that is invisible against a dark canvas until hovered,
+      so this product draws its own. It drew FIVE: two on the canvas, one under the filmstrip, one
+      beside the Marker list, one in the Assemble preview - the same twenty lines, copied.
+
+      They had already drifted. The filmstrip's and the Assemble preview's took a pointer because
+      they had to (a vertical wheel cannot scroll a horizontal view, and a document is dragged as
+      often as rolled). The other three were indicator-only, so the Reviewer could see how far down
+      they were and could not do anything about it.
+    impact: |
+      Two of the three are the canvas's, which is the surface the Reviewer spends the most time on.
+      A control that looks like a scrollbar and refuses a drag is worse than no scrollbar: it invites
+      the gesture and then ignores it.
+    why_undetected: |
+      Each copy was correct on its own terms, and no test compared them. A guard existed - it checked
+      that the filmstrip's bar and the canvas's shared their geometry - and geometry was exactly the
+      half that had NOT drifted.
+    fix: |
+      fastpath, done. `apps/desktop/ui/components/scrollbar.slint`: one `SdScrollBar`, used by all
+      five surfaces. Thickness, radius, colour, the 28px minimum and the drag live in it; the call
+      site gives it the extent, the offset, and where to sit - because where a bar belongs depends on
+      what it is scrolling.
+    verified: |
+      `every_scrollbar_in_the_product_is_the_same_component` asserts the geometry is the component's,
+      that dragging AND clicking the track both seek, and that no surface draws a `border-radius: 4px`
+      bar of its own any more.
+
+      Three mutants KILLED, and the second one matters: the first version of the drag assertion
+      checked that `root.seek(` appeared anywhere in the component, and an empty `moved => { }`
+      survived it on the strength of the click handler. The two halves of the gesture are now
+      asserted separately.
+    status: fixed

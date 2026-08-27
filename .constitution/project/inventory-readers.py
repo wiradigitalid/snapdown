@@ -232,6 +232,19 @@ def derive_screen(root: Path) -> "Derived":   # noqa: F821
     surviving there is not evidence a screen is built, so desktop-owned rows are read from the
     Slint source instead of `shared`, and correctly come back `unread` for everything not yet
     rebuilt there. See DEC-<slint-migration>.
+
+    Updated 2026-08-27: a row is now (path, needle), and a screen counts as built only if the file
+    exists AND contains the needle. Two reasons, and the second is the one that matters.
+
+    It reported the Marker canvas as absent because it looked for `components/marker-layer.slint`,
+    while the Marker canvas is built - inside `appwindow.slint`, like most of this UI. A reader that
+    assumes one file per screen cannot see a one-file UI, and a FALSE gap costs more than a missed
+    one: it trains the reader to skim the list.
+
+    And three rows passed on the mere existence of `appwindow.slint`, which is 111KB holding the
+    whole product. That is the flaw `BUG-8` records about `V25` - a check answering "does this exist"
+    while nobody can ask "does it describe the thing it is named after". The needle makes it answer
+    the second question.
     """
     rows: list[Row] = []                      # noqa: F821
     unread: list[str] = []
@@ -240,50 +253,63 @@ def derive_screen(root: Path) -> "Derived":   # noqa: F821
     desktop_ui = root / "apps" / "desktop" / "ui"
     shared = root / "web" / "ui" / "src"
 
-    # route -> (screen name, owning component, actor, UC served, the file that must exist)
+    # route -> (screen name, owning component, actor, UC served, the file that must exist,
+    #           the string that must be IN it)
     plan = [
         ("— (the window frame itself)", "Editor shell", "settings", "Reviewer", "UC-24, UC-25",
-         desktop_ui / "appwindow.slint"),
+         desktop_ui / "appwindow.slint", "export component AppWindow"),
         ("— (one transparent window per monitor)", "Capture Overlay", "finding", "Reviewer", "UC-1, UC-2",
-         desktop_ui / "appwindow.slint"),
+         desktop_ui / "appwindow.slint", "export component CaptureOverlayWindow"),
         ("— (anchored to the selected region)", "Capture note field", "finding", "Reviewer", "UC-1",
-         desktop_ui / "appwindow.slint"),
+         desktop_ui / "appwindow.slint", "note-text"),
+        # The result line built for BUG-55 is a general one and fires on an Assemble, not on a
+        # capture. UC-2's confirmation after a capture is still absent, so this row stays unread -
+        # the mechanism exists, the screen does not.
         ("— (transient, never takes focus)", "Capture confirmation toast", "finding", "Reviewer", "UC-2",
-         desktop_ui / "components" / "toast.slint"),
+         desktop_ui / "appwindow.slint", "capture-confirmation"),
         ("/findings", "Editor — Findings", "finding", "Reviewer", "UC-3, UC-4, UC-6",
-         desktop_ui / "screens" / "findings-view.slint"),
+         desktop_ui / "screens" / "findings-view.slint", "FindingsView"),
+        # Built inside appwindow.slint: the canvas repeats ReticleMarker over `root.markers` and
+        # `marker-placed` reaches a handler (BUG-55). It was reported absent for a month because this
+        # reader looked for a file that the Slint app was never going to have.
         ("/findings/:id", "Finding detail with Marker canvas", "finding", "Reviewer", "UC-4, UC-5",
-         desktop_ui / "components" / "marker-layer.slint"),
+         desktop_ui / "appwindow.slint", "for m in root.markers"),
         ("/findings/delete` (modal)", "Delete Findings confirmation", "finding", "Reviewer", "UC-7",
-         desktop_ui / "components" / "confirm-dialog.slint"),
+         desktop_ui / "components" / "confirm-dialog.slint", "ConfirmDialog"),
         ("/findings/orphans", "Orphan report", "finding", "Reviewer", "UC-8",
-         desktop_ui / "screens" / "orphan-report-view.slint"),
+         desktop_ui / "screens" / "orphan-report-view.slint", "OrphanReport"),
         ("/bundles", "Editor — Bundles", "bundle", "Reviewer", "UC-10, UC-11, UC-23",
-         desktop_ui / "screens" / "bundle-view.slint"),
+         desktop_ui / "screens" / "bundle-view.slint", "BundleView"),
+        # Assemble writes a Bundle (BUG-55), but the compose STEP - naming it, reviewing what goes in,
+        # reordering - does not exist. A generated name and an immediate write is not this screen.
         ("/bundles/compose` (modal)", "Compose Bundle", "bundle", "Reviewer", "UC-9",
-         desktop_ui / "components" / "bundle-composer.slint"),
+         desktop_ui / "components" / "bundle-composer.slint", "BundleComposer"),
         ("/bundles/:id", "Bundle detail", "bundle", "Reviewer", "UC-11, UC-12, UC-23",
-         desktop_ui / "screens" / "bundle-view.slint"),
+         desktop_ui / "screens" / "bundle-view.slint", "BundleView"),
         ("/bundles/:id/publish` (modal)", "Publish and unpublish a Bundle", "sharing", "Reviewer", "UC-20, UC-22",
-         desktop_ui / "components" / "publish-dialog.slint"),
+         desktop_ui / "components" / "publish-dialog.slint", "PublishDialog"),
         ("/settings", "Settings", "settings", "Reviewer", "UC-13, UC-14, UC-15, UC-16",
-         desktop_ui / "screens" / "settings-view.slint"),
+         desktop_ui / "screens" / "settings-view.slint", "SettingsView"),
         ("/settings/agent-access", "Settings — Agent access", "agent-access", "Reviewer", "UC-17, UC-19",
-         desktop_ui / "screens" / "agent-access-view.slint"),
+         desktop_ui / "screens" / "agent-access-view.slint", "AgentAccessView"),
         ("/b/:slug", "Published Bundle reader", "sharing", "Remote coding agent, Reviewer", "UC-21",
-         shared / "screens" / "PublishedBundleReader.tsx"),
+         shared / "screens" / "PublishedBundleReader.tsx", "PublishedBundleReader"),
         ("/b/:slug` (the refused state)", "Publication not available", "sharing", "Remote coding agent, Reviewer", "UC-22",
-         shared / "screens" / "PublicationNotFound.tsx"),
+         shared / "screens" / "PublicationNotFound.tsx", "PublicationNotFound"),
     ]
 
-    for route, name, owner, actor, ucs, path in plan:
-        if path.exists():
+    for route, name, owner, actor, ucs, path, needle in plan:
+        if path.exists() and needle in read(path):
             rows.append(Row(                  # noqa: F821
                 key=f"?:{route}",
                 cells=[name, f"`{route}`" if route.startswith("/") else route,
                        f"`{owner}`", actor, ucs],
                 source=str(path.relative_to(root)).replace("\\", "/"),
             ))
+        elif path.exists():
+            unread.append(
+                f"{name} — {path.relative_to(root)} exists but holds no `{needle}`"
+            )
         else:
             unread.append(f"{name} — no component at {path.relative_to(root)}")
 
