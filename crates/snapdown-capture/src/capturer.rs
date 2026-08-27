@@ -7,11 +7,11 @@ use crate::error::CaptureError;
 
 /// One monitor's own pixels, plus where that monitor sits in virtual-desktop coordinates.
 ///
-/// The capture overlay uses one of these per monitor rather than a single stitched canvas: on
-/// Windows a window has exactly one DPI, so a window spanning displays with different scale
-/// factors cannot render any of them 1:1 - it gets bitmap-scaled and, when it crosses the
-/// boundary, `WM_DPICHANGED` re-derives its physical size and inflates it. Keeping each overlay
-/// wholly inside one monitor sidesteps both.
+/// The grab is per-monitor because the OS is: there is no single call that hands back the whole
+/// virtual desktop. The overlay that *presents* them is a single window over the whole desktop -
+/// one window per monitor was tried and reverted, because each carried its own renderer warm-up
+/// and its own event-loop turn (`BUG-26`, `BUG-27`). Do not read this type as an argument for
+/// going back.
 pub struct MonitorCapture {
     pub image: RgbaImage,
     pub width: u32,
@@ -44,10 +44,21 @@ pub struct MonitorRect {
     pub name: String,
 }
 
-/// The whole virtual desktop as one image, plus the monitors it spans.
+/// The whole virtual desktop: every monitor's pixels, plus the canvas geometry they add up to.
+///
+/// There is deliberately **no stitched canvas here**. This used to own one, and building it cost
+/// the Reviewer most of the wait between pressing Capture and the screen freezing: a canvas
+/// allocation, an `image::imageops::overlay` per monitor - a per-pixel *blend* loop, not a blit -
+/// and then a full copy into the toolkit's own pixel buffer. [`Self::blit_into`] writes the
+/// monitors straight into the buffer that will be presented instead, which removed the blend and
+/// the copy together: measured in release on a 6000x3840 two-monitor desktop, 83-91 ms became
+/// 36-38 ms. See `BUG-28`.
+///
+/// The pixels stay at native physical resolution either way, so crops are still full quality.
 pub struct VirtualDesktopCapture {
-    /// Stitched at native physical resolution - no downscaling, so crops are full quality.
-    pub image: RgbaImage,
+    /// Each monitor's own grab, unstitched, in the order [`RegionCapturer::capture_each_monitor`]
+    /// returns them.
+    pub captures: Vec<MonitorCapture>,
     pub width: u32,
     pub height: u32,
     /// Top-left of the virtual desktop in virtual-desktop coordinates. Negative when a monitor
@@ -57,16 +68,105 @@ pub struct VirtualDesktopCapture {
     pub monitors: Vec<MonitorRect>,
 }
 
+/// RGBA8: four bytes per pixel, in both the monitor grabs and the canvas they are blitted into.
+const BYTES_PER_PIXEL: usize = 4;
+
+impl VirtualDesktopCapture {
+    /// How many bytes a buffer must hold to take the whole canvas.
+    pub fn byte_len(&self) -> usize {
+        self.width as usize * self.height as usize * BYTES_PER_PIXEL
+    }
+
+    /// Writes every monitor's pixels into `dst` - the canvas, RGBA8, row-major, `width` pixels per
+    /// row - at that monitor's place in it.
+    ///
+    /// `dst` is meant to be the buffer that will actually be shown, which is the whole point: the
+    /// desktop's pixels are not blended into a canvas and then copied out of it. The blend was
+    /// arithmetic whose answer was already the source pixel - every source pixel is opaque and the
+    /// destination untouched - and `identical_bytes_to_the_stitch_it_replaces` is the test that
+    /// keeps that equivalence honest rather than merely claimed.
+    ///
+    /// Measured in release on a 6000x3840 two-monitor desktop, all shapes producing identical
+    /// bytes: the old canvas-plus-blend-plus-copy took 83-91 ms, and this takes 36-38 ms with a
+    /// freshly allocated `dst`.
+    ///
+    /// **Most of that 36-38 ms is not this function.** Allocating a zeroed 92 MB
+    /// `SharedPixelBuffer` costs 33-37 ms on its own, because `SharedVector`'s `FromIterator` is a
+    /// per-element push loop rather than a `calloc` - a plain 92 MB write pass is 3.6 ms by
+    /// comparison. Handing this the SAME buffer again on a later capture, while nothing else holds
+    /// a clone of it, costs **4.3-4.6 ms** total. That is the cheap win still on the table, and it
+    /// belongs to the caller, not here.
+    ///
+    /// Pixels no monitor covers are left exactly as the caller set them. A zeroed buffer therefore
+    /// keeps the black gap that a non-rectangular desktop has always shown, and this function needs
+    /// no notion of a gap at all.
+    ///
+    /// A monitor that does not fit the canvas is **skipped**, not panicked on. A display can be
+    /// unplugged between the enumeration that sized the canvas and the grab, and an out-of-range
+    /// index here would take the tray, the hotkeys and the Editor down with it - they share this
+    /// one process (`AD-11`).
+    pub fn blit_into(&self, dst: &mut [u8]) -> Result<(), CaptureError> {
+        if dst.len() != self.byte_len() {
+            return Err(CaptureError::InvalidRegion(format!(
+                "canvas buffer holds {} bytes, but {}x{} needs {}",
+                dst.len(),
+                self.width,
+                self.height,
+                self.byte_len()
+            )));
+        }
+
+        let canvas_width = self.width as usize;
+        let canvas_height = self.height as usize;
+
+        for capture in &self.captures {
+            let (Ok(left), Ok(top)) = (
+                usize::try_from(capture.origin_x - self.origin_x),
+                usize::try_from(capture.origin_y - self.origin_y),
+            ) else {
+                continue;
+            };
+
+            let (width, height) = (capture.width as usize, capture.height as usize);
+            if left + width > canvas_width || top + height > canvas_height {
+                continue;
+            }
+
+            let row_bytes = width * BYTES_PER_PIXEL;
+            let src = capture.image.as_raw();
+            if src.len() < row_bytes * height {
+                continue;
+            }
+
+            // A monitor as wide as the canvas occupies whole rows, so its destination is one
+            // contiguous run - which is every single-monitor desktop. Worth about 1 ms per 33 MB
+            // over the row loop below; small, and it costs exactly one branch.
+            if left == 0 && width == canvas_width {
+                let at = top * canvas_width * BYTES_PER_PIXEL;
+                dst[at..at + row_bytes * height].copy_from_slice(&src[..row_bytes * height]);
+                continue;
+            }
+
+            for row in 0..height {
+                let to = ((top + row) * canvas_width + left) * BYTES_PER_PIXEL;
+                let from = row * row_bytes;
+                dst[to..to + row_bytes].copy_from_slice(&src[from..from + row_bytes]);
+            }
+        }
+
+        Ok(())
+    }
+}
+
 pub struct RegionCapturer;
 
 impl RegionCapturer {
     /// Captures every attached monitor separately, each at its own native resolution.
     ///
     /// Prefer this over [`Self::capture_monitor_image`] for anything that has to *display* the
-    /// capture: it never allocates a stitched virtual canvas (which on a 6000x3840 desktop is a
-    /// 92 MB zeroed allocation plus a blit per monitor), and it keeps each monitor's pixels in
-    /// their own image so a per-monitor overlay can show them 1:1. See [`MonitorCapture`] for
-    /// why per-monitor matters on mixed-DPI setups.
+    /// capture: that one stitches its own canvas internally, which is the cost `BUG-28` is about.
+    /// [`Self::capture_virtual_desktop`] wraps this with the desktop geometry and leaves the
+    /// stitching to [`VirtualDesktopCapture::blit_into`].
     ///
     /// A monitor whose grab fails is skipped rather than failing the whole capture; the error is
     /// only returned when no monitor could be captured at all.
@@ -184,31 +284,26 @@ impl RegionCapturer {
             .max()
             .unwrap_or(0);
 
-        let total_w = (max_x - min_x).max(1) as u32;
-        let total_h = (max_y - min_y).max(1) as u32;
-
-        let mut canvas = RgbaImage::new(total_w, total_h);
-        let mut monitors = Vec::with_capacity(captures.len());
-
-        for capture in &captures {
-            // Window-local: the overlay's top-left is the virtual desktop's top-left, so a
-            // monitor's offset inside the canvas is its virtual-desktop origin minus that.
-            let local_x = capture.origin_x - min_x;
-            let local_y = capture.origin_y - min_y;
-            image::imageops::overlay(&mut canvas, &capture.image, local_x as i64, local_y as i64);
-            monitors.push(MonitorRect {
-                x: local_x,
-                y: local_y,
+        // Window-local: the overlay's top-left is the virtual desktop's top-left, so a monitor's
+        // offset inside the canvas is its virtual-desktop origin minus that.
+        let monitors = captures
+            .iter()
+            .map(|capture| MonitorRect {
+                x: capture.origin_x - min_x,
+                y: capture.origin_y - min_y,
                 width: capture.width,
                 height: capture.height,
                 name: capture.name.clone(),
-            });
-        }
+            })
+            .collect();
 
+        // No canvas is built here. The caller allocates the buffer it is going to present and
+        // passes it to `blit_into`, so the desktop's 92 MB is written once instead of being
+        // blended into a canvas and then copied out of it - see `VirtualDesktopCapture`.
         Ok(VirtualDesktopCapture {
-            image: canvas,
-            width: total_w,
-            height: total_h,
+            captures,
+            width: (max_x - min_x).max(1) as u32,
+            height: (max_y - min_y).max(1) as u32,
             origin_x: min_x,
             origin_y: min_y,
             monitors,
@@ -460,6 +555,61 @@ impl RegionCapturer {
             .map_err(|e| CaptureError::CaptureFailed(e.to_string()))?;
 
         Self::crop_and_encode_image(&full_image, region)
+    }
+
+    /// Crops a region out of a canvas held as raw RGBA8 bytes, `source_width` pixels per row.
+    ///
+    /// The desktop app's canvas lives in the toolkit's own pixel buffer rather than an `RgbaImage`,
+    /// because owning a second copy of it is what `BUG-28` was about - see
+    /// [`VirtualDesktopCapture::blit_into`]. So the crop cannot go through
+    /// `image::imageops::crop_imm`, and copies its rows out itself. The crop is a selection, not a
+    /// desktop, so this is cheap.
+    ///
+    /// Unlike [`Self::crop_and_encode_image`] this imposes no minimum size: the caller has already
+    /// clamped the region into the canvas, and a small selection is the Reviewer's business.
+    pub fn crop_rgba_from_slice(
+        source: &[u8],
+        source_width: u32,
+        source_height: u32,
+        region: &Region,
+    ) -> Result<RgbaImage, CaptureError> {
+        let expected = source_width as usize * source_height as usize * BYTES_PER_PIXEL;
+        if source.len() != expected {
+            return Err(CaptureError::InvalidRegion(format!(
+                "canvas holds {} bytes, but {source_width}x{source_height} needs {expected}",
+                source.len()
+            )));
+        }
+
+        if region.x < 0
+            || region.y < 0
+            || region.width == 0
+            || region.height == 0
+            || (region.x as u64 + region.width as u64) > source_width as u64
+            || (region.y as u64 + region.height as u64) > source_height as u64
+        {
+            return Err(CaptureError::RegionExceedsMonitorBounds {
+                requested: format!(
+                    "{},{},{},{}",
+                    region.x, region.y, region.width, region.height
+                ),
+                monitor: format!("{source_width}x{source_height}"),
+            });
+        }
+
+        let row_bytes = region.width as usize * BYTES_PER_PIXEL;
+        let mut cropped = Vec::with_capacity(row_bytes * region.height as usize);
+        for row in 0..region.height as usize {
+            let from = ((region.y as usize + row) * source_width as usize + region.x as usize)
+                * BYTES_PER_PIXEL;
+            cropped.extend_from_slice(&source[from..from + row_bytes]);
+        }
+
+        RgbaImage::from_raw(region.width, region.height, cropped).ok_or_else(|| {
+            CaptureError::InvalidRegion(
+                "the cropped rows did not fill the requested region".to_string(),
+            )
+        })
     }
 
     pub fn crop_and_encode_image(

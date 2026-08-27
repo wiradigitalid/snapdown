@@ -1441,19 +1441,117 @@ defects:
       the moment of the grab, so nothing is lost - it reads as latency, not as a wrong capture.
     why_undetected: |
       Nothing here measures this, and it only becomes obvious at 6000x3840 across two monitors.
+    root_cause: code
     fix: |
-      NOT DONE. Note that the single-window architecture MADE THIS WORSE: the per-monitor design
-      needed no stitched canvas at all. That was a deliberate trade - see BUG-27 - and reverting it
-      to buy latency back would reintroduce the whole multi-window defect class.
+      PARTLY DONE, 2026-08-26. Note that the single-window architecture MADE THIS WORSE: the
+      per-monitor design needed no stitched canvas at all. That was a deliberate trade - see
+      BUG-27 - and reverting it to buy latency back would reintroduce the whole multi-window
+      defect class. It was not reverted.
 
-      Untried ideas, cheapest first:
-        - Avoid the extra copy into SharedPixelBuffer by capturing directly into one, or by
-          keeping one buffer and overwriting its pixels between captures rather than allocating a
-          new Image each time (a new texture per capture is also the last untested suspicion in
-          BUG-27).
-        - Skip the stitch when only one monitor exists, which is the common case for most users.
-        - A faster grab path than xcap's (DXGI Desktop Duplication).
+      Done - the image preparation now costs one pass instead of three:
+        - `VirtualDesktopCapture` no longer owns a canvas. `capture_virtual_desktop` returns the
+          per-monitor grabs plus the desktop geometry, and `blit_into` writes them ROW-WISE
+          straight into the `SharedPixelBuffer` the overlay presents. That removes the canvas
+          allocation, the blend and the copy in one move.
+        - The blend was the surprise. `image::imageops::overlay` is a per-pixel
+          `get_pixel`/`blend`/`put_pixel` loop, not a blit, and for an opaque source over an
+          untouched destination its answer IS the source pixel - 23 million pixels of arithmetic
+          for a copy. Measured at 64-75ms of the ~225ms.
+        - The whole preparation moved off the event loop. `SharedPixelBuffer<Rgba8Pixel>` is
+          `Send`, so the grab AND the blit now happen on the capture thread; the UI thread only
+          wraps the finished buffer in an `Image`. It used to pay the 17-20ms `clone_from_slice`.
+        - "Skip the stitch when only one monitor exists" turned out to need no separate path. Once
+          the blit writes into the presentation buffer, a single monitor already costs exactly one
+          memcpy. Measured: a dedicated fast path saved a further 1.2ms on a 33MB monitor, so it is
+          implemented as the general case "a monitor as wide as the canvas is one contiguous run"
+          rather than as a monitor-count branch.
+
+        - TWO canvases are allocated per desktop layout and written alternately, never reallocated
+          per capture. They live on `LiveOverlay`, whose `placement` reuse key is already exactly
+          their validity condition, and they are allocated in `prewarm_capture_overlay` - the same
+          move that put the renderer warm-up where nobody is looking. This was the largest single
+          win and it was invisible until measured: `SharedPixelBuffer::new` is not a `calloc`, it
+          fills through `SharedVector`'s per-element `FromIterator` push loop, so allocating a
+          6000x3840 buffer costs 33-37ms on its own while a plain 92MB write pass costs 3.6ms.
+        - Reusing a canvas means writing UI-thread state, so the blit moved back onto the event
+          loop. That is deliberate: 4.5ms there is a third of a frame, and it replaced 92MB of
+          memcpy that was not.
+
+      WHY TWO CANVASES, recorded because one was tried first and shipped past a unit test.
+
+      `make_mut_bytes` is copy-on-write, so the canvas being written must be held by nothing. The
+      first attempt used ONE canvas and cleared the overlay's `snapshot-image` property immediately
+      before the blit, on the reasoning that this was the only clone. A test against the real
+      component agreed - and both were wrong about the running application. Slint bindings are
+      LAZY: the two elements that bind the image, the backdrop and the loupe, latch their `source`
+      when they RENDER and keep it until they render again. A hidden window never renders, so
+      between captures they still hold the last image shown, and clearing the root property never
+      reaches them. The test passed only because a component constructed in a test harness has
+      never rendered, so its bindings had never latched anything - it proved a condition that does
+      not occur.
+
+      Nothing about the output was wrong, which is the point: a copy-on-write yields perfectly
+      correct pixels and costs ~40ms. It was caught by the canary at the write site, which compares
+      the buffer's data pointer across the write; it fired on all 28 captures of an owner session.
+      After alternating was introduced the same canary was silent across a full session.
+
+      Alternating does not fight the lazy binding, it sidesteps it: whatever those elements still
+      hold is the PREVIOUS capture's canvas, so the one being written is free by construction, with
+      no release step and no ordering to get right. The cost is a second 92MB resident.
+
+      Measured in release on the 6000x3840 two-monitor rig, all shapes asserted to produce
+      identical bytes, in one process so the figures are comparable:
+
+        | preparation, grab excluded                           | ms      |
+        | original: RgbaImage + imageops::overlay + copy        | 83-91   |
+        | intermediate: SharedPixelBuffer::new + blit_into      | 35-38   |
+        | rejected: Vec + blit_into + clone_from_slice          | 39-47   |
+        | NOW: blit into the retained canvas that is off screen | 4.3-5.4 |
+
+      With the grab at 132-167ms, total time to the overlay goes from ~225ms to ~150ms, and the
+      preparation this defect's evidence blames is effectively gone - 95% of it.
+
+      Two things besides the alternation hold the line:
+        - the completed handler READS the on-screen canvas out of `LIVE_OVERLAYS` instead of
+          capturing a clone, which the borrow checker now enforces on its own;
+        - the capture path compares the data pointer across the write and reports on stderr if it
+          moved. That check is not decoration - it is the only thing that caught the single-canvas
+          design, and it is the only symptom this class of bug has.
+      `identical_bytes_to_the_stitch_it_replaces` and `identical_to_the_crop_imm_it_replaces`
+      hold the two equivalences this rests on; both were verified by mutation, as were the other
+      nine guards added with them.
+
+      A correction worth keeping, because it was measured after the fix was written and it
+      invalidated the first set of numbers recorded here: **the allocation is not free.**
+      `SharedPixelBuffer::new(6000, 3840)` costs 33-37ms by itself, because `SharedVector`'s
+      `FromIterator` is a per-element push loop, not a `calloc`; a plain 92MB write pass is 3.6ms
+      for comparison. So 33-37 of the 36-38ms above is the buffer, not the blit. An earlier draft
+      of this entry claimed 22-27ms, measured with `vec![0u8; n]` - which Rust turns into
+      `alloc_zeroed` and Windows serves as lazy zero pages. Benchmarking a stand-in for the
+      allocator measured the stand-in.
+
+      One cost was accepted rather than removed: 184MB of canvas is now resident for the life of
+      the process (two 6000x3840 buffers) instead of one being allocated and freed per capture.
+      That is the price of the alternation, and it is the trade that bought 83-91ms down to
+      4.3-5.4ms. For a screenshot tool on a desktop this size it is the right way round, but it is
+      a real cost and it scales with the desktop, not with usage.
+
+      STILL OPEN. Everything left is the GRAB, which nothing here touched:
+        - A faster grab path than xcap's. It is now 132-167ms of a ~150ms wait, i.e. essentially
+          all of it. Worth recording precisely: xcap is compiled WITHOUT its `wgc` feature (it has
+          no `default` feature and the workspace asks for none), so the active path is GDI -
+          `BitBlt` from the desktop DC, `GetDIBits`, then a scalar BGRA->RGBA swap over 33MB per
+          monitor. Enabling `wgc` is one line, NOT a new implementation. But it is not a free win:
+          `wgc_capture` builds a fresh frame pool and capture session per call and blocks on
+          `recv_timeout(3000ms)` waiting for `FrameArrived`, still does a staging readback and the
+          same channel swap, shows a capture border on Windows 10, and excludes the cursor. It has
+          to be A/B measured, not assumed.
         - Show the overlay before the image is ready, then fill it in - changes the UX contract
           (the screen would not freeze instantly) and needs the owner's call.
+
+      Left open rather than resolved on purpose. The cost this defect's own evidence names - the
+      image preparation - is gone. What remains is a different cost that happens to produce the
+      same symptom, and whether ~150ms still reads as "cukup lama" is the owner's eyes to judge,
+      not a number.
     related: BUG-27
     status: open

@@ -6,6 +6,24 @@ fn main_rs() -> String {
     fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read {path:?}: {e}"))
 }
 
+/// The whole of `main.rs` with `//` and `///` comment lines stripped.
+///
+/// Same reason as `capture_block_code`, one scope wider: a guard that matches a token to find out
+/// WHERE something happens must not be satisfied by prose that merely names it. This is not
+/// hypothetical either - a doc comment on `LiveOverlay::snapshot` that referred to
+/// `on_capture_clicked` made the start-up guard below find the handler hundreds of lines before
+/// the real one, and fail on correct code.
+fn main_rs_code() -> String {
+    main_rs()
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join(
+            "
+",
+        )
+}
+
 fn capture_block() -> String {
     let source = main_rs();
     let start = source
@@ -107,7 +125,7 @@ fn the_capture_overlay_is_reused_across_captures_not_rebuilt() {
 #[test]
 fn the_software_renderer_is_not_forced() {
     assert!(
-        !main_rs().contains("with_renderer_name(\"software\")"),
+        !main_rs_code().contains("with_renderer_name(\"software\")"),
         "the software renderer must not be hard-coded: it cannot repaint a full-screen overlay \
          per pointer move, so region dragging becomes choppy (BUG-27)"
     );
@@ -232,7 +250,7 @@ fn the_crosshair_is_confined_to_the_monitor_under_the_pointer() {
 /// monitor, and it is the remaining share of the blink.
 #[test]
 fn the_overlay_is_created_at_startup_not_on_first_capture() {
-    let source = main_rs();
+    let source = main_rs_code();
 
     assert!(
         source.contains("fn prewarm_capture_overlay"),
@@ -271,5 +289,109 @@ fn the_selection_is_reported_in_canvas_pixels() {
         !overlay.contains("capture-completed(\n                                sel-x / 1px"),
         "the selection must not be emitted in raw logical pixels - on a 150%/175% display that \
          crops the wrong region (BUG-26)"
+    );
+}
+
+/// BUG-28: the desktop's pixels must go straight into the buffer that is presented.
+///
+/// The overlay used to appear ~225ms after Capture on a 6000x3840 two-monitor desktop, and only
+/// about half of that was the grab. The rest was the app going over 92 MB three times: allocate a
+/// canvas, `image::imageops::overlay` each monitor into it - a per-pixel `blend`, not a blit, whose
+/// answer for an opaque source over an untouched destination is the source pixel - and then
+/// `clone_from_slice` the whole thing into the toolkit's own buffer. Measured in release: 83-91ms
+/// for that shape, against 36-38ms once the monitors were blitted straight into the presented
+/// buffer, and 4.3-4.6ms once that buffer stopped being reallocated (see the next test).
+#[test]
+fn the_snapshot_is_written_into_the_buffer_that_is_shown() {
+    let block = capture_block_code();
+
+    assert!(
+        block.contains("blit_into"),
+        "the canvas must be written straight into the buffer that will be shown          (VirtualDesktopCapture::blit_into), not stitched into an image of its own first (BUG-28)"
+    );
+    assert!(
+        !block.contains("clone_from_slice"),
+        "the canvas must not be copied into the presentation buffer - that copy is 92 MB on a          6000x3840 desktop (BUG-28)"
+    );
+    assert!(
+        !block.contains("imageops::overlay"),
+        "the monitors must not be alpha-blended into a canvas: every source pixel is opaque and          the destination is untouched, so the blend's result is a copy that costs 75ms (BUG-28)"
+    );
+}
+
+/// BUG-28: the canvas buffers are allocated once per desktop layout and written alternately, never
+/// reallocated per capture.
+///
+/// Allocating is the expensive part, and not for the reason anyone expects:
+/// `SharedPixelBuffer::new` fills through `SharedVector`'s `FromIterator`, a per-element push loop
+/// rather than a `calloc`, so a 6000x3840 buffer costs 33-37ms while a plain 92 MB write pass costs
+/// 3.6ms. Moving that to start-up is the same move that put the renderer warm-up where nobody is
+/// looking.
+///
+/// **Two canvases, not one, and that is the whole point of this test.** `make_mut_bytes` is
+/// copy-on-write, so the canvas being written must be held by nothing. The first attempt cleared
+/// the overlay's `snapshot-image` property immediately before the blit and assumed that released
+/// it. It does not: Slint bindings are lazy, the backdrop and the loupe latch their `source` when
+/// they render, and a hidden window never renders - so between captures they still hold the last
+/// image shown. That shipped past a unit test and was caught only by the canary, which reported a
+/// copy on all 28 captures of a session.
+///
+/// Alternating needs no release step and no ordering: whatever those elements still hold is the
+/// previous capture's canvas, so the other one is free by construction.
+#[test]
+fn the_capture_canvas_is_reused_and_alternated_not_reallocated() {
+    let source = main_rs_code();
+    let block = capture_block_code();
+
+    let allocation = source
+        .find("SharedPixelBuffer::<slint::Rgba8Pixel>::new")
+        .expect(
+        "the canvas buffers must be allocated somewhere - reusing them is what keeps a capture \
+         off the 33-37ms `SharedPixelBuffer::new` fill (BUG-28)",
+    );
+    let capture_handler = source
+        .find("on_capture_clicked")
+        .expect("on_capture_clicked must exist");
+    assert!(
+        allocation < capture_handler,
+        "the canvas buffers must be allocated at start-up, before the Capture handler is even \
+         installed - `SharedPixelBuffer::new` is a 33-37ms per-element fill, not a calloc, and \
+         paying it on Capture is exactly the latency BUG-28 is about"
+    );
+
+    assert!(
+        block.contains("entry.snapshots[target].make_mut_bytes()"),
+        "the capture must write into one of the overlay's own retained canvases, not a fresh one \
+         (BUG-28)"
+    );
+
+    // The alternation itself. Without it, the canvas being written is the one the backdrop and the
+    // loupe are still holding, and every write is a silent 92 MB copy-on-write.
+    assert!(
+        block.contains("let target = 1 - entry.current;"),
+        "the capture must write the canvas that is NOT on screen. Writing the one just shown means \
+         writing what the overlay's own bindings still hold, which copies 92 MB instead (BUG-28)"
+    );
+    assert!(
+        block.contains("entry.current = target;"),
+        "the capture must record which canvas is now on screen, or the next capture alternates \
+         back onto the one it just wrote and a Finding crops from the wrong one (BUG-28)"
+    );
+
+    // A copy-on-write moves the allocation, so the pointer is the evidence. This is the check that
+    // caught the single-buffer design after a unit test had passed it.
+    assert!(
+        block.contains("std::ptr::eq"),
+        "the capture must check that the canvas was written in place rather than copied - the \
+         failure produces perfectly correct pixels and shows up only as latency (BUG-28)"
+    );
+
+    // The completed handler must READ the canvas from the live overlay. A clone captured in that
+    // closure would outlive the capture and still be held two captures later.
+    assert!(
+        block.contains("LIVE_OVERLAYS.with_borrow(")
+            && block.contains("entry.snapshots[entry.current].as_bytes()"),
+        "the completed handler must read the on-screen canvas out of LIVE_OVERLAYS rather than \
+         capturing a clone of it, and it must read the one that is actually on screen (BUG-28)"
     );
 }

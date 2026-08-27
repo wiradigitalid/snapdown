@@ -12,10 +12,9 @@ use std::sync::{Arc, Mutex};
 
 use global_hotkey::hotkey::HotKey;
 use global_hotkey::{GlobalHotKeyEvent, HotKeyState};
-use image::imageops::crop_imm;
 use slint::{ComponentHandle, ModelRc, SharedPixelBuffer, VecModel};
 use snapdown_capture::RegionCapturer;
-use snapdown_core::domain::finding::{Finding, Note};
+use snapdown_core::domain::finding::{Finding, Note, Region};
 use snapdown_core::domain::image::ImageDimensions;
 use snapdown_core::domain::setting::{
     HotkeyAction, QualityBudget, Setting, SettingKey, SettingValue,
@@ -318,34 +317,73 @@ struct LiveOverlay {
     /// `(x, y, width, height)` in physical virtual-desktop pixels. Doubles as the reuse key: if
     /// the desktop layout still matches, the existing window is reused untouched.
     placement: (i32, i32, u32, u32),
+    /// TWO canvases, written alternately, because one cannot be reused safely.
+    ///
+    /// Reusing a canvas at all is worth a lot: `SharedPixelBuffer::new` is not a `calloc`, it fills
+    /// through `SharedVector`'s per-element `FromIterator` push loop, so allocating a 6000x3840
+    /// buffer costs 33-37ms while a plain 92 MB write pass costs 3.6ms. Allocating here, once per
+    /// desktop layout, keeps that off the Reviewer's clock the same way the renderer warm-up is
+    /// kept off it. `placement` is already exactly these buffers' validity condition.
+    ///
+    /// Why two, and not one written in place: `make_mut_bytes` is copy-on-write, so the buffer must
+    /// be uniquely owned when it is written. Clearing the overlay's `snapshot-image` property first
+    /// is NOT enough. A unit test said it was, and the canary at the write site then fired on all
+    /// 28 captures of a session. Slint bindings are lazy: the two elements that bind this image,
+    /// the backdrop and the loupe, latch their `source` when they RENDER, and a hidden window never
+    /// renders, so between captures they still hold the last image shown. Clearing the root
+    /// property never reaches them.
+    ///
+    /// Alternating sidesteps that rather than fighting it. Whatever those elements are still
+    /// holding is the canvas from the PREVIOUS capture, so the other one is free by construction -
+    /// no release step, no ordering to get right. The cost is a second 92 MB resident.
+    ///
+    /// Zeroed at allocation, and the blit only ever writes where a monitor is, so the black gaps of
+    /// a non-rectangular desktop stay black across captures without being rewritten.
+    snapshots: [SharedPixelBuffer<slint::Rgba8Pixel>; 2],
+    /// Index of the canvas currently on screen - the one a Finding must be cropped from.
+    current: usize,
 }
 
-/// Crops one monitor's capture to the selected region, shrinks it to the active QualityBudget,
+/// Crops the capture canvas to the selected region, shrinks it to the active QualityBudget,
 /// writes it to the Vault, and records the Finding plus its note.
 ///
-/// `region` is in the source image's own pixel space, which for a per-monitor overlay is the
-/// same space its pointer coordinates arrive in - one overlay covers exactly one monitor at 1:1,
-/// so no virtual-desktop translation is involved.
+/// `source` is the canvas as raw RGBA8 bytes, `source_size` pixels, and `region` is in that
+/// canvas's own pixel space - the same space the overlay reports its selection in, so no scale
+/// conversion is involved. It is borrowed rather than owned as an `RgbaImage` because the canvas
+/// now lives in the buffer the overlay presents, and owning a second copy of it is exactly the
+/// cost `BUG-28` was about.
 ///
 /// Returns the new Finding's id, or `None` if the region could not be persisted.
 fn persist_finding(
     ctx: &AppContext,
-    source: &image::RgbaImage,
+    source: &[u8],
+    source_size: (u32, u32),
     region: (u32, u32, u32, u32),
     monitor_name: &str,
     note_body: &str,
 ) -> Option<String> {
-    let (src_w, src_h) = (source.width(), source.height());
+    let (src_w, src_h) = source_size;
     let (sel_x, sel_y, sel_w, sel_h) = region;
 
     // Clamp into the source rather than trusting the caller: a drag released off-screen can
-    // report a region reaching past the monitor's own bounds.
+    // report a region reaching past the canvas's own bounds.
     let crop_x = sel_x.min(src_w.saturating_sub(1));
     let crop_y = sel_y.min(src_h.saturating_sub(1));
     let crop_w = sel_w.min(src_w - crop_x).max(1);
     let crop_h = sel_h.min(src_h - crop_y).max(1);
 
-    let cropped = crop_imm(source, crop_x, crop_y, crop_w, crop_h).to_image();
+    let cropped = match RegionCapturer::crop_rgba_from_slice(
+        source,
+        src_w,
+        src_h,
+        &Region::new(crop_x as i32, crop_y as i32, crop_w, crop_h),
+    ) {
+        Ok(cropped) => cropped,
+        Err(e) => {
+            eprintln!("Failed to crop the selected region out of the capture: {e}");
+            return None;
+        }
+    };
 
     let mut png_bytes = Vec::new();
     if let Err(e) = image::ImageEncoder::write_image(
@@ -492,6 +530,13 @@ fn prewarm_capture_overlay() {
         *live = vec![LiveOverlay {
             window: overlay,
             placement,
+            // The 33-37ms allocation, paid here at start-up rather than on the first Capture, for
+            // the same reason the window itself is built here. See `LiveOverlay::snapshot`.
+            snapshots: [
+                SharedPixelBuffer::<slint::Rgba8Pixel>::new(width, height),
+                SharedPixelBuffer::<slint::Rgba8Pixel>::new(width, height),
+            ],
+            current: 0,
         }]
     });
 }
@@ -667,10 +712,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let main_weak = window_weak.clone();
         let ctx_inner = ctx_capture.clone();
         std::thread::spawn(move || {
+            // The grab is the blocking syscall and it stays here, off the event loop. What is
+            // deliberately NOT done here any more is building the canvas.
+            //
+            // The canvas used to be blended into an `RgbaImage` and then copied into the toolkit's
+            // buffer - 83-91ms on a 6000x3840 two-monitor desktop, measured in release. Writing the
+            // monitors straight into a freshly allocated `SharedPixelBuffer` took that to 36-38ms.
+            // But 33-37ms of what was left is the ALLOCATION, not the writing: `SharedVector`'s
+            // `FromIterator` is a per-element push loop, not a `calloc`. So the buffer is now
+            // allocated once per desktop layout and reused, which measures 4.3-4.6ms per capture -
+            // and reusing it means writing into state that lives on the UI thread, so the blit
+            // moved there with it. 4.5ms on the event loop is a third of a frame; the 92 MB of
+            // memcpy it replaced was not. See `BUG-28`.
             let capture_result = RegionCapturer::capture_virtual_desktop();
+
             if let Err(e) = slint::invoke_from_event_loop(move || {
                 let captured = match capture_result {
-                    Ok(c) => c,
+                    Ok(captured) => captured,
                     Err(e) => {
                         eprintln!("Capture failed: {e}");
                         return;
@@ -698,15 +756,63 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // monitor and then moved - moving across a DPI boundary fires WM_DPICHANGED,
                     // which rebuilds the surface and re-derives the size.
                     match CaptureOverlayWindow::new() {
-                        Ok(window) => live.push(LiveOverlay { window, placement }),
+                        Ok(window) => live.push(LiveOverlay {
+                            window,
+                            placement,
+                            // A new layout means a new canvas size, so this one is allocated here
+                            // rather than at start-up. It is the only capture that pays the
+                            // 33-37ms; every capture on an unchanged desktop reuses it.
+                            snapshots: [
+                                SharedPixelBuffer::<slint::Rgba8Pixel>::new(
+                                    captured.width,
+                                    captured.height,
+                                ),
+                                SharedPixelBuffer::<slint::Rgba8Pixel>::new(
+                                    captured.width,
+                                    captured.height,
+                                ),
+                            ],
+                            current: 0,
+                        }),
                         Err(e) => eprintln!("Failed to create CaptureOverlayWindow: {e}"),
                     }
                 }
 
-                let Some(entry) = live.first() else {
+                let Some(entry) = live.first_mut() else {
                     eprintln!("Capture aborted: the overlay window could not be created.");
                     return;
                 };
+
+                // Write the canvas that is NOT on screen.
+                //
+                // `make_mut_bytes` is copy-on-write, so this stays cheap only while nothing else
+                // holds the buffer being written. Clearing the overlay's `snapshot-image` property
+                // first is NOT enough: Slint bindings are lazy, and the backdrop and the loupe keep
+                // the `source` they latched at their last render, which for a hidden window is the
+                // previous capture's image. Alternating means the canvas being written is always
+                // one generation older than anything still held, which needs no release step and no
+                // ordering to be got right. See `LiveOverlay::snapshots`.
+                let target = 1 - entry.current;
+
+                let buffer_before = entry.snapshots[target].as_bytes().as_ptr();
+                if let Err(e) = captured.blit_into(entry.snapshots[target].make_mut_bytes()) {
+                    eprintln!("Capture aborted: the desktop did not fit the overlay canvas: {e}");
+                    LIVE_OVERLAYS.with_borrow_mut(|slot| *slot = live);
+                    return;
+                }
+                // Checked rather than trusted, because the failure is invisible: a copy-on-write
+                // yields perfectly correct pixels and costs ~40ms. This line is what caught the
+                // single-buffer version, after a unit test had said it was fine.
+                if !std::ptr::eq(buffer_before, entry.snapshots[target].as_bytes().as_ptr()) {
+                    eprintln!(
+                        "The capture canvas was copied instead of written in place - something still holds a clone of it. Correct, but ~40ms per capture slower (BUG-28)."
+                    );
+                }
+                entry
+                    .window
+                    .set_snapshot_image(slint::Image::from_rgba8(entry.snapshots[target].clone()));
+                entry.current = target;
+
                 let overlay = &entry.window;
 
                 // A reused overlay still carries the previous capture's state.
@@ -726,14 +832,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     })
                     .collect();
                 overlay.set_monitors(ModelRc::from(Rc::new(VecModel::from(monitor_rects))));
-
-                overlay.set_snapshot_image(slint::Image::from_rgba8(SharedPixelBuffer::<
-                    slint::Rgba8Pixel,
-                >::clone_from_slice(
-                    captured.image.as_raw(),
-                    captured.width,
-                    captured.height,
-                )));
 
                 // Geometry is deliberately NOT set here.
                 //
@@ -772,7 +870,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Handlers are reinstalled every capture: a reused overlay's old handlers close
                 // over the PREVIOUS canvas, so a region would be cropped out of a stale
                 // screenshot. Setting a handler replaces it.
-                let canvas = Rc::new(captured.image);
                 let monitors = Rc::new(captured.monitors);
                 let overlay_weak = overlay.as_weak();
 
@@ -796,7 +893,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 overlay.on_capture_completed({
                     let ctx_inner = ctx_inner.clone();
                     let main_weak = main_weak.clone();
-                    let canvas = canvas.clone();
                     let monitors = monitors.clone();
                     let close_overlay = close_overlay.clone();
                     // x/y/w/h arrive in CANVAS pixels, not logical ones, so they index the
@@ -823,13 +919,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .map(|m| m.name.clone())
                             .unwrap_or_else(|| "UNKNOWN".to_string());
 
-                        let finding_id = persist_finding(
-                            &ctx_inner,
-                            &canvas,
-                            region,
-                            &monitor_name,
-                            note.as_str(),
-                        );
+                        // The canvas is READ from the live overlay, never captured into this
+                        // closure. A clone captured here would outlive this capture and still be
+                        // alive at the next one's `make_mut_bytes`, turning it into a 92 MB
+                        // copy-on-write - the precise cost reusing the buffer exists to avoid.
+                        // Nothing on this path takes `LIVE_OVERLAYS` again, so the borrow is safe
+                        // to hold across the crop and the write.
+                        let finding_id = LIVE_OVERLAYS.with_borrow(|live| {
+                            live.first().and_then(|entry| {
+                                persist_finding(
+                                    &ctx_inner,
+                                    entry.snapshots[entry.current].as_bytes(),
+                                    (entry.placement.2, entry.placement.3),
+                                    region,
+                                    &monitor_name,
+                                    note.as_str(),
+                                )
+                            })
+                        });
                         close_overlay();
                         if let Some(main) = main_weak.upgrade() {
                             load_findings_into_window(&main, &ctx_inner, finding_id.as_deref());
