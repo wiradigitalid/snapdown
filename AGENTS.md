@@ -179,6 +179,7 @@ verifies the result, and lands the memlog.
 | Looking for where code lives, or placing new code | `.control/structure-codebase.md` |
 | Looking for where a document lives | `.control/structure-document.md` |
 | Writing or reviewing code | `.constitution/project/codebase-stack-guide.md` · `.constitution/project/codebase-conventions-guide.md` · `.constitution/project/codebase-brownfield-guide.md` |
+| Building or changing any UI, in either window | `.constitution/project/design-system-guide.md` |
 
 All three `.constitution/project/codebase-*-guide.md` start as `status: Draft`. While they are, their contents MAY be read
 as guidance but MUST NOT be used to reject a change.
@@ -223,9 +224,19 @@ shared UI package in `web/ui` consumed as `@snapdown/ui`, and a Go service in `a
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+```
+
+`apps/desktop` has **no `package.json`** — `DEC-007` moved the desktop app off React onto Slint, so the
+three `npm --prefix apps/desktop` lines that used to be here fail with `enoent` and always will. They
+were left behind by that decision and cost a session's time before being noticed.
+
+`web/ui` still has one, and nothing in the active workspace builds or tests it: the desktop app no
+longer consumes `@snapdown/ui` and the Go service never did (`OQ-27`). Run it only when changing
+`web/ui` itself:
+
+```bash
+npm --prefix web/ui ci
 npm --prefix web/ui run typecheck && npm --prefix web/ui run lint && npm --prefix web/ui run test
-npm --prefix apps/desktop run typecheck && npm --prefix apps/desktop run lint
-npm --prefix apps/desktop run test && npm --prefix apps/desktop run build
 ```
 
 Three CI jobs cover these: `rust-check`, `web-check`, and `web-service`. A green `korpus.yml` is

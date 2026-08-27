@@ -31,7 +31,28 @@ export global Theme {
     out property <color> semantic-success: is-dark ? #4ade80 : #166534; // Tag Status Editing Green
     out property <color> semantic-success-bg: is-dark ? #166534.with-alpha(0.3) : #ffffff.with-alpha(0.92);
 
-    // 6. Geometry Tokens (Theme Invariant)
+    // 6. Capture Overlay Tokens
+    //
+    // The overlay is drawn over a frozen screenshot of the operator's desktop, not over app
+    // chrome, so the scrim, the selection ring and the loupe grid MUST read the same in both
+    // themes - a light scrim over a dark screenshot is invisible. That is the same reasoning as
+    // the four deliberately theme-invariant groups in `web/ui/src/styles/tokens.css`, and it is
+    // why these four carry no `is-dark` branch.
+    out property <color> overlay-scrim:         #000000.with-alpha(0.65); // Dim outside the selection
+    out property <color> overlay-ring:          #38bdf8;                  // Selection & pixel-cell outline
+    out property <color> overlay-grid:          #ffffff.with-alpha(0.22); // Loupe pixel lattice
+    out property <color> overlay-canvas:        #000000;                  // Ground behind the loupe image
+
+    // The overlay's own chrome - the loupe frame and the full-screen control - is a floating panel
+    // over that screenshot, so it stays dark in BOTH themes to keep its contrast predictable, and
+    // only the note panel (a document surface) follows `bg-card` into light mode.
+    out property <color> overlay-chrome:        #17171a.with-alpha(0.94);
+    out property <color> overlay-chrome-border: #ffffff.with-alpha(0.14);
+    out property <color> overlay-text:          #f2f2f3;
+    out property <color> overlay-text-muted:    #9a9ba0;
+    out property <color> overlay-shadow:        #000000.with-alpha(0.45); // Lift under a floating panel
+
+    // 7. Geometry Tokens (Theme Invariant)
     out property <length> radius-sharp: 3px;
     out property <length> radius-pill: 9999px;
 }

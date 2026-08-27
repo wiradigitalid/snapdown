@@ -44,6 +44,19 @@ pub struct MonitorRect {
     pub name: String,
 }
 
+/// One rectangle a single click may take, and how near the front of the z-order it sits.
+///
+/// The depth is what makes occlusion work. Candidates are gathered per window, by handle, so a
+/// window buried behind another still reports its rectangles - and offering those would highlight
+/// something the Reviewer cannot even see. Keeping the enumeration order (`EnumWindows` walks the
+/// z-order from front to back) lets a hit test prefer whatever is actually on top at that point.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CaptureTarget {
+    pub region: Region,
+    /// 0 is the frontmost window; larger is further back.
+    pub depth: u32,
+}
+
 /// The whole virtual desktop: every monitor's pixels, plus the canvas geometry they add up to.
 ///
 /// There is deliberately **no stitched canvas here**. This used to own one, and building it cost
@@ -661,11 +674,32 @@ impl RegionCapturer {
         Ok(bytes)
     }
 
+    /// Every rectangle the Reviewer might plausibly want to capture, in virtual-desktop
+    /// coordinates, ordered so that a hit test can take the first match: frontmost window first,
+    /// and within one window the tightest container first.
+    ///
+    /// This is precomputed rather than asked per pointer move, and that is forced by the overlay
+    /// rather than chosen. Once the capture overlay is up it covers the whole desktop and is the
+    /// topmost window, so `ElementFromPoint` returns *our* window and a live query degrades to
+    /// enumerating top-level windows. Enumerating by HANDLE instead makes z-order irrelevant to
+    /// whether this works - which is what lets it run late, after the overlay is already up.
+    ///
+    /// Three filters decide what is worth offering, and each was added because its absence showed:
+    ///
+    /// - **Cloaked windows are skipped.** `IsWindowVisible` returns true for a Store/UWP window that
+    ///   DWM is not drawing at all, so without `DWMWA_CLOAKED` the Reviewer is offered rectangles
+    ///   belonging to windows that are not on screen.
+    /// - **Off-screen UIA elements are skipped.** A scrolled-out or collapsed pane reports a
+    ///   perfectly good bounding rectangle.
+    /// - **Windows belonging to this process are skipped**, so the pre-warmed overlay does not offer
+    ///   the whole desktop as a container.
     #[cfg(windows)]
-    pub fn detect_element_at_point(screen_x: i32, screen_y: i32) -> Option<Region> {
+    pub fn detect_capture_targets() -> Vec<CaptureTarget> {
         use windows::core::BOOL;
-        use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
-        use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
+        use windows::Win32::Foundation::{HWND, LPARAM, RECT};
+        use windows::Win32::Graphics::Dwm::{
+            DwmGetWindowAttribute, DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS,
+        };
         use windows::Win32::System::Com::{
             CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
             COINIT_APARTMENTTHREADED,
@@ -674,183 +708,193 @@ impl RegionCapturer {
         use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation};
         use windows::Win32::UI::WindowsAndMessaging::{
             EnumWindows, GetDesktopWindow, GetShellWindow, GetWindowLongW, GetWindowRect,
-            GetWindowThreadProcessId, IsIconic, IsWindowVisible, GWL_EXSTYLE, GWL_STYLE,
-            WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT,
+            GetWindowThreadProcessId, IsIconic, IsWindowVisible, GWL_EXSTYLE, WS_EX_TOOLWINDOW,
         };
 
+        /// A target smaller than this is a button or an icon, not something worth one click.
+        const MIN_W: i32 = 64;
+        const MIN_H: i32 = 40;
+        /// How far into a window's own tree to look. Two levels reaches the panes and documents
+        /// people target; deeper starts offering individual list rows.
+        const MAX_DEPTH: u32 = 2;
+
+        struct Scan {
+            pid: u32,
+            shell: HWND,
+            desktop: HWND,
+            windows: Vec<HWND>,
+        }
+
+        /// `EnumWindows` walks top-level windows front to back, so the push order IS the z-order.
+        unsafe extern "system" fn collect(hwnd: HWND, lparam: LPARAM) -> BOOL {
+            let scan = &mut *(lparam.0 as *mut Scan);
+
+            if !IsWindowVisible(hwnd).as_bool() || IsIconic(hwnd).as_bool() {
+                return BOOL(1);
+            }
+            if hwnd == scan.shell || hwnd == scan.desktop {
+                return BOOL(1);
+            }
+            let mut pid = 0u32;
+            GetWindowThreadProcessId(hwnd, Some(&mut pid));
+            if pid == scan.pid {
+                return BOOL(1);
+            }
+            if (GetWindowLongW(hwnd, GWL_EXSTYLE) as u32 & WS_EX_TOOLWINDOW.0) != 0 {
+                return BOOL(1);
+            }
+            // A cloaked window passes IsWindowVisible while DWM draws nothing for it - the usual
+            // case being a suspended Store app. Offering its rectangles points at nothing.
+            let mut cloaked = 0u32;
+            if DwmGetWindowAttribute(
+                hwnd,
+                DWMWA_CLOAKED,
+                &mut cloaked as *mut _ as *mut _,
+                std::mem::size_of::<u32>() as u32,
+            )
+            .is_ok()
+                && cloaked != 0
+            {
+                return BOOL(1);
+            }
+            scan.windows.push(hwnd);
+            BOOL(1)
+        }
+
+        let mut targets: Vec<CaptureTarget> = Vec::new();
+
         unsafe {
-            let pt = POINT {
-                x: screen_x,
-                y: screen_y,
+            let mut scan = Scan {
+                pid: GetCurrentProcessId(),
+                shell: GetShellWindow(),
+                desktop: GetDesktopWindow(),
+                windows: Vec::new(),
             };
+            let _ = EnumWindows(Some(collect), LPARAM(&mut scan as *mut _ as isize));
 
-            let current_pid = GetCurrentProcessId();
-
-            // Try modern Windows UI Automation with Container-Level walking
             let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-            let uia_result: windows::core::Result<IUIAutomation> =
-                CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER);
+            let automation: Option<IUIAutomation> =
+                CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER).ok();
 
-            if let Ok(automation) = uia_result {
-                if let Ok(element) = automation.ElementFromPoint(pt) {
-                    if let Ok(elem_pid) = element.CurrentProcessId() {
-                        if (elem_pid as u32) != current_pid {
-                            // Find meaningful panel / viewport / toolbar container by inspecting element and its immediate ancestors
-                            let mut best_region: Option<Region> = None;
-                            let mut current_elem = Some(element);
+            for (depth, hwnd) in scan.windows.into_iter().enumerate() {
+                let depth = depth as u32;
+                let mut window_targets: Vec<Region> = Vec::new();
 
-                            let mut depth = 0;
-                            while let Some(elem) = current_elem {
-                                if depth > 6 {
-                                    break;
-                                }
-                                depth += 1;
-
-                                if let Ok(rect) = elem.CurrentBoundingRectangle() {
-                                    let w = (rect.right - rect.left).max(0) as u32;
-                                    let h = (rect.bottom - rect.top).max(0) as u32;
-
-                                    // Check if this container represents a meaningful UI section (e.g. web body, toolbar, split pane, card)
-                                    // Minimum size 64x40 to avoid tiny icon buttons/links, maximum under full screen canvas (w < 3800 || h < 2100)
-                                    if w >= 64 && h >= 40 && (w < 3800 || h < 2100) {
-                                        // Pick the most direct meaningful container
-                                        if best_region.is_none() {
-                                            best_region =
-                                                Some(Region::new(rect.left, rect.top, w, h));
-                                            // If it's already a sizeable content pane (like web body or document), return it immediately
-                                            if w >= 200 && h >= 150 {
-                                                CoUninitialize();
-                                                return best_region;
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Walk up to parent container
-                                let tree_walker = automation.ControlViewWalker();
-                                current_elem = if let Ok(walker) = tree_walker {
-                                    walker.GetParentElement(&elem).ok()
-                                } else {
-                                    None
-                                };
-                            }
-
-                            if let Some(reg) = best_region {
-                                CoUninitialize();
-                                return Some(reg);
-                            }
-                        }
-                    }
-                }
-            }
-            CoUninitialize();
-
-            // Fallback to Win32 Top-level and Child Window enumeration
-            let shell_hwnd = GetShellWindow();
-            let desktop_hwnd = GetDesktopWindow();
-
-            struct WindowSearch {
-                pt: POINT,
-                current_pid: u32,
-                shell_hwnd: HWND,
-                desktop_hwnd: HWND,
-                found_hwnd: Option<HWND>,
-                found_rect: Option<RECT>,
-            }
-
-            let mut search = WindowSearch {
-                pt,
-                current_pid,
-                shell_hwnd,
-                desktop_hwnd,
-                found_hwnd: None,
-                found_rect: None,
-            };
-
-            unsafe extern "system" fn enum_windows_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
-                let search = &mut *(lparam.0 as *mut WindowSearch);
-
-                if !IsWindowVisible(hwnd).as_bool() || IsIconic(hwnd).as_bool() {
-                    return BOOL(1);
-                }
-
-                if hwnd == search.shell_hwnd || hwnd == search.desktop_hwnd {
-                    return BOOL(1);
-                }
-
-                let mut pid = 0u32;
-                GetWindowThreadProcessId(hwnd, Some(&mut pid));
-                if pid == search.current_pid {
-                    return BOOL(1);
-                }
-
-                let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
-                if (ex_style & WS_EX_TRANSPARENT.0 != 0) && (ex_style & WS_EX_TOOLWINDOW.0 != 0) {
-                    return BOOL(1);
-                }
-
+                // The DWM frame bounds are what the Reviewer sees; `GetWindowRect` includes the
+                // invisible resize border DWM adds, which would offer a target several pixels
+                // larger than the window looks.
                 let mut rect = RECT::default();
-                let dwm_res = DwmGetWindowAttribute(
+                let framed = DwmGetWindowAttribute(
                     hwnd,
                     DWMWA_EXTENDED_FRAME_BOUNDS,
                     &mut rect as *mut _ as *mut _,
                     std::mem::size_of::<RECT>() as u32,
-                );
-
-                if (dwm_res.is_err()
-                    || (rect.right - rect.left <= 0)
-                    || (rect.bottom - rect.top <= 0))
-                    && GetWindowRect(hwnd, &mut rect).is_err()
-                {
-                    return BOOL(1);
+                )
+                .is_ok()
+                    && rect.right > rect.left
+                    && rect.bottom > rect.top;
+                if !framed && GetWindowRect(hwnd, &mut rect).is_err() {
+                    continue;
+                }
+                push_target(&mut window_targets, &rect, MIN_W, MIN_H);
+                if window_targets.is_empty() {
+                    // Too small to be worth a click, so its children are not worth walking.
+                    continue;
                 }
 
-                let w = (rect.right - rect.left).max(0);
-                let h = (rect.bottom - rect.top).max(0);
-                if w < 16 || h < 16 {
-                    return BOOL(1);
-                }
-
-                // Ignore full-desktop background cover windows
-                if rect.left <= 0 && rect.top <= 0 && w >= 3800 && h >= 2100 {
-                    let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
-                    if (style & 0x00C00000) == 0 {
-                        return BOOL(1);
+                if let Some(automation) = automation.as_ref() {
+                    if let (Ok(element), Ok(walker)) = (
+                        automation.ElementFromHandle(hwnd),
+                        automation.ControlViewWalker(),
+                    ) {
+                        // Breadth-first, so a shallow useful pane is found before a deep one and
+                        // the depth cap bites where it is meant to.
+                        let mut level = vec![element];
+                        for _ in 0..MAX_DEPTH {
+                            let mut next = Vec::new();
+                            for parent in &level {
+                                let mut child = walker.GetFirstChildElement(parent).ok();
+                                while let Some(node) = child {
+                                    // A scrolled-out or collapsed pane still reports a perfectly
+                                    // good rectangle, and offering it points at nothing.
+                                    let on_screen = !node
+                                        .CurrentIsOffscreen()
+                                        .map(|v| v.as_bool())
+                                        .unwrap_or(false);
+                                    if on_screen {
+                                        if let Ok(bounds) = node.CurrentBoundingRectangle() {
+                                            push_target(&mut window_targets, &bounds, MIN_W, MIN_H);
+                                        }
+                                    }
+                                    child = walker.GetNextSiblingElement(&node).ok();
+                                    if on_screen {
+                                        next.push(node);
+                                    }
+                                    // A pathological tree would otherwise stall the capture.
+                                    if next.len() > 256 {
+                                        break;
+                                    }
+                                }
+                            }
+                            if next.is_empty() {
+                                break;
+                            }
+                            level = next;
+                        }
                     }
                 }
 
-                if search.pt.x >= rect.left
-                    && search.pt.x < rect.right
-                    && search.pt.y >= rect.top
-                    && search.pt.y < rect.bottom
-                {
-                    search.found_hwnd = Some(hwnd);
-                    search.found_rect = Some(rect);
-                    return BOOL(0);
-                }
-
-                BOOL(1)
+                // Tightest first WITHIN this window, so a hit test descends into the innermost
+                // container it can before falling back to the window itself.
+                window_targets.sort_by_key(|r| (r.width as u64) * (r.height as u64));
+                targets.extend(
+                    window_targets
+                        .into_iter()
+                        .map(|region| CaptureTarget { region, depth }),
+                );
             }
 
-            let _ = EnumWindows(
-                Some(enum_windows_proc),
-                LPARAM(&mut search as *mut _ as isize),
-            );
-
-            let final_rect = search.found_rect?;
-            let width = (final_rect.right - final_rect.left).max(0) as u32;
-            let height = (final_rect.bottom - final_rect.top).max(0) as u32;
-
-            if width < 8 || height < 8 {
-                return None;
-            }
-
-            Some(Region::new(final_rect.left, final_rect.top, width, height))
+            CoUninitialize();
         }
+
+        // Frontmost window first. A hit test takes the first rectangle containing the pointer, so
+        // a window buried behind another is never offered where the front one covers it.
+        targets.sort_by_key(|t| (t.depth, (t.region.width as u64) * (t.region.height as u64)));
+        targets
     }
 
     #[cfg(not(windows))]
-    pub fn detect_element_at_point(_screen_x: i32, _screen_y: i32) -> Option<Region> {
-        None
+    pub fn detect_capture_targets() -> Vec<CaptureTarget> {
+        Vec::new()
     }
+}
+
+/// Adds `rect` to `targets` unless it is too small to be worth a click, or close enough to one
+/// already collected that offering both would be a coin toss for the Reviewer.
+///
+/// The tolerance is deliberate: a window and its own top-level client pane routinely differ by a
+/// pixel or two of border, and presenting those as two separate targets makes a one-click selection
+/// feel unpredictable.
+#[cfg(windows)]
+fn push_target(
+    targets: &mut Vec<Region>,
+    rect: &windows::Win32::Foundation::RECT,
+    min_w: i32,
+    min_h: i32,
+) {
+    let (w, h) = (rect.right - rect.left, rect.bottom - rect.top);
+    if w < min_w || h < min_h {
+        return;
+    }
+    let candidate = Region::new(rect.left, rect.top, w as u32, h as u32);
+    const NEAR: i32 = 3;
+    if targets.iter().any(|t| {
+        (t.x - candidate.x).abs() <= NEAR
+            && (t.y - candidate.y).abs() <= NEAR
+            && (t.width as i32 - candidate.width as i32).abs() <= NEAR * 2
+            && (t.height as i32 - candidate.height as i32).abs() <= NEAR * 2
+    }) {
+        return;
+    }
+    targets.push(candidate);
 }

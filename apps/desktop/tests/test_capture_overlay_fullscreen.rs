@@ -107,6 +107,44 @@ fn the_capture_overlay_is_reused_across_captures_not_rebuilt() {
         "capture must decide whether the existing overlay still matches the desktop layout and \
          reuse it when it does, instead of recreating the window per capture (BUG-27)"
     );
+
+    // A layout change must not rebuild the window either, which is BUG-53.
+    //
+    // The instrumentation settled what argument could not. Over five captures with four resolution
+    // changes the log read four creations and four drops - so `LiveOverlay` and its canvas WERE
+    // released every time, and the process still climbed 173 -> 370 -> 384 MB at the SAME
+    // resolution. Dropping a Slint `ComponentHandle` does not free the native window's renderer
+    // resources, so the surface of every window ever created stayed alive: +181 MB and +174 MB per
+    // cycle, which is a 6000x3840 framebuffer plus its snapshot texture.
+    let code = capture_block_code();
+    assert!(
+        !code.contains("live.clear();"),
+        "a desktop layout change must not clear the overlay and build a new window - the old \
+         window's renderer resources survive its handle being dropped, so every resolution change \
+         leaked one framebuffer and one texture (BUG-53)"
+    );
+    assert!(
+        code.contains("entry.placement = placement;"),
+        "a layout change must simply record the new shape on the existing entry. The geometry is \
+         re-asserted by the timer below, through winit in DEVICE pixels - which is why no resize \
+         call belongs here, and why a Slint-level one would have needed the `scale_factor()` that \
+         BUG-26 is about (BUG-53)"
+    );
+    let creation = code
+        .find("CaptureOverlayWindow::new()")
+        .expect("there must still be a creation path, for the case where the pre-warm failed");
+    // Checked structurally, because `capture_block_code` strips comments and the prose that says so
+    // is therefore not available to match - which is exactly why comments are stripped.
+    let existing = code
+        .find("if let Some(entry) = live.first_mut() {")
+        .expect("the layout-change branch must first ask whether a window already exists");
+    assert!(
+        existing < creation && code[existing..creation].contains("} else {"),
+        "constructing an overlay window must be the ELSE of \"there is not one yet\". Reached any \
+         other way, a resolution change builds a second window whose renderer resources are never \
+         freed (BUG-53)"
+    );
+
     assert!(
         block.contains("LIVE_OVERLAYS.with_borrow_mut(std::mem::take)"),
         "capture must take the existing overlay out of LIVE_OVERLAYS to reconfigure and reuse it; \
@@ -231,10 +269,22 @@ fn a_drag_is_bounded_by_the_canvas_not_by_a_monitor() {
 fn the_crosshair_is_confined_to_the_monitor_under_the_pointer() {
     let overlay = overlay_slint_block();
 
+    // Asserts the containment arithmetic, not the name of the helper that performs it. This guard
+    // named `monitor-holds-pointer` and went red when that helper was generalised to take a point -
+    // a rename, with the behaviour untouched. A guard that locks an identifier tests the spelling.
     assert!(
-        overlay.contains("active-monitor()") && overlay.contains("monitor-holds-pointer"),
-        "the overlay must resolve which monitor the pointer is over from the monitor rectangles \
-         (BUG-26)"
+        overlay.contains("active-monitor()")
+            && overlay.contains("px >= m.x && px < m.x + m.width")
+            && overlay.contains("py >= m.y && py < m.y + m.height"),
+        "the overlay must resolve which monitor holds a point from the monitor rectangles \
+         themselves (BUG-26)"
+    );
+    assert!(
+        overlay.contains("function active-monitor() -> MonitorRectData {")
+            && overlay.contains("return root.monitor-at(root.pointer-src-x, root.pointer-src-y);"),
+        "the crosshair's monitor must come from the POINTER. The same lookup also answers for the \
+         selection - the note panel is clamped to that one - so the two callers must not be \
+         collapsed into a single pointer-only helper again"
     );
     assert!(
         overlay.contains("root.crosshair-h") && overlay.contains("root.crosshair-w"),
@@ -319,79 +369,89 @@ fn the_snapshot_is_written_into_the_buffer_that_is_shown() {
     );
 }
 
-/// BUG-28: the canvas buffers are allocated once per desktop layout and written alternately, never
-/// reallocated per capture.
+/// BUG-28 and BUG-51: the canvas is allocated ONCE PER CAPTURE, off the event loop, and written in
+/// place.
 ///
 /// Allocating is the expensive part, and not for the reason anyone expects:
 /// `SharedPixelBuffer::new` fills through `SharedVector`'s `FromIterator`, a per-element push loop
 /// rather than a `calloc`, so a 6000x3840 buffer costs 33-37ms while a plain 92 MB write pass costs
-/// 3.6ms. Moving that to start-up is the same move that put the renderer warm-up where nobody is
-/// looking.
+/// 3.6ms.
 ///
-/// **Two canvases, not one, and that is the whole point of this test.** `make_mut_bytes` is
-/// copy-on-write, so the canvas being written must be held by nothing. The first attempt cleared
-/// the overlay's `snapshot-image` property immediately before the blit and assumed that released
-/// it. It does not: Slint bindings are lazy, the backdrop and the loupe latch their `source` when
-/// they render, and a hidden window never renders - so between captures they still hold the last
-/// image shown. That shipped past a unit test and was caught only by the canary, which reported a
-/// copy on all 28 captures of a session.
+/// Two earlier designs, both about the same hazard. `make_mut_bytes` is copy-on-write, so the canvas
+/// being written must be held by nothing - and something always holds it. Slint's bindings are lazy:
+/// the backdrop and the lens latch their `source` when they RENDER, and a hidden window never
+/// renders, so clearing the overlay's `snapshot-image` releases nothing. Clearing the property was
+/// the first attempt; it shipped past a unit test and the canary reported a copy on all 28 captures
+/// of a session. Alternating two retained buffers was the second: correct, and 175.8 MB resident for
+/// ever, which is most of what the owner was seeing as a 400 MB process.
 ///
-/// Alternating needs no release step and no ordering: whatever those elements still hold is the
-/// previous capture's canvas, so the other one is free by construction.
+/// A freshly allocated buffer has a refcount of one by construction, so there is nothing to
+/// alternate away from - and the 33-37ms goes onto its own thread beside the 132-167ms grab, where
+/// it costs no wall clock. That is the design this test pins: allocated per capture, allocated OFF
+/// the event loop, and still checked for a copy on write.
 #[test]
-fn the_capture_canvas_is_reused_and_alternated_not_reallocated() {
+fn the_capture_canvas_is_allocated_per_capture_off_the_event_loop() {
     let source = main_rs_code();
     let block = capture_block_code();
 
-    let allocation = source
-        .find("SharedPixelBuffer::<slint::Rgba8Pixel>::new")
+    // Allocated on a thread of its own, started BEFORE the grab so the two overlap.
+    let spawn = block
+        .find("let allocating = planned.map(|(_, _, width, height)| {")
         .expect(
-        "the canvas buffers must be allocated somewhere - reusing them is what keeps a capture \
-         off the 33-37ms `SharedPixelBuffer::new` fill (BUG-28)",
-    );
-    let capture_handler = source
-        .find("on_capture_clicked")
-        .expect("on_capture_clicked must exist");
+            "the canvas must be allocated on its own thread - `SharedPixelBuffer::new` is a 33-37ms              per-element fill, and running it after the grab on the same thread adds all of it to              the latency BUG-28 exists to protect",
+        );
+    let grab = block
+        .find("RegionCapturer::capture_virtual_desktop()")
+        .expect("the grab must exist");
     assert!(
-        allocation < capture_handler,
-        "the canvas buffers must be allocated at start-up, before the Capture handler is even \
-         installed - `SharedPixelBuffer::new` is a 33-37ms per-element fill, not a calloc, and \
-         paying it on Capture is exactly the latency BUG-28 is about"
+        spawn < grab,
+        "the allocation must be STARTED before the grab, or it does not overlap it and the 33-37ms          is simply added back"
+    );
+    assert!(
+        block.contains("allocating.and_then(|handle| match handle.join()"),
+        "and joined after it, so the buffer is ready when the blit needs it"
+    );
+
+    // Nothing retained between captures beyond the one canvas on screen.
+    assert!(
+        !source.contains("snapshots:") && !source.contains("entry.current"),
+        "the two alternating retained buffers must be gone, not merely unused - they were 175.8 MB          resident on a two-4K-monitor desktop (BUG-51)"
+    );
+    assert!(
+        source.contains("canvas: Option<SharedPixelBuffer<slint::Rgba8Pixel>>,"),
+        "the overlay must hold at most ONE canvas, and optionally: before the first capture there is          nothing to hold"
+    );
+    let prewarm = source
+        .find("fn prewarm_capture_overlay")
+        .expect("the pre-warm must exist");
+    let prewarm_body = &source[prewarm..(prewarm + 2600).min(source.len())];
+    assert!(
+        !prewarm_body.contains("SharedPixelBuffer::<slint::Rgba8Pixel>::new"),
+        "start-up must not allocate a canvas: it would be 87.9 MB waiting for a capture that may          never come, and the allocation now overlaps the grab anyway (BUG-51)"
     );
 
     assert!(
-        block.contains("entry.snapshots[target].make_mut_bytes()"),
-        "the capture must write into one of the overlay's own retained canvases, not a fresh one \
-         (BUG-28)"
-    );
-
-    // The alternation itself. Without it, the canvas being written is the one the backdrop and the
-    // loupe are still holding, and every write is a silent 92 MB copy-on-write.
-    assert!(
-        block.contains("let target = 1 - entry.current;"),
-        "the capture must write the canvas that is NOT on screen. Writing the one just shown means \
-         writing what the overlay's own bindings still hold, which copies 92 MB instead (BUG-28)"
+        block.contains("canvas.make_mut_bytes()"),
+        "the capture must write into the buffer it just took, in place"
     );
     assert!(
-        block.contains("entry.current = target;"),
-        "the capture must record which canvas is now on screen, or the next capture alternates \
-         back onto the one it just wrote and a Finding crops from the wrong one (BUG-28)"
+        block.contains("entry.canvas = None;"),
+        "and the previous canvas must be released as the new one is installed - holding both is what          made this 175.8 MB (BUG-51)"
     );
 
     // A copy-on-write moves the allocation, so the pointer is the evidence. This is the check that
-    // caught the single-buffer design after a unit test had passed it.
+    // caught the single-buffer design after a unit test had passed it, and it still earns its place:
+    // a fresh buffer has a refcount of one, so a copy here means something clones the canvas
+    // between the allocation and the blit.
     assert!(
         block.contains("std::ptr::eq"),
-        "the capture must check that the canvas was written in place rather than copied - the \
-         failure produces perfectly correct pixels and shows up only as latency (BUG-28)"
+        "the capture must check that the canvas was written in place rather than copied - the          failure produces perfectly correct pixels and shows up only as latency (BUG-28)"
     );
 
     // The completed handler must READ the canvas from the live overlay. A clone captured in that
-    // closure would outlive the capture and still be held two captures later.
+    // closure would outlive the capture and still be held at the next one.
     assert!(
-        block.contains("LIVE_OVERLAYS.with_borrow(")
-            && block.contains("entry.snapshots[entry.current].as_bytes()"),
-        "the completed handler must read the on-screen canvas out of LIVE_OVERLAYS rather than \
-         capturing a clone of it, and it must read the one that is actually on screen (BUG-28)"
+        block.contains("LIVE_OVERLAYS.with_borrow(") && block.contains("canvas.as_bytes()"),
+        "the completed handler must read the on-screen canvas out of LIVE_OVERLAYS rather than          capturing a clone of it (BUG-28)"
     );
 }

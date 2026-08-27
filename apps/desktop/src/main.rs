@@ -12,8 +12,8 @@ use std::sync::{Arc, Mutex};
 
 use global_hotkey::hotkey::HotKey;
 use global_hotkey::{GlobalHotKeyEvent, HotKeyState};
-use slint::{ComponentHandle, ModelRc, SharedPixelBuffer, VecModel};
-use snapdown_capture::RegionCapturer;
+use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, VecModel};
+use snapdown_capture::{CaptureTarget, RegionCapturer};
 use snapdown_core::domain::finding::{Finding, Note, Region};
 use snapdown_core::domain::image::ImageDimensions;
 use snapdown_core::domain::setting::{
@@ -188,6 +188,29 @@ impl AppContext {
     }
 }
 
+/// The largest a filmstrip thumbnail is ever drawn: a 120x86 card at 2x for a HiDPI display.
+///
+/// Every card used to hold the Finding's image at FULL resolution. Measured on the owner's library of
+/// 61 Findings: 230.8 MB of decoded RGBA held resident, to fill cards of 120x86 - and it grew with
+/// every capture, on top of the 175.8 MB the overlay retains by design. That is most of where 650 MB
+/// of private bytes was going.
+///
+/// `DynamicImage::thumbnail` is the cheap box-filter path, which is the right trade for a 120px card.
+const THUMB_MAX_W: u32 = 240;
+const THUMB_MAX_H: u32 = 172;
+
+// Checked at COMPILE time rather than in a test. A library of a few hundred Findings holds one
+// decoded thumbnail each for the life of the window, so the bound is an invariant of the build, not
+// something to discover in CI - and clippy is right that asserting it at runtime asserts a constant.
+const _: () = assert!(
+    (THUMB_MAX_W as u64) * (THUMB_MAX_H as u64) * 4 < 200 * 1024,
+    "one thumbnail must cost under 200 KB decoded: 230.8 MB of full-size images for 61 Findings is      what this bound exists to prevent"
+);
+const _: () = assert!(
+    THUMB_MAX_W >= 240 && THUMB_MAX_H >= 172,
+    "and it must still be at least the 120x86 card at 2x, or the filmstrip is visibly soft on a      HiDPI display"
+);
+
 fn rgba_to_slint_image(img: &image::RgbaImage) -> slint::Image {
     let (w, h) = (img.width(), img.height());
     let pixel_buffer = SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(img.as_raw(), w, h);
@@ -218,7 +241,7 @@ fn load_findings_into_window(
 
         let loaded_img = if img_path.exists() {
             if let Ok(dyn_img) = image::open(&img_path) {
-                rgba_to_slint_image(&dyn_img.to_rgba8())
+                rgba_to_slint_image(&dyn_img.thumbnail(THUMB_MAX_W, THUMB_MAX_H).to_rgba8())
             } else {
                 slint::Image::default()
             }
@@ -249,60 +272,206 @@ fn load_findings_into_window(
     let model = Rc::new(VecModel::from(filmstrip));
     window.set_filmstrip_items(ModelRc::from(model));
 
-    // Update active finding details if available
     if let Some(active_id) = target_active_id {
-        if let Ok(Some(detail)) = ctx.finding_store.get_finding(&active_id) {
-            let f = &detail.finding;
-            let img_path = if PathBuf::from(&f.image_path).is_absolute() {
-                PathBuf::from(&f.image_path)
-            } else {
-                ctx.vault_path.join(&f.image_path)
-            };
-
-            if let Ok(dyn_img) = image::open(&img_path) {
-                let rgba = dyn_img.to_rgba8();
-                window.set_active_image(rgba_to_slint_image(&rgba));
-            }
-
-            let filename = PathBuf::from(&f.image_path)
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| f.image_path.clone());
-
-            window.set_current_filename(filename.into());
-            window.set_resolution_text(format!("{} × {} px", f.image_width, f.image_height).into());
-
-            if let Ok(metadata) = std::fs::metadata(&img_path) {
-                let kb = metadata.len() as f64 / 1024.0;
-                window.set_size_text(format!("{:.1} KB", kb).into());
-            } else {
-                window.set_size_text(
-                    format!(
-                        "{:.1} KB",
-                        (f.image_width * f.image_height * 4) as f64 / 1024.0 / 6.0
-                    )
-                    .into(),
-                );
-            }
-
-            window.set_observation_summary(detail.note.body.into());
-
-            // Convert markers
-            let slint_markers: Vec<MarkerData> = detail
-                .markers
-                .iter()
-                .map(|m| MarkerData {
-                    id: m.id.clone().into(),
-                    ordinal: m.ordinal as i32,
-                    x: m.x as f32,
-                    y: m.y as f32,
-                    comment: m.comment.clone().into(),
-                })
-                .collect();
-            window.set_markers(ModelRc::from(Rc::new(VecModel::from(slint_markers))));
-        }
+        load_active_detail(window, ctx, &active_id);
     }
 }
+
+/// The selected width and height out of a Finding's `region` column, which holds `"x,y,w,h"`.
+///
+/// `persist_finding` writes it as `format!("{crop_x},{crop_y},{crop_w},{crop_h}")` - a bare
+/// comma-separated string, NOT the JSON form of `Region`. The first attempt at reading it here used
+/// `serde_json::from_str::<Region>`, which compiles, raises nothing visible, and always returns
+/// `None`: the readout would simply never have shown the reduction. Worse, the guard written
+/// alongside it asserted the SHAPE OF THE CODE rather than the shape of the data, so it passed.
+///
+/// Caught by reading the live database. `AGENTS.md` records four earlier cases of code that compiled,
+/// tested green and did nothing; this is the same shape, found before shipping only because the
+/// database was opened to check something else.
+fn parse_region_field(region: &str) -> Option<(u32, u32)> {
+    let mut parts = region.split(',');
+    let _x = parts.next()?;
+    let _y = parts.next()?;
+    let w = parts.next()?.trim().parse::<u32>().ok()?;
+    let h = parts.next()?.trim().parse::<u32>().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Some((w, h))
+}
+
+/// Loads ONE Finding into the Editor: its image, its dimensions, its note, its markers.
+///
+/// Split out of `load_findings_into_window` because selecting a Finding used to run the whole of it,
+/// and the whole of it decodes every thumbnail in the library. Measured on this machine with 58
+/// Findings: 320.9 ms per click, of which 310.0 ms was thumbnail decoding and 1.3 ms was the database
+/// query. None of that work changes when the selection changes, and the cost grows with every
+/// capture the owner takes.
+fn load_active_detail(window: &AppWindow, ctx: &AppContext, active_id: &str) {
+    let Ok(Some(detail)) = ctx.finding_store.get_finding(active_id) else {
+        return;
+    };
+    let f = &detail.finding;
+    let img_path = if PathBuf::from(&f.image_path).is_absolute() {
+        PathBuf::from(&f.image_path)
+    } else {
+        ctx.vault_path.join(&f.image_path)
+    };
+
+    if let Ok(dyn_img) = image::open(&img_path) {
+        let rgba = dyn_img.to_rgba8();
+        window.set_active_image(rgba_to_slint_image(&rgba));
+    }
+
+    let filename = PathBuf::from(&f.image_path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| f.image_path.clone());
+
+    window.set_current_filename(filename.into());
+    window.set_active_finding_id(f.id.clone().into());
+
+    // Says what was saved, and - when the Quality Budget shrank it - what it was saved FROM.
+    //
+    // The overlay reports the region you are selecting, in source pixels; this reports the file on
+    // disk, after `ImageReducer` has applied the budget. Those legitimately differ, and with only
+    // one number visible the difference read as one of them being wrong. The region is already
+    // recorded on the Finding, so both can be shown.
+    let selected = parse_region_field(&f.region);
+    let resolution = match selected {
+        Some((w, h)) if w != f.image_width || h != f.image_height => {
+            format!(
+                "{} × {} px  ·  from {} × {}",
+                f.image_width, f.image_height, w, h
+            )
+        }
+        _ => format!("{} × {} px", f.image_width, f.image_height),
+    };
+    window.set_resolution_text(resolution.into());
+
+    if let Ok(metadata) = std::fs::metadata(&img_path) {
+        let kb = metadata.len() as f64 / 1024.0;
+        window.set_size_text(format!("{:.1} KB", kb).into());
+    } else {
+        window.set_size_text(
+            format!(
+                "{:.1} KB",
+                (f.image_width * f.image_height * 4) as f64 / 1024.0 / 6.0
+            )
+            .into(),
+        );
+    }
+
+    window.set_observation_summary(detail.note.body.clone().into());
+
+    let slint_markers: Vec<MarkerData> = detail
+        .markers
+        .iter()
+        .map(|m| MarkerData {
+            id: m.id.clone().into(),
+            ordinal: m.ordinal as i32,
+            x: m.x as f32,
+            y: m.y as f32,
+            comment: m.comment.clone().into(),
+        })
+        .collect();
+    window.set_markers(ModelRc::from(Rc::new(VecModel::from(slint_markers))));
+}
+
+/// Selects a Finding already present in the filmstrip.
+///
+/// Loads its detail and moves the `is_active` flag by writing the two affected rows in place. What it
+/// deliberately does NOT do is rebuild the filmstrip model, because building that model re-decodes
+/// every image in the library - 310 ms of the 321 ms a click used to cost here, and rising with each
+/// capture. The set of Findings has not changed, so neither has the strip.
+fn select_active_finding(window: &AppWindow, ctx: &AppContext, id: &str) {
+    let items = window.get_filmstrip_items();
+    if let Some(vec_model) = items.as_any().downcast_ref::<VecModel<FindingThumb>>() {
+        for row in 0..vec_model.row_count() {
+            let Some(thumb) = vec_model.row_data(row) else {
+                continue;
+            };
+            let should_be_active = thumb.id == id;
+            if thumb.is_active != should_be_active {
+                vec_model.set_row_data(
+                    row,
+                    FindingThumb {
+                        is_active: should_be_active,
+                        ..thumb
+                    },
+                );
+            }
+        }
+    } else {
+        // The model is not the one this function knows how to update in place. Falling back to the
+        // full rebuild is slow rather than wrong, and silently doing nothing would be wrong.
+        load_findings_into_window(window, ctx, Some(id));
+        return;
+    }
+
+    load_active_detail(window, ctx, id);
+}
+
+thread_local! {
+    /// The containers a single click may take, in CANVAS pixels, smallest first.
+    ///
+    /// Filled by a detection thread that runs alongside the grab, and read by the overlay's
+    /// `target-at` hit test. It is deliberately NOT waited for: precomputing these costs 180-345ms
+    /// on a busy desktop, more than the grab itself, and the overlay needs them only by the time
+    /// the Reviewer starts moving the pointer - not to appear. Until they land, dragging works and
+    /// click-to-select simply finds nothing.
+    ///
+    /// Precomputed rather than queried live because the overlay is the topmost window once it is
+    /// up, so a point-based query would return our own window. Enumerating by HWND instead makes
+    /// z-order irrelevant, which is what lets this run late.
+    static CAPTURE_TARGETS: RefCell<Vec<CaptureTarget>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Hides a window from screen-capture APIs, or stops hiding it, without moving it on screen.
+///
+/// Returns nothing on purpose: there is no useful recovery. `WDA_EXCLUDEFROMCAPTURE` needs Windows
+/// 10 2004 or newer, and where it is unavailable the consequence is that Snapdown appears in its
+/// own screenshot - the behaviour before this existed. That is worth a line on stderr, not a
+/// failed capture.
+#[cfg(windows)]
+fn set_capture_exclusion(window: &slint::Weak<AppWindow>, exclude: bool) {
+    use i_slint_backend_winit::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use i_slint_backend_winit::WinitWindowAccessor;
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE, WDA_NONE,
+    };
+
+    let Some(main) = window.upgrade() else {
+        return;
+    };
+    let affinity = if exclude {
+        WDA_EXCLUDEFROMCAPTURE
+    } else {
+        WDA_NONE
+    };
+
+    let applied = main.window().with_winit_window(|winit_win| {
+        let Ok(handle) = winit_win.window_handle() else {
+            return false;
+        };
+        let RawWindowHandle::Win32(win32) = handle.as_raw() else {
+            return false;
+        };
+        let hwnd = HWND(win32.hwnd.get() as *mut std::ffi::c_void);
+        unsafe { SetWindowDisplayAffinity(hwnd, affinity) }.is_ok()
+    });
+
+    if applied != Some(true) {
+        eprintln!(
+            "Could not {} the Editor from screen capture; it may appear in its own screenshot.",
+            if exclude { "exclude" } else { "restore" }
+        );
+    }
+}
+
+#[cfg(not(windows))]
+fn set_capture_exclusion(_window: &slint::Weak<AppWindow>, _exclude: bool) {}
 
 /// The capture overlay, kept alive between captures.
 ///
@@ -317,31 +486,42 @@ struct LiveOverlay {
     /// `(x, y, width, height)` in physical virtual-desktop pixels. Doubles as the reuse key: if
     /// the desktop layout still matches, the existing window is reused untouched.
     placement: (i32, i32, u32, u32),
-    /// TWO canvases, written alternately, because one cannot be reused safely.
+    /// The canvas on screen: the desktop as it was when this capture started.
     ///
-    /// Reusing a canvas at all is worth a lot: `SharedPixelBuffer::new` is not a `calloc`, it fills
-    /// through `SharedVector`'s per-element `FromIterator` push loop, so allocating a 6000x3840
-    /// buffer costs 33-37ms while a plain 92 MB write pass costs 3.6ms. Allocating here, once per
-    /// desktop layout, keeps that off the Reviewer's clock the same way the renderer warm-up is
-    /// kept off it. `placement` is already exactly these buffers' validity condition.
+    /// ONE buffer, allocated fresh for every capture off the event loop, replacing a pair of
+    /// permanently retained ones. Both of the earlier designs were about the same hazard and this
+    /// one removes it rather than working around it.
     ///
-    /// Why two, and not one written in place: `make_mut_bytes` is copy-on-write, so the buffer must
-    /// be uniquely owned when it is written. Clearing the overlay's `snapshot-image` property first
-    /// is NOT enough. A unit test said it was, and the canary at the write site then fired on all
-    /// 28 captures of a session. Slint bindings are lazy: the two elements that bind this image,
-    /// the backdrop and the loupe, latch their `source` when they RENDER, and a hidden window never
-    /// renders, so between captures they still hold the last image shown. Clearing the root
-    /// property never reaches them.
+    /// `make_mut_bytes` is copy-on-write, so writing the canvas is only cheap while nothing else
+    /// holds it - and something always does. Slint's bindings are lazy: the backdrop and the lens
+    /// keep the `source` they latched at their last render, and a hidden window never renders, so
+    /// clearing the overlay's `snapshot-image` property releases nothing. The first version reused a
+    /// single buffer and silently paid a 92 MB memcpy per capture (the canary in the blit caught it,
+    /// 28 times). The second alternated two buffers so the one being written was always a generation
+    /// older than anything still held - correct, and 175.8 MB resident for ever.
     ///
-    /// Alternating sidesteps that rather than fighting it. Whatever those elements are still
-    /// holding is the canvas from the PREVIOUS capture, so the other one is free by construction -
-    /// no release step, no ordering to get right. The cost is a second 92 MB resident.
+    /// A buffer that has just been allocated has a refcount of one by construction, so there is
+    /// nothing to alternate away from. The cost moved instead of growing: 33-37 ms of allocation per
+    /// capture, paid on its own thread alongside the 132-167 ms grab, where it does not show up in
+    /// wall clock. Idle drops by 87.9 MB on this desktop, and the peak during a capture - the old
+    /// canvas plus the new one - is the profile Snagit has: low at rest, a spike while in use.
+    canvas: Option<SharedPixelBuffer<slint::Rgba8Pixel>>,
+}
+
+impl Drop for LiveOverlay {
+    /// Hides the native window before the handle goes away.
     ///
-    /// Zeroed at allocation, and the blit only ever writes where a monitor is, so the black gaps of
-    /// a non-rectangular desktop stay black across captures without being rewritten.
-    snapshots: [SharedPixelBuffer<slint::Rgba8Pixel>; 2],
-    /// Index of the canvas currently on screen - the one a Finding must be cropped from.
-    current: usize,
+    /// A desktop layout change replaces this entry, and dropping the handle is what should close the
+    /// window - but Slint routes window destruction through the event loop, and this drop happens
+    /// INSIDE an event-loop callback, so the close is scheduled rather than done. Hiding first takes
+    /// the window off screen immediately, whatever the destruction is waiting for.
+    ///
+    /// The canvas needs no such care: it is a plain `SharedPixelBuffer` and drops with this struct.
+    fn drop(&mut self) {
+        if let Err(e) = self.window.hide() {
+            eprintln!("Could not hide the outgoing capture overlay: {e}");
+        }
+    }
 }
 
 /// Crops the capture canvas to the selected region, shrinks it to the active QualityBudget,
@@ -516,8 +696,12 @@ fn prewarm_capture_overlay() {
                 let _ = winit_win.request_inner_size(PhysicalSize::new(width, height));
             });
             if applied.is_none() {
+                // Expected, not a fault: `show()` does not create the native window - the event
+                // loop does, on its next turn - so the first pre-warm attempt runs before there is
+                // a window to place. The geometry timer places it a turn later. Third time this
+                // string has been mangled by a line-length edit; it is one literal on one line now.
                 eprintln!(
-                    "Pre-warm could not place the overlay: no winit window yet. The first                      capture will place it instead."
+                    "Pre-warm: no winit window yet; the geometry timer will place the overlay."
                 );
             }
         }
@@ -530,13 +714,11 @@ fn prewarm_capture_overlay() {
         *live = vec![LiveOverlay {
             window: overlay,
             placement,
-            // The 33-37ms allocation, paid here at start-up rather than on the first Capture, for
-            // the same reason the window itself is built here. See `LiveOverlay::snapshot`.
-            snapshots: [
-                SharedPixelBuffer::<slint::Rgba8Pixel>::new(width, height),
-                SharedPixelBuffer::<slint::Rgba8Pixel>::new(width, height),
-            ],
-            current: 0,
+            // Nothing allocated here any more. The window's renderer warm-up and its geometry
+            // correction are what start-up is paying for; the canvas is allocated per capture, off
+            // the event loop, and holding one here would only be 87.9 MB waiting for a capture that
+            // may never come. See `LiveOverlay::canvas`.
+            canvas: None,
         }]
     });
 }
@@ -624,7 +806,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ctx_sel = ctx.clone();
     main_window.on_finding_selected(move |id| {
         if let Some(win) = win_weak_sel.upgrade() {
-            load_findings_into_window(&win, &ctx_sel, Some(&id));
+            select_active_finding(&win, &ctx_sel, &id);
+        }
+    });
+
+    // An edited Observation Summary is written through to the store.
+    //
+    // It used to live only in the Slint property, so selecting another Finding overwrote it and the
+    // edit was gone. Silent data loss, and the kind a Reviewer discovers long afterwards - which is
+    // why this writes on every edit rather than on some blur or close event that may never fire. A
+    // note is a few hundred bytes and the write is sub-millisecond; a debounce here would be a
+    // second place for the text to be lost.
+    let win_weak_note = main_window.as_weak();
+    let ctx_note = ctx.clone();
+    main_window.on_observation_edited(move |body| {
+        let Some(win) = win_weak_note.upgrade() else {
+            return;
+        };
+        let id = win.get_active_finding_id().to_string();
+        if id.is_empty() {
+            return;
+        }
+        let now = SystemClock::new().now_rfc3339();
+        if let Err(e) = ctx_note.finding_store.update_note(&id, body.as_str(), &now) {
+            eprintln!("Could not save the note for Finding {id}: {e}");
         }
     });
 
@@ -707,10 +912,62 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let window_weak = main_window.as_weak();
     let ctx_capture = ctx.clone();
     main_window.on_capture_clicked(move || {
-        // The grab is a blocking syscall; run it off the UI thread so the window does not freeze
-        // while it runs, then hop back onto the event loop to present the overlay.
+        // Get Snapdown out of its own screenshot - by making it invisible to the CAPTURE rather
+        // than invisible to the Reviewer.
+        //
+        // Hiding the window was tried first and is the obvious move, but it cannot be timed
+        // honestly: `hide()` reaches `ShowWindow` at once, while the desktop only stops containing
+        // those pixels after the compositor has presented a frame without them AND whatever was
+        // underneath has repainted. A 60ms wait left the owner reporting leftover window shadow in
+        // the overlay, and the only way to make a wait reliable is to make it long - which hands
+        // back the latency `BUG-28` spent so much measurement removing.
+        //
+        // `WDA_EXCLUDEFROMCAPTURE` sidesteps the timing entirely: DWM composes the frame that
+        // capture APIs see without this window in it, shadow included, from the moment the call
+        // returns. Nothing moves on screen, so there is no repaint to wait for and no flicker when
+        // the Editor comes back. The overlay covers the desktop anyway, so the Reviewer cannot tell
+        // the difference.
+        //
+        // It also removes a hazard rather than adding one: with nothing hidden, no failure path can
+        // leave the Reviewer looking at a product with no window.
         let main_weak = window_weak.clone();
         let ctx_inner = ctx_capture.clone();
+
+        set_capture_exclusion(&main_weak, true);
+
+        // Work out the click-to-select containers on their own thread, concurrently with the grab
+        // and WITHOUT the overlay waiting for them. On a busy desktop this takes 180-345ms - longer
+        // than the grab - so making the overlay wait would hand back everything BUG-28 bought. The
+        // overlay does not need them to appear, only by the time the pointer starts moving.
+        std::thread::spawn(|| {
+            let targets = RegionCapturer::detect_capture_targets();
+            if let Err(e) = slint::invoke_from_event_loop(move || {
+                // Reported in virtual-desktop coordinates; the overlay works in canvas pixels,
+                // whose origin is the desktop's top-left. That origin is the placement the overlay
+                // was built with, so it is read from there rather than recomputed.
+                let origin = LIVE_OVERLAYS
+                    .with_borrow(|live| live.first().map(|entry| (entry.placement.0, entry.placement.1)));
+                let Some((origin_x, origin_y)) = origin else {
+                    return;
+                };
+                let local: Vec<CaptureTarget> = targets
+                    .into_iter()
+                    .map(|t| CaptureTarget {
+                        region: Region::new(
+                            t.region.x - origin_x,
+                            t.region.y - origin_y,
+                            t.region.width,
+                            t.region.height,
+                        ),
+                        depth: t.depth,
+                    })
+                    .collect();
+                CAPTURE_TARGETS.with_borrow_mut(|slot| *slot = local);
+            }) {
+                eprintln!("Could not hand the capture targets to the overlay: {e}");
+            }
+        });
+
         std::thread::spawn(move || {
             // The grab is the blocking syscall and it stays here, off the event loop. What is
             // deliberately NOT done here any more is building the canvas.
@@ -724,13 +981,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // and reusing it means writing into state that lives on the UI thread, so the blit
             // moved there with it. 4.5ms on the event loop is a third of a frame; the 92 MB of
             // memcpy it replaced was not. See `BUG-28`.
+            //
+            // The allocation now happens HERE rather than being avoided, and on its own thread so it
+            // overlaps the grab instead of adding to it. `virtual_desktop_bounds` is a cheap
+            // enumeration - it is what the start-up pre-warm uses - so the size is known before the
+            // grab begins. If the desktop changes shape between the two, the size will not match and
+            // the UI thread allocates instead; that is a display being plugged in mid-capture, and
+            // paying 37 ms for it is right.
+            let planned = RegionCapturer::virtual_desktop_bounds().ok();
+            let allocating = planned.map(|(_, _, width, height)| {
+                std::thread::spawn(move || {
+                    (
+                        width,
+                        height,
+                        SharedPixelBuffer::<slint::Rgba8Pixel>::new(width, height),
+                    )
+                })
+            });
+
             let capture_result = RegionCapturer::capture_virtual_desktop();
 
+            let prepared = allocating.and_then(|handle| match handle.join() {
+                Ok(prepared) => Some(prepared),
+                Err(_) => {
+                    eprintln!("The canvas allocation thread panicked; allocating on the event loop.");
+                    None
+                }
+            });
+
             if let Err(e) = slint::invoke_from_event_loop(move || {
+                // The Editor is still on screen, merely excluded from capture, so the only thing
+                // an early return owes it is that exclusion being lifted again.
+                let restore_editor = {
+                    let main_weak = main_weak.clone();
+                    move || set_capture_exclusion(&main_weak, false)
+                };
+
                 let captured = match capture_result {
                     Ok(captured) => captured,
                     Err(e) => {
                         eprintln!("Capture failed: {e}");
+                        restore_editor();
                         return;
                     }
                 };
@@ -744,74 +1035,110 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let mut live: Vec<LiveOverlay> = LIVE_OVERLAYS.with_borrow_mut(std::mem::take);
 
-                // Reuse only while the desktop still has the same shape. A display added,
-                // removed, moved or re-scaled makes the existing window the wrong size, and it is
-                // rebuilt - paying the warm-up again, which is correct for a new layout.
+                // The desktop's shape decides whether the window has to be RESIZED, never whether
+                // it has to be rebuilt.
+                //
+                // It used to be rebuilt: `live.clear()` then a fresh `CaptureOverlayWindow`. That
+                // leaked, and the instrumentation is what settled it rather than argument. Over five
+                // captures with four resolution changes the log read four creations and four drops -
+                // so `LiveOverlay` and its canvas WERE released every time, and the process still
+                // climbed 173 -> 370 -> 384 MB at the same resolution. Two candidate mechanisms were
+                // refuted outright by the same log: no strong handle was outstanding, and the
+                // pre-allocated canvas never once mismatched.
+                //
+                // What is left is that dropping a Slint `ComponentHandle` does not free the native
+                // window's renderer resources. The jumps were +181 MB and +174 MB per cycle, which is
+                // two 87.9 MB allocations - a 6000x3840 framebuffer and its snapshot texture - so the
+                // surface of every window ever created is still alive.
+                //
+                // Rather than fight Slint's destruction semantics, this stops creating a second
+                // window at all: one overlay window per process, moved and resized as the desktop
+                // changes. That also removes the renderer warm-up on a layout change, which was a
+                // cost this code accepted in writing.
+                //
+                // Resizing is safe HERE and was not safe at creation, which is the distinction
+                // `BUG-26` records: `scale_factor()` returns 1.0 until a window has been realised, so
+                // sizing a brand-new window from it asked for 6000x3840 LOGICAL pixels and got a
+                // 9000x5760 window. This window has been shown, so its scale factor is real.
                 let layout_unchanged = live.len() == 1 && live[0].placement == placement;
 
                 if !layout_unchanged {
-                    live.clear();
-                    // Publish the placement so the attributes hook can create the window already
-                    // covering the whole desktop, rather than having it created on the primary
-                    // monitor and then moved - moving across a DPI boundary fires WM_DPICHANGED,
-                    // which rebuilds the surface and re-derives the size.
-                    match CaptureOverlayWindow::new() {
-                        Ok(window) => live.push(LiveOverlay {
-                            window,
-                            placement,
-                            // A new layout means a new canvas size, so this one is allocated here
-                            // rather than at start-up. It is the only capture that pays the
-                            // 33-37ms; every capture on an unchanged desktop reuses it.
-                            snapshots: [
-                                SharedPixelBuffer::<slint::Rgba8Pixel>::new(
-                                    captured.width,
-                                    captured.height,
-                                ),
-                                SharedPixelBuffer::<slint::Rgba8Pixel>::new(
-                                    captured.width,
-                                    captured.height,
-                                ),
-                            ],
-                            current: 0,
-                        }),
-                        Err(e) => eprintln!("Failed to create CaptureOverlayWindow: {e}"),
+                    if let Some(entry) = live.first_mut() {
+                        // Nothing to do but record the new shape.
+                        //
+                        // No resize call belongs here, and reaching for one was the wrong instinct:
+                        // the geometry timer further down already re-asserts this capture's placement
+                        // through winit in DEVICE pixels, on every capture, precisely because that
+                        // path needs no scale factor and so cannot be wrong. A Slint-level resize
+                        // would have needed `scale_factor()`, which is the call `BUG-26` is about -
+                        // and the guard for it caught the attempt within the minute.
+                        entry.placement = placement;
+                        // The canvas is the old desktop's size and is about to be replaced anyway;
+                        // releasing it here keeps the peak to one buffer rather than two.
+                        entry.canvas = None;
+                    } else {
+                        // No window at all - the start-up pre-warm did not manage to build one.
+                        //
+                        // The placement is deliberately NOT published here. `new()` does not create
+                        // the native window; `show()` does, one event-loop turn later, and the
+                        // attributes hook reads the placement then. Publishing it around `new()` is
+                        // exactly the mistake `BUG-26` records - consumed and gone before the hook
+                        // runs, the window created at a default size, the overlay zoomed. It is
+                        // published further down, immediately before `show()`.
+                        match CaptureOverlayWindow::new() {
+                            Ok(window) => live.push(LiveOverlay {
+                                window,
+                                placement,
+                                canvas: None,
+                            }),
+                            Err(e) => eprintln!("Failed to create CaptureOverlayWindow: {e}"),
+                        }
                     }
                 }
 
                 let Some(entry) = live.first_mut() else {
                     eprintln!("Capture aborted: the overlay window could not be created.");
+                    restore_editor();
                     return;
                 };
 
-                // Write the canvas that is NOT on screen.
+                // Take the buffer the grab thread allocated, if it is the right size for the desktop
+                // that was actually captured.
                 //
-                // `make_mut_bytes` is copy-on-write, so this stays cheap only while nothing else
-                // holds the buffer being written. Clearing the overlay's `snapshot-image` property
-                // first is NOT enough: Slint bindings are lazy, and the backdrop and the loupe keep
-                // the `source` they latched at their last render, which for a hidden window is the
-                // previous capture's image. Alternating means the canvas being written is always
-                // one generation older than anything still held, which needs no release step and no
-                // ordering to be got right. See `LiveOverlay::snapshots`.
-                let target = 1 - entry.current;
+                // Dropping the previous canvas here rather than at close is deliberate: it is what
+                // `persist_finding` reads, and a Finding is written before the overlay closes.
+                let mut canvas = match prepared {
+                    Some((w, h, buffer)) if w == captured.width && h == captured.height => buffer,
+                    _ => {
+                        // The desktop changed shape while the grab was running, or the allocating
+                        // thread died. Rare, and 37 ms on the event loop beats abandoning the
+                        // capture.
+                        SharedPixelBuffer::<slint::Rgba8Pixel>::new(captured.width, captured.height)
+                    }
+                };
+                entry.canvas = None;
 
-                let buffer_before = entry.snapshots[target].as_bytes().as_ptr();
-                if let Err(e) = captured.blit_into(entry.snapshots[target].make_mut_bytes()) {
+                let buffer_before = canvas.as_bytes().as_ptr();
+                if let Err(e) = captured.blit_into(canvas.make_mut_bytes()) {
                     eprintln!("Capture aborted: the desktop did not fit the overlay canvas: {e}");
                     LIVE_OVERLAYS.with_borrow_mut(|slot| *slot = live);
+                    restore_editor();
                     return;
                 }
                 // Checked rather than trusted, because the failure is invisible: a copy-on-write
-                // yields perfectly correct pixels and costs ~40ms. This line is what caught the
-                // single-buffer version, after a unit test had said it was fine.
-                if !std::ptr::eq(buffer_before, entry.snapshots[target].as_bytes().as_ptr()) {
+                // yields perfectly correct pixels and costs ~40 ms. This line is what caught the
+                // single-reused-buffer version after a unit test had said it was fine, and it still
+                // earns its place - a fresh buffer has a refcount of one, so a copy here would mean
+                // something clones the canvas between allocation and blit.
+                if !std::ptr::eq(buffer_before, canvas.as_bytes().as_ptr()) {
                     eprintln!(
-                        "The capture canvas was copied instead of written in place - something still holds a clone of it. Correct, but ~40ms per capture slower (BUG-28)."
+                        "The capture canvas was copied instead of written in place - something already holds a clone of it. Correct, but ~40ms per capture slower (BUG-28)."
                     );
                 }
                 entry
                     .window
-                    .set_snapshot_image(slint::Image::from_rgba8(entry.snapshots[target].clone()));
-                entry.current = target;
+                    .set_snapshot_image(slint::Image::from_rgba8(canvas.clone()));
+                entry.canvas = Some(canvas);
 
                 let overlay = &entry.window;
 
@@ -882,6 +1209,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 eprintln!("Failed to hide the capture overlay: {e}");
                             }
                         }
+                        // Snapdown becomes screenshot-able by other tools again the moment its
+                        // own capture is over.
+                        set_capture_exclusion(&main_weak, false);
                         if let Some(main) = main_weak.upgrade() {
                             if let Err(e) = main.show() {
                                 eprintln!("Failed to reshow the main window: {e}");
@@ -927,9 +1257,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // to hold across the crop and the write.
                         let finding_id = LIVE_OVERLAYS.with_borrow(|live| {
                             live.first().and_then(|entry| {
+                                let canvas = entry.canvas.as_ref()?;
                                 persist_finding(
                                     &ctx_inner,
-                                    entry.snapshots[entry.current].as_bytes(),
+                                    canvas.as_bytes(),
                                     (entry.placement.2, entry.placement.3),
                                     region,
                                     &monitor_name,
@@ -942,6 +1273,58 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             load_findings_into_window(&main, &ctx_inner, finding_id.as_deref());
                         }
                     }
+                });
+
+                // `detect_capture_targets` orders by z-order first and then by area, so the FIRST
+                // rectangle containing the pointer is the tightest container of the frontmost
+                // window. Taking the first match is therefore what makes occlusion work: a window
+                // buried behind another is never offered where the front one covers it.
+                //
+                // A zero-width answer means "nothing here", which the overlay reads as no
+                // highlight and no click target.
+                // `level` walks OUTWARD through the containers under the pointer.
+                //
+                // `detect_capture_targets` orders by z-order and then by area, so level 0 is the
+                // tightest container of the frontmost window - which is what makes occlusion work,
+                // and also what made a whole window unreachable. The owner could select a panel
+                // inside an application and never the application: every deeper candidate always
+                // won. Level 1 is the next container out, and so on.
+                overlay.on_target_at(|x, y, level| {
+                    CAPTURE_TARGETS.with_borrow(|targets| {
+                        targets
+                            .iter()
+                            .filter(|t| {
+                                x >= t.region.x
+                                    && x < t.region.x + t.region.width as i32
+                                    && y >= t.region.y
+                                    && y < t.region.y + t.region.height as i32
+                            })
+                            .nth(level.max(0) as usize)
+                            .map(|t| MonitorRectData {
+                                x: t.region.x as f32,
+                                y: t.region.y as f32,
+                                width: t.region.width as f32,
+                                height: t.region.height as f32,
+                            })
+                            .unwrap_or_default()
+                    })
+                });
+
+                // How many containers sit under the pointer, so the overlay knows whether there is
+                // anywhere to walk to and can say so. Without it the affordance is invisible and the
+                // Reviewer has no reason to try the wheel.
+                overlay.on_target_count_at(|x, y| {
+                    CAPTURE_TARGETS.with_borrow(|targets| {
+                        targets
+                            .iter()
+                            .filter(|t| {
+                                x >= t.region.x
+                                    && x < t.region.x + t.region.width as i32
+                                    && y >= t.region.y
+                                    && y < t.region.y + t.region.height as i32
+                            })
+                            .count() as i32
+                    })
                 });
 
                 overlay.on_overlay_cancelled({
@@ -1000,6 +1383,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             // Keyboard focus too, so Escape works without a click first.
                             winit_win.focus_window();
                         });
+                        // And hand focus to the overlay's own key handler. `init` claims it once,
+                        // at creation - but the overlay is created once and reused forever, so
+                        // anything that took focus in an earlier capture (the note field, the Save
+                        // button) still had it, and Enter went nowhere. Escape survived because the
+                        // note field rejects it and it bubbles; Enter does not bubble, which is
+                        // exactly why Enter was the one that intermittently did nothing.
+                        overlay.invoke_claim_focus();
                         if applied.is_none() {
                             eprintln!("Capture overlay still has no winit window; geometry unset.");
                         }
@@ -1164,4 +1554,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // `std::process::exit`) or `slint::quit_event_loop()` should end the process.
     slint::run_event_loop_until_quit()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The exact string shape found in the live `finding.region` column, read out of
+    /// `%APPDATA%/id.wiradigital.snapdown/library.db`.
+    ///
+    /// This test exists because the first version of the caller used
+    /// `serde_json::from_str::<Region>` on this column. That compiles, raises nothing, and returns
+    /// `None` for every row - so the Editor's "reduced from" readout would never have appeared, and
+    /// the guard written beside it asserted the shape of the CODE and passed. A parser has to be
+    /// tested against the data it will actually be given.
+    #[test]
+    fn a_region_field_is_four_comma_separated_numbers() {
+        assert_eq!(parse_region_field("419,344,1020,885"), Some((1020, 885)));
+        assert_eq!(parse_region_field("0,0,1,1"), Some((1, 1)));
+        // Negative origins are legal - a monitor left of the primary one - and only w/h are read.
+        assert_eq!(
+            parse_region_field("-1440,-559,2160,3840"),
+            Some((2160, 3840))
+        );
+    }
+
+    #[test]
+    fn a_region_field_that_is_not_that_shape_yields_nothing() {
+        // The JSON form the first attempt assumed. If this ever parses, the caller is guessing.
+        assert_eq!(
+            parse_region_field(r#"{"x":419,"y":344,"width":1020,"height":885}"#),
+            None
+        );
+        assert_eq!(parse_region_field(""), None);
+        assert_eq!(parse_region_field("419,344,1020"), None);
+        assert_eq!(parse_region_field("419,344,1020,885,7"), None);
+        assert_eq!(parse_region_field("419,344,wide,tall"), None);
+    }
 }

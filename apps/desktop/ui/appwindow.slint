@@ -1,8 +1,17 @@
-import { Button, ScrollView, LineEdit, TextEdit } from "std-widgets.slint";
+// `ScrollView` only.
+//
+// `LineEdit`, `TextEdit` and `Button` all paint themselves from Slint's own style palette rather than
+// from `theme.slint` - which is why the Observation Summary rendered white-on-white, and why the
+// capture panel's Save action was a different size, colour and type scale from every button in the
+// Editor. `SdTextField` and `SdActionButton` are this product's text entry and its actions,
+// everywhere; importing the std-widget versions is how the drift got back in twice.
+import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { ReticleMarker } from "components/reticle-marker.slint";
 import { CornerBrackets } from "components/corner-brackets.slint";
 import { IconButton } from "components/icon-button.slint";
+import { SdTextField } from "components/text-field.slint";
+import { SdActionButton, SdSectionLabel, SdCaption } from "components/action-button.slint";
 
 import "../assets/fonts/IBMPlexSans-Medium.ttf";
 import "../assets/fonts/IBMPlexSans-SemiBold.ttf";
@@ -62,7 +71,7 @@ export component CaptureOverlayWindow inherits Window {
     // this window, so transparency buys nothing - and it costs: a transparent no-frame window is
     // a layered, per-pixel-alpha composited surface on Windows, whose first frame shows the live
     // desktop through it before the content lands. That read as a flicker on reveal.
-    background: #000000;
+    background: Theme.overlay-canvas;
 
     in-out property <image> snapshot-image;
     in-out property <length> mouse-x: 0px;
@@ -83,6 +92,17 @@ export component CaptureOverlayWindow inherits Window {
     // Each monitor's bounds inside the snapshot, in snapshot (physical) pixels.
     in-out property <[MonitorRectData]> monitors: [];
 
+    // Whether the pointer has slowed enough for the lens to be worth showing. Driven by the tick
+    // timer near the bottom of this component.
+    property <bool> pointer-settled: false;
+    property <length> tick-x: 0px;
+    property <length> tick-y: 0px;
+    property <int> fast-ticks: 0;
+    // Distance per 100ms tick. Below the first the lens appears; above the second it goes away;
+    // between them the current state is kept. That band is the tolerance - roughly 200 to 700 px/s.
+    property <length> settle-slow: 20px;
+    property <length> settle-fast: 70px;
+
     // Below this drag distance, a press+release is a click, not a region selection.
     property <length> click-threshold: 4px;
 
@@ -97,25 +117,31 @@ export component CaptureOverlayWindow inherits Window {
     property <float> pointer-src-x: root.mouse-x / 1px * root.source-scale;
     property <float> pointer-src-y: root.mouse-y / 1px * root.source-scale;
 
-    // Which monitor the pointer is over. Slint's `for` is an element repeater, not a statement
-    // usable inside a function, so the (realistically 1-4 entry) list is probed by index.
-    // Falls back to the whole desktop, so the crosshair is never left invisible.
-    function monitor-holds-pointer(m: MonitorRectData) -> bool {
-        return root.pointer-src-x >= m.x && root.pointer-src-x < m.x + m.width
-            && root.pointer-src-y >= m.y && root.pointer-src-y < m.y + m.height;
+    function monitor-holds(m: MonitorRectData, px: float, py: float) -> bool {
+        return px >= m.x && px < m.x + m.width && py >= m.y && py < m.y + m.height;
     }
 
-    function active-monitor() -> MonitorRectData {
-        if (root.monitors.length > 0 && monitor-holds-pointer(root.monitors[0])) {
+    // The monitor containing an arbitrary point, given in SNAPSHOT pixels.
+    //
+    // Takes the point as arguments rather than reading the pointer, because two different things
+    // need this answer about two different points: the crosshair and the full-screen control follow
+    // the POINTER, while the note panel must be clamped to the monitor holding the SELECTION - the
+    // pointer moves onto that panel and may cross to another screen while it is open.
+    //
+    // Slint's `for` is an element repeater, not a statement usable inside a function, so the
+    // (realistically 1-4 entry) list is probed by index. Falls back to the whole desktop, so
+    // nothing is ever left unplaced.
+    function monitor-at(px: float, py: float) -> MonitorRectData {
+        if (root.monitors.length > 0 && monitor-holds(root.monitors[0], px, py)) {
             return root.monitors[0];
         }
-        if (root.monitors.length > 1 && monitor-holds-pointer(root.monitors[1])) {
+        if (root.monitors.length > 1 && monitor-holds(root.monitors[1], px, py)) {
             return root.monitors[1];
         }
-        if (root.monitors.length > 2 && monitor-holds-pointer(root.monitors[2])) {
+        if (root.monitors.length > 2 && monitor-holds(root.monitors[2], px, py)) {
             return root.monitors[2];
         }
-        if (root.monitors.length > 3 && monitor-holds-pointer(root.monitors[3])) {
+        if (root.monitors.length > 3 && monitor-holds(root.monitors[3], px, py)) {
             return root.monitors[3];
         }
         return {
@@ -124,6 +150,10 @@ export component CaptureOverlayWindow inherits Window {
             width: root.snapshot-image.width,
             height: root.snapshot-image.height,
         };
+    }
+
+    function active-monitor() -> MonitorRectData {
+        return root.monitor-at(root.pointer-src-x, root.pointer-src-y);
     }
 
     // The monitor under the pointer, in this window's logical pixels. Used ONLY to lay the
@@ -137,22 +167,171 @@ export component CaptureOverlayWindow inherits Window {
     property <length> crosshair-y: root.active-monitor().y / root.source-scale * 1px;
     property <length> crosshair-w: root.active-monitor().width / root.source-scale * 1px;
     property <length> crosshair-h: root.active-monitor().height / root.source-scale * 1px;
-    // Side of the source square the magnifier shows. Scaled by source-scale so the loupe reads
-    // as the same 3x magnification on every monitor regardless of its DPI.
-    property <float> loupe-source-size: 32 * root.source-scale;
+    // The lens shows exactly `loupe-pixels` SOURCE pixels across its face, and draws one grid cell
+    // per source pixel - so a cell IS a pixel of the screenshot, not a decoration laid over it. That
+    // equality is what `loupe-source-size == loupe-pixels` buys, and it broke once when this was
+    // scaled by `source-scale`: on a HiDPI display the lens read out more pixels than the grid drew
+    // cells, and the boxes lined up with nothing.
+    //
+    // 20 pixels across a 96px face, both to the owner's specification: round, smaller than it was,
+    // and with smaller cells. It was 16 across 144px, which made each cell 9px - big enough that the
+    // lens read as a diagram rather than as glass over the picture.
+    property <int> loupe-pixels: 20;
+    property <int> loupe-source-size: root.loupe-pixels;
+
+    // Everything about the lens is snapped to whole PHYSICAL pixels, and that is what the blurred
+    // rows were about.
+    //
+    // A cell was `96px / 20 = 4.8px` LOGICAL, and this display runs at 1.5 - so the grid lines fell
+    // at 7.2, 14.4, 21.6 physical pixels and the renderer antialiased each one across two of them.
+    // Some rows landed near a boundary and read sharp, others landed mid-pixel and read blurred,
+    // which is exactly the "kayak ada yang kabur di beberapa baris" the owner saw. The 1px lines
+    // themselves had the same problem: 1 logical pixel is 1.5 physical, so every one of them was a
+    // 50% smear by construction.
+    //
+    // So the cell is chosen as a whole number of physical pixels and converted back, the face
+    // follows from it, and the line is exactly ONE physical pixel. Positions then fall on integers
+    // at whatever scale the monitor happens to run.
+    property <length> loupe-cell-target: 5px;
+    property <length> loupe-cell:
+        round(root.loupe-cell-target / 1px * root.source-scale) / root.source-scale * 1px;
+    property <length> loupe-face: root.loupe-cell * root.loupe-pixels;
+    property <length> loupe-line: 1px / root.source-scale;
+
+    // Snaps a coordinate to a whole physical pixel. The lens's own origin needs it as much as the
+    // grid does: the pointer arrives at fractional logical coordinates, so an unsnapped lens shifts
+    // its whole content by a fraction of a physical pixel and blurs every line inside it at once.
+    function snap(v: length) -> length {
+        return round(v / 1px * root.source-scale) / root.source-scale * 1px;
+    }
+
+    // The top-left source pixel of the lens's view: a WHOLE pixel, clamped so the face stays filled
+    // at the desktop's edges instead of running off the source.
+    //
+    // The previous attempt made this fractional and slid the image and the grid together by the
+    // remainder, on the theory that the lattice had to MOVE to belong to the picture. It does not,
+    // and the attempt made things worse: offsetting a magnified image by a fraction of a pixel
+    // resamples it every frame, so the whole view shimmered as the mouse moved. Reverted rather than
+    // built on.
+    property <int> loupe-origin-x: clamp(
+        floor(root.pointer-src-x) - root.loupe-pixels / 2,
+        0,
+        max(0, root.snapshot-image.width - root.loupe-pixels));
+    property <int> loupe-origin-y: clamp(
+        floor(root.pointer-src-y) - root.loupe-pixels / 2,
+        0,
+        max(0, root.snapshot-image.height - root.loupe-pixels));
+
+    // Which cell holds the pixel under the pointer. Derived from the clamped origin rather than
+    // assumed to be the middle one: in the outermost few pixels of the desktop the view cannot be
+    // centred, and there the box has to follow the pixel rather than the pointer.
+    property <int> loupe-cursor-col: clamp(
+        floor(root.pointer-src-x) - root.loupe-origin-x, 0, root.loupe-pixels - 1);
+    property <int> loupe-cursor-row: clamp(
+        floor(root.pointer-src-y) - root.loupe-origin-y, 0, root.loupe-pixels - 1);
 
     // Selection is reported in SNAPSHOT pixels, not logical ones, so the caller can crop the
     // canvas directly without needing to know this window's scale factor.
     callback capture-completed(int, int, int, int, string);
     callback overlay-cancelled();
 
+    // Which container the pointer is over, so a single click can take it (`FR-1`: "1-click
+    // container selection").
+    //
+    // The search is in Rust rather than here because Slint's expression language has no loop, so a
+    // function cannot walk a list of candidates. Coordinates in and out are CANVAS pixels, the same
+    // space the selection is reported in, so nothing has to convert twice.
+    //
+    // `pure` is what lets it be used in the binding below; a zero width means "nothing here".
+    pure callback target-at(int, int, int) -> MonitorRectData;
+    pure callback target-count-at(int, int) -> int;
+
+    // How far OUT through the containers under the pointer to look. 0 is the tightest one.
+    //
+    // The detection returns candidates smallest-first, which is what makes occlusion work and is also
+    // what made a whole window unselectable: a panel inside an application always won, and there was
+    // no way to ask for the application. The wheel walks outward; moving the pointer resets it,
+    // because the candidates under a new point are a different list.
+    property <int> target-level: 0;
+    property <int> target-count: root.target-count-at(
+        round(root.mouse-x / 1px * root.source-scale),
+        round(root.mouse-y / 1px * root.source-scale));
+
+    property <MonitorRectData> hover-target: root.target-at(
+        round(root.mouse-x / 1px * root.source-scale),
+        round(root.mouse-y / 1px * root.source-scale),
+        root.target-level);
+    property <bool> has-hover-target:
+        !root.is-dragging && !root.has-selection && root.hover-target.width > 0;
+
+    // Set by the full-screen control's own TouchArea through a `changed` handler rather than read
+    // from it here, because an id can only be referenced after it is declared and that control has
+    // to come last in the file to sit on top of the catch-all TouchArea.
+    property <bool> fullscreen-hover: false;
+    property <bool> fullscreen-preview:
+        root.fullscreen-hover && !root.has-selection && !root.is-narrating;
+
+    // What a click would take right now, in this window's logical pixels: the whole screen while the
+    // full-screen control is hovered, otherwise the container under the pointer.
+    //
+    // ONE rectangle drives both the scrim cut-out and the outline, so the two can never disagree
+    // about what is being offered - and hovering the full-screen control previews the screen without
+    // a click, which is what the owner asked for: the offer appears on entering the control and is
+    // withdrawn on leaving it.
+    property <bool> has-preview: root.fullscreen-preview || root.has-hover-target;
+    property <length> preview-x: root.fullscreen-preview
+        ? root.crosshair-x : root.hover-target.x / root.source-scale * 1px;
+    property <length> preview-y: root.fullscreen-preview
+        ? root.crosshair-y : root.hover-target.y / root.source-scale * 1px;
+    property <length> preview-w: root.fullscreen-preview
+        ? root.crosshair-w : root.hover-target.width / root.source-scale * 1px;
+    property <length> preview-h: root.fullscreen-preview
+        ? root.crosshair-h : root.hover-target.height / root.source-scale * 1px;
+
+    // The monitor the SELECTION sits on, in logical pixels - the box the note panel is clamped
+    // inside. Derived from the selection, never from the pointer: see `monitor-at`.
+    property <MonitorRectData> panel-monitor: root.monitor-at(
+        root.sel-x / 1px * root.source-scale,
+        root.sel-y / 1px * root.source-scale);
+    property <length> panel-mon-x: root.panel-monitor.x / root.source-scale * 1px;
+    property <length> panel-mon-y: root.panel-monitor.y / root.source-scale * 1px;
+    property <length> panel-mon-w: root.panel-monitor.width / root.source-scale * 1px;
+    property <length> panel-mon-h: root.panel-monitor.height / root.source-scale * 1px;
+
+    // Focus has to be re-claimed at the start of every capture, not just once.
+    //
+    // `init` below fires exactly once, because this overlay is created at start-up and reused
+    // forever. Anything that took focus during an earlier capture - the note field, the Save button
+    // - still had it on the next one, so Enter went nowhere. Escape kept working because the note
+    // field REJECTS it and it bubbles up to the scope; Enter does not bubble, which is precisely
+    // why Enter was the key that intermittently did nothing.
+    public function claim-focus() {
+        key-handler.focus();
+    }
+
     key-handler := FocusScope {
         width: 100%;
         height: 100%;
 
+        // Escape and Enter are both promised by the hint text under the note field, so both must
+        // work wherever the keyboard focus happens to be. Enter used to be handled ONLY by the
+        // note field's own `accepted`, so it worked while that field had focus and did nothing
+        // otherwise - which is most of the time, because dragging a region moves focus away.
+        //
+        // When the note field DOES have focus it consumes Enter itself and this never sees it, so
+        // there is no double-save.
         key-pressed(event) => {
             if (event.text == Key.Escape) {
                 root.overlay-cancelled();
+                accept
+            } else if (event.text == Key.Return && root.has-selection) {
+                root.capture-completed(
+                    round(sel-x / 1px * root.source-scale),
+                    round(sel-y / 1px * root.source-scale),
+                    round(sel-w / 1px * root.source-scale),
+                    round(sel-h / 1px * root.source-scale),
+                    root.note-text
+                );
                 accept
             } else {
                 reject
@@ -182,17 +361,33 @@ export component CaptureOverlayWindow inherits Window {
         // Gated with `visible` rather than `if` so neither subtree is torn down and rebuilt; a
         // freshly built subtree presents one frame with no content, which reads as a blink.
         Rectangle {
-            visible: !root.has-selection;
+            visible: !root.has-selection && !root.has-preview;
             width: 100%;
             height: 100%;
-            background: #000000.with-alpha(0.65);
+            background: Theme.overlay-scrim;
+        }
+
+        // The same four-rectangles construction as the selection below, applied to whatever a click
+        // would take right now - the container under the pointer, or the whole screen while the
+        // full-screen control is hovered.
+        //
+        // A previewed container used to be an outline plus a translucent wash drawn ON TOP of the
+        // full scrim, so it stayed dimmed while a dragged region did not - two visual languages for
+        // one idea, and the owner could not tell what a click was about to take. Cutting the scrim
+        // instead means hovering previews exactly what selecting will look like.
+        Rectangle {
+            visible: root.has-preview;
+            Rectangle { x: 0px; y: 0px; width: 100%; height: root.preview-y; background: Theme.overlay-scrim; }
+            Rectangle { x: 0px; y: root.preview-y + root.preview-h; width: 100%; height: parent.height - (root.preview-y + root.preview-h); background: Theme.overlay-scrim; }
+            Rectangle { x: 0px; y: root.preview-y; width: root.preview-x; height: root.preview-h; background: Theme.overlay-scrim; }
+            Rectangle { x: root.preview-x + root.preview-w; y: root.preview-y; width: parent.width - (root.preview-x + root.preview-w); height: root.preview-h; background: Theme.overlay-scrim; }
         }
         Rectangle {
             visible: root.has-selection;
-            Rectangle { x: 0px; y: 0px; width: 100%; height: sel-y; background: #000000.with-alpha(0.65); }
-            Rectangle { x: 0px; y: sel-y + sel-h; width: 100%; height: parent.height - (sel-y + sel-h); background: #000000.with-alpha(0.65); }
-            Rectangle { x: 0px; y: sel-y; width: sel-x; height: sel-h; background: #000000.with-alpha(0.65); }
-            Rectangle { x: sel-x + sel-w; y: sel-y; width: parent.width - (sel-x + sel-w); height: sel-h; background: #000000.with-alpha(0.65); }
+            Rectangle { x: 0px; y: 0px; width: 100%; height: sel-y; background: Theme.overlay-scrim; }
+            Rectangle { x: 0px; y: sel-y + sel-h; width: 100%; height: parent.height - (sel-y + sel-h); background: Theme.overlay-scrim; }
+            Rectangle { x: 0px; y: sel-y; width: sel-x; height: sel-h; background: Theme.overlay-scrim; }
+            Rectangle { x: sel-x + sel-w; y: sel-y; width: parent.width - (sel-x + sel-w); height: sel-h; background: Theme.overlay-scrim; }
         }
         Rectangle {
             visible: root.has-selection;
@@ -200,7 +395,7 @@ export component CaptureOverlayWindow inherits Window {
             y: sel-y;
             width: sel-w;
             height: sel-h;
-            border-color: Theme.border-focus;
+            border-color: Theme.overlay-ring;
             border-width: 2px;
             background: transparent;
 
@@ -212,8 +407,12 @@ export component CaptureOverlayWindow inherits Window {
                 border-radius: Theme.radius-sharp;
                 background: Theme.accent-primary;
                 Text {
-                    text: round(sel-w / 1px) + " × " + round(sel-h / 1px);
-                    color: #ffffff;
+                    // SOURCE pixels, which is what gets saved. It read `sel-w / 1px` - LOGICAL
+                    // pixels - so on a 175% display it under-reported the region by 1.75x while
+                    // every number downstream was physical.
+                    text: round(sel-w / 1px * root.source-scale)
+                        + " × " + round(sel-h / 1px * root.source-scale);
+                    color: Theme.text-on-accent;
                     font-size: 11px;
                     font-weight: 700;
                     font-family: "IBM Plex Mono";
@@ -222,63 +421,6 @@ export component CaptureOverlayWindow inherits Window {
                 }
             }
 
-            if is-narrating : Rectangle {
-                y: parent.height + 12px;
-                x: (parent.width - self.width) / 2;
-                width: 320px;
-                height: 110px;
-                background: #ffffff;
-                border-radius: Theme.radius-sharp;
-                drop-shadow-blur: 16px;
-                drop-shadow-color: #000000.with-alpha(0.4);
-
-                VerticalLayout {
-                    padding: 10px;
-                    spacing: 8px;
-                    Text {
-                        text: "What is wrong here?";
-                        font-size: 11px;
-                        font-weight: 700;
-                        color: #475569;
-                        font-family: "IBM Plex Sans";
-                    }
-                    note-input := LineEdit {
-                        text <=> root.note-text;
-                        placeholder-text: "Type finding note...";
-                        accepted => {
-                            root.capture-completed(
-                                round(sel-x / 1px * root.source-scale),
-                                round(sel-y / 1px * root.source-scale),
-                                round(sel-w / 1px * root.source-scale),
-                                round(sel-h / 1px * root.source-scale),
-                                root.note-text
-                            );
-                        }
-                    }
-                    HorizontalLayout {
-                        alignment: space-between;
-                        Text {
-                            text: "Enter to save · Esc to cancel";
-                            font-size: 10px;
-                            color: #94a3b8;
-                            font-family: "IBM Plex Sans";
-                        }
-                        Button {
-                            text: "Save Finding";
-                            primary: true;
-                            clicked => {
-                                root.capture-completed(
-                                    round(sel-x / 1px * root.source-scale),
-                                    round(sel-y / 1px * root.source-scale),
-                                    round(sel-w / 1px * root.source-scale),
-                                    round(sel-h / 1px * root.source-scale),
-                                    root.note-text
-                                );
-                            }
-                        }
-                    }
-                }
-            }
         }
 
         // The crosshair, confined to the monitor the pointer is over rather than running the full
@@ -289,80 +431,225 @@ export component CaptureOverlayWindow inherits Window {
         // element subtree, and the first paint of a freshly built subtree presented one frame
         // with the window's clear colour and no image, which read as a black blink. `visible`
         // keeps the elements alive and merely stops drawing them.
+        // The crosshair. It is the pointer: the OS cursor is hidden (see `mouse-cursor` on the
+        // catch-all TouchArea below), so these lines are what the Reviewer aims with.
+        //
+        // Confined to the monitor the pointer is over rather than running the full width and height
+        // of the desktop, which is the behaviour the owner asked for and what Snagit does.
+        //
+        // Gated with `visible`, deliberately NOT with `if`. An `if` creates and destroys the element
+        // subtree, and the first paint of a freshly built subtree presented one frame with the
+        // window's clear colour and no image, which read as a black blink. `visible` keeps the
+        // elements alive and merely stops drawing them.
         Rectangle {
             visible: !root.is-narrating && hover-tracker.has-hover;
             Rectangle {
-                x: mouse-x - 0.5px;
+                x: root.snap(mouse-x);
                 y: root.crosshair-y;
-                width: 1px;
+                width: root.loupe-line;
                 height: root.crosshair-h;
-                background: Theme.accent-primary.with-alpha(0.8);
+                background: Theme.overlay-ring.with-alpha(0.85);
             }
             Rectangle {
                 x: root.crosshair-x;
-                y: mouse-y - 0.5px;
+                y: root.snap(mouse-y);
                 width: root.crosshair-w;
-                height: 1px;
-                background: Theme.accent-primary.with-alpha(0.8);
+                height: root.loupe-line;
+                background: Theme.overlay-ring.with-alpha(0.85);
+            }
+        }
+
+        // The pixel lens: a round magnifier BESIDE the pointer, showing the pixel under it at the
+        // centre of its own crosshair.
+        //
+        // Beside, not centred on the pointer. Centred was tried, on a reading of "the boxes should be
+        // on the canvas" that turned out to be about something else; a lens sitting on top of the
+        // thing being aimed at hides it. The owner's specification is explicit: "jangan pas di
+        // tengah2 crosshair ... ada magnifying glass di dekat situ, dan magnifying glass itu
+        // tengahnya adalah crosshair juga."
+        //
+        // It appears only once the pointer SETTLES, which is Snagit's behaviour and the owner's
+        // request - a magnifier that chases a fast pointer is noise, and the one thing nobody needs
+        // while crossing the screen is a 96px disc in the way.
+        //
+        // The magnifier is NOT the source of the one-frame stall on the first pointer move of each
+        // capture: hiding it entirely was tried and the stall remained.
+        Rectangle {
+            visible: !root.is-narrating && hover-tracker.has-hover && root.pointer-settled;
+            // Beside the pointer, flipping to the other side near the monitor's edge so the lens
+            // stays on the screen it belongs to.
+            x: root.snap((root.mouse-x + 18px + root.loupe-face > root.crosshair-x + root.crosshair-w)
+                ? root.mouse-x - 18px - root.loupe-face
+                : root.mouse-x + 18px);
+            y: root.snap((root.mouse-y + 18px + root.loupe-face > root.crosshair-y + root.crosshair-h)
+                ? root.mouse-y - 18px - root.loupe-face
+                : root.mouse-y + 18px);
+            width: root.loupe-face;
+            height: root.loupe-face;
+            // Round, to specification. It costs the outermost cells, which the mask cuts into
+            // slivers - accepted, because the pixel that matters is the one at the centre.
+            border-radius: root.loupe-face / 2;
+            border-width: 2px;
+            border-color: Theme.overlay-ring;
+            background: Theme.overlay-canvas;
+            clip: true;
+            drop-shadow-blur: 10px;
+            drop-shadow-color: Theme.overlay-shadow;
+
+            // Only the small square under the cursor is read out of the screenshot, via source-clip.
+            //
+            // It used to lay out the ENTIRE screenshot at 3x (`width: root.width * 3`) and rely on
+            // `clip: true` to show a 96px window onto it. On a 3840x2160 monitor that asks the
+            // renderer for a ~75-megapixel scaled image on every pointer move, which is what made
+            // the overlay flicker while the mouse moved and then settle once the renderer had
+            // finally cached that texture. That is also the measurement that ruled out `pixelated`,
+            // and the reason it no longer applies - see OQ-28.
+            Image {
+                width: root.loupe-face;
+                height: root.loupe-face;
+                source: root.snapshot-image;
+                image-fit: fill;
+                // Nearest-neighbour, so a source pixel is a solid block rather than a smear. Three
+                // earlier attempts drew a lattice over a SMOOTHLY interpolated image, where there
+                // are no pixels for a grid to belong to - which is why the grid kept reading as part
+                // of the glass.
+                image-rendering: pixelated;
+                source-clip-width: root.loupe-source-size;
+                source-clip-height: root.loupe-source-size;
+                // Whole source pixels, so each block lands on a cell boundary.
+                source-clip-x: root.loupe-origin-x;
+                source-clip-y: root.loupe-origin-y;
             }
 
+            // A separator between blocks that are now actually there, rather than a lattice standing
+            // in for pixels that were not.
+            for i in root.loupe-pixels : Rectangle {
+                x: i * root.loupe-cell;
+                y: 0px;
+                width: root.loupe-line;
+                height: root.loupe-face;
+                background: Theme.overlay-grid;
+            }
+            for i in root.loupe-pixels : Rectangle {
+                x: 0px;
+                y: i * root.loupe-cell;
+                width: root.loupe-face;
+                height: root.loupe-line;
+                background: Theme.overlay-grid;
+            }
+
+            // The lens's own crosshair, crossing on the pixel under the pointer.
+            //
+            // Placed from the CLAMPED origin rather than at the geometric centre: in the outermost
+            // few pixels of the desktop the view cannot be centred, and there the crosshair has to
+            // follow the pixel rather than the frame.
             Rectangle {
-                // The magnifier is NOT the source of the one-frame stall on the first pointer
-                // move of each capture: hiding it entirely was tried and the stall remained.
-                x: mouse-x + 24px;
-                y: mouse-y + 24px;
-                width: 96px;
-                height: 96px;
-                border-radius: 48px;
-                border-width: 2.5px;
-                border-color: Theme.border-focus;
-                background: #000000;
-                clip: true;
-
-                // Only the small square under the cursor is read out of the screenshot, via
-                // source-clip, and drawn into the 96px loupe.
-                //
-                // It used to lay out the ENTIRE screenshot at 3x (`width: root.width * 3`) and
-                // rely on `clip: true` to show a 96px window onto it. On a 3840x2160 monitor that
-                // asks the renderer for a ~75-megapixel scaled image on every pointer move, which
-                // is what made the overlay flicker while the mouse moved and then settle once the
-                // renderer had finally cached that texture.
-                Image {
-                    width: 96px;
-                    height: 96px;
-                    source: root.snapshot-image;
-                    image-fit: fill;
-                    // Left at the default `smooth`. `pixelated` was tried here on the theory that
-                    // filtered magnification was what stalled the first draw after each new
-                    // snapshot texture - it made the flicker measurably WORSE, so the theory was
-                    // wrong and this stays as it is.
-                    source-clip-width: root.loupe-source-size;
-                    source-clip-height: root.loupe-source-size;
-                    // Clamped so the loupe stays filled at the screen edges instead of running
-                    // off the source and going blank.
-                    source-clip-x: clamp(
-                        root.mouse-x / 1px * root.source-scale - root.loupe-source-size / 2,
-                        0,
-                        max(0, root.snapshot-image.width - root.loupe-source-size));
-                    source-clip-y: clamp(
-                        root.mouse-y / 1px * root.source-scale - root.loupe-source-size / 2,
-                        0,
-                        max(0, root.snapshot-image.height - root.loupe-source-size));
-                }
-
-                Rectangle { x: 47px; y: 0px; width: 2px; height: 96px; background: Theme.border-focus; }
-                Rectangle { x: 0px; y: 47px; width: 96px; height: 2px; background: Theme.border-focus; }
+                x: root.loupe-cursor-col * root.loupe-cell
+                    + (root.loupe-cell - root.loupe-line) / 2;
+                y: 0px;
+                width: root.loupe-line;
+                height: root.loupe-face;
+                background: Theme.overlay-ring;
             }
+            Rectangle {
+                x: 0px;
+                y: root.loupe-cursor-row * root.loupe-cell
+                    + (root.loupe-cell - root.loupe-line) / 2;
+                width: root.loupe-face;
+                height: root.loupe-line;
+                background: Theme.overlay-ring;
+            }
+        }
+
+        // Which pixel that crosshair is on, in desktop coordinates - beside the lens rather than
+        // inside it, so it cannot sit under the pointer it is describing.
+        Rectangle {
+            visible: !root.is-narrating && hover-tracker.has-hover && root.pointer-settled;
+            x: root.mouse-x - self.width / 2;
+            y: root.mouse-y + 18px + root.loupe-face + 6px;
+            width: 100px;
+            height: 20px;
+            border-radius: Theme.radius-pill;
+            background: Theme.overlay-chrome;
+            border-width: 1px;
+            border-color: Theme.overlay-chrome-border;
+            Text {
+                width: 100%;
+                height: 100%;
+                text: (root.loupe-origin-x + root.loupe-cursor-col)
+                    + ", " + (root.loupe-origin-y + root.loupe-cursor-row) + " px";
+                font-size: 10px;
+                font-family: "IBM Plex Mono";
+                color: Theme.overlay-text;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        // Says that the wheel widens the selection, and only while there is somewhere to widen to.
+        //
+        // The detection walks panels before windows, so the tightest candidate is usually a panel
+        // and the Reviewer wanting the whole window has no way of knowing one exists. A hint is
+        // cheaper than a preference and honest about what is available at this exact point.
+        Rectangle {
+            visible: root.has-preview && !root.fullscreen-preview && root.target-count > 1;
+            x: root.preview-x + root.preview-w - self.width - 6px;
+            y: max(root.preview-y - 26px, 6px);
+            width: 168px;
+            height: 20px;
+            border-radius: Theme.radius-sharp;
+            background: Theme.overlay-chrome;
+            border-width: 1px;
+            border-color: Theme.overlay-chrome-border;
+            Text {
+                width: 100%;
+                height: 100%;
+                text: "Scroll to widen  ·  " + (root.target-level + 1) + " / " + root.target-count;
+                font-size: 10px;
+                font-family: "IBM Plex Sans";
+                color: Theme.overlay-text-muted;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        // The container under the pointer, outlined so it is obvious what a click would take.
+        //
+        // Gated with `visible` rather than `if`, like everything else in this overlay: building and
+        // tearing down a subtree presents one frame of the window's clear colour, which reads as a
+        // blink (`BUG-27`).
+        Rectangle {
+            visible: root.has-preview;
+            x: root.preview-x;
+            y: root.preview-y;
+            width: root.preview-w;
+            height: root.preview-h;
+            background: transparent;
+            border-width: 2px;
+            border-color: Theme.overlay-ring;
+            border-radius: 2px;
         }
 
         hover-tracker := TouchArea {
             width: 100%;
             height: 100%;
-            // Once a selection is being narrated this catch-all must get out of the way: it
-            // otherwise sits on top of the note popup in z-order and swallows every click meant
-            // for the note field or the Save Finding button.
-            enabled: !root.is-narrating;
-
+            // The OS cursor is hidden only while the crosshair is standing in for it.
+            //
+            // Hiding it unconditionally was wrong and shipped: the crosshair is drawn only while
+            // `!is-narrating`, so once a region was selected there was no pointer on screen at all -
+            // it reappeared over the note panel and nowhere else, because that panel's own TouchArea
+            // restores the default. The Reviewer was aiming at a Save button they could not see.
+            //
+            // The condition is deliberately the crosshair's own visibility condition, not a
+            // separately-reasoned one, so the two cannot drift apart again.
+            mouse-cursor: root.is-narrating ? MouseCursor.default : MouseCursor.none;
+            // Enabled throughout, INCLUDING while a note is being written.
+            //
+            // It used to be `enabled: !root.is-narrating`, because the note panel was nested inside
+            // the selection frame and therefore sat under this TouchArea, which swallowed every
+            // click meant for the note field. The panel is now declared after this element, so it
+            // receives its own clicks - and leaving this enabled is what lets a click somewhere else
+            // start a new selection instead of forcing Escape and a fresh capture.
             pointer-event(event) => {
                 root.mouse-x = self.mouse-x;
                 root.mouse-y = self.mouse-y;
@@ -375,13 +662,35 @@ export component CaptureOverlayWindow inherits Window {
                     root.drag-current-y = self.mouse-y;
                     root.has-selection = false;
                     root.is-narrating = false;
+                    // The SIZE has to go too, not just the flag.
+                    //
+                    // Leaving sel-w/sel-h behind is what made a plain click select the wrong thing:
+                    // on release, the "was this a drag or a click" test reads sel-w/sel-h, so with
+                    // the previous drag's size still in them a click looked like a drag and re-armed
+                    // the OLD region - while the blue outline had been showing the container the
+                    // pointer was actually over.
+                    root.sel-x = self.mouse-x;
+                    root.sel-y = self.mouse-y;
+                    root.sel-w = 0px;
+                    root.sel-h = 0px;
                 }
                 if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) {
                     root.is-dragging = false;
-                    // A plain click - no meaningful drag distance - is not a region selection.
+                    // A plain click - no meaningful drag distance - takes the container under the
+                    // pointer if there is one, and otherwise clears the selection. Dragging still
+                    // wins whenever the pointer actually travelled.
                     if (root.sel-w < root.click-threshold || root.sel-h < root.click-threshold) {
-                        root.has-selection = false;
-                        root.is-narrating = false;
+                        if (root.hover-target.width > 0) {
+                            root.sel-x = root.hover-target.x / root.source-scale * 1px;
+                            root.sel-y = root.hover-target.y / root.source-scale * 1px;
+                            root.sel-w = root.hover-target.width / root.source-scale * 1px;
+                            root.sel-h = root.hover-target.height / root.source-scale * 1px;
+                            root.has-selection = true;
+                            root.is-narrating = true;
+                        } else {
+                            root.has-selection = false;
+                            root.is-narrating = false;
+                        }
                     } else {
                         root.has-selection = true;
                         root.is-narrating = true;
@@ -392,7 +701,28 @@ export component CaptureOverlayWindow inherits Window {
                 }
             }
 
+            // The wheel walks outward through the containers under the pointer, and back in.
+            //
+            // Clamped rather than wrapped: wrapping means one notch too many silently returns to the
+            // panel you were trying to escape, which is indistinguishable from the wheel not working.
+            scroll-event(event) => {
+                if (!root.is-dragging && !root.has-selection && !root.is-narrating) {
+                    if (event.delta-y < 0) {
+                        root.target-level = min(root.target-level + 1, max(0, root.target-count - 1));
+                    } else if (event.delta-y > 0) {
+                        root.target-level = max(root.target-level - 1, 0);
+                    }
+                    accept
+                } else {
+                    reject
+                }
+            }
+
             moved => {
+                // A new point has a different candidate list, so the level cannot carry over.
+                if (!root.is-dragging) {
+                    root.target-level = 0;
+                }
                 if (root.is-dragging) {
                     // Bounded by the canvas - the whole desktop - so a region may span monitors.
                     // It must still not escape the canvas, or the crop would index outside the
@@ -404,6 +734,287 @@ export component CaptureOverlayWindow inherits Window {
                     root.sel-w = abs(root.drag-current-x - root.drag-start-x);
                     root.sel-h = abs(root.drag-current-y - root.drag-start-y);
                     root.has-selection = true;
+                }
+            }
+        }
+
+        // The lens appears when the pointer SETTLES and hides while it travels, which is Snagit's
+        // behaviour and what the owner asked for.
+        //
+        // Sampled on a fixed tick rather than accumulated per `moved` event: mouse event rates differ
+        // by device and by how busy the frame is, so a per-event distance threshold means a different
+        // speed on every machine. Comparing position against the position one tick ago is a real
+        // velocity in px/s - here, roughly 240 px/s.
+        //
+        // `running` is tied to the tracker's hover, so this does not tick while the overlay is
+        // sitting hidden between captures. It is declared after the tracker because a Slint id
+        // resolves backwards only.
+        Timer {
+            interval: 100ms;
+            running: hover-tracker.has-hover;
+            triggered => {
+                // TWO thresholds, not one, and a two-tick delay before hiding.
+                //
+                // One threshold with a binary flip is a comparator without hysteresis: hold the
+                // pointer anywhere near the boundary and consecutive ticks land on opposite sides of
+                // it, so the lens blinks. That is exactly what the owner saw - "saya pelan, tapi
+                // kadang hilang, kadang muncul".
+                //
+                // Now: below `settle-slow` it appears, above `settle-fast` it goes away, and BETWEEN
+                // the two nothing changes. A pointer drifting in that band keeps whatever state it
+                // had, which is the tolerance that was missing. Hiding also needs two consecutive
+                // fast ticks, so one jerk of the wrist does not dismiss it.
+                if (abs(root.mouse-x - root.tick-x) + abs(root.mouse-y - root.tick-y)
+                        > root.settle-fast) {
+                    root.fast-ticks += 1;
+                    if (root.fast-ticks >= 2) {
+                        root.pointer-settled = false;
+                    }
+                } else {
+                    root.fast-ticks = 0;
+                    if (abs(root.mouse-x - root.tick-x) + abs(root.mouse-y - root.tick-y)
+                            < root.settle-slow) {
+                        root.pointer-settled = true;
+                    }
+                }
+                root.tick-x = root.mouse-x;
+                root.tick-y = root.mouse-y;
+            }
+        }
+
+        // A one-click full-screen target, in the top-right corner of the monitor the pointer is on
+        // (`FR-1`: "1-click container selection" - a whole screen is the container people take most).
+        //
+        // A CORNER, not the middle of the top edge, where it used to be: a control in the middle of
+        // that edge stands in the way of a drag that starts there, and the owner asked for "paling
+        // pojok di atas".
+        //
+        // Hovering it PREVIEWS the whole screen - the scrim opens and the ring appears - so the
+        // offer is visible before committing to it, and taking the pointer away withdraws the offer.
+        // No click is needed to see what you would get.
+        //
+        // Declared AFTER the catch-all TouchArea: Slint puts later siblings on top, and the
+        // catch-all covers the whole desktop, so anything before it never receives a click. That
+        // ordering is enforced by the compiler as well as by taste, since this reads ids declared
+        // above it.
+        //
+        // Its visibility deliberately does NOT depend on `hover-tracker.has-hover`. It used to, and
+        // this control sits ON TOP of that TouchArea - so moving the pointer onto the control took
+        // the hover away from the tracker, which hid the control, which handed the hover back. That
+        // oscillation is the flicker the owner saw, and it was in the visibility condition rather
+        // than anywhere near the rendering.
+        Rectangle {
+            visible: !root.has-selection && !root.is-narrating;
+            // TOP CENTRE of the monitor under the pointer, at the owner's direction. It was in the
+            // corner first, on the argument that the middle of the top edge stands in the way of a
+            // drag that starts there; the owner asked for the centre twice, so the centre it is, and
+            // the cost is small - pressing the control takes the whole screen, which is a reasonable
+            // outcome for a press in that spot anyway.
+            x: root.crosshair-x + (root.crosshair-w - self.width) / 2;
+            y: root.crosshair-y + 16px;
+            width: 186px;
+            height: 32px;
+            // `radius-sharp`, the product's one corner radius for a control. This was `radius-pill`,
+            // which no button in the Editor uses - the Assemble action, the toolbar buttons and the
+            // tab strip are all sharp - so a pill here read as belonging to a different product.
+            border-radius: Theme.radius-sharp;
+            // Accent, not chrome. It was `overlay-chrome` - near-black - sitting on a 65% black
+            // scrim, and the owner could not see that it was there at all. A control nobody notices
+            // is a control that does not exist, which is the same failure as FR-1's affordance being
+            // absent; the fix is contrast, not a bigger hit area.
+            background: root.fullscreen-hover ? Theme.accent-hover : Theme.accent-primary;
+            // No border. The Editor's accent buttons carry none, and a 1.5px light ring on an accent
+            // fill is the detail that made this look bolted on rather than designed.
+            border-width: 0px;
+            drop-shadow-blur: 14px;
+            drop-shadow-color: Theme.overlay-shadow;
+
+            HorizontalLayout {
+                padding-left: 10px;
+                padding-right: 12px;
+                spacing: 8px;
+                alignment: center;
+
+                // Icon, then label, then readout: the same three-part shape as the Assemble action
+                // in the filmstrip, at the same sizes - 12px glyph, 4-8px gap, small bold label.
+                Image {
+                    width: 13px;
+                    height: 13px;
+                    y: (parent.height - self.height) / 2;
+                    image-fit: contain;
+                    source: @image-url("../assets/icons/image.svg");
+                    colorize: Theme.text-on-accent;
+                }
+                Text {
+                    text: "Full Screen";
+                    font-size: 11px;
+                    font-weight: 700;
+                    font-family: "IBM Plex Sans";
+                    color: Theme.text-on-accent;
+                    vertical-alignment: center;
+                }
+                // A hairline divider, the same device the status strip in the Editor uses to
+                // separate a label from its readout.
+                Rectangle {
+                    width: 1px;
+                    y: 9px;
+                    height: parent.height - 18px;
+                    background: Theme.text-on-accent.with-alpha(0.35);
+                }
+                Text {
+                    // The monitor's own pixel count, straight out of the monitor rectangle - which
+                    // is already in snapshot pixels, so nothing is converted and nothing can drift.
+                    text: root.active-monitor().width + " × " + root.active-monitor().height;
+                    font-size: 10px;
+                    font-family: "IBM Plex Mono";
+                    color: Theme.text-on-accent.with-alpha(0.8);
+                    vertical-alignment: center;
+                }
+            }
+
+            fullscreen-touch := TouchArea {
+                // Pushed up to the root rather than read from here, because the properties that
+                // depend on it are declared above this element and an id resolves backwards only.
+                changed has-hover => {
+                    root.fullscreen-hover = self.has-hover;
+                }
+                clicked => {
+                    root.sel-x = root.crosshair-x;
+                    root.sel-y = root.crosshair-y;
+                    root.sel-w = root.crosshair-w;
+                    root.sel-h = root.crosshair-h;
+                    root.has-selection = true;
+                    root.is-narrating = true;
+                    root.fullscreen-hover = false;
+                }
+            }
+        }
+
+        // The note panel, at the TOP of the overlay's z-order rather than nested inside the
+        // selection frame. Two separate things needed that move.
+        //
+        // Changing your mind: clicking somewhere else has to start a new selection without pressing
+        // Escape first, and that means the catch-all TouchArea stays enabled while the note is being
+        // written. Nested where it was, this panel sat UNDER that TouchArea, and every click meant
+        // for the note field or the Save button was swallowed - which is why the TouchArea had to be
+        // disabled in the first place.
+        //
+        // Staying on screen: nested, its position was expressed partly in the selection's coordinate
+        // space and partly in the root's, and the flip-above test could only compare against
+        // `root.height`. On a two-monitor desktop the canvas is the bounding box of both screens, so
+        // its bottom edge is BELOW the shorter screen's - a panel that "fitted the canvas" was still
+        // off the visible screen. That is the bug the previous attempt at this did not fix.
+        if is-narrating : Rectangle {
+            // Below the selection when there is room, above it when there is not, and then clamped
+            // into the monitor either way.
+            //
+            // The flip is the preference and the clamp is the guarantee: with only a flip, a
+            // selection taller than the screen has nowhere to put the panel and it leaves the
+            // screen again. Clamped, it can at worst overlap the selection - and a panel over the
+            // region beats a panel nobody can reach.
+            y: clamp(
+                (root.sel-y + root.sel-h + 12px + self.height > root.panel-mon-y + root.panel-mon-h)
+                    ? root.sel-y - self.height - 12px
+                    : root.sel-y + root.sel-h + 12px,
+                root.panel-mon-y + 12px,
+                max(root.panel-mon-y + 12px,
+                    root.panel-mon-y + root.panel-mon-h - self.height - 12px));
+            x: clamp(
+                root.sel-x + (root.sel-w - self.width) / 2,
+                root.panel-mon-x + 12px,
+                max(root.panel-mon-x + 12px,
+                    root.panel-mon-x + root.panel-mon-w - self.width - 12px));
+            // 440px, the inspector's width, so a note wraps at the same line length in both places.
+            // It was 360px, which is a number chosen for this panel alone - and the guide's own rule
+            // is that the Editor is the reference where the two disagree.
+            width: 440px;
+            // Sized from its own contents. It used to be a fixed 110px, which was enough for a
+            // one-line LineEdit and stopped being enough the moment the field grew - so the
+            // hint text and the Save button were pushed out through the bottom edge.
+            height: note-body.preferred-height;
+            background: Theme.bg-card;
+            border-radius: Theme.radius-sharp;
+            border-width: 1px;
+            border-color: Theme.border-subtle;
+            drop-shadow-blur: 16px;
+            drop-shadow-color: Theme.overlay-shadow;
+
+            // Absorbs clicks that land on the panel's own padding. Without it they fall through to
+            // the catch-all TouchArea below and clear the very selection this panel is about - the
+            // one cost of that TouchArea staying enabled during narration.
+            TouchArea {
+                width: 100%;
+                height: 100%;
+            }
+
+            // The Editor inspector's spacing, to the pixel: 16px padding, 6px between a label and
+            // the thing it labels. This panel had 14px and 10px, chosen in isolation, and that is
+            // most of why it still read as a different product once the colours already matched.
+            note-body := VerticalLayout {
+                padding: 16px;
+                spacing: 6px;
+                // The same heading component the inspector uses - 11px/800, 0.5px letter-spacing,
+                // upper case. It was 11px/700 in sentence case: two dialects for one idea, and
+                // invisible until the two panels are seen side by side.
+                SdSectionLabel {
+                    text: "WHAT IS WRONG HERE?";
+                }
+                // The product's one text field. It was drawn by hand here first, which is
+                // how the palette problem was found; it now lives in
+                // `components/text-field.slint` and the Editor's Observation Summary is the
+                // same component, so the two cannot drift apart.
+                note-input := SdTextField {
+                    // Grows with the note rather than clipping it, and never shorter than one
+                    // comfortable line.
+                    height: max(38px, note-input.content-height + 20px);
+                    placeholder: "Describe what is wrong here...";
+                    text <=> root.note-text;
+                    // Enter saves, which is what the hint below promises.
+                    commit-on-enter: true;
+                    // Takes focus the moment the popup exists.
+                    //
+                    // Nothing ever focused this field, so typing only worked if the Reviewer
+                    // clicked it first. That was survivable while nothing else held the
+                    // keyboard - and stopped being survivable when the window's FocusScope
+                    // started re-claiming focus for every capture, because its key handler
+                    // REJECTS every key except Escape and Enter. Keystrokes went nowhere and
+                    // Enter then saved an empty note: the note was not lost in storage, it was
+                    // never captured.
+                    init => {
+                        self.focus-input();
+                    }
+                    accepted => {
+                        root.capture-completed(
+                            round(sel-x / 1px * root.source-scale),
+                            round(sel-y / 1px * root.source-scale),
+                            round(sel-w / 1px * root.source-scale),
+                            round(sel-h / 1px * root.source-scale),
+                            root.note-text
+                        );
+                    }
+                }
+                // A little more air above the action than between a label and its field, which is
+                // the inspector's own rhythm rather than a number picked here.
+                Rectangle { height: 4px; }
+
+                HorizontalLayout {
+                    alignment: space-between;
+                    SdCaption {
+                        text: "Enter to save · Esc to cancel";
+                    }
+                    SdActionButton {
+                        label: "Save Finding";
+                        icon: @image-url("../assets/icons/camera.svg");
+                        clicked => {
+                            root.capture-completed(
+                                round(sel-x / 1px * root.source-scale),
+                                round(sel-y / 1px * root.source-scale),
+                                round(sel-w / 1px * root.source-scale),
+                                round(sel-h / 1px * root.source-scale),
+                                root.note-text
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -437,7 +1048,12 @@ export component AppWindow inherits Window {
     in-out property <string> current-filename: "capture_20260826_041750.png";
     in-out property <int> active-tool-index: 0;
     in-out property <int> active-tab-index: 0;
-    in-out property <string> observation-summary: "test\n1. Marker 1\n2. Marker 2";
+    // No placeholder default. It used to read "test\n1. Marker 1\n2. Marker 2", which is content a
+    // reader cannot tell from a real note - so a binding that never delivered looked like a note
+    // that had been saved wrong. An empty default makes that failure visible instead (`BUG-45`).
+    in-out property <string> observation-summary: "";
+    // Which Finding the panel is showing, so an edit can be written to the right row.
+    in-out property <string> active-finding-id: "";
     in-out property <int> selected-finding-count: 0;
     in-out property <string> resolution-text: "1020 × 885  px";
     in-out property <string> size-text: "119.5  KB";
@@ -449,6 +1065,7 @@ export component AppWindow inherits Window {
     in-out property <[FindingThumb]> filmstrip-items: [];
 
     callback finding-selected(string);
+    callback observation-edited(string);
     callback library-clicked();
     callback capture-clicked();
     callback open-file-clicked();
@@ -992,11 +1609,38 @@ export component AppWindow inherits Window {
                     }
 
                     // BOTTOM FILMSTRIP TRAY
+                    // The filmstrip scrolls horizontally, and that is not a nicety.
+                    //
+                    // Its cards are a fixed 120px, so a bare `HorizontalLayout` reports a minimum
+                    // width of roughly 132px per Finding. That minimum propagates all the way up
+                    // through the workspace layout, so after a dozen captures the left column
+                    // demanded more width than the window had and squeezed the 440px
+                    // Notes/Properties panel down to nothing. It read as "the canvas keeps
+                    // growing"; what was actually growing was this strip's appetite. A ScrollView
+                    // has no such appetite - it clips rather than demanding - so the panel keeps
+                    // its width and the strip scrolls.
                     Rectangle {
-                        height: 110px;
+                        // 110px of cards plus room for the scrollbar underneath them.
+                        height: 124px;
                         background: root.bg-app;
 
+                        filmstrip-scroll := ScrollView {
+                            width: 100%;
+                            height: 100%;
+                            vertical-scrollbar-policy: always-off;
+                            // Always on, not `as-needed`. A vertical wheel does not scroll a
+                            // horizontal-only view, so without a bar on screen there was no way to
+                            // reach the later Findings at all - the strip clipped them and offered
+                            // no handle.
+                            horizontal-scrollbar-policy: always-on;
+                            // 12px padding each side, the 110px Assemble tile, then one 120px card
+                            // plus 12px of spacing per Finding.
+                            viewport-width: 24px + 110px + root.filmstrip-items.length * 132px;
+                            viewport-height: self.visible-height;
+
                         HorizontalLayout {
+                            width: filmstrip-scroll.viewport-width;
+                            height: 110px;
                             padding: 12px;
                             spacing: 12px;
                             alignment: start;
@@ -1101,6 +1745,7 @@ export component AppWindow inherits Window {
                                 }
                             }
                         }
+                        }
                     }
                 }
                 // RIGHT PANEL: 440px INSPECTOR
@@ -1114,6 +1759,70 @@ export component AppWindow inherits Window {
                         padding: 0px;
                         spacing: 0px;
 
+                        // OBSERVATION SUMMARY - above the tabs, always on screen.
+                        //
+                        // It used to sit inside `if active-tab-index == 0`, and that one placement
+                        // caused two different failures.
+                        //
+                        // The visible one: the owner could not tell whether a Note had been saved,
+                        // because the only place it ever appeared was behind a tab and gave no sign
+                        // of itself from outside. A Finding's note is its primary content, not a
+                        // tab's detail.
+                        //
+                        // The structural one: an `if` subtree is CREATED and DESTROYED rather than
+                        // shown and hidden, and NEITHER binding form survives that. `text <=>` links
+                        // the widget's property and this one into a single property at construction,
+                        // and the rebuild re-ran that link against the widget's own empty string. A
+                        // one-way `text:` binding avoids that and trades it for a worse fault: Slint
+                        // drops a binding the moment anything writes to the property, and the widget
+                        // writes to itself on every keystroke - so after the first edit no newly
+                        // selected Finding's note ever lands again.
+                        //
+                        // Out of the conditional, the link happens once at window construction and
+                        // `<=>` is simply correct in both directions (`BUG-45`).
+                        Rectangle {
+                            height: 172px;
+                            background: root.bg-app;
+
+                            Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: root.border-subtle; }
+
+                            VerticalLayout {
+                                padding: 16px;
+                                spacing: 6px;
+
+                                // The component now carries these values, and the capture panel
+                                // reads the same ones - which is the only thing that keeps the two
+                                // equal as either changes.
+                                SdSectionLabel {
+                                    text: "OBSERVATION SUMMARY";
+                                }
+                                // The same component the capture note uses.
+                                //
+                                // It was a `std-widgets` `TextEdit`, and that produced two defects
+                                // at once. It paints from Slint's own palette rather than this
+                                // product's, so on a white panel it rendered white-on-white and was
+                                // legible only while focused - and then went grey, which is a third
+                                // text-entry appearance in one product. And, being an imported
+                                // COMPONENT rather than a built-in element, it took its own
+                                // preferred size instead of filling its parent: the accessibility
+                                // tree showed it holding the right note with an INFINITE bounding
+                                // rectangle. Two rounds of binding fixes could not have touched
+                                // either cause.
+                                SdTextField {
+                                    height: 120px;
+                                    placeholder: "No note on this Finding.";
+                                    text <=> root.observation-summary;
+                                    edited => {
+                                        // Written through on every edit. A Finding's note used to be
+                                        // held only in this property, so selecting another Finding
+                                        // overwrote it and the edit was gone - silent data loss, and
+                                        // the sort a Reviewer only discovers later.
+                                        root.observation-edited(root.observation-summary);
+                                    }
+                                }
+                            }
+                        }
+
                         // TAB HEADERS ([Notes] & [Properties])
                         Rectangle {
                             height: 46px;
@@ -1126,9 +1835,14 @@ export component AppWindow inherits Window {
                                 padding-right: 16px;
                                 spacing: 16px;
 
-                                // Tab 0: Notes
+                                // Tab 0: Marker Notes
+                                //
+                                // Renamed, because the Observation Summary moved out of it and up
+                                // above the tab bar - so what is left in here is only the per-marker
+                                // commentary, and a tab called "Notes" beside a permanently visible
+                                // note panel says nothing about which notes it holds.
                                 Rectangle {
-                                    width: 100px;
+                                    width: 140px;
                                     Rectangle {
                                         y: parent.height - 2.5px;
                                         width: 100%;
@@ -1146,11 +1860,22 @@ export component AppWindow inherits Window {
                                                 width: 14px;
                                                 height: 14px;
                                                 image-fit: contain;
-                                                source: @image-url("../assets/icons/file-text.svg");
+                                                // A marker pin, not a document. `file-text.svg`
+                                                // described the Observation Summary, which is no
+                                                // longer in this tab; the icon has to follow the
+                                                // content or it reads as the wrong tab.
+                                                //
+                                                // Blue OUTLINE, matching `palette.svg` on the
+                                                // Properties tab beside it - the two tab icons are a
+                                                // pair and have to speak one language. `marker.svg`
+                                                // is a filled red pin, which is correct for a marker
+                                                // ON the canvas and wrong for a tab, so this is a
+                                                // new file: the existing marker icons are untouched.
+                                                source: @image-url("../assets/icons/marker-outline.svg");
                                             }
                                         }
                                         Text {
-                                            text: "Notes";
+                                            text: "Marker Notes";
                                             font-size: 13px;
                                             font-weight: root.active-tab-index == 0 ? 700 : 500;
                                             color: root.active-tab-index == 0 ? Theme.accent-primary : root.text-muted;
@@ -1205,30 +1930,6 @@ export component AppWindow inherits Window {
                                 padding: 16px;
                                 spacing: 16px;
 
-                                // Section 1: Observation Summary
-                                VerticalLayout {
-                                    spacing: 6px;
-                                    Text {
-                                        text: "OBSERVATION SUMMARY";
-                                        font-size: 11px;
-                                        font-weight: 800;
-                                        color: root.text-secondary;
-                                        letter-spacing: 0.5px;
-                                        font-family: "IBM Plex Sans";
-                                    }
-                                    Rectangle {
-                                        height: 120px;
-                                        border-radius: Theme.radius-sharp;
-                                        border-width: 1px;
-                                        border-color: root.border-strong;
-                                        background: root.bg-card;
-                                        TextEdit {
-                                            text <=> root.observation-summary;
-                                            font-size: 13px;
-                                        }
-                                    }
-                                }
-
                                 // Section 2: Step Marker Notes
                                 VerticalLayout {
                                     spacing: 8px;
@@ -1268,16 +1969,15 @@ export component AppWindow inherits Window {
                                                 }
                                             }
 
-                                            Rectangle {
+                                            // The product's one text field, like every other one.
+                                            // This was a `LineEdit` in a bare Rectangle - the same
+                                            // two faults as the Observation Summary, unseen only
+                                            // because this list has always been empty.
+                                            SdTextField {
                                                 height: 32px;
-                                                background: root.bg-subtle;
-                                                border-radius: Theme.radius-sharp;
-                                                border-width: 1px;
-                                                border-color: root.border-subtle;
-                                                LineEdit {
-                                                    text: marker.comment;
-                                                    font-size: 12px;
-                                                }
+                                                pad: 8px;
+                                                text-size: 12px;
+                                                text: marker.comment;
                                             }
                                         }
                                     }
@@ -1363,7 +2063,12 @@ export component AppWindow inherits Window {
                                         padding: 12px;
                                         spacing: 8px;
                                         Text { text: "Font Family"; font-size: 11px; font-weight: 700; color: root.text-muted; font-family: "IBM Plex Sans"; }
-                                        LineEdit { text: "IBM Plex Sans, sans-serif"; }
+                                        SdTextField {
+                                            height: 32px;
+                                            pad: 8px;
+                                            text-size: 12px;
+                                            text: "IBM Plex Sans, sans-serif";
+                                        }
                                         Text { text: "Font Size: 14px"; font-size: 11px; font-weight: 700; color: root.text-muted; font-family: "IBM Plex Sans"; }
                                     }
                                 }

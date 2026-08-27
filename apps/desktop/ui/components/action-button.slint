@@ -1,0 +1,91 @@
+// Copyright © Wira Digital Indonesia
+//
+// ONE action button for the whole product, taken from the Editor's own.
+//
+// This exists for the same reason `SdTextField` does: `std-widgets`' `Button` paints itself from
+// Slint's style palette rather than from `theme.slint`, so the capture panel's Save action was a
+// different size, a different colour and a different type scale from every button in the Editor -
+// while the Editor's own actions (Share, Copy, Assemble) were all hand-built from the tokens and
+// agreed with each other.
+//
+// The values here are not new. They are the Editor's: `radius-sharp`, the
+// accent-primary/hover/pressed triple, `text-on-accent`, 10-11px at weight 700, and an accent-tinted
+// shadow that lifts on hover. Changing one of them changes every action in the product, which is the
+// point.
+//
+// A styled `Button` MUST NOT be reintroduced anywhere in this product.
+
+import { Theme } from "../theme.slint";
+
+export component SdActionButton inherits Rectangle {
+    in property <string> label;
+    in property <image> icon;
+    in property <bool> primary: true;
+    in property <length> label-size: 11px;
+
+    callback clicked();
+
+    height: 32px;
+    // Sized from its contents, with the Editor's own horizontal breathing room, so a longer label
+    // does not get clipped and a short one does not float in a wide slab.
+    min-width: body.min-width + 24px;
+    border-radius: Theme.radius-sharp;
+    background: root.primary
+        ? (touch.pressed ? Theme.accent-pressed : (touch.has-hover ? Theme.accent-hover : Theme.accent-primary))
+        : (touch.has-hover ? Theme.bg-hover : Theme.bg-card);
+    border-width: root.primary ? 0px : 1px;
+    border-color: Theme.border-strong;
+    drop-shadow-blur: root.primary ? (touch.has-hover ? 6px : 2px) : 0px;
+    drop-shadow-color: Theme.accent-primary.with-alpha(0.35);
+
+    body := HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 6px;
+        alignment: center;
+
+        if root.icon.width > 0 : Image {
+            width: 13px;
+            height: 13px;
+            y: (parent.height - self.height) / 2;
+            image-fit: contain;
+            source: root.icon;
+            colorize: root.primary ? Theme.text-on-accent : Theme.text-secondary;
+        }
+        Text {
+            text: root.label;
+            font-size: root.label-size;
+            font-weight: 700;
+            font-family: "IBM Plex Sans";
+            color: root.primary ? Theme.text-on-accent : Theme.text-secondary;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+/// A section heading, the way the Editor's inspector writes one.
+///
+/// The capture panel said "What is wrong here?" at 11px/700 in sentence case while the panel it is
+/// supposed to match says "OBSERVATION SUMMARY" at 11px/800 with 0.5px of letter-spacing. Two
+/// dialects for one idea, and the sort of drift that is invisible until the two are seen together.
+export component SdSectionLabel inherits Text {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: Theme.text-secondary;
+    font-family: "IBM Plex Sans";
+}
+
+/// A caption: a hint, a timestamp, a dimension readout.
+export component SdCaption inherits Text {
+    font-size: 10px;
+    color: Theme.text-dim;
+    font-family: "IBM Plex Sans";
+    vertical-alignment: center;
+}

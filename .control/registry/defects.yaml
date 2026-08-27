@@ -1418,6 +1418,23 @@ defects:
       Owner confirmed acceptable. The lesson worth keeping is in the ruled-out list above: four
       fixes aimed at the symptom all failed, and what worked was removing the structure that
       produced it.
+    residue: |
+      2026-08-27, accepted, and recorded here so it is not rediscovered as a defect.
+
+      The owner, after the BUG-53 fix: "overlay pertama sedikit ngezoom transisi (tapi acceptable
+      kok)." The FIRST overlay of a session still shows a brief zoom as it settles.
+
+      That is this row's own mechanism, not a new one. `show()` does not create the native window -
+      the event loop does, on its next turn - so the attributes hook sizes the window when the loop
+      gets to it, and the geometry timer re-asserts it through winit one turn later. Between those
+      two moments there is one frame at whatever size the platform chose, and on a 6000x3840 canvas
+      that reads as a zoom.
+
+      Removing it needs the window to be born at the right size with no correcting turn at all,
+      which means either a platform call before Slint knows the window exists, or Slint growing an
+      API for it. Neither is worth the risk against a one-frame transition on the first capture of a
+      session that the owner has looked at and accepted. If it ever becomes worth revisiting, the
+      thing to change is the hook, not the timer.
     status: resolved
   - id: BUG-28
     title: The capture overlay takes a visible moment to appear
@@ -1555,3 +1572,1438 @@ defects:
       not a number.
     related: BUG-27
     status: open
+  - id: BUG-29
+    title: Enter did nothing unless the note field already had keyboard focus
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test
+    component: capture
+    severity: medium
+    contradicts: [FR-2]
+    root_cause: code
+    evidence: |
+      Enter was handled only by the note field's own `accepted` callback. The overlay's FocusScope
+      handled Key.Escape and rejected everything else, and the hint text under the field reads
+      "Enter to save . Esc to cancel" - so the promise was on screen and half broken.
+    impact: |
+      Dragging a region moves keyboard focus away from the note field, which is most of the time,
+      so the advertised key did nothing until the Reviewer clicked into the field first.
+    why_undetected: |
+      No test drives the keyboard against the overlay, and the hint text is a literal string that
+      nothing compares against a binding - the same gap BUG-25 was filed under for Escape.
+    fix: |
+      Key.Return on the window's FocusScope, guarded by `has-selection` so it cannot emit a
+      zero-sized crop. No double-save: when the field has focus it consumes Enter itself and the
+      window handler never sees it.
+    resolved: |
+      2026-08-27. Guarded by enter_saves_from_the_window_not_only_from_the_note_field, verified by
+      mutation.
+    status: resolved
+  - id: BUG-30
+    title: An intermittent failure of Enter, caused by focus being claimed once for an overlay reused forever
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test after BUG-29
+    component: capture
+    severity: medium
+    contradicts: [FR-2]
+    root_cause: code
+    evidence: |
+      The overlay's FocusScope claims focus in `init`, which fires exactly once - the overlay is
+      built at start-up and reused for every capture (BUG-27). Anything that took focus during an
+      earlier capture, the note field or the Save button, still held it on the next one.
+    impact: |
+      Reported as "ada case gak berhasil enter (jarang sekali)". Escape kept working throughout,
+      which is what made it look random: the note field REJECTS Escape so it bubbles to the scope,
+      and Enter does not bubble.
+    why_undetected: |
+      The failure depends on capture history, so a single capture never shows it.
+    fix: |
+      A `public function claim-focus()` on the overlay, invoked from the capture path on every
+      capture rather than relying on `init`.
+    resolved: |
+      2026-08-27. Guarded by keyboard_focus_is_reclaimed_on_every_capture, verified by mutation.
+    status: resolved
+  - id: BUG-31
+    title: The note was never captured at all, because nothing gave the note field focus
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test
+    component: capture
+    severity: high
+    contradicts: [FR-2]
+    root_cause: code
+    evidence: |
+      Nothing in appwindow.slint called `note-input.focus()`. The field acquired focus only from a
+      click, and BUG-30's fix made the window's FocusScope claim the keyboard at the start of every
+      capture - and that scope's key handler rejects every key except Escape and Return.
+    impact: |
+      Reported as "observation summary note tidak tersimpan". The note was not lost in storage; it
+      was never entered. Keystrokes reached a handler that discarded them, the field stayed empty,
+      and Enter then saved an empty note against a perfectly good image. FR-2 promises the Editor
+      shows "exactly the text that was typed at capture time".
+
+      This was a REGRESSION INTRODUCED BY BUG-30's FIX, and it is the second time in this session
+      that fixing focus broke something else about focus.
+    why_undetected: |
+      Nothing types into the overlay in any test. The two guards that exist assert that Enter and
+      Escape are BOUND, not that a printable key reaches the field.
+    fix: |
+      `init => { self.focus(); }` on the note field. It lives inside `if is-narrating`, so its
+      creation and the moment the Reviewer should be typing are the same event.
+    resolved: |
+      2026-08-27. Guarded by the_note_field_takes_focus_when_the_popup_opens, verified by mutation.
+    status: resolved
+  - id: BUG-32
+    title: A plain click re-armed the previous drag's region instead of taking the container under the pointer
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test of 1-click container selection
+    component: capture
+    severity: high
+    contradicts: [FR-1]
+    root_cause: code
+    evidence: |
+      The press handler reset `has-selection` but not `sel-w`/`sel-h`. The release handler decides
+      "drag or click" by comparing sel-w/sel-h against a threshold, so with the previous drag's size
+      still in them a click was read as a drag and the old rectangle was re-armed.
+    impact: |
+      Reported as "pas di klik areanya, malah yang tersorot area lain". The hover outline showed the
+      correct container the whole time; what got selected was the region from the previous capture.
+      Worst case the Reviewer saves a Finding of the wrong part of the screen without noticing.
+    why_undetected: |
+      1-click container selection did not exist until the same day, so no test or session had ever
+      exercised a click that was not a drag.
+    fix: |
+      The press handler resets sel-x/sel-y to the press point and sel-w/sel-h to zero.
+    resolved: |
+      2026-08-27, confirmed by the owner. Guarded by a_press_clears_the_previous_selection_size,
+      verified by mutation.
+    status: resolved
+  - id: BUG-33
+    title: Container suggestions included cloaked windows, off-screen panes, and windows behind other windows
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test of 1-click container selection
+    component: capture
+    severity: medium
+    contradicts: [FR-1]
+    root_cause: code
+    evidence: |
+      `detect_capture_targets` filtered on `IsWindowVisible` and a minimum size, and nothing else.
+      Three consequences: `IsWindowVisible` is true for a suspended Store/UWP window that DWM draws
+      nothing for; a scrolled-out or collapsed UIA pane still reports a valid bounding rectangle;
+      and candidates carried no z-order, so a pane belonging to a buried window was offered on top
+      of the window covering it.
+    impact: |
+      Reported as "mensuggest area2 yang gak jelas ... jangan2 window yang hidden juga dideteksi".
+      Exactly that.
+    why_undetected: |
+      The detection was wired the same day. Its bench counted targets and timed them; nothing
+      checked whether a target was somewhere the Reviewer could actually see.
+    fix: |
+      DWMWA_CLOAKED skips undrawn windows, CurrentIsOffscreen skips scrolled-out elements, and
+      CaptureTarget carries the window's z-order depth. Targets are sorted depth first and area
+      second, so taking the first rectangle containing the pointer yields the tightest container of
+      the FRONTMOST window. Measured: 77 targets before, 68 after.
+    resolved: |
+      2026-08-27, confirmed by the owner. Guarded by detection_ignores_what_is_not_actually_on_screen,
+      verified by mutation - including a mutant that swaps the sort keys.
+    status: resolved
+  - id: BUG-34
+    title: Snapdown appeared in its own screenshot, and hiding it could not be timed reliably
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test
+    component: capture
+    severity: medium
+    contradicts: [FR-1]
+    root_cause: code
+    evidence: |
+      The Editor stayed on screen while the desktop was grabbed. The Tauri predecessor hid it first
+      (archive/desktop-tauri) and the Slint port dropped that. Hiding it was tried first and left
+      the owner reporting "ada bayang2nya tidak hilang total di overlay": `hide()` reaches
+      `ShowWindow` at once, but the desktop stops containing those pixels only after the compositor
+      has presented a frame without them AND whatever was underneath has repainted.
+    impact: |
+      Snapdown's own window, and its shadow, appeared in the frozen overlay and in any Finding
+      overlapping it.
+    why_undetected: |
+      Nothing inspects the captured pixels for the presence of our own window.
+    fix: |
+      WDA_EXCLUDEFROMCAPTURE rather than hiding. DWM composes the frame that capture APIs see
+      without the window in it, shadow included, from the moment the call returns - so there is no
+      timing to get right, no repaint to wait for, and no flicker when the Editor comes back. The
+      60ms wait that hiding needed is gone with it.
+
+      It also removes a hazard instead of adding one: with nothing hidden, no failure path can leave
+      the Reviewer looking at a product with no visible window. An interim version DID hide, and
+      needed a restore call on every early return to avoid exactly that.
+
+      Needs Windows 10 2004 or newer. Where unavailable it logs and degrades to the old behaviour.
+    resolved: |
+      2026-08-27, confirmed by the owner. Guarded by
+      the_editor_is_excluded_from_the_capture_rather_than_hidden, verified by mutation.
+    status: resolved
+  - id: BUG-35
+    title: The filmstrip's fixed-width cards pushed the Notes and Properties panel off screen
+    found: "2026-08-27"
+    found_by: kodesh87, manual test after several captures
+    component: finding
+    severity: high
+    contradicts: [FR-29]
+    root_cause: code
+    evidence: |
+      The filmstrip was a bare HorizontalLayout of 120px cards, so it reported a minimum width
+      growing by ~132px per Finding. That minimum propagates up through the workspace layout, so the
+      left column eventually demanded more width than the window had.
+    impact: |
+      Reported as "setiap screenshot canvas jadi membesar dan menghilangkan area panel notes dan
+      properties". The canvas was not growing; the filmstrip's appetite was. After roughly a dozen
+      captures the 440px inspector was squeezed to nothing, which is FR-29 - a primary surface no
+      longer fits its window.
+    why_undetected: |
+      Nothing measures layout at a given Finding count, and the defect needs a filmstrip long enough
+      to overflow before it appears at all.
+    fix: |
+      A ScrollView around the strip, which clips rather than demanding, plus an explicit
+      viewport-width derived from the Finding count. The scrollbar is `always-on`: a vertical wheel
+      does not scroll a horizontal-only view, so `as-needed` left the later Findings unreachable -
+      clipped, with no handle.
+    resolved: |
+      2026-08-27, confirmed by the owner. Guarded by
+      the_filmstrip_scrolls_instead_of_widening_the_workspace, verified by mutation.
+    status: resolved
+  - id: BUG-36
+    title: The note popup's fixed height pushed its own hint text and Save button outside it
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test
+    component: capture
+    severity: medium
+    contradicts: [FR-29]
+    root_cause: code
+    evidence: |
+      The popup was `height: 110px`, enough for a one-line LineEdit. When the note field was
+      redrawn taller its contents needed about 130px, and the hint row and Save button were laid out
+      past the bottom edge. The placeholder had a second, separate fault: it centred itself
+      vertically while the TextInput rendered from the top, so the grey prompt and the caret sat in
+      visibly different places.
+    impact: |
+      Reported as "window berantakan, tulisan esc & enter terlalu ke bawah, tombol save finding
+      terlalu ke bawah". The primary action of the capture flow was partly off its own panel.
+    why_undetected: |
+      A fixed height and a variable content height only disagree once the content changes, and
+      nothing asserts that a panel contains its own children.
+    fix: |
+      The popup takes its height from its layout's preferred-height. The placeholder and the caret
+      are pinned to one origin rather than aligned by different rules.
+    resolved: |
+      2026-08-27. Owner's verdict: "cukup baik" on layout, with the look-and-feel objection filed
+      separately as BUG-37.
+    status: resolved
+  - id: BUG-37
+    title: The capture overlay does not follow the Editor's design system, and does not follow dark mode
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test
+    component: capture
+    severity: medium
+    contradicts: [NFR-17, NFR-16]
+    root_cause: code
+    evidence: |
+      CaptureOverlayWindow in apps/desktop/ui/appwindow.slint carries colour literals throughout -
+      #ffffff, #475569, #94a3b8, #38bdf8, #000000.with-alpha(...) - while apps/desktop/ui/theme.slint
+      defines the product's tokens for both themes. The note popup was converted to tokens on
+      2026-08-27; the scrim, the crosshair, the loupe, the dimension badge and the selection frame
+      were not.
+    impact: |
+      Reported as "tidak sesuai desain sistem snapdown editor kita - itulah kenapa look and feelnya
+      berbeda". The overlay reads as a different product from the Editor it belongs to, and it
+      stays light while the Editor is dark. NFR-17 forbids a colour defined for only one theme.
+    why_undetected: |
+      NFR-17's stated enforcement is a lint refusing a colour literal outside the token file, and
+      that lint covers web/ui/src only. The Slint surfaces have no equivalent.
+    fix: |
+      Two parts, and the second is the reason this is not a quick pass:
+        - mechanical: replace every literal in the overlay with a Theme token, and extend whatever
+          lint enforces NFR-17 to cover .slint so it cannot come back;
+        - design: the owner asked for a look-and-feel study first, naming Graphite as a reference,
+          rather than a token-for-token substitution. That is a design decision, not a defect fix.
+    note: |
+      PARTIAL, 2026-08-27, and the mechanical half is done. theme.slint gained a group 6, "Capture
+      Overlay Tokens": overlay-scrim, overlay-ring, overlay-grid, overlay-canvas, overlay-chrome,
+      overlay-chrome-border, overlay-text, overlay-text-muted. Every literal in the overlay now
+      resolves through one of them, and the whole overlay's chrome is derived from the token set
+      rather than from ad-hoc hex.
+
+      Those eight carry no `is-dark` branch, and that is deliberate rather than an oversight of
+      NFR-17. The overlay is drawn over a frozen screenshot of the operator's own desktop, not over
+      app chrome: a light scrim over a dark screenshot is invisible, and the loupe grid has to read
+      against whatever happens to be underneath it. That is the same argument as the four
+      deliberately theme-invariant groups in web/ui/src/styles/tokens.css, and the comment beside
+      them says so. The note panel - a document surface rather than furniture - follows bg-card into
+      light mode as before.
+
+      Still open, and still the reason this row is open: the owner asked for a look-and-feel STUDY
+      first, naming Graphite as a reference, rather than a token substitution. That has not been
+      done. Also still open: NFR-17's lint covers web/ui/src only, so nothing mechanically prevents
+      a literal returning to a .slint file.
+    note_2: |
+      2026-08-27, and this row was understating itself. The overlay's literals were the visible half;
+      the other half was that `std-widgets`' `LineEdit` and `TextEdit` do not use `theme.slint` AT
+      ALL - they paint from Slint's own style palette. That is not a missed literal, it is a whole
+      class of widget outside the token system, and it produced a white-on-white Observation Summary
+      (see BUG-45's fourth pass).
+
+      Both are now closed off. The overlay carries no colour literal and a guard fails the build if
+      one returns; `SdTextField` is the product's only text entry and the two std widgets are not
+      imported. The full-screen control was also rebuilt in the Editor's idiom rather than its own
+      (BUG-42, third pass).
+
+      What keeps this row OPEN is unchanged: the owner asked for a look-and-feel study first, naming
+      Graphite as a reference, and that has not been done. Also still open: nothing mechanically
+      prevents a literal returning to a .slint file outside the overlay, since NFR-17's lint covers
+      web/ui/src only.
+      2026-08-27, and the fourth report on this row is what finally named the pattern. Owner: "kenapa
+      desain sistemmu gak konsisten?"
+
+      Every instance had the same shape, and it was never a number chosen badly: a `std-widgets`
+      component painting itself from Slint's palette instead of `theme.slint`. `TextEdit` gave the
+      Observation Summary white-on-white. `Button` gave the capture panel a Save action at a different
+      size, colour and type scale from every action in the Editor - while the Editor's own actions
+      (Share, Copy, Assemble) were hand-built from the tokens and agreed with each other. The numbers
+      were not ours to adjust.
+
+      Closed off properly now rather than instance by instance:
+        - `SdTextField`, `SdActionButton`, `SdSectionLabel`, `SdCaption` carry the Editor's values -
+          `radius-sharp`, the accent-primary/hover/pressed triple, `text-on-accent`, 700 weight at
+          10-11px, 11px/800 with 0.5px letter-spacing for a heading;
+        - `std-widgets` now exports only `ScrollView` into this product, so reaching for `Button`,
+          `LineEdit` or `TextEdit` is a compile error rather than something a review has to notice;
+        - the capture panel took the inspector's 16px padding and 6px label spacing, replacing 14px
+          and 10px chosen for it alone;
+        - both section headings are the SAME component, not two Texts that happen to match - matching
+          numbers drift the first time one is touched.
+
+      Guarded by the_capture_panel_and_the_inspector_share_one_design_system and
+      the_capture_overlay_takes_every_colour_from_the_token_set, both verified by mutation.
+
+      What keeps this row open is unchanged and is not a defect: the owner asked for a look-and-feel
+      STUDY, naming Graphite as a reference. Consistency has been achieved WITH THE EXISTING system;
+      whether that system is the right one is the question still open. `wdi-ux` is the skill for it.
+      2026-08-27, and one more decision the owner delegated: "tentang panel teks, kau aja yg
+      mutusin."
+
+      Decided by applying this file's own rule rather than by taste. The capture note panel was 360px
+      wide against the inspector's 440px - a number chosen for that panel alone, which is exactly the
+      habit the guide forbids. It is now 440px, so a note wraps at the same line length in both
+      places and the two panels are the same panel in every respect that can be measured.
+
+      Where they still differ on purpose: the capture field is one line that grows with the text,
+      while the Observation Summary is a fixed 120px box. That follows the task rather than the
+      styling - a note written during capture is a sentence, and a note being reviewed afterwards is
+      read alongside the image.
+    status: open
+  - id: BUG-38
+    title: The note popup is always placed below the selection, so a selection near the bottom of a screen puts it off screen
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test
+    component: capture
+    severity: medium
+    contradicts: [FR-2, FR-29]
+    root_cause: code
+    evidence: |
+      The popup is positioned `y: parent.height + 12px` relative to the selection frame, with no
+      consideration of the canvas edge or of which monitor the selection sits on.
+    impact: |
+      Reported as "dia selalu di bawah area pilih, padahal misal di bawah sekali itu sudah mentok,
+      makanya hilang dari tampilan". A region dragged near the bottom of a screen cannot be
+      annotated at all, so FR-2 is unreachable for that region.
+    why_undetected: |
+      Every test and every manual pass selected regions near the middle of a screen.
+    fix: |
+      Flip the popup above the selection when there is not room below, and clamp it horizontally
+      into the monitor under the selection rather than into the whole canvas - the monitor
+      rectangles the overlay already holds are what that needs.
+    resolved: |
+      2026-08-27. The popup tests whether it fits below the selection and flips above it when it
+      does not, and is clamped horizontally into the canvas with an 8px margin so a selection near a
+      side edge cannot push it off that edge either. Guarded by
+      the_note_popup_flips_above_a_selection_with_no_room_below, verified by mutation.
+      2026-08-27, SECOND ATTEMPT. The first closure above was premature - the owner retested the
+      same day and reported "field note masih hilang di tepi bawah layar". The flip test was
+      written against `root.height`, and `root.height` is the CANVAS: the bounding box of every
+      monitor. On this two-monitor desktop the canvas bottom is below the shorter screen's bottom,
+      so a panel that passed the "fits below" test was still off the visible screen. The test was
+      answering a question nobody asked.
+
+      Two changes, and neither is a tweak of the first:
+        - the bound is now the monitor holding the SELECTION, derived from the selection rather than
+          the pointer - the pointer moves onto the panel and may cross to another screen while it
+          is open, which would otherwise make the panel jump monitors;
+        - both axes are CLAMPED into that monitor, with the flip kept only as a preference. A flip
+          alone has nowhere to put the panel when the selection is taller than the screen, so it
+          leaves the screen again; clamped, the worst case is overlapping the selection, and a panel
+          over the region beats a panel nobody can reach.
+
+      The panel was also lifted out of the selection frame in the same change (see BUG-40), which is
+      what made the arithmetic expressible in one coordinate space instead of two.
+
+      Guarded by the_note_panel_is_kept_inside_the_monitor_holding_the_selection, verified by
+      mutation - including a mutant that restores the `root.height` comparison.
+    status: resolved
+  - id: BUG-39
+    title: A suggested container is outlined but still dimmed, so it does not read as selectable the way a dragged region does
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test of 1-click container selection
+    component: capture
+    severity: low
+    contradicts: [FR-1]
+    root_cause: code
+    evidence: |
+      The hover highlight is drawn as an outline with a translucent fill ON TOP of the scrim. A
+      dragged selection instead has the scrim built as four rectangles AROUND it, so the region
+      itself shows the undimmed screenshot.
+    impact: |
+      Owner: "maunya yang disuggest itu area overlaynya hilang, dan tetap ada garis mengelilingi".
+      The suggestion and the selection use different visual languages for the same idea, so what a
+      click is about to do is not obvious.
+    why_undetected: |
+      New behaviour, landed the same day.
+    fix: |
+      Cut the scrim around the hovered container the way it is already cut around a selection. The
+      four-rectangles construction is reusable; note the comment in the .slint explaining why it
+      must NOT become a source-clipped copy of the image.
+    resolved: |
+      2026-08-27. The hovered container is now cut out of the scrim with the same four-rectangles
+      construction the selection uses, and the full scrim stands down while a container is hovered.
+      The translucent wash is gone: hovering now previews exactly what selecting will look like.
+      Guarded by a_hovered_container_cuts_the_scrim_rather_than_being_washed_over, verified by
+      mutation.
+    status: resolved
+  - id: BUG-40
+    title: A selection cannot be replaced by clicking elsewhere; it takes Escape and a fresh capture
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test
+    component: capture
+    severity: medium
+    contradicts: [FR-3]
+    root_cause: code
+    evidence: |
+      The catch-all TouchArea carries `enabled: !root.is-narrating`, because it otherwise sits above
+      the note popup in z-order and swallows every click meant for the note field or the Save
+      button. So once a selection is being annotated, no click anywhere reaches the overlay.
+    impact: |
+      Owner: "saya bisa membatalkan sorot dengan mengklik sorot daerah lain tanpa harus ESC dan
+      start capture lagi". Correcting a mis-selection costs a cancel and a whole new capture, which
+      is the loop FR-3 exists to protect.
+    why_undetected: |
+      The `enabled` gate was added to fix a real defect - the popup being unclickable - and nothing
+      recorded the behaviour it traded away.
+    fix: |
+      Ordering, not gating: the popup must sit above the catch-all in z-order so both can be live at
+      once. The popup is currently nested inside the selection frame, which is declared before the
+      catch-all, so this is a restructure rather than a property change.
+    resolved: |
+      2026-08-27. Ordering, as the fix field predicted, and the restructure was the whole of it: the
+      note panel is now declared at the END of the overlay - after the catch-all TouchArea and after
+      the full-screen control - instead of nested inside the selection frame. With the panel above
+      the catch-all in z-order, the catch-all no longer has to be disabled to keep the note field
+      clickable, so a press anywhere outside the panel clears the selection and starts a new one.
+
+      One consequence had to be handled rather than discovered later: a click landing on the panel's
+      own padding would now fall through to the still-live catch-all and clear the very selection the
+      panel is about. The panel absorbs those with a TouchArea of its own.
+
+      Lifting it out also fixed BUG-38's second attempt, because the panel's position stopped being
+      expressed in two coordinate spaces at once.
+
+      Guarded by clicking_elsewhere_starts_a_new_selection_without_escape, verified by mutation.
+    status: resolved
+  - id: BUG-41
+    title: Selecting a Finding in the filmstrip takes a visible moment to reach the canvas
+    found: "2026-08-27"
+    found_by: kodesh87, manual test
+    component: finding
+    severity: low
+    contradicts: []
+    root_cause: code
+    evidence: |
+      Owner: "pas klik sebuah film/screenshot, dia agak delay lumayan untuk menampilkan ke canvas".
+      Not yet measured, and it MUST be measured before anything is changed - BUG-28 recorded three
+      separate occasions where the obvious suspect was not the cost.
+    impact: |
+      Browsing the Library feels slow at the one moment the Reviewer is looking for something.
+    why_undetected: |
+      Nothing here measures it, and it only shows once the filmstrip holds enough Findings to
+      browse.
+    fix: |
+      NOT DIAGNOSED. Read the blob, decode the PNG and upload the texture on the UI thread are the
+      candidates; `rgba_to_slint_image` also does a full `clone_from_slice`, which BUG-28 measured
+      at 19ms per 92MB. Measure first.
+    measurement: |
+      2026-08-27, on the owner's library of 58 Findings, instrumented in the release build:
+
+        load_findings_into_window  n=58  list=1.3ms  thumbs=310.0ms  total=320.9ms
+
+      The database query is 1.3 ms. The 310 ms is `image::open` plus `clone_from_slice` for EVERY
+      thumbnail in the library, run on the UI thread, on every click - and none of that work changes
+      when the selection changes. It also grows with each capture taken, so the defect gets worse the
+      more the product is used.
+
+      None of the three candidates named in the `fix` field above was the cost. The full-size decode
+      of the selected image - the obvious suspect - measures 10.5 ms.
+    resolved: |
+      2026-08-27. The loader was split. `load_active_detail` loads one Finding; `select_active_finding`
+      calls it and moves the `is_active` flag by writing the two affected rows in place, leaving the
+      filmstrip model alone. `load_findings_into_window` still rebuilds everything, and is still what
+      a completed capture calls, because a new Finding does change the set.
+
+      Measured after: 10.5 ms per selection, against 320.9 ms before, and it no longer scales with the
+      library.
+
+      The in-place path downcasts the model to `VecModel`; if that ever fails it falls back to the
+      full rebuild rather than doing nothing, because slow is a defect and silent is a mystery.
+
+      Guarded by selecting_a_finding_does_not_rebuild_the_filmstrip, verified by mutation.
+    status: resolved
+  - id: BUG-42
+    title: FR-1's one-click full-screen affordance does not exist on the monitor under the pointer
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test
+    component: capture
+    severity: medium
+    contradicts: [FR-1]
+    root_cause: code
+    evidence: |
+      FR-1's proof requires "1-click container selection". The overlay offers no full-screen target
+      at all, and the owner asks for it at the top of whichever monitor the pointer is on - a
+      multi-monitor placement the overlay already has the rectangles for.
+    impact: |
+      Capturing a whole screen, the commonest case of all, needs a drag from corner to corner.
+    why_undetected: |
+      FR-1's proof was never walked end to end; three of its clauses were unmet at once. See BUG-33
+      and BUG-43 for the other two.
+    fix: |
+      A full-screen target per monitor, placed at the top of the monitor under the pointer, using
+      the monitor rectangles the overlay already receives. Hover must preview and a click must
+      select, matching the container behaviour rather than inventing a second interaction.
+    resolved: |
+      2026-08-27. A "Capture Full Screen" target sits at the top of the monitor under the pointer,
+      placed from the same active-monitor geometry the crosshair is confined by, and a click takes
+      that monitor's bounds.
+
+      It is declared AFTER the catch-all TouchArea, and that ordering turns out to be enforced by
+      the compiler rather than by taste: the target reads `hover-tracker.has-hover`, so Slint refuses
+      to build it declared earlier. Moving it before the catch-all as a mutation failed the BUILD,
+      which is a stronger guard than the structural assertion written alongside it.
+
+      Guarded by a_full_screen_target_exists_on_the_active_monitor.
+      2026-08-27, AMENDED. The control existed and worked, and was still wrong in two ways the
+      owner reported the same day.
+
+      It was centred on the monitor's top edge, which is where a drag that starts at the top of the
+      screen begins - the control stood in its way. It is now in the top-right CORNER, inset 16px,
+      which is what was asked for ("paling pojok di atas").
+
+      And it flickered: "asal saya sorot ke dia, kadang2 flickering hilang". Its visibility read
+      `hover-tracker.has-hover`, and it sits ON TOP of that TouchArea - so moving the pointer onto
+      the control took the hover away from the tracker, which hid the control, which handed the hover
+      straight back. A two-frame oscillation, entirely in the visibility condition, with nothing
+      about rendering involved. Visibility now depends on the selection state alone.
+
+      The control gained the behaviour asked for alongside: hovering it PREVIEWS the whole screen -
+      the scrim opens and the ring appears - and leaving it withdraws the offer, so no click is
+      needed to see what the click would take. That reuses BUG-39's cut-out through one shared
+      preview rectangle, so the outline and the cut-out cannot disagree about what is on offer.
+
+      Guarded by a_full_screen_target_sits_in_the_active_monitors_corner and
+      the_full_screen_control_visibility_does_not_depend_on_the_tracker_it_covers, both verified by
+      mutation.
+      2026-08-27, AMENDED AGAIN. Two more reports on the same control, both about being able to
+      use it rather than about it existing.
+
+      Placement: it is now at the TOP CENTRE of the monitor under the pointer. The corner was an
+      argued choice - the middle of the top edge stands in the way of a drag that starts there - and
+      the owner asked for the centre twice, which settles it. The cost is small: pressing the control
+      selects the whole screen, which is a reasonable outcome for a press in that spot.
+
+      Contrast: "dia hitam, jadi susah mengetahui bahwa dia ada". It was `overlay-chrome`, near-black,
+      sitting on a 65% black scrim, with the accent reserved for the hover state - so it was only
+      visible once you had already found it. It is now the accent at rest and `accent-hover` under the
+      pointer. A control nobody notices fails FR-1 exactly as completely as one that does not exist,
+      and the answer is contrast rather than a larger hit area.
+
+      Guarded by the_full_screen_control_is_centred_on_the_top_edge_and_reads_against_the_scrim,
+      verified by mutation - including a mutant that restores the near-black resting state, since
+      that is the half a placement test would not catch.
+      2026-08-27, THIRD PASS - "memang terlihat, tapi jelek sekali gak sesuai desain sistem."
+      Visible was necessary and not sufficient.
+
+      What was wrong was measurable rather than a matter of taste: it was a `radius-pill` at 38px
+      with a 1.5px light ring, and NOTHING in the Editor is a pill - the Assemble action, the toolbar
+      buttons and the tab strip are all `radius-sharp`, and the accent buttons carry no border. The
+      control was speaking a dialect of its own.
+
+      Rebuilt in the Editor's own idiom: 32px, `radius-sharp`, no border, and the same three-part
+      shape the Assemble action uses - 13px glyph, 8px gap, 11px/700 label, hairline divider, mono
+      readout. The readout's number was also wrong; that is BUG-49.
+    status: resolved
+  - id: BUG-43
+    title: FR-1's "pixel loupe" shows no pixel grid
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test
+    component: capture
+    severity: low
+    contradicts: [FR-1]
+    root_cause: code
+    evidence: |
+      FR-1's proof names a "pixel loupe". The magnifier shows magnified pixels with no grid and no
+      centre-pixel indicator, so it magnifies without letting the Reviewer count.
+    impact: |
+      Aligning a selection to an exact pixel boundary is guesswork.
+    why_undetected: |
+      As BUG-42.
+    fix: |
+      Grid lines at high magnification with the centre pixel marked. Note the dead end recorded in
+      BUG-27: `image-rendering: pixelated` on the loupe made frame timing measurably WORSE, so the
+      grid must be drawn rather than obtained by changing the filtering mode.
+    resolved: |
+      2026-08-27. The loupe's magnification is now expressed in source pixels (16 across its 96px
+      face, where it was 32), a grid is drawn per source pixel, and the pixel under the cursor is
+      boxed - replacing two 2px crosshair lines that could only say "about here".
+
+      Drawn rather than obtained by changing the sampling mode, per the dead end recorded in BUG-27.
+      Guarded by the_loupe_draws_a_pixel_grid, verified by mutation.
+      2026-08-27, AMENDED - the grid existed and its cells were not pixels.
+
+      The owner's report reads as a request to move the grid onto the image ("maunya pixelnya itu di
+      gambarnya bukan di magnifier ... kotak2 pixel itu mengilustrasikan gambarnya"), and taken
+      literally that is not buildable: at 1:1 a source pixel is at most one logical pixel wide and a
+      grid line would cover it. Reading the code instead of the request found the real defect, and it
+      is the same complaint from the other side.
+
+      `loupe-source-size` was `loupe-pixels * source-scale`. That held the apparent magnification
+      constant across DPIs, and in doing so detached the grid from the picture: on a 150% display the
+      loupe read out 24 source pixels while the grid drew 16 cells. The boxes lined up with nothing,
+      and the image slid continuously underneath a static grid as the pointer moved - so the boxes
+      belonged to the FRAME, not to the image. That is exactly what was reported.
+
+      Four changes:
+        - `loupe-source-size == loupe-pixels`, so one cell is one source pixel. The DPI-invariant
+          magnification loses, because a pixel loupe whose boxes are not pixels is worse than one
+          with no boxes;
+        - the clip origin is an explicit floored int, so the lattice starts on a whole pixel and the
+          view steps pixel by pixel instead of drifting;
+        - the boxed cell is derived from the CLAMPED origin rather than assumed to be the middle
+          one - at a screen edge the view is pushed off-centre and the middle cell is not the pixel
+          under the cursor;
+        - the loupe is a square with a 128px face, not a 96px circle. A round mask cuts the outer
+          cells into slivers, which is most of the rest of why the grid read as part of the
+          magnifier. It also gained a readout of the pixel's desktop coordinates.
+
+      `image-rendering: pixelated` is still not used, and the reason it is not was re-examined rather
+      than inherited: the measurement that rejected it was taken while this Image laid out the whole
+      screenshot at 3x, and it now clips to 16x16 - so the premise has changed. Filed as OQ-28 rather
+      than flipped silently, per the exclusion-expiry rule in AGENTS.md.
+
+      Guarded by the_loupe_grid_is_one_cell_per_source_pixel, verified by mutation with four mutants
+      including a restoration of the DPI factor.
+      2026-08-27, AMENDED AGAIN - "kotak2 itu menempel di magnifier ... harusnya kotak2 ada di
+      kanvas (overlayed screen), sehingga kita bisa memilih pixel yang tepat."
+
+      Taken literally this cannot be built, and that is worth writing down rather than attempting: at
+      1:1 a source pixel is at most one screen pixel wide, so a grid line would cover the very cell it
+      was drawn to outline. There is no magnification-free way to see an individual pixel.
+
+      What the request is FOR is buildable, and it is where the boxes are, not what they are. The lens
+      is now centred on the pointer and drawn on the canvas - a ring, no plate, no caption box - so
+      the boxed cell is AT the point of aim and the grid lies over the part of the screen being
+      looked at, instead of 24px away in a separate instrument the eye has to travel to. The
+      coordinate readout moved outside the lens so it cannot sit under the pointer it describes.
+
+      Deliberately not clamped into the monitor: clamping slides the lens off the pointer, and a lens
+      whose centre is not the thing it magnifies is a panel again. At the desktop's outer edge it is
+      clipped by the window, and the source clamp keeps the pixels it does show valid.
+
+      Third change to this magnifier, and deliberately a different KIND of change from the first two.
+      Those fixed defects - no grid at all, then a grid whose cells were not pixels. This one moves
+      where the instrument lives, on a clarified want. If it is still wrong, the next step is a
+      decision about the magnifier's shape, not a fourth attempt at the same spot.
+
+      Guarded by the_pixel_lens_is_centred_on_the_pointer, verified by mutation.
+      2026-08-27, THIRD PASS, and the owner's clarification is what made it solvable: "pixelnya gak
+      bergerak di canvas. Ketika glass magnifier itu bergerak seiring mouse bergerak, maka pixel2
+      kotak2 itu yah seperti kita observasi."
+
+      The grid was not supposed to be somewhere else. It was supposed to STAY STILL relative to the
+      picture while the lens travelled over it - a magnifier over graph paper. And it did not,
+      because of a Slint constraint the previous pass worked WITH rather than around:
+      `source-clip-x` is an INTEGER property, so the image can only be clipped on whole source
+      pixels. Clipping there and drawing the grid from the lens's own top-left left both of them
+      stationary inside the frame, with the image stepping between them - a grid stuck to the glass.
+
+      The fix is to split the view position into a whole part and a fraction. The whole part clips
+      the image; the fraction offsets BOTH the image and the grid inside the lens by a sub-pixel
+      amount, with one extra source column and row clipped so there is something to reveal. Image
+      and grid now share one offset, which is exactly what makes the lattice belong to the picture.
+
+      Three passes, and only this one addresses the thing that was actually reported both times. It
+      is a different mechanism rather than a fourth guess at the same spot; the earlier passes fixed
+      the cell COUNT and the lens's POSITION, and neither could have made the lattice move.
+
+      Guarded by the_loupe_grid_is_one_cell_per_source_pixel_and_slides_with_the_image, verified by
+      mutation - including mutants that remove the offset from the image alone and from the grid
+      alone, since sharing it is the whole property.
+      2026-08-27, FOURTH PASS - and the first one that changes what the image is MADE OF rather than
+      where the lattice is drawn.
+
+      The third pass made this worse and was reverted rather than built on: sliding the image by a
+      sub-pixel remainder resamples a magnified picture every frame, so the whole lens shimmered as
+      the mouse moved. Owner: "Buruk sekali soal pixel menggeser gambar."
+
+      Their framing is what pointed at the real answer: "anggap aja canvas yang akan di screenshot ini
+      punya pixel, semua dipixeling, lalu ketika kita mau berjalan mousenya, disitulah magnifying
+      glass melihat menjelajah pixel2 itu." The canvas is pixelated; the glass merely travels over it.
+
+      All three earlier passes drew a lattice over a SMOOTHLY interpolated image - and with smooth
+      filtering there are no pixels in the picture for a grid to belong to. The blocks are a blur, the
+      only crisp thing is the drawn grid, and so the grid reads as part of the glass no matter where
+      it is anchored. `image-rendering: pixelated` makes each source pixel a solid block, and the grid
+      becomes a separator between blocks that are already there.
+
+      That sampling mode was excluded on the BUG-27 measurement - taken while this Image laid out the
+      whole screenshot at 3x. It now clips to 16x16, the premise expired, and OQ-28 had already
+      re-opened it in writing the turn before. OQ-28 is now answered. The residual risk is BUG-27's
+      flicker returning; 289 pixels against 75 million makes that unlikely, and it has NOT been
+      re-measured, so it is the first place to look if the flicker comes back.
+
+      Four passes on one instrument. Each addressed something real - the cell count, the lens's
+      position, the lattice's anchoring, the sampling - and the fourth is a different KIND of change
+      rather than another guess at the same spot. If it is still wrong the next step is a decision
+      about the magnifier's shape, recorded, not a fifth attempt.
+
+      Guarded by the_loupe_shows_source_pixels_as_pixels, verified by mutation - including a mutant
+      that turns `pixelated` back off, since that one line is the whole of this pass.
+      2026-08-27, FIFTH PASS - and this one is a specification, not a diagnosis. The owner stopped
+      describing the symptom and described the instrument:
+
+        "mouse cursor hilangkan aja ganti jadi cross hair. Lalu ada magnifiying glass di dekat situ,
+        dan magnifiying glass itu tengahnya adalah crosshair juga. di snagit magnifiying glass muncul
+        kalau mouse kita pelan. ketika cepat dia gak muncul. Magnifiying glassnya bulat, tidak terlalu
+        besar seperti sekarang, dan kotak2nya gak sebesar sekarang."
+
+      Built to that, point by point:
+        - the OS cursor is hidden and the crosshair IS the pointer - an arrow on top of a 1px
+          crosshair covers the pixel it is aiming at;
+        - the lens sits BESIDE the pointer again, flipping side near a monitor edge. Centred was the
+          fourth pass, on a reading of "the boxes should be on the canvas" that turned out to be
+          about the sampling; a lens on top of the target hides the target;
+        - it carries a crosshair of its own, crossing on the pixel under the pointer, placed from the
+          CLAMPED origin so it still lands on the right pixel at a screen edge;
+        - it appears only once the pointer SETTLES. Sampled on a 100ms tick rather than accumulated
+          per `moved` event, because event rates differ by device and by how busy the frame is - a
+          per-event distance threshold is a different speed on every machine. Roughly 240 px/s. The
+          tick stops while the overlay is hidden between captures;
+        - round, 96px, 20 source pixels across, so a cell is 4.8px instead of 9px.
+
+      Five passes on one instrument. What that says about this repository is worth recording: four of
+      them were the agent inventing a design and the owner correcting it. The absence of a written
+      design system is what made that possible, and that is now
+      `.constitution/project/design-system-guide.md` rather than another defect row.
+
+      Guarded by the_lens_sits_beside_the_pointer_and_waits_for_it_to_settle and
+      the_loupe_shows_source_pixels_as_pixels, both verified by mutation - including two that gate the
+      lens and its readout separately, since a single search for the gate passed while the lens itself
+      was ungated.
+      2026-08-27, SIXTH PASS - the settle detector had no hysteresis, and that is a defect I shipped
+      in the fifth.
+
+      Owner: "sekarang magnifiying glassnya terlalu kedap kedip, maunya ada toleransi lambat ... saya
+      pelan, tapi kadang hilang, kadang muncul."
+
+      One threshold with a binary flip is a comparator without hysteresis. Hold the pointer anywhere
+      near 24px-per-tick and consecutive ticks land on opposite sides of the line, so the lens blinks
+      at roughly 5 Hz - and "moving slowly" is precisely the speed that sits near a slow threshold.
+      The fault was in the shape of the test, not in the number.
+
+      Now two thresholds with a band between them where nothing changes: below 20px per tick it
+      appears, above 70px it goes away, and in between the current state is kept. Hiding also needs
+      two consecutive fast ticks, so one jerk of the wrist does not dismiss a lens being read. Roughly
+      200 px/s to show and 700 px/s to hide.
+
+      Guarded by the_lens_sits_beside_the_pointer_and_waits_for_it_to_settle, which asserts the two
+      thresholds EXIST and that the hide threshold is strictly looser than the show threshold - an
+      empty band is a single threshold wearing two names. Verified by mutation, including one that
+      collapses them to the same value.
+      2026-08-27, SEVENTH PASS - the grid lines were blurred on some rows, and it was a
+      physical-pixel alignment fault rather than anything about the grid.
+
+      Owner: "garis2 pixel di magnifying glass itu kayak ada yang kabur di beberapa baris."
+
+      A cell was `96px / 20 = 4.8px` LOGICAL, and this display runs at scale 1.5 - so lines fell at
+      7.2, 14.4, 21.6 PHYSICAL pixels and the renderer antialiased each one across two of them. Rows
+      that happened to land near a boundary read sharp; the rest read blurred, which is exactly what
+      "some rows" means. The 1px lines had the same fault by construction: one logical pixel is 1.5
+      physical, so every line was a 50% smear whatever its position.
+
+      Three changes, all the same idea:
+        - the cell is chosen as a whole number of PHYSICAL pixels and converted back, and the face is
+          derived FROM the cell rather than the other way round - a round face over a pixel count
+          gives a fractional cell;
+        - a grid line is exactly ONE physical pixel: `1px / source-scale`;
+        - the lens's own origin is snapped, via a `snap()` function. That one matters most: the
+          pointer arrives at fractional logical coordinates, so an unsnapped lens shifts its entire
+          content by a fraction of a physical pixel and blurs every line inside it at once, no matter
+          how carefully the cells are computed. The desktop crosshair got the same treatment.
+
+      Seven passes on one instrument, and the shape of them is worth keeping: four were the agent
+      inventing a design, two were defects in the agent's own previous pass, and one - this - was a
+      rendering fault that no amount of design discussion would have found. Only the owner's eye
+      caught any of them, because nothing here renders a Slint component and looks at it.
+
+      Guarded by the_loupe_shows_source_pixels_as_pixels and
+      the_lens_sits_beside_the_pointer_and_waits_for_it_to_settle, verified by mutation - including
+      one that restores the fractional cell and one that returns the line to a logical pixel.
+    status: resolved
+  - id: BUG-44
+    title: detect_element_at_point is dead code
+    found: "2026-08-27"
+    found_by: coordinator, while wiring detect_capture_targets
+    component: capture
+    severity: low
+    contradicts: []
+    evidence: |
+      crates/snapdown-capture/src/capturer.rs carries a 188-line point-based UIA detection that
+      nothing calls. It cannot work under the capture overlay - the overlay is topmost, so
+      ElementFromPoint returns our own window - which is why detect_capture_targets enumerates by
+      handle instead.
+    impact: |
+      None at runtime. It is a maintenance trap: the next reader may believe it is the detection in
+      use, and AGENTS.md records four earlier cases in this repository of code that existed,
+      compiled and was reachable by nobody.
+    why_undetected: |
+      It was written before the overlay existed, and its unit tests pass.
+    fix: |
+      Delete it, unless the owner wants a point-based path kept for a caller that runs while no
+      overlay is up.
+    resolved: |
+      2026-08-27. Deleted - 8,111 bytes. Nothing referenced it, and it could not have worked under
+      the overlay. Guarded by the_point_based_detection_is_deleted.
+    status: resolved
+  - id: BUG-45
+    title: A typed Note is stored but does not appear in the Editor's Observation Summary
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test
+    component: finding
+    severity: high
+    contradicts: [FR-2]
+    root_cause: code
+    evidence: |
+      Reported as "note diketik masih belum simpan". It IS saved. Read straight out of the live
+      library with a read-only connection: 10 of 55 note rows carry text, including four written
+      during the owner's own test session -
+        06:44:36  note='asdfasdf'
+        06:42:02  note='asdfhasdklfhkdjlsahflkjdsaf'
+        06:41:55  note='Jadi apa ini?a sdakfjasdlkfjsdlakfj...'
+
+      Every Rust step is correct, and that was established by instrumenting the release binary
+      rather than by reading it. At start-up the probe reported:
+        [probe] active=01a041f6-... note_len=8 note="asdfasdf"
+        [probe] readback="asdfasdf"
+      So `get_finding` loads the note, `set_observation_summary` receives it, and reading the
+      property straight back returns it. The value is on the property and does not reach the screen.
+
+      The remaining suspect is the only structure between the two:
+      apps/desktop/ui/appwindow.slint:1382 gates the whole Observation Summary section behind
+      `if root.active-tab-index == 0`, and the `TextEdit` inside it carries
+      `text <=> root.observation-summary`. A conditional subtree is created and destroyed rather
+      than shown and hidden - which is the same class of trap that produced BUG-27's blink and the
+      copy-on-write in BUG-28: Slint bindings latch, and an `if` decides when.
+
+      Note also that the property's declared default is placeholder junk -
+      "test\n1. Marker 1\n2. Marker 2" - so a broken binding shows that rather than nothing, which
+      is a second reason a reader cannot tell "not saved" from "not displayed".
+    impact: |
+      The Reviewer believes their note was lost. It was not, but they have no way to see it, so
+      FR-2 - "the Editor shows exactly the text that was typed at capture time" - is unmet, and the
+      product looks like it discards work.
+    why_undetected: |
+      Nothing here renders a Slint component and asserts what is on screen. Every test in this
+      repository checks either Rust state or source text, and this defect is invisible to both -
+      the Rust state is correct and the source looks right.
+    fix: |
+      NOT DIAGNOSED PAST THIS POINT, deliberately. The instrumentation narrowed it to the Slint
+      side; confirming WHICH of "the section never re-reads" and "the widget latches its text"
+      applies needs one look at the running panel, because the property already holds the right
+      value. Two reasonable candidates once that is known: gate the section with `visible` instead
+      of `if` (the same fix that removed BUG-27's per-monitor blinks), or drive the TextEdit from a
+      one-way binding plus an explicit edited-callback.
+
+      The placeholder default should go with it, whatever the cause: a property whose default looks
+      like real content hides exactly this kind of failure.
+    note: |
+      A FIX HAS LANDED and this row is deliberately still open, because it cannot be confirmed from
+      here. 2026-08-27: the TextEdit now reads `observation-summary` one way and pushes edits back
+      through `edited`, instead of aliasing it with `<=>` across the tab's conditional subtree; and
+      the property's placeholder default is gone, so a failure shows as empty rather than as
+      plausible content.
+
+      That follows the measurement - every Rust step was proved correct by instrumenting the release
+      binary - but the remaining step was inferred from how Slint behaved twice before in this
+      session, not observed. Nothing in this repository renders a Slint component and asserts what is
+      on screen, so only the owner can close this. Guarded by
+      the_observation_summary_reads_the_note_one_way, verified by mutation.
+    resolved: |
+      2026-08-27. The note is now shown above the tabs, permanently, and the binding is `<=>` again.
+
+      The previous entry left this row open because its fix was inferred rather than observed, and
+      that was the right call: the inference was wrong in a way that mattered. A one-way `text:`
+      binding does avoid the rebuild problem, and trades it for a worse one - Slint drops a binding
+      the moment anything writes the property, and a text widget writes to itself on every keystroke.
+      After the first edit, no newly selected Finding's note would ever have landed again. That
+      would have read as a fresh, more confusing defect.
+
+      Neither binding form is safe inside `if active-tab-index == 0`, because an `if` subtree is
+      CREATED and DESTROYED rather than shown and hidden. So the widget left the subtree instead. A
+      Finding's note is its primary content rather than a tab's detail, which makes hoisting it the
+      right shape as well as the fix - and it answers the owner's actual complaint, that there was no
+      place on screen where the note could be seen at all.
+
+      It also gained a placeholder, because an empty box could mean "no note" or "the note did not
+      arrive" and that ambiguity is what made this defect hard to read from the outside.
+
+      Guarded by the_observation_summary_is_outside_the_conditional_tab_body, verified by mutation.
+      2026-08-27, THIRD ATTEMPT, and this one is the cause. The owner retested and reported the
+      summary still absent, which made three attempts on one defect - so the rule fired and the next
+      step was to go and look rather than to reason again. Looking took one query.
+
+      The running build's accessibility tree contains exactly ONE Edit control. It holds the right
+      note - "apa yang terbaik?" - and its bounding rectangle is INFINITE. The label above it reports
+      real coordinates, so the section lays out; the widget inside it has no geometry. The value had
+      been arriving the whole time and there was nowhere on screen for it to be drawn.
+
+      The cause is a Slint rule neither earlier attempt was about: a `Rectangle` child with no size
+      fills its parent, but an imported COMPONENT takes its own preferred size, and a `TextEdit`'s
+      resolves to nothing. The fix is four lines of geometry.
+
+      Both earlier attempts were worth keeping and neither could have fixed this:
+        - the one-way binding really would have broken on the first edit, and reverting it to `<=>`
+          prevented a defect that had not been reported yet;
+        - the widget really did belong outside the conditional tab, and hoisting it answered the
+          owner's actual complaint - that there was no place on screen where a note could be seen.
+
+      The same construction sits under the marker list and was fixed in the same change. It had never
+      been seen because that list has always been empty - which is precisely how the first instance
+      survived four rounds of testing.
+
+      The first tab was renamed "Marker Notes" and given the marker icon, because the summary leaving
+      it made "Notes" name the wrong thing and `file-text.svg` describe content that was no longer
+      there.
+
+      Guarded by a_std_widget_in_a_plain_rectangle_is_given_explicit_geometry - which checks the
+      RULE, not this instance, so the marker list's copy and any future one are covered - and by
+      the_marker_tab_label_and_icon_agree. Both verified by mutation.
+      2026-08-27, FOURTH PASS - and a second, independent cause was hiding behind the first.
+
+      With geometry fixed, the note was drawn and still could not be read: white text on a white
+      panel, legible only while focused, and grey while being edited. `std-widgets`' `TextEdit` and
+      `LineEdit` paint themselves from Slint's OWN style palette, not from `theme.slint` - so the
+      product had three text-entry appearances, none of them its own. That is the same root as
+      BUG-37 and it is why NFR-17's "colour lives in one file" was never true here.
+
+      The capture overlay's note field had already been hand-drawn from the tokens after exactly this
+      discovery, months of context ago. So the fix was not to restyle anything: it was to extract
+      that field into `ui/components/text-field.slint` as `SdTextField` and use it in all four places
+      - the capture note, the Observation Summary, the marker comment, the font-family field. There
+      is now one text field in the product, `LineEdit`/`TextEdit` are no longer even imported, and a
+      guard fails the build if either returns.
+
+      The owner asked for exactly this and it is worth quoting, because it names the principle better
+      than the defect did: "Harusnya textbox, textarea punya prilaku yang sama dimanapun di
+      aplikasi."
+
+      Guarded by the_product_has_exactly_one_text_entry_component and
+      the_observation_summary_is_visible_persistent_and_outside_the_tab_body, verified by mutation.
+    status: resolved
+  - id: BUG-46
+    title: The capture note field is single-line, so a longer note scrolls out of sight as it is typed
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test
+    component: capture
+    severity: medium
+    contradicts: [FR-2]
+    root_cause: code
+    evidence: |
+      The field is a `TextInput` with `single-line: true`. Text runs off to the right and the
+      Reviewer cannot see what they have written.
+    impact: |
+      Reported as "dia bukan text area, dan malah membuat dia panjang ke kanan, sampe gak bisa
+      dilihat apa yang diketik". A Note is prose about what is wrong; a field that hides its own
+      contents is not usable for that.
+    why_undetected: |
+      Every test typed nothing, and every manual check typed a few characters.
+    fix: |
+      `single-line: true` is not an oversight - it is the ONLY way `accepted` fires, and `accepted`
+      is what makes Enter save. Slint's TextInput consumes Return itself when multi-line, so the
+      window's FocusScope never sees it and there is no capture phase to intercept it in.
+
+      So this is a trade, and the owner has to know which side they are on:
+        - wrapping text area, Enter inserts a newline, Ctrl+Enter saves (the Slack/GitHub
+          convention), hint text updated to match;
+        - or stay single-line and keep Enter.
+      Recommendation is the first: the owner has now asked for a text area twice, and Ctrl+Enter is
+      the convention every comment box they already use follows.
+    resolved: |
+      2026-08-27. `wrap: word-wrap` with `single-line: true`, and the field's box takes its height
+      from the input's preferred height so a wrapped note is shown rather than clipped.
+
+      The owner's clarification is what unlocked this - "single line, tapi wrapping ke bawah" - and
+      it turned out not to be a trade at all: `TextInput::layout_info` in i-slint-core consults
+      `wrap()` without regard for `single_line()`, so the text wraps AND Return still reaches
+      `accepted`. The Ctrl+Enter alternative this row recommended is not needed.
+
+      Guarded by the_note_field_wraps_while_staying_single_line, verified by mutation.
+    status: resolved
+  - id: BUG-47
+    title: An edited Observation Summary is discarded when another Finding is selected
+    found: "2026-08-27"
+    found_by: kodesh87, manual test
+    component: finding
+    severity: high
+    contradicts: [FR-2]
+    root_cause: code
+    evidence: |
+      The Observation Summary was bound to a Slint property and nothing else. `load_active_detail`
+      calls `set_observation_summary` for the newly selected Finding, which overwrites whatever was
+      typed. There was no write path to the store at all: `update_note` existed on the port and on
+      the SQLite adapter and was called from nowhere in the desktop app.
+    impact: |
+      Owner: "Ketika edit note dan pindah ke finding lain, edit note yang sudah diubah hilang ke
+      awal." Silent data loss - the edit disappears with no error and no sign, and a Reviewer finds
+      out about it later or not at all. FR-2 promises the Editor shows the Finding's note.
+    why_undetected: |
+      Every test of the note path exercised capture-time notes, which ARE persisted, by
+      `persist_finding`. Nothing tested editing one afterwards, because until BUG-45 was fixed the
+      field could not be seen, let alone edited.
+    fix: |
+      2026-08-27. A `observation-edited` callback writes through to `FindingStore::update_note` on
+      every edit, against the id in a new `active-finding-id` property set by `load_active_detail`.
+
+      On every edit rather than on blur or close: a note is a few hundred bytes and the write is
+      sub-millisecond, and a debounce would be a second place for the text to be lost. With no
+      Finding selected the handler returns rather than writing, which would otherwise attach the note
+      to whichever row happened to be first.
+
+      Guarded by an_edited_observation_summary_is_written_to_the_store, verified by mutation.
+    status: resolved
+  - id: BUG-48
+    title: The filmstrip retains every Finding's image at full resolution to fill 120x86 cards
+    found: "2026-08-27"
+    found_by: kodesh87, manual test
+    component: finding
+    severity: high
+    contradicts: [NFR-6]
+    root_cause: code
+    measurement: |
+      2026-08-27, instrumented in the release build, on the owner's library of 61 Findings:
+
+        overlay canvas 6000x3840 = 87.9MB each, two retained   ->  175.8 MB, by design (BUG-28)
+        thumbnails n=61 decoded_bytes=230.8MB                  ->  for cards drawn at 120x86
+        process private bytes at start-up                      ->  650.1 MB
+
+      The 230.8 MB is the defect. It grows with every capture taken, so the product gets heavier the
+      more it is used - at 200 Findings it would be roughly 750 MB of thumbnails alone.
+    evidence: |
+      `load_findings_into_window` called `image::open` and `rgba_to_slint_image` per Finding with no
+      downscale, and the resulting `slint::Image` was held in the filmstrip model for the life of the
+      window. Each also becomes a GPU texture at that size.
+    impact: |
+      Owner: "kenapa memori meningkat tajam sampai 400mb?" - and it was worse than reported.
+    why_undetected: |
+      Nothing here measures memory, and a small vault hides it. It also became more visible with the
+      BUG-41 fix: the model now persists rather than being rebuilt per click, so the textures behind
+      it stop churning and stay resident.
+    fix: |
+      2026-08-27. Thumbnails are downscaled to 240x172 - a 120x86 card at 2x for a HiDPI display -
+      before they enter the model, via `DynamicImage::thumbnail`, the cheap box-filter path that is
+      the right trade for a card that size. The selected Finding's own image stays full-size, because
+      that one is the canvas.
+
+      Expected saving on this library: 230.8 MB down to roughly 10 MB, plus the same proportion of
+      GPU texture. The overlay's 175.8 MB is untouched and remains the deliberate trade recorded in
+      BUG-28 - it buys the capture latency, and giving it back means giving back a 92 MB copy per
+      capture.
+
+      Guarded by filmstrip_thumbnails_are_downscaled_before_they_are_retained, verified by mutation.
+    status: resolved
+  - id: BUG-49
+    title: The overlay reports region and screen sizes in logical pixels while everything downstream is physical
+    found: "2026-08-27"
+    found_by: kodesh87, manual test
+    component: capture
+    severity: medium
+    contradicts: [FR-1]
+    root_cause: code
+    evidence: |
+      The selection badge read `round(sel-w / 1px)` and the full-screen control read
+      `round(root.crosshair-w / 1px)` - both LOGICAL pixels of the overlay window. The crop, the
+      stored file and the Editor's readout are all in physical pixels. On the owner's 175% display
+      that is a 1.75x understatement of what is being taken.
+
+      A second, separate reason the two numbers differ: the saved image is reduced by the active
+      QualityBudget in `persist_finding`, so a 2560x1440 screen capture is stored at 1600x900. That
+      is correct behaviour, invisibly applied.
+    impact: |
+      Owner: "preview resolusi kok beda antara yang di capture mode dengan snapdown editor? di
+      snapdown editor tertulis 1600 x 900px, tapi di capture mode 2194 x 1234 px?" Two parts of the
+      product appeared to disagree about the same image, and one of them was in fact wrong.
+    why_undetected: |
+      Both numbers are plausible on their own, and nothing compared them. The overlay's own tests
+      assert placement and behaviour, never the arithmetic of what it displays.
+    fix: |
+      2026-08-27. Two changes, one per cause.
+
+      The overlay now reports SOURCE pixels: the selection badge multiplies by `source-scale`, and
+      the full-screen readout comes straight out of the monitor rectangle, which is already in
+      snapshot pixels - so nothing is converted and nothing can drift.
+
+      The Editor now says what the budget did: `1600 x 900 px  ·  from 2560 x 1440`, shown only when
+      the two differ, read from the `region` already recorded on the Finding. The difference was
+      always legitimate; with one number visible there was no way to tell a reduction from a bug.
+
+      Guarded by the_overlay_reports_dimensions_in_source_pixels and
+      the_editor_shows_what_the_quality_budget_reduced, both verified by mutation.
+    correction: |
+      The first version of the Editor half of this fix DID NOTHING, and it is recorded because the
+      way it was caught was luck rather than method.
+
+      It read the region with serde_json::from_str::<Region>. The column does not hold JSON: it holds
+      "419,344,1020,885", written by persist_finding as a bare comma-separated string. So the parse
+      returned None for every row and the readout never changed - and the guard written beside it
+      asserted that the CODE called a parser, which it did. Green test, no behaviour.
+
+      Found by opening the live database to check something unrelated. AGENTS.md records four earlier
+      cases of code that compiled, tested green and was reached by nobody; this is the same shape with
+      a different surface, and the lesson is the narrower one: a parser must be tested against a
+      string taken from the real store, not against the type it is hoped to be.
+
+      Now parsed by parse_region_field, unit-tested in main.rs against that exact string plus the JSON
+      form the first attempt assumed - which must NOT parse, or the caller is guessing again. Both
+      verified by mutation.
+    status: resolved
+  - id: BUG-50
+    title: A whole window cannot be selected, because the tightest container under the pointer always wins
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test
+    component: capture
+    severity: medium
+    contradicts: [FR-1]
+    root_cause: code
+    evidence: |
+      `detect_capture_targets` sorts candidates by z-order and then by ascending area, and
+      `on_target_at` took the FIRST match. That ordering is deliberate and correct for occlusion - the
+      tightest container of the frontmost window is what a click should take - but it also means a
+      panel inside an application always wins, and there is no way to ask for the application.
+    impact: |
+      Owner: "agak sulit ke window, ada case dimana karena dia mendeteksi panel per panel, saya jadi
+      kesulitan untuk mendeteksi 1 window penuh." FR-1 promises 1-click container selection; the
+      container people most often want - a whole window - was the one container unreachable. The only
+      workaround was to drag it by hand, which is what the feature exists to avoid.
+    why_undetected: |
+      The detection's tests assert that it FINDS containers and orders them correctly, and it does
+      both. Nothing asserted that every candidate it finds can be reached, which is a different
+      question - and the same shape as the four "built but reachable by nobody" cases in AGENTS.md,
+      one level down: reachable in principle, not in practice.
+    fix: |
+      2026-08-27. The hit test takes a LEVEL and indexes the candidates under the pointer with `.nth`
+      instead of `.find`. The wheel walks it outward and back in, clamped rather than wrapped -
+      wrapping means one notch too many silently returns to the panel being escaped, which is
+      indistinguishable from the wheel not working. Moving the pointer resets it to 0, because the
+      candidates under a new point are a different list and level 2 there means something unrelated.
+
+      A hint - "Scroll to widen · 2 / 5" - appears only while there is somewhere to widen to. Without
+      it the affordance is invisible, and an invisible affordance is not one: the detection walks
+      panels before windows, so a Reviewer wanting the window has no reason to try the wheel.
+
+      Guarded by the_reviewer_can_walk_outward_to_a_whole_window, verified by mutation.
+    status: resolved
+  - id: BUG-51
+    title: The capture overlay retains two full-desktop canvases for the life of the process
+    found: "2026-08-27"
+    found_by: kodesh87, manual test
+    component: capture
+    severity: high
+    contradicts: []
+    root_cause: code
+    no_requirement: |
+      Deliberately empty, and that is a finding of its own: NO requirement in this corpus mentions
+      memory footprint. NFR-6 covers start-up TIME (3 s to a usable tray icon), NFR-7 covers not
+      needing administrator rights; there is nothing about how much memory the product may hold at
+      rest. So nothing was violated, and nothing could have flagged this - it took the owner opening
+      Task Manager.
+
+      Classified `code` rather than `architecture` for the same kind of reason: the retained pair of
+      buffers was an implementation choice recorded in BUG-28's resolution, not a decision in
+      `.how/`. No `AD-N` prescribed it, so changing it contradicts nothing and needs no `DEC-`.
+    measurement: |
+      2026-08-27, instrumented in the release build, on a desktop of two 4K monitors (one portrait):
+
+        canvas 6000x3840 = 23.04 Mpx = 87.9 MB, TWO retained  ->  175.8 MB, from start-up onwards
+        monitors occupy 16.59 Mpx of that canvas               ->  28% of it is desktop gap
+
+      After the fix, idle before any capture:
+
+        private working set   69.7 MB     (was ~390 MB as the owner read it in Task Manager)
+        working set          102.5 MB     (was 280.1 MB)
+        private bytes        458.0 MB     (commit charge, largely GPU reservation, not resident)
+    evidence: |
+      `LiveOverlay` held `snapshots: [SharedPixelBuffer; 2]`, allocated at start-up and never
+      released. That was the accepted trade recorded in BUG-28's resolution: allocation is 33-37 ms
+      because `SharedPixelBuffer::new` fills through `SharedVector`'s per-element `FromIterator`
+      rather than calling `calloc`, so it was moved off the capture path entirely.
+
+      Two buffers rather than one because `make_mut_bytes` is copy-on-write and Slint's bindings are
+      lazy: the backdrop and the lens latch their `source` when they RENDER, a hidden window never
+      renders, and clearing the overlay's `snapshot-image` property therefore releases nothing.
+    impact: |
+      Owner, three times: "yang fatal adalah size 400mb". They then went and measured Snagit, which
+      is the observation that reframed the problem - its capture process idles at 60 MB and balloons
+      to 1 GB only while capturing, its editor sits at ~200 MB, its RPC helper at 1 MB. Snapdown was
+      holding capture-time memory at rest, in one process, and losing to a three-process design on
+      idle footprint for no benefit the Reviewer could see.
+    why_undetected: |
+      Nothing here measures memory, and the trade was recorded as accepted in BUG-28's resolution
+      rather than as an open question - so it read as settled. It was also invisible on a small vault
+      and on a single-monitor desktop.
+    fix: |
+      2026-08-27. ONE canvas, allocated fresh per capture, on its own thread beside the grab.
+
+      A freshly allocated buffer has a refcount of one by construction, so there is nothing to
+      alternate away from and the copy-on-write hazard disappears rather than being worked around.
+      The 33-37 ms did not go away - it moved onto a thread that runs concurrently with the 132-167 ms
+      grab, where it costs no wall clock. `virtual_desktop_bounds` is cheap enough to call before the
+      grab to learn the size; if the desktop changes shape mid-capture the size will not match and the
+      event loop allocates instead, which is the right price for a display being plugged in.
+
+      Start-up now allocates nothing, so a session that never captures holds nothing. The peak during
+      a capture is the old canvas plus the new one, which is the profile Snagit has: low at rest, a
+      spike while in use.
+
+      Considered and rejected: splitting the process, which the owner raised. It would not have freed
+      the 175.8 MB, because that memory belongs to the capture side and the capture side must stay
+      resident for the hotkey. It would have added a second process, IPC, and a contradiction of
+      AD-11 to reclaim the Editor's renderer alone.
+
+      Still not measured: the effect on time-to-overlay. The instrumentation for it is in the build
+      the owner is testing, deliberately, because a capture has to happen for the number to exist.
+
+      Guarded by the_capture_canvas_is_allocated_per_capture_off_the_event_loop, verified by mutation
+      - including one that moves the allocation after the grab, which is the whole of the latency
+      argument.
+    measurement_after: |
+      2026-08-27, measured by the owner from Task Manager on the shipped build. Private working set:
+
+        editor open, before any capture        64.4 MB
+        first capture mode, cancelled         176 MB
+        again                                 190 MB -> cancel -> 171 MB
+        again                                 199 MB -> cancel -> 175 MB
+        capture and save                     ~220 MB -> after  -> 190 MB
+        capture and save                      199 MB ->          186 MB
+        capture and save                     ~220 MB ->          189 MB
+        window closed                                            185 MB
+
+      It PLATEAUS. Three post-capture readings of 190, 186 and 189 MB is the same number three
+      times, not a climb - so nothing accumulates per capture, which is the question these figures
+      were taken to answer.
+
+      Latency, from the same session's instrumented log:
+
+        grab=163.07ms  alloc_join_wait=8.5us
+        grab=183.69ms  alloc_join_wait=2.0us
+
+      The join waited MICROSECONDS. The 33-37 ms allocation finished long before the grab did, so it
+      costs nothing in wall clock - which was the whole claim, now measured rather than argued. The
+      owner confirms the overlay appears as quickly as before.
+
+      The remaining ~120 MB above idle is structural, and worth naming precisely rather than treating
+      as slack:
+        - 87.9 MB is the ONE canvas still on screen in the hidden overlay. It cannot be released at
+          close, because Slint's lazy bindings mean the backdrop and the lens hold the `source` they
+          latched at their last render and a hidden window never renders again. It IS released - at
+          the start of the next capture, when the overlay renders the new one, which is exactly why
+          the peak is ~220 MB (old plus new) and settles back to ~190 MB;
+        - the rest is the overlay window's own renderer surface for a 6000x3840 window, retained
+          deliberately because rebuilding it is BUG-27's black blink.
+
+      Going lower means giving one of those up. Destroying the overlay window when idle brings the
+      blink back. Destroying the EDITOR window on close - which is why 185 MB survives closing it -
+      is `OQ-19` and `DEC-003`'s own named reversal trigger, and it is the owner's decision, not a
+      defect. For scale: Snagit idles at ~261 MB across three processes; this is 64 MB before use and
+      185 MB after, in one.
+    status: resolved
+  - id: BUG-52
+    title: The mouse cursor disappears once a region is selected, because it is hidden unconditionally
+    found: "2026-08-27"
+    found_by: kodesh87, manual capture test
+    component: capture
+    severity: medium
+    contradicts: [FR-2]
+    root_cause: code
+    evidence: |
+      `mouse-cursor: none` was set on the catch-all TouchArea with no condition, so the OS pointer was
+      hidden for the whole of capture mode. The crosshair that replaces it is drawn only while
+      `!is-narrating`, so between selecting a region and saving there was no pointer on screen at all
+      - it reappeared over the note panel and nowhere else, because that panel's own TouchArea
+      restores the default.
+    impact: |
+      Owner: "ketika sudah menyorot, masih di capture mode, mouse cursor saya hilang, hanya muncul di
+      area catatan." The Reviewer was aiming at a Save button they could not see. FR-2 is about the
+      note surviving the capture; a control you cannot point at is a control you cannot use.
+    why_undetected: |
+      Introduced in the same change that hid the cursor, and the guard written alongside it asserted
+      that the cursor WAS hidden - which was the requirement as understood at the time. The
+      requirement was incomplete, not the code, and the test encoded the incomplete version. A guard
+      is only ever as good as the sentence behind it.
+    fix: |
+      2026-08-27. `mouse-cursor: root.is-narrating ? MouseCursor.default : MouseCursor.none;` - and
+      deliberately the crosshair's OWN visibility condition rather than a separately reasoned one, so
+      the two cannot drift apart again.
+
+      Guarded by the_lens_sits_beside_the_pointer_and_waits_for_it_to_settle, which now asserts both
+      halves: hidden while the crosshair stands in for it, and restored once it does not. Verified by
+      mutation, including one that hides it unconditionally again.
+    status: resolved
+  - id: BUG-53
+    title: Changing the display resolution takes the process to 363 MB
+    found: "2026-08-27"
+    found_by: kodesh87, manual test
+    component: capture
+    severity: medium
+    contradicts: []
+    root_cause: code
+    evidence: |
+      NOT DIAGNOSED, and it MUST NOT be fixed before it is. Owner: "Ketika ubah resolusi 2x. saya
+      lihat ram membengkak ke 363mb", against a steady state of 185-190 MB after ordinary captures.
+
+      A resolution change is the one path that takes the `!layout_unchanged` branch: `live.clear()`
+      drops the outgoing `LiveOverlay`, a new `CaptureOverlayWindow` is created, and a new canvas is
+      allocated at the new size. Two changes therefore mean three windows created and two dropped, so
+      roughly 363 - 185 = 178 MB is about two canvases' worth - which is suggestive and is NOT
+      evidence.
+
+      At least three mechanisms could produce it and they need telling apart:
+        - the outgoing `LiveOverlay` is not dropped at all, because something still holds a strong
+          handle to the window;
+        - it IS dropped, but Slint routes window destruction through the event loop and this drop
+          happens inside an event-loop callback, so the native window and its 6000x3840 renderer
+          surface are released later than the owner measured;
+        - the canvas pre-allocated on the grab thread is sized from `virtual_desktop_bounds()` taken
+          BEFORE the grab. A resolution change mid-capture makes that size wrong, so an 87.9 MB
+          buffer is allocated and discarded - transient, but it is transient at exactly the moment
+          being measured.
+    impact: |
+      Only reachable by changing display configuration, which a Reviewer does rarely - so this is
+      severity medium rather than high. But it is the one path that CREATES windows rather than
+      reusing them, which makes it the path where a handle leak would hide, and a leak there would
+      grow without bound over a long session on a laptop that docks and undocks.
+    why_undetected: |
+      Nothing measures memory, and nothing here exercises a display-configuration change - it cannot
+      be done from a test. This was found the only way it could be: the owner changed their
+      resolution and looked.
+    fix: |
+      NOT YET. Instrumentation first, in the build the owner is testing:
+        - `LiveOverlay` now has a `Drop` impl that logs the drop with the canvas size, so whether the
+          outgoing entry is released at all stops being a guess;
+        - window creation logs a running count of creations against drops, so the number of live
+          overlay windows is readable rather than inferred;
+        - the discarded pre-allocation logs its planned and actual sizes.
+
+      That `Drop` impl also hides the outgoing window, which is a correctness improvement independent
+      of this defect: it takes the window off screen immediately rather than whenever the scheduled
+      destruction runs.
+
+      The three-fix rule applies from here. If the first hypothesis the log supports does not hold,
+      the second attempt gets a new hypothesis rather than a second patch.
+    diagnosis: |
+      2026-08-27. Measured, and two of the three candidate mechanisms were refuted outright.
+
+      The owner's sequence, private working set, changing both monitors one level each time:
+
+        capture 1  (native)      173 MB
+        capture 2  (lower)       189 MB
+        capture 3  (native)      370 MB
+        capture 4  (lower)       210 MB
+        capture 5  (native)      400 -> 384 MB
+
+      At the SAME resolution: 173 -> 370 -> 384 MB. It accumulates. The instrumented log for the
+      same session:
+
+        LiveOverlay dropped (#1), canvas 6000x3840
+        overlay window created (#1), placement (-1600, -157, 4160, 2560), dropped so far 1
+        LiveOverlay dropped (#2), canvas 4160x2560
+        overlay window created (#2), placement (-2160, -1376, 6000, 3840), dropped so far 2
+        LiveOverlay dropped (#3), canvas 6000x3840
+        overlay window created (#3), placement (-1600, -1376, 4160, 2976), dropped so far 3
+        LiveOverlay dropped (#4), canvas 4160x2976
+        overlay window created (#4), placement (-2160, -815, 6000, 3840), dropped so far 4
+
+      Four creations, four drops, and NOT ONE "pre-allocated canvas discarded" line. So:
+        - the hypothesis that a strong handle was outstanding is REFUTED - every `LiveOverlay` was
+          dropped, and its canvas with it;
+        - the hypothesis that the pre-allocated buffer was being thrown away is REFUTED - the
+          planned size matched the captured size on every single capture, because
+          `virtual_desktop_bounds()` is read at capture time and therefore already reflects the new
+          resolution.
+
+      What remains is the third: dropping a Slint `ComponentHandle` does not free the native
+      window's renderer resources. The per-cycle jumps were +181 MB and +174 MB, which is two 87.9 MB
+      allocations - a 6000x3840 framebuffer and its snapshot texture - so the surface of every
+      overlay window ever created is still alive.
+    fix: |
+      2026-08-27. Stop creating a second window. One overlay window per process: a layout change now
+      records the new `placement` on the existing entry and releases the old canvas, and that is all
+      it does.
+
+      There is no resize call, and reaching for one was the wrong instinct - caught within the minute
+      by BUG-26's own guard. The geometry timer further down already re-asserts each capture's
+      placement through winit in DEVICE pixels, on every capture, precisely because that path takes
+      no scale factor and so cannot be wrong. A Slint-level resize would have needed
+      `scale_factor()`, which is the call BUG-26 exists about. The rebuild was not merely leaky, it
+      was unnecessary: the code that makes it unnecessary was already there.
+
+      The construction path survives for exactly one case - there is no window yet, because the
+      start-up pre-warm failed - and the guard asserts it sits behind that question rather than
+      behind "has the layout changed".
+
+      This also gives back a cost the previous code accepted in writing: a layout change no longer
+      pays the renderer warm-up, so it no longer risks BUG-27's blink either.
+
+      `LiveOverlay` keeps its `Drop` impl, which hides the outgoing window. It is now reached only
+      when the whole overlay is torn down, and it is a correctness improvement independent of this
+      defect.
+
+      NOT verified by the agent: this cannot be tested here - changing display configuration is not
+      something a test can do, which is how the defect survived in the first place. The
+      instrumentation is left in the owner's build so the next resolution change answers it in one
+      line: a RESIZED entry and no new creation.
+
+      Guarded by the_capture_overlay_is_reused_across_captures_not_rebuilt, verified by mutation -
+      including one that throws the outgoing window away again and one that moves the creation out
+      from behind the existence check.
+    verified: |
+      2026-08-27, by the owner, repeating the exact sequence that found it - capture, drop both
+      monitors one level, capture, raise them again, capture, and so on. Private working set:
+
+                              before        after
+        idle                  64 MB         76 MB
+        capture 1 (native)   173 MB        178 MB
+        capture 2 (lower)    189 MB        128 MB
+        capture 3 (native)   370 MB        184 MB
+        capture 4 (lower)    210 MB        129 MB
+        capture 5 (native)   384 MB        182 MB
+
+      At native resolution: 178, 184, 182 MB. At the lower one: 128, 129 MB. The same number each
+      time it returns to a resolution, where before it climbed 173 -> 370 -> 384. The lower
+      resolution now costs LESS than the higher one, which is what a canvas sized to the desktop
+      should do and what the leak was masking.
+
+      The log confirms it by silence: no `overlay window created (#2)`, no `LiveOverlay dropped`, and
+      no discarded pre-allocation. One window, reused, for the whole session.
+
+      The instrumentation has been removed. `LiveOverlay`'s `Drop` impl stays, without the counter:
+      hiding the outgoing window is a correctness improvement in its own right.
+    status: resolved

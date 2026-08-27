@@ -1,0 +1,83 @@
+// Copyright © Wira Digital Indonesia
+//
+// ONE text field for the whole product.
+//
+// This exists because `std-widgets`' `LineEdit` and `TextEdit` do not use this product's palette at
+// all: they paint themselves from Slint's own style palette, which is why the Observation Summary
+// rendered white-on-white on a white panel and only became legible once focused - and why it turned
+// grey while being edited. Two different text-entry behaviours in one product, neither of them ours.
+//
+// The capture overlay's note field was already drawn by hand from `Theme`, for the same reason and
+// after the same discovery. This is that field, extracted, so the capture note and the Editor's
+// summary are literally the same component rather than two implementations that agree by luck.
+//
+// A styled `LineEdit`/`TextEdit` MUST NOT be reintroduced anywhere in this product.
+
+import { Theme } from "../theme.slint";
+
+export component SdTextField inherits Rectangle {
+    in property <string> placeholder;
+    in property <length> text-size: 13px;
+    // Single-line SEMANTICS - `accepted` fires, so Enter can commit - with wrapping DISPLAY, because
+    // a note that scrolls off to the right hides what has just been typed. Those two are compatible:
+    // `TextInput::layout_info` in i-slint-core consults `wrap()` without regard for `single_line()`.
+    in property <bool> commit-on-enter: false;
+    in property <length> pad: 10px;
+
+    in-out property <string> text <=> input.text;
+    out property <bool> has-focus: input.has-focus;
+    out property <length> content-height: input.preferred-height;
+
+    callback edited();
+    callback accepted();
+
+    public function focus-input() {
+        input.focus();
+    }
+
+    background: Theme.bg-app;
+    border-radius: Theme.radius-sharp;
+    // The border is the only thing focus changes. The fill, the border and the placeholder are all
+    // visible BEFORE any interaction, because the styled widget this replaces only looked like
+    // somewhere you could type once it already had focus - so the first thing the Reviewer saw was a
+    // blank strip they had no reason to click.
+    border-width: input.has-focus ? 2px : 1px;
+    border-color: input.has-focus ? Theme.border-focus : Theme.border-strong;
+    clip: true;
+
+    input := TextInput {
+        x: root.pad;
+        y: root.pad;
+        // Explicit geometry, not inherited. A `Rectangle` child with no size fills its parent; this
+        // is a built-in element and takes its preferred height, which is what lets the field grow
+        // with a wrapped note.
+        width: parent.width - root.pad * 2;
+        font-size: root.text-size;
+        font-family: "IBM Plex Sans";
+        color: Theme.text-primary;
+        selection-background-color: Theme.accent-primary;
+        selection-foreground-color: Theme.text-on-accent;
+        single-line: root.commit-on-enter;
+        wrap: word-wrap;
+        edited => {
+            root.edited();
+        }
+        accepted => {
+            root.accepted();
+        }
+    }
+
+    // Pinned to the same origin as the caret. The first attempt centred the placeholder vertically
+    // while the text itself rendered from the top, so the grey prompt and the caret sat in visibly
+    // different places.
+    if root.text == "" : Text {
+        x: root.pad;
+        y: root.pad;
+        width: parent.width - root.pad * 2;
+        text: root.placeholder;
+        font-size: root.text-size;
+        font-family: "IBM Plex Sans";
+        color: Theme.text-dim;
+        wrap: word-wrap;
+    }
+}
