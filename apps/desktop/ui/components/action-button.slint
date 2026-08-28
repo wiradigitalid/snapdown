@@ -97,3 +97,19 @@ export component SdCaption inherits Text {
     font-family: "IBM Plex Sans";
     vertical-alignment: center;
 }
+
+/// A heading inside a RENDERED document, at a Markdown level.
+///
+/// The Assemble preview used `SdSectionLabel` for its sections - 11px, upper case, letter-spaced -
+/// which is the inspector's vocabulary for a panel heading and says nothing about depth. In a
+/// document, `## Bundle Notes` and `## Finding 1` are the same level and have to look it. The
+/// owner's words: "maunya mencerminkan markdown preview sebenarnya".
+export component SdDocHeading inherits Text {
+    in property <int> level: 2;
+
+    font-size: root.level == 1 ? 19px : (root.level == 2 ? 15px : 13px);
+    font-weight: 800;
+    color: Theme.text-primary;
+    font-family: "IBM Plex Sans";
+    wrap: word-wrap;
+}

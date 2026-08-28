@@ -271,14 +271,35 @@ fn load_findings_into_window(
 
     let mut filmstrip: Vec<FindingThumb> = Vec::new();
 
-    // A capture rebuilds the strip, and the Reviewer may be halfway through ticking Findings for a
-    // Bundle. Rebuilding with `is_selected: false` would silently discard that.
-    let already_ticked: Vec<String> = window
-        .get_filmstrip_items()
-        .iter()
-        .filter(|t| t.is_selected)
-        .map(|t| t.id.to_string())
-        .collect();
+    // A capture becomes THE selection: the new Finding alone, ticked and on the canvas.
+    //
+    // Ticks used to survive a capture, so the Reviewer would not lose a half-built Bundle. That
+    // created a trap the owner hit: a capture makes the new Finding ACTIVE - it is what the canvas
+    // shows and what Markers get added to - while an older Finding stays TICKED from before. Assemble
+    // follows the tick, so the Bundle silently took the wrong Finding, with the right one's Markers
+    // still sitting in the inspector.
+    //
+    // Verified against the owner's own library: the Finding being annotated had 19 Markers, and the
+    // Bundle written from that session held a different one with 3 empty ones.
+    //
+    // Pressing the capture hotkey says "this is what I am working on now", so it selects like a plain
+    // click does. Any other rule lets the tick and the canvas point at different Findings, and
+    // nothing on screen has to be wrong for the Bundle to be.
+    let already_ticked: Vec<String> = match active_finding_id {
+        Some(fresh) => {
+            // The anchor moves with it. Ticking the new Finding alone while leaving the anchor on the
+            // last one clicked would make the next Shift-click range from a card the Reviewer is no
+            // longer working on - which is what they reported: "index kedua yang jadi anchor".
+            SELECTION_ANCHOR.with(|held| *held.borrow_mut() = fresh.to_string());
+            vec![fresh.to_string()]
+        }
+        None => window
+            .get_filmstrip_items()
+            .iter()
+            .filter(|t| t.is_selected)
+            .map(|t| t.id.to_string())
+            .collect(),
+    };
 
     let target_active_id = active_finding_id
         .map(|s| s.to_string())
@@ -515,14 +536,7 @@ fn refresh_selection_count(window: &AppWindow) {
 ///
 /// Rewritten in place rather than by rebuilding the strip: a rebuild decodes and rescales every
 /// thumbnail, which measured 320 ms on the owner's library and is why `BUG-41` exists.
-fn click_finding(
-    window: &AppWindow,
-    ctx: &AppContext,
-    anchor_id: &RefCell<String>,
-    id: &str,
-    ctrl: bool,
-    shift: bool,
-) {
+fn click_finding(window: &AppWindow, ctx: &AppContext, id: &str, ctrl: bool, shift: bool) {
     let items = window.get_filmstrip_items();
     let Some(vec_model) = items.as_any().downcast_ref::<VecModel<FindingThumb>>() else {
         // Not the model this function knows how to update in place. A full rebuild is slow rather
@@ -541,12 +555,12 @@ fn click_finding(
     // The anchor is held by id, not by index: a capture rebuilds the strip and every index moves.
     // An anchor that is no longer in the strip - it went into a Bundle, say - falls back to the
     // click, which makes Shift behave like a plain click rather than selecting a wild range.
-    let anchor = {
-        let held = anchor_id.borrow();
+    let anchor = SELECTION_ANCHOR.with(|held| {
+        let held = held.borrow();
         rows.iter()
             .position(|thumb| thumb.id.as_str() == held.as_str())
             .unwrap_or(clicked)
-    };
+    });
     let (lo, hi) = if anchor <= clicked {
         (anchor, clicked)
     } else {
@@ -583,7 +597,7 @@ fn click_finding(
     }
 
     if !shift {
-        *anchor_id.borrow_mut() = id.to_string();
+        SELECTION_ANCHOR.with(|held| *held.borrow_mut() = id.to_string());
     }
 
     refresh_selection_count(window);
@@ -882,10 +896,11 @@ fn show_bundle_preview(window: &AppWindow, pending: &PendingBundle) {
     let blocks = bundle_doc_blocks(pending);
     window.set_bundle_preview_blocks(ModelRc::from(Rc::new(VecModel::from(blocks))));
     window.set_bundle_preview_finding_count(pending.planned.items.len() as i32);
+    window.set_bundle_preview_markdown(pending.planned.markdown.clone().into());
     window.set_bundle_preview_text_tokens((pending.planned.markdown.len() / 4) as i32);
-    // Preview, every time it opens. The Code view is for checking, and a checking view that is
-    // sticky becomes the default by accident.
-    window.set_bundle_preview_shows_code(false);
+    // Edit, every time it opens. Preview is for checking what will be handed over, and a checking
+    // view that is sticky becomes the default by accident.
+    window.set_bundle_preview_shows_source(false);
     window.set_bundle_preview_open(true);
 }
 
@@ -945,6 +960,17 @@ fn write_bundle(ctx: &AppContext, pending: &PendingBundle) -> Result<String, Str
 }
 
 thread_local! {
+    /// The Finding a Shift-click ranges FROM.
+    ///
+    /// It lives here rather than in a closure because two different things move the selection - a
+    /// click on a card, and a capture - and both have to move the anchor with it. When only the
+    /// click did, a capture left the anchor on the previous Finding: the new card was ticked and on
+    /// the canvas, and a Shift-click ranged from wherever the Reviewer had been before, which is the
+    /// same class of divergence as `BUG-67` one step further in.
+    ///
+    /// Held by id, not by index: a capture rebuilds the strip and every index moves.
+    static SELECTION_ANCHOR: RefCell<String> = const { RefCell::new(String::new()) };
+
     /// The containers a single click may take, in CANVAS pixels, smallest first.
     ///
     /// Filled by a detection thread that runs alongside the grab, and read by the overlay's
@@ -1348,13 +1374,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The Shift anchor lives here rather than in the UI: Slint has the click, but the anchor is a
     // piece of interaction STATE that has to survive a click without being changed by it, and the
     // repeater has nowhere to keep one.
-    let selection_anchor: Rc<RefCell<String>> = Rc::new(RefCell::new(String::new()));
     let win_weak_sel = main_window.as_weak();
     let ctx_sel = ctx.clone();
-    let anchor_sel = selection_anchor.clone();
     main_window.on_finding_clicked(move |id, ctrl, shift| {
         if let Some(win) = win_weak_sel.upgrade() {
-            click_finding(&win, &ctx_sel, &anchor_sel, &id, ctrl, shift);
+            click_finding(&win, &ctx_sel, &id, ctrl, shift);
         }
     });
 
@@ -1631,6 +1655,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         recompose_markdown(pending);
+        win.set_bundle_preview_markdown(pending.planned.markdown.clone().into());
         win.set_bundle_preview_text_tokens((pending.planned.markdown.len() / 4) as i32);
     });
 
@@ -1638,24 +1663,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(windows)]
     {
         use i_slint_backend_winit::WinitWindowAccessor;
+        // A PRESS on the titlebar. Windows refuses `SC_MOVE` for a maximized window, so there is
+        // nothing to do for one here - and doing something anyway is what made a single click
+        // restore the window, as if it had been a double click.
+        //
+        // The swallowed Result this replaced (`let _ = winit_win.drag_window()`) is the class
+        // `AGENTS.md` records: what it discarded was the error message explaining why the titlebar
+        // was dead.
         let win_drag = main_window.as_weak();
         main_window.on_drag_window_requested(move || {
             let Some(win) = win_drag.upgrade() else {
                 return;
             };
-            // A maximized window cannot be moved. Windows refuses `SC_MOVE` for one, so
-            // `drag_window` returns an error and the titlebar simply stops responding - which is
-            // what the owner reported after resizing the Editor to test something else. Every window
-            // manager's answer is the same: dragging a maximized window restores it first.
             if win.window().is_maximized() {
-                win.window().set_maximized(false);
+                return;
             }
             win.window().with_winit_window(|winit_win| {
-                // NOT `let _ =`. This is the class `AGENTS.md` records: a swallowed Result an
-                // invariant depends on. It swallowed the reason the titlebar was dead and left
-                // nothing to read.
                 if let Err(e) = winit_win.drag_window() {
                     eprintln!("The titlebar drag was refused by the window manager: {e}");
+                }
+            });
+        });
+
+        // MOVEMENT while the titlebar is held. Only here is a maximized window restored, because
+        // only movement says a drag was meant rather than a click - and once restored it has to be
+        // dragged in the same gesture, or the window snaps back to a corner and stays there.
+        let win_drag_moved = main_window.as_weak();
+        main_window.on_drag_window_moved(move || {
+            let Some(win) = win_drag_moved.upgrade() else {
+                return;
+            };
+            if !win.window().is_maximized() {
+                // Already being dragged by the system; nothing to do.
+                return;
+            }
+            win.window().set_maximized(false);
+            win.window().with_winit_window(|winit_win| {
+                if let Err(e) = winit_win.drag_window() {
+                    eprintln!("The titlebar drag was refused after restoring: {e}");
                 }
             });
         });

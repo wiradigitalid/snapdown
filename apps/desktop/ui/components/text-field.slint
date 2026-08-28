@@ -31,8 +31,18 @@ export component SdTextField inherits Rectangle {
     // the same component, so the type scale, the caret colour and the placeholder behaviour cannot
     // drift from the boxed one.
     in property <bool> flat: false;
+    // Shown, not editable. Used while the document has been hand-edited in the Code view, where
+    // rewriting a note would silently discard what the Reviewer typed.
+    in property <bool> read-only: false;
+    // Monospace, for text whose alignment carries meaning - the Assemble preview's Code view is
+    // CommonMark, and a proportional font makes its structure unreadable.
+    in property <bool> mono: false;
 
     in-out property <string> text <=> input.text;
+    // The height the content wants, so a caller can simply omit `height` and let the field hug its
+    // own text. Callers used to do `max(32px, self.content-height + 16px)` by hand and each guessed
+    // a different pair of numbers, which is why one card grew far taller than the line inside it.
+    min-height: input.preferred-height + root.pad * 2;
     out property <bool> has-focus: input.has-focus;
     out property <length> content-height: input.preferred-height;
 
@@ -62,6 +72,7 @@ export component SdTextField inherits Rectangle {
     }
 
     input := TextInput {
+        read-only: root.read-only;
         x: root.pad;
         y: root.pad;
         // Explicit geometry, not inherited. A `Rectangle` child with no size fills its parent; this
@@ -69,7 +80,7 @@ export component SdTextField inherits Rectangle {
         // with a wrapped note.
         width: parent.width - root.pad * 2;
         font-size: root.text-size;
-        font-family: "IBM Plex Sans";
+        font-family: root.mono ? "IBM Plex Mono" : "IBM Plex Sans";
         color: Theme.text-primary;
         selection-background-color: Theme.accent-primary;
         selection-foreground-color: Theme.text-on-accent;

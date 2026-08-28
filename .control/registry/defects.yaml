@@ -3978,3 +3978,116 @@ defects:
       survived it on the strength of the click handler. The two halves of the gesture are now
       asserted separately.
     status: fixed
+
+  - id: BUG-67
+    title: A Bundle silently took a different Finding from the one being annotated
+    found: "2026-08-28"
+    found_by: the owner - "marker notes yang saya isi gak muncul di preview juga code"
+    component: bundle
+    severity: high
+    contradicts: [UC-9, FR-10]
+    root_cause: code
+    evidence: |
+      Read out of the owner's own `library.db`:
+
+        the Finding being annotated  01a043af-f132…  19 Markers
+        the Finding the Bundle took  01a04315-e1a9…   3 Markers, none with a note
+
+      The Markers were saved correctly - `update_marker` writes the comment, and 14 of 42 rows carry
+      one. They were simply on a different Finding from the one in the Bundle.
+
+      `load_findings_into_window` preserved which Findings were ticked across a capture:
+
+        let already_ticked: Vec<String> = window.get_filmstrip_items()
+            .iter().filter(|t| t.is_selected).map(|t| t.id.to_string()).collect();
+
+      So after a capture the NEW Finding is ACTIVE - it is what the canvas shows and what Markers get
+      added to - while an OLDER Finding stays TICKED from before. Assemble follows the tick.
+    impact: |
+      A Bundle can contain a Finding the Reviewer was not looking at, with the annotations they just
+      wrote sitting on a different one - and nothing on screen has to be wrong for it to happen. Both
+      states are drawn correctly: the accent bar marks the active card, the outline marks the ticked
+      ones. They just point at different cards, and only one of them is the one Assemble uses.
+
+      Worse in a long strip, where the ticked card has scrolled out of view.
+    why_undetected: |
+      The preservation was deliberate - a capture should not discard a half-built Bundle - and it was
+      even tested, as "centang filmstrip tidak hilang setelah capture baru". The test was right about
+      what it asserted and the behaviour behind it was wrong, which is a shape no test finds: nothing
+      compares the tick to the canvas, because until Assemble existed there was nothing that read the
+      tick.
+    fix: |
+      fastpath, done. A capture - and an import - becomes THE selection: the new Finding alone,
+      ticked and on the canvas. Pressing the capture hotkey says "this is what I am working on now",
+      so it selects the way a plain click does.
+
+      The cost is real and accepted: a half-built Bundle's ticks are cleared by a capture. That is
+      recoverable in a few clicks, and the alternative is a Bundle that is silently wrong.
+    verified: |
+      `a_capture_becomes_the_selection` - a fresh Finding is ticked alone, and the preservation path
+      remains for a rebuild that names no new Finding.
+    status: fixed
+
+  - id: BUG-68
+    title: A Marker's note rendered one character per line in the Assemble preview
+    found: "2026-08-28"
+    found_by: the owner - "terender memanjang ke bawah tanpa visible teks (sepertinya 1 karakter = 1 new line)"
+    component: bundle
+    severity: medium
+    contradicts: [UC-9]
+    root_cause: code
+    evidence: |
+      The Marker row in the rendered document was a `HorizontalLayout` carrying `alignment: start`
+      alongside a note field marked `horizontal-stretch: 1`.
+
+      In Slint those two contradict each other. `alignment: start` gives every child its MINIMUM
+      width and distributes nothing, so the stretch factor never applies: the field collapsed to its
+      minimum and the text wrapped after every character.
+
+      The Code view was unaffected, because it printed the same text through a plain `Text` that took
+      the row's width - which is why it read correctly there and not two inches away.
+    impact: |
+      A Marker's note was unreadable in the one screen whose job is to show what is being handed
+      over, and a Finding with several Markers pushed the rest of the document off the bottom.
+    why_undetected: |
+      Nothing renders in a test here. The guard added with the fix asserts the layout's shape rather
+      than the pixels, which is the honest limit of a source-level check - and it is enough for this
+      one, because the defect IS the shape.
+    fix: |
+      fastpath, done. `alignment: start` removed from the Marker row. The default distribution is
+      what lets the ordinal keep its width and the note take the rest.
+    verified: |
+      `the_marker_note_row_gives_the_note_the_row`. One mutant KILLED: restoring the alignment.
+    status: fixed
+
+  - id: BUG-69
+    title: A capture moved the selection but left the Shift anchor on the previous Finding
+    found: "2026-08-28"
+    found_by: the owner, after BUG-67 was fixed - "index kedua yang jadi anchor"
+    component: finding
+    severity: medium
+    contradicts: [UC-9]
+    root_cause: code
+    evidence: |
+      `BUG-67` made a capture tick the new Finding alone. The Shift anchor lived in a closure owned by
+      the click handler, so `load_findings_into_window` could not reach it - and a capture therefore
+      left it pointing at whatever card had last been clicked.
+
+      Assemble was correct after `BUG-67`: the right Finding went into the Bundle. What was wrong was
+      the next Shift-click, which ranged from a card the Reviewer had left behind.
+    impact: |
+      The same class as `BUG-67` one step further in: two pieces of selection state disagreeing with
+      nothing on screen being wrong. It is quieter than `BUG-67` - a Shift range that starts in the
+      wrong place is visible the moment it is made - but it is the same shape.
+    why_undetected: |
+      `BUG-67`'s fix and its guard were both about the TICK. The anchor is a third piece of state, and
+      the guard written for `BUG-67` had no reason to look at it.
+    fix: |
+      fastpath, done. The anchor is now a `thread_local!` beside the two the capture path already
+      uses, so a click and a capture both move it. Held by id rather than by index, because a capture
+      rebuilds the strip and every index moves.
+    verified: |
+      `a_capture_becomes_the_selection` now asserts the anchor moves too. One mutant KILLED: removing
+      that line while leaving the tick correct.
+    related: BUG-67
+    status: fixed

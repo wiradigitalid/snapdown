@@ -12,7 +12,7 @@ import { CornerBrackets } from "components/corner-brackets.slint";
 import { IconButton } from "components/icon-button.slint";
 import { SdTextField } from "components/text-field.slint";
 import { SdScrollBar } from "components/scrollbar.slint";
-import { SdActionButton, SdSectionLabel, SdCaption } from "components/action-button.slint";
+import { SdActionButton, SdSectionLabel, SdCaption, SdDocHeading } from "components/action-button.slint";
 
 import "../assets/fonts/IBMPlexSans-Medium.ttf";
 import "../assets/fonts/IBMPlexSans-SemiBold.ttf";
@@ -1117,9 +1117,19 @@ export component AppWindow inherits Window {
     // document in memory before touching the disk, so the preview is that plan shown rather than a
     // second rendering path that could disagree with it.
     in-out property <bool> bundle-preview-open: false;
-    // Preview by default. Code shows the same document with its markup visible - and still editable,
-    // which is the point of having it.
-    in-out property <bool> bundle-preview-shows-code: false;
+    // EDIT and PREVIEW, and Edit is where the work happens.
+    //
+    // This was Preview and Code, with Code the editor - and the owner turned it round, correctly:
+    // the title, the Bundle note, every Finding's note and every Marker's note are all edited in the
+    // rendered view, so THAT is the editor. What is left for the raw CommonMark is to show what will
+    // actually be handed over, which is a preview of the deliverable and is read-only.
+    //
+    // The alternative was to keep raw editing and render it back, which needs a Markdown parser this
+    // product has no other use for - and until it had one, an edit in the raw view could not appear
+    // in the rendered one. That mismatch is what the `Regenerate` button was papering over, and
+    // "regenerate" was the wrong word for it anyway: it restored.
+    in-out property <bool> bundle-preview-shows-source: false;
+    in-out property <string> bundle-preview-markdown: "";
     in-out property <[DocBlock]> bundle-preview-blocks: [];
     // For the header's readout only. The document itself is `bundle-preview-blocks`.
     in-out property <int> bundle-preview-finding-count: 0;
@@ -1148,6 +1158,7 @@ export component AppWindow inherits Window {
     // sequence of blocks and which store a block writes to is Rust's business, not the layout's.
     callback bundle-block-edited(string, string, string, string);
     callback drag-window-requested();
+    callback drag-window-moved();
     callback theme-toggle-clicked();
     callback bundles-drawer-clicked();
     callback settings-clicked();
@@ -1180,9 +1191,20 @@ export component AppWindow inherits Window {
                 TouchArea {
                     width: 100%;
                     height: 100%;
+                    // A press asks to drag. A maximized window cannot be moved, so Rust ignores this
+                    // one and waits for actual movement - otherwise a single click on a maximized
+                    // titlebar restores the window, which is what the owner saw: "klik title bar 1x
+                    // malah mentrigger seolah2 doble klik".
                     pointer-event(event) => {
                         if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
                             root.drag-window-requested();
+                        }
+                    }
+                    // MOVEMENT is what says a drag was meant. This is where a maximized window is
+                    // restored and then dragged, which is what every window manager does.
+                    moved => {
+                        if (self.pressed) {
+                            root.drag-window-moved();
                         }
                     }
                     double-clicked => {
@@ -2058,7 +2080,13 @@ export component AppWindow inherits Window {
 
                         if root.active-tab-index == 0 : VerticalLayout {
                             vertical-stretch: 1;
-                            padding: 16px;
+                            padding-left: 16px;
+                            // The bar lives in this 4px gutter rather than on top of the cards. It
+                            // was inside the 16px padding, so it overlapped them - a scrollbar drawn
+                            // across the thing it is scrolling.
+                            padding-right: 4px;
+                            padding-top: 16px;
+                            padding-bottom: 16px;
                             spacing: 12px;
 
                             SdSectionLabel {
@@ -2085,8 +2113,11 @@ export component AppWindow inherits Window {
                                     VerticalLayout {
                                         spacing: 8px;
                                         alignment: start;
+                                        // The cards keep the inset the panel's padding used to give
+                                        // them; the bar gets the gutter to itself.
+                                        padding-right: 12px;
 
-    for marker in root.markers : Rectangle {
+                                        for marker in root.markers : Rectangle {
                                             border-radius: Theme.radius-sharp;
                                             background: root.bg-card;
                                             border-width: 1px;
@@ -2143,7 +2174,6 @@ export component AppWindow inherits Window {
                                                 // note is prose, and a fixed 32px hid everything
                                                 // past the first line.
                                                 SdTextField {
-                                                    height: max(32px, self.content-height + 16px);
                                                     pad: 8px;
                                                     text-size: 12px;
                                                     placeholder: "What is wrong here?";
@@ -2468,18 +2498,18 @@ export component AppWindow inherits Window {
 
                                         Rectangle {
                                             border-radius: Theme.radius-sharp;
-                                            preview-tab := TouchArea {
+                                            edit-tab := TouchArea {
                                                 mouse-cursor: MouseCursor.pointer;
-                                                clicked => { root.bundle-preview-shows-code = false; }
+                                                clicked => { root.bundle-preview-shows-source = false; }
                                             }
-                                            background: !root.bundle-preview-shows-code
+                                            background: !root.bundle-preview-shows-source
                                                 ? Theme.accent-primary
-                                                : (preview-tab.has-hover ? root.bg-hover : transparent);
+                                                : (edit-tab.has-hover ? root.bg-hover : transparent);
                                             Text {
-                                                text: "Preview";
+                                                text: "Edit";
                                                 font-size: 10px;
                                                 font-weight: 700;
-                                                color: !root.bundle-preview-shows-code ? Theme.text-on-accent : root.text-secondary;
+                                                color: !root.bundle-preview-shows-source ? Theme.text-on-accent : root.text-secondary;
                                                 horizontal-alignment: center;
                                                 vertical-alignment: center;
                                                 font-family: "IBM Plex Sans";
@@ -2488,21 +2518,21 @@ export component AppWindow inherits Window {
 
                                         Rectangle {
                                             border-radius: Theme.radius-sharp;
-                                            code-tab := TouchArea {
+                                            source-tab := TouchArea {
                                                 mouse-cursor: MouseCursor.pointer;
-                                                clicked => { root.bundle-preview-shows-code = true; }
+                                                clicked => { root.bundle-preview-shows-source = true; }
                                             }
-                                            background: root.bundle-preview-shows-code
+                                            background: root.bundle-preview-shows-source
                                                 ? Theme.accent-primary
-                                                : (code-tab.has-hover ? root.bg-hover : transparent);
+                                                : (source-tab.has-hover ? root.bg-hover : transparent);
                                             Text {
-                                                text: "Code";
+                                                text: "Preview";
                                                 font-size: 10px;
                                                 font-weight: 700;
-                                                color: root.bundle-preview-shows-code ? Theme.text-on-accent : root.text-secondary;
+                                                color: root.bundle-preview-shows-source ? Theme.text-on-accent : root.text-secondary;
                                                 horizontal-alignment: center;
                                                 vertical-alignment: center;
-                                                font-family: "IBM Plex Mono";
+                                                font-family: "IBM Plex Sans";
                                             }
                                         }
                                     }
@@ -2534,18 +2564,23 @@ export component AppWindow inherits Window {
                         }
                     }
 
-                    // THE DOCUMENT, and the only place any of it is edited.
+                    // THE DOCUMENT, in two views, and the only place any of it is edited.
                     //
-                    // The name and the Bundle note used to have their own fields above this, so each
-                    // appeared TWICE - once as a form field and once as content - and only the form
-                    // copy could be changed. The owner's note was that everything should be editable
-                    // and asked for the right UX. This is it: the document IS the editor. One place
-                    // per thing, and the thing is where you would expect to find it.
+                    // PREVIEW renders it - headings at their Markdown level, the image visible - and
+                    // every piece of CONTENT is editable in place: the title, the Bundle note, a
+                    // Finding's note, each Marker's note. What is NOT editable there is what the
+                    // product generates: a Finding's heading and its image reference.
                     //
-                    // Code shows the same blocks with their markup printed above them, still
-                    // editable. A Finding's heading and its image reference are NOT editable in
-                    // either view: they are generated from the Finding and the plan, and typing over
-                    // them would mean the document no longer describes what is being written.
+                    // CODE is the whole CommonMark, as text, editable without restriction. The
+                    // owner's framing: "user harus dengan sadar menulis bagaimana markdown akhirnya".
+                    // Breaking the template is allowed - it is a document, and it is theirs.
+                    //
+                    // Deleting the image reference does NOT cancel the image. The burned copies are
+                    // written from the plan, not from the Markdown, so a Bundle whose document does
+                    // not mention its images still carries them.
+                    //
+                    // Once Code has been typed in, the hand-written text is what gets written and
+                    // Preview says so rather than quietly regenerating over it.
                     Rectangle {
                         vertical-stretch: 1;
                         background: root.bg-app;
@@ -2565,138 +2600,133 @@ export component AppWindow inherits Window {
                                 spacing: 10px;
                                 alignment: start;
 
-                                for block in root.bundle-preview-blocks : VerticalLayout {
-                                    spacing: 4px;
+                                // --- PREVIEW: exactly what the agent will be handed -------------
+                                //
+                                // Read-only on purpose. The document is edited in the rendered view;
+                                // this one exists so the Reviewer can see the file before it is
+                                // written, and a second place to type would be a second source of
+                                // truth for the same document.
+                                if root.bundle-preview-shows-source : SdTextField {
+                                    flat: true;
+                                    read-only: true;
+                                    pad: 2px;
+                                    text-size: 12px;
+                                    mono: true;
+                                    placeholder: "The composed CommonMark appears here.";
+                                    text: root.bundle-preview-markdown;
+                                }
+
+                                // --- PREVIEW ----------------------------------------------------
+                                // --- EDIT: the document, rendered, and every piece of content editable in place ---
+                                if !root.bundle-preview-shows-source : VerticalLayout {
+                                    spacing: 10px;
                                     alignment: start;
 
-                                    // --- the Bundle's title -------------------------------------
-                                    if block.kind == "title" && root.bundle-preview-shows-code : Text {
-                                        text: "# ";
-                                        font-size: 11px;
-                                        color: Theme.accent-primary;
-                                        font-family: "IBM Plex Mono";
-                                    }
-                                    if block.kind == "title" : SdTextField {
-                                        flat: true;
-                                        height: max(30px, self.content-height + 10px);
-                                        pad: 2px;
-                                        text-size: root.bundle-preview-shows-code ? 12px : 19px;
-                                        placeholder: "Name this handoff";
-                                        text: block.text;
-                                        edited => { root.bundle-block-edited(block.kind, "", "", self.text); }
-                                    }
-
-                                    // --- the Bundle's own note ----------------------------------
-                                    if block.kind == "bundle-notes" && root.bundle-preview-shows-code : Text {
-                                        text: "## Bundle Notes";
-                                        font-size: 11px;
-                                        color: Theme.accent-primary;
-                                        font-family: "IBM Plex Mono";
-                                    }
-                                    if block.kind == "bundle-notes" && !root.bundle-preview-shows-code : SdSectionLabel {
-                                        text: "BUNDLE NOTES";
-                                    }
-                                    if block.kind == "bundle-notes" : SdTextField {
-                                        flat: true;
-                                        height: max(38px, self.content-height + 12px);
-                                        pad: 2px;
-                                        text-size: 12px;
-                                        placeholder: "What is this handoff about? The agent reads this first.";
-                                        text: block.text;
-                                        edited => { root.bundle-block-edited(block.kind, "", "", self.text); }
-                                    }
-
-                                    // --- a Finding's heading ------------------------------------
-                                    if block.kind == "finding" : Text {
-                                        text: (root.bundle-preview-shows-code ? "## " : "") + "Finding " + block.ordinal;
-                                        font-size: root.bundle-preview-shows-code ? 12px : 15px;
-                                        font-weight: 800;
-                                        color: root.text-primary;
-                                        font-family: root.bundle-preview-shows-code ? "IBM Plex Mono" : "IBM Plex Sans";
-                                    }
-
-                                    // --- the image ----------------------------------------------
-                                    if block.kind == "image" && root.bundle-preview-shows-code : Text {
-                                        text: "![Finding " + block.ordinal + "](" + block.path + ")";
-                                        font-size: 11px;
-                                        color: root.text-muted;
-                                        wrap: word-wrap;
-                                        font-family: "IBM Plex Mono";
-                                    }
-                                    if block.kind == "image" && !root.bundle-preview-shows-code : HorizontalLayout {
+                                    for block in root.bundle-preview-blocks : VerticalLayout {
+                                        spacing: 4px;
                                         alignment: start;
-                                        Rectangle {
-                                            // HALF the page at most, at the owner's direction: the
-                                            // notes are what this screen is for, and a full-measure
-                                            // screenshot buries them.
-                                            //
-                                            // Bounded by the PANEL's width, not by `parent.width`.
-                                            // Reading the parent here is a binding loop - the
-                                            // layout's width comes from its content, and this is
-                                            // that content. The panel's width comes from its own
-                                            // height, so it is outside the loop.
-                                            width: min((preview-panel.width - 52px) * 0.5, block.image.width * 1px);
-                                            height: block.image.width > 0
-                                                ? self.width * (block.image.height / block.image.width)
-                                                : 0px;
-                                            Image {
-                                                width: 100%;
-                                                height: 100%;
-                                                image-fit: contain;
-                                                source: block.image;
-                                            }
-                                        }
-                                    }
 
-                                    // --- a Finding's note ---------------------------------------
-                                    if block.kind == "note" && root.bundle-preview-shows-code : Text {
-                                        text: "### Notes";
-                                        font-size: 11px;
-                                        color: Theme.accent-primary;
-                                        font-family: "IBM Plex Mono";
-                                    }
-                                    if block.kind == "note" && !root.bundle-preview-shows-code : SdSectionLabel {
-                                        text: "NOTES";
-                                    }
-                                    if block.kind == "note" : SdTextField {
-                                        flat: true;
-                                        height: max(30px, self.content-height + 12px);
-                                        pad: 2px;
-                                        text-size: 12px;
-                                        text: block.text;
-                                        edited => { root.bundle-block-edited(block.kind, block.finding-id, "", self.text); }
-                                    }
-
-                                    // --- one Marker's note --------------------------------------
-                                    if block.kind == "marker" && block.starts-section && root.bundle-preview-shows-code : Text {
-                                        text: "### Marker Notes";
-                                        font-size: 11px;
-                                        color: Theme.accent-primary;
-                                        font-family: "IBM Plex Mono";
-                                    }
-                                    if block.kind == "marker" && block.starts-section && !root.bundle-preview-shows-code : SdSectionLabel {
-                                        text: "MARKER NOTES";
-                                    }
-                                    if block.kind == "marker" : HorizontalLayout {
-                                        spacing: 6px;
-                                        alignment: start;
-                                        Text {
-                                            text: block.ordinal + ".";
-                                            font-size: 12px;
-                                            font-weight: 700;
-                                            color: root.text-muted;
-                                            vertical-alignment: top;
-                                            font-family: root.bundle-preview-shows-code ? "IBM Plex Mono" : "IBM Plex Sans";
-                                        }
-                                        SdTextField {
+                                        // `# ` - the Bundle's title
+                                        if block.kind == "title" : SdTextField {
                                             flat: true;
-                                            horizontal-stretch: 1;
-                                            height: max(26px, self.content-height + 8px);
+                                            pad: 2px;
+                                            text-size: 19px;
+                                            placeholder: "Name this handoff";
+                                            text: block.text;
+                                            edited => { root.bundle-block-edited(block.kind, "", "", self.text); }
+                                        }
+
+                                        // `## Bundle Notes`
+                                        if block.kind == "bundle-notes" : SdDocHeading {
+                                            level: 2;
+                                            text: "Bundle Notes";
+                                        }
+                                        if block.kind == "bundle-notes" : SdTextField {
+                                            flat: true;
                                             pad: 2px;
                                             text-size: 12px;
-                                            placeholder: "What is wrong at this point?";
+                                            placeholder: "What is this handoff about? The agent reads this first.";
                                             text: block.text;
-                                            edited => { root.bundle-block-edited(block.kind, block.finding-id, block.marker-id, self.text); }
+                                            edited => { root.bundle-block-edited(block.kind, "", "", self.text); }
+                                        }
+
+                                        // `## Finding N` - generated, so not editable
+                                        if block.kind == "finding" : SdDocHeading {
+                                            level: 2;
+                                            text: "Finding " + block.ordinal;
+                                        }
+
+                                        // The image the agent will fetch: the burned copy.
+                                        if block.kind == "image" : HorizontalLayout {
+                                            alignment: start;
+                                            Rectangle {
+                                                // HALF the page at most, at the owner's direction:
+                                                // the notes are what this screen is for, and a
+                                                // full-measure screenshot buries them.
+                                                //
+                                                // Bounded by the PANEL's width, not by
+                                                // `parent.width`. Reading the parent here is a
+                                                // binding loop - the layout's width comes from its
+                                                // content, and this is that content. The panel's
+                                                // width comes from its own height, so it is outside
+                                                // the loop.
+                                                width: min((preview-panel.width - 52px) * 0.5, block.image.width * 1px);
+                                                height: block.image.width > 0
+                                                    ? self.width * (block.image.height / block.image.width)
+                                                    : 0px;
+                                                Image {
+                                                    width: 100%;
+                                                    height: 100%;
+                                                    image-fit: contain;
+                                                    source: block.image;
+                                                }
+                                            }
+                                        }
+
+                                        // `### Notes`, and only when there is one. An empty note is
+                                        // left out of the document, so it is left out of here too.
+                                        if block.kind == "note" : SdDocHeading {
+                                            level: 3;
+                                            text: "Notes";
+                                        }
+                                        if block.kind == "note" : SdTextField {
+                                            flat: true;
+                                            pad: 2px;
+                                            text-size: 12px;
+                                            text: block.text;
+                                            edited => { root.bundle-block-edited(block.kind, block.finding-id, "", self.text); }
+                                        }
+
+                                        // `### Marker Notes`, printed once above the list.
+                                        if block.kind == "marker" && block.starts-section : SdDocHeading {
+                                            level: 3;
+                                            text: "Marker Notes";
+                                        }
+                                        if block.kind == "marker" : HorizontalLayout {
+                                            spacing: 6px;
+                                            // NO `alignment: start`. It gives every child its
+                                            // minimum width and distributes nothing, so the note
+                                            // field - stretchy or not - got none of the row and
+                                            // wrapped one character per line. The default stretch is
+                                            // what lets the ordinal keep its width and the note take
+                                            // the rest.
+                                            Text {
+                                                text: block.ordinal + ".";
+                                                font-size: 12px;
+                                                font-weight: 700;
+                                                color: root.text-muted;
+                                                vertical-alignment: top;
+                                                font-family: "IBM Plex Sans";
+                                            }
+                                            SdTextField {
+                                                flat: true;
+                                                    horizontal-stretch: 1;
+                                                pad: 2px;
+                                                text-size: 12px;
+                                                placeholder: "(no note)";
+                                                text: block.text;
+                                                edited => { root.bundle-block-edited(block.kind, block.finding-id, block.marker-id, self.text); }
+                                            }
                                         }
                                     }
                                 }

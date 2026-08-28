@@ -1598,15 +1598,22 @@ fn the_marker_list_scrolls_inside_a_bounded_area_below_a_pinned_cost_card() {
         "the Marker list must align to the top inside its scroll area, or one Marker floats to the          middle of it"
     );
 
-    // A Marker's note is prose, so its field grows with the wrapped text. A fixed height hid
-    // everything past the first line, and the field wraps rather than scrolling sideways.
+    // A Marker's note is prose, so its field grows with the wrapped text. The sizing lives in the
+    // COMPONENT now: callers used to write `max(32px, self.content-height + 16px)` by hand and each
+    // guessed a different pair of numbers, which is how one card ended up far taller than the line
+    // inside it.
+    let field = code("ui/components/text-field.slint");
+    assert!(
+        field.contains("min-height: input.preferred-height + root.pad * 2;"),
+        "the field must hug its own text, so a caller can simply omit `height`"
+    );
     let marker_field = body
         .find("placeholder: \"What is wrong here?\"")
         .expect("the Marker note field must be in this tab");
     let field_block = &body[marker_field.saturating_sub(400)..marker_field];
     assert!(
-        field_block.contains("self.content-height"),
-        "the Marker note field must size itself from its content, like the capture note field does"
+        !field_block.contains("height:"),
+        "and the Marker card must not override it with a number of its own"
     );
 
     // The estimate must be derived, not typed. These were hard-coded before, pinned where they are
@@ -1828,41 +1835,77 @@ fn the_assemble_preview_is_a_page_that_grows_with_the_window() {
     );
 }
 
-/// Preview and Code, with Preview the default - and Code still editable, which is the point of it.
+/// Edit is the editor; Preview is the file, read-only.
+///
+/// This was Preview and Code with Code as the editor, and the owner turned it round. Every piece of
+/// content - the title, the Bundle note, each Finding's note, each Marker's note - is edited in the
+/// rendered view, so that IS the editor. What is left for the raw CommonMark is showing what will be
+/// handed over, and a second place to type would be a second source of truth for one document.
+///
+/// It also removes the `Regenerate` button, which existed only to undo a divergence that can no
+/// longer happen - and which was misnamed anyway: it restored.
 #[test]
-fn the_code_view_shows_the_markup_and_still_takes_an_edit() {
+fn edit_is_the_editor_and_preview_is_the_file() {
     let source = code("ui/appwindow.slint");
     let main = code("src/main.rs");
 
     assert!(
-        source.contains("in-out property <bool> bundle-preview-shows-code: false;"),
-        "the view toggle must default to the rendered document: the question this screen answers is \
-         whether the handoff is right, not what its source looks like"
+        source.contains("in-out property <bool> bundle-preview-shows-source: false;"),
+        "the toggle must default to Edit: that is where the document is written"
     );
     assert!(
-        main.contains("set_bundle_preview_shows_code(false)"),
+        main.contains("set_bundle_preview_shows_source(false)"),
         "and it must be reset every time the preview opens - a checking view that is sticky becomes \
          the default by accident"
     );
 
-    // Code prints the markup and then the SAME editable field, rather than dumping a read-only
-    // string. "Itulah tujuan code" - the owner's words - is that you can still work in it.
-    for markup in [
-        "\"# \"",
-        "\"## Bundle Notes\"",
-        "\"### Notes\"",
-        "\"### Marker Notes\"",
+    // The raw view shows the document and does not take a keystroke.
+    let raw = source
+        .find("if root.bundle-preview-shows-source : SdTextField")
+        .expect("the Preview view must show the composed CommonMark");
+    let raw_body = &source[raw..(raw + 700).min(source.len())];
+    assert!(
+        raw_body.contains("read-only: true;"),
+        "the raw view must be read-only: the document is edited in Edit, and a second place to type \
+         is a second source of truth for the same document"
+    );
+    assert!(
+        raw_body.contains("mono: true;") && raw_body.contains("root.bundle-preview-markdown"),
+        "and it must be monospace and bound to the composed document"
+    );
+
+    // Nothing is left of the hand-edited path.
+    for gone in [
+        "bundle-markdown-edited",
+        "bundle-markdown-reverted",
+        "hand-edited",
+        "Regenerate",
     ] {
         assert!(
-            source.contains(markup),
-            "the Code view must print {markup} above the field it belongs to"
+            !source.contains(gone),
+            "`{gone}` belonged to raw editing and must be gone with it - a divergence that cannot \
+             happen needs no undo"
         );
     }
+    assert!(
+        !main.contains("hand_edited"),
+        "and Rust must not still be tracking a flag nothing can set"
+    );
+
+    // Every piece of content is editable in Edit.
     let edits = source.matches("root.bundle-block-edited(").count();
     assert!(
         edits >= 4,
-        "the title, the Bundle note, a Finding's note and a Marker's must all be editable - in \
-         either view, because the fields are the same fields. Found {edits} edit sites"
+        "the title, the Bundle note, a Finding's note and a Marker's must all be editable. Found \
+         {edits} edit sites"
+    );
+
+    // And the images are written from the plan, so what the document says about them is irrelevant.
+    let write = main.find("fn write_bundle").expect("the writer must exist");
+    let write_body = &main[write..(write + 1600).min(main.len())];
+    assert!(
+        write_body.contains("for (path, bytes) in &planned.blobs"),
+        "the burned copies must be written from the PLAN, not from the Markdown"
     );
 }
 
@@ -1925,30 +1968,115 @@ fn the_preview_image_is_left_aligned_on_nothing_and_takes_half_the_page() {
     );
 }
 
-/// Dragging a maximized window restores it first, and a refused drag says so.
+/// A PRESS on the titlebar is not a drag, and only movement restores a maximized window.
 ///
-/// The titlebar simply stopped responding after the owner had been resizing the Editor. Windows
-/// refuses `SC_MOVE` for a maximized window, so `drag_window` returned an error - into a `let _ =`,
-/// which is the swallowed-Result class `AGENTS.md` records. The symptom had no trace at all.
+/// Two reports, one handler. First the titlebar was dead while maximized - Windows refuses `SC_MOVE`
+/// for one, and `drag_window` returned that refusal into a `let _ =`, so the swallowed value was the
+/// error message explaining the symptom. Then restoring on the press meant a single click on a
+/// maximized titlebar un-maximized the window: "klik title bar 1x malah mentrigger seolah2 doble
+/// klik".
 #[test]
-fn dragging_a_maximized_window_restores_it_first() {
+fn only_movement_drags_a_maximized_window() {
     let main = code("src/main.rs");
-    let at = main
-        .find("on_drag_window_requested")
-        .expect("the titlebar drag must be handled");
-    let body = &main[at..(at + 900).min(main.len())];
+    let ui = code("ui/appwindow.slint");
 
+    let press = main
+        .find("on_drag_window_requested")
+        .expect("a press on the titlebar must be handled");
+    let press_body = &main[press..(press + 500).min(main.len())];
     assert!(
-        body.contains("is_maximized()") && body.contains("set_maximized(false)"),
-        "a maximized window cannot be moved, so the drag must restore it first - every window \
-         manager does this, and without it the titlebar is simply dead"
+        press_body.contains("if win.window().is_maximized() {")
+            && press_body.contains("return;"),
+        "a press on a MAXIMIZED titlebar must do nothing - restoring here turns a single click into          an un-maximize"
     );
     assert!(
-        !body.contains("let _ = winit_win.drag_window()"),
+        !press_body.contains("set_maximized(false)"),
+        "and it must not restore on the press at all"
+    );
+
+    let moved = main
+        .find("on_drag_window_moved")
+        .expect("movement on the titlebar must be handled separately");
+    let moved_body = &main[moved..(moved + 700).min(main.len())];
+    assert!(
+        moved_body.contains("set_maximized(false)") && moved_body.contains("drag_window()"),
+        "movement is what says a drag was meant: restore, then drag in the same gesture"
+    );
+
+    // Neither may swallow the refusal.
+    assert!(
+        !main.contains("let _ = winit_win.drag_window()"),
         "the drag's Result must not be swallowed: it swallowed the reason the titlebar was dead"
     );
+
+    // And the UI has to send both.
     assert!(
-        body.contains("eprintln!") || body.contains("if let Err("),
-        "a refused drag must leave something to read"
+        ui.contains("root.drag-window-moved();"),
+        "the titlebar must report movement, not only the press"
+    );
+}
+
+/// A capture becomes the selection, so the tick and the canvas cannot point at different Findings.
+///
+/// Ticks used to survive a capture, so a half-built Bundle would not be lost. That created the trap
+/// in `BUG-67`: the new Finding is ACTIVE - it is what the canvas shows and what Markers get added
+/// to - while an older one stays TICKED, and Assemble follows the tick. Read out of the owner's own
+/// library: 19 Markers on the Finding being annotated, 3 empty ones on the Finding the Bundle took.
+#[test]
+fn a_capture_becomes_the_selection() {
+    let main = code("src/main.rs");
+    let build = main
+        .find("fn load_findings_into_window")
+        .expect("the filmstrip builder must exist");
+    let body = &main[build..(build + 2200).min(main.len())];
+
+    // The SUBJECT of the match matters as much as its arms: a first version asserted only the arm,
+    // and a mutant that matched on `None` instead of on the new Finding survived it untouched.
+    assert!(
+        body.contains("match active_finding_id {") && body.contains("vec![fresh.to_string()]"),
+        "a rebuild that names a new Finding must tick THAT Finding alone - anything else lets the \
+         tick and the canvas point at different Findings, and Assemble follows the tick"
+    );
+    // And the Shift anchor moves with it. Ticking the new Finding while leaving the anchor on the
+    // last one clicked makes the next Shift-click range from a card the Reviewer has left behind -
+    // the same divergence as BUG-67, one step further in.
+    assert!(
+        body.contains("SELECTION_ANCHOR.with(|held| *held.borrow_mut() = fresh.to_string());"),
+        "a capture must move the Shift anchor to the new Finding as well as ticking it"
+    );
+    assert!(
+        body.contains("filter(|t| t.is_selected)"),
+        "and a rebuild that names none must still preserve what was ticked: a redraw is not a \
+         capture"
+    );
+}
+
+/// A Marker's note gets the width of its row.
+///
+/// The row carried `alignment: start`, which gives every child its MINIMUM width and distributes
+/// nothing - so the note field, stretchy or not, got none of the row and wrapped one character per
+/// line. The owner's description was exact: "terender memanjang ke bawah tanpa visible teks
+/// (sepertinya 1 karakter = 1 new line)".
+#[test]
+fn the_marker_note_row_gives_the_note_the_row() {
+    let source = code("ui/appwindow.slint");
+    let row = source
+        .find("if block.kind == \"marker\" : HorizontalLayout")
+        .expect("the Marker rows must exist in the document");
+    // As far as the note field, which is the child that has to get the space.
+    let field = source[row..]
+        .find("root.bundle-block-edited(block.kind, block.finding-id, block.marker-id")
+        .map(|rel| row + rel)
+        .expect("a Marker's note must be editable");
+    let block = &source[row..field];
+
+    assert!(
+        !block.contains("alignment: start;"),
+        "the Marker row must not align to start: that gives every child its minimum width and \
+         leaves the note none of the row, so it wraps one character per line"
+    );
+    assert!(
+        block.contains("horizontal-stretch: 1;"),
+        "and the note must be the child that takes the space the ordinal does not"
     );
 }
