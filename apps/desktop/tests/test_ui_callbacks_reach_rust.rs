@@ -67,10 +67,6 @@ const DELIBERATELY_UNHANDLED: &[(&str, &str)] = &[
         "clipboard-in is not built: nothing reads an image out of the Windows clipboard yet",
     ),
     (
-        "copy-image-clicked",
-        "clipboard-out is not built: no clipboard dependency is in the workspace",
-    ),
-    (
         "share-bundle-clicked",
         "publishing is frozen by DEC-005, and the Publication path has no Slint caller",
     ),

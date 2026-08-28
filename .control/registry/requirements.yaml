@@ -204,7 +204,9 @@ functional:
     title: Delete Findings, and their image files with them
     capability: CAP-5
     component: finding
-    writes: [Finding, Note, Marker]
+    # `VisualAnnotation` added 2026-08-28: deleting a Finding cascades to its annotations, so this
+    # requirement writes them too. The schema has done it since migration 8; the row had not caught up.
+    writes: [Finding, Note, Marker, VisualAnnotation]
     proof: Deleting three Findings removes them from the Editor and leaves no trace of their three
       image files in the Vault folder.
   - id: FR-15
@@ -290,6 +292,69 @@ functional:
     proof: Clicking any visual annotation or marker displays its interactive control points (8-point
       resizing handles for boxes, start/end points for arrows, tail handle for callouts); pressing
       Delete or Backspace removes the active element.
+  - id: FR-38
+    title: Change the front-to-back order of canvas annotations
+    capability: CAP-11
+    component: finding
+    writes: [Finding]
+    no_uc: A property of the annotations already placed under UC-27, not a goal of its own. The
+      Reviewer does not open Snapdown to reorder something; they reorder because a Callout landed on
+      top of the Shape it was describing.
+    proof: With two overlapping annotations, sending the upper one to the back puts the other in
+      front of it on the canvas AND in the burned image; the four movements are reachable from the
+      element's own panel and from its right-click menu.
+
+  # --- Behaviours the owner asked for, promised after the fact (OQ-29) ----------------
+  #
+  # These four arrived as requests rather than as requirements, which is the wrong order and is
+  # recorded as such. `OQ-29` opened when seven behaviours were asked for with no `FR-` anywhere;
+  # three of the seven turned out not to need one. `undo`/`redo` was already promised inside FR-33's
+  # consequences, and `crop` and destructive `resize` are NAMED NON-GOALS - see the note under
+  # `## Not promised` at the foot of this file.
+  - id: FR-34
+    title: Zoom the canvas to inspect a capture at more or less than natural size
+    capability: CAP-3
+    component: finding
+    writes: []
+    no_uc: Zoom has no goal of its own. It is how the Reviewer looks at a Finding inside UC-2 and
+      UC-27, and it stores nothing - a use case whose success condition is "the image is bigger on
+      screen now" describes a control, not a reason to open the product.
+    proof: The canvas can be zoomed in and out and returned to natural size; Markers and annotations
+      stay on the pixels they were placed on at every zoom level, and nothing about the stored image
+      changes.
+  - id: FR-35
+    title: Paste an image from the clipboard as a new Finding
+    capability: CAP-1
+    component: finding
+    writes: [Finding]
+    no_uc: A second entry point into UC-1, not a second use case. It replaces one step - where the
+      pixels come from - and from the reduction onward the flow, the Finding and every failure it can
+      hit are UC-1's own. Giving it a use case of its own would duplicate that flow and the two would
+      drift. If pasting ever grows behaviour UC-1 does not have, that is when it earns one.
+    proof: With an image on the Windows clipboard, Paste creates a Finding carrying those pixels,
+      reduced under the same Quality Budget a Capture would use, and it appears in the filmstrip.
+  - id: FR-36
+    title: Copy a Finding's burned image to the clipboard
+    capability: CAP-3
+    component: finding
+    writes: []
+    no_uc: The one-Finding shortcut through UC-9's own door. The goal - hand this to an agent - is
+      UC-9's, and this is that goal without a Bundle around it. It writes nothing, so there is no
+      state for a flow to describe.
+    proof: Copy puts the image on the clipboard WITH its Markers and annotations burned in - the same
+      bytes a Bundle would carry - so pasting it into a chat shows what the Reviewer marked up.
+  - id: FR-37
+    title: Reach a canvas or filmstrip action from a right-click context menu
+    capability: CAP-9
+    component: finding
+    writes: []
+    no_uc: A second route to actions that already have use cases, and deliberately never a first one -
+      the requirement itself forbids an entry with no other route. A use case here would be a copy of
+      whichever one the Reviewer happened to reach through the menu.
+    proof: Right-clicking the canvas offers the actions that apply to what is under the pointer, and
+      right-clicking a filmstrip card offers that Finding's own; every entry does what the toolbar
+      button of the same name does, and no entry exists that has no other route.
+
   # --- CAP-7 Local agent access ------------------------------------------------------
   - id: FR-19
     title: Issue and copy an Access Key
@@ -477,3 +542,23 @@ journeys:
   - id: UJ-6
     title: The Reviewer hands a Bundle to an agent on a server
     prd: agent-handoff
+
+# NOT PROMISED, and deliberately.
+#
+# Recorded here rather than in a defect row, because the next reader's question is "why is there no
+# FR for crop" and the answer has to be findable from the requirements themselves.
+#
+# `crop` and user-controlled destructive `resize` of a stored capture were both asked for on
+# 2026-08-28 and both are NAMED NON-GOALS in two places written earlier:
+#
+#   .what/finding/SRS-finding.md      "Editing captured pixels. No crop, rotate, or resize
+#                                      after capture."
+#   .what/_product-brief/brief.md     "Editing the captured pixels after the fact - crop, rotate,
+#                                      resize."
+#
+# The corpus wins here and the code does not get written. Reversing it is a `DEC-`, not an `FR-`:
+# the non-goal is load-bearing - `AD-9` promises a Bundle's copy is byte-identical to the Finding
+# when nothing is drawn on it, and a destructive edit to the stored pixels is the one operation that
+# cannot be taken back from a Vault with no second copy.
+#
+# The toolbar's Crop button therefore stays inert. It is a stub with a reason, not a gap.

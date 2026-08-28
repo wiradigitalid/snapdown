@@ -3833,6 +3833,25 @@ defects:
 
       `root_cause` is `architecture` rather than `code` because no amount of code fixes it: the
       format is the decision. It stays open until a `DEC-` says which of the four holds.
+    surface: |
+      The Settings screen this is changed from is already DESIGNED and not built.
+      `.how/settings/01-ux/assets/06a-settings-general.html` lays out "MULTIMODAL QUALITY BUDGET"
+      with Auto / Sharp / Balanced / Small, a live readout ("Latest capture: 184 KB · 1408 px ·
+      Auto"), and a collapsed "Advanced Compression Settings (Dimensions & Quality)". So whatever is
+      decided here has a place to be set from - it is on `BUG-61`'s list as `/settings`.
+
+      Worth separating two ideas that sound alike, because the owner raised the second and the
+      product implements the first:
+
+        a CAP  - `max_long_edge`, what the budget uses today. Bounds the worst case and leaves a
+                 small image alone. A 1254x1254 import under a 1600 cap is untouched, which is why
+                 it came back the same size
+        a RATIO - "reduce to 80%". Always shrinks, including images that were already cheap
+
+      For an agent audience the cost tracks pixel AREA (`OQ-2`), so a cap is the right primitive: it
+      bounds what a handoff can cost. The presets may still be too generous, but that is a number,
+      not an algorithm. What is actually missing is the second half of the pair - the quality lever
+      this row is about.
     related: BUG-62
     status: open
 
@@ -4090,4 +4109,558 @@ defects:
       `a_capture_becomes_the_selection` now asserts the anchor moves too. One mutant KILLED: removing
       that line while leaving the tick correct.
     related: BUG-67
+    status: fixed
+
+  - id: BUG-70
+    title: Icon and text sit on different baselines in the readout strip, the filmstrip cards and the Assemble tile
+    found: "2026-08-28"
+    found_by: the owner - "ICON DAN TEXT MASIH BERANTAKAN"
+    component: finding
+    severity: low
+    contradicts: [NFR-16]
+    root_cause: code
+    evidence: |
+      Three places pair a 12-13px `Image` with a `Text` inside a `HorizontalLayout` and set neither
+      element's vertical alignment consistently:
+
+        the readout strip   ruler + resolution, hard-drive + size
+        the Assemble tile   package + "Assemble"
+        the filmstrip card  time + dimensions along the bottom edge
+
+      An `Image` in a `HorizontalLayout` is centred on the row's height while a `Text` sits on its own
+      baseline, so the two disagree by a pixel or two - enough to read as untidy at the sizes this
+      strip uses, and it is the same pairing three times with three slightly different fixes.
+    impact: |
+      Cosmetic, and cumulative: it is the strip the Reviewer reads on every capture, and the product
+      has been corrected five times for exactly this kind of drift. `NFR-16` is the one surface rule
+      the design system exists to keep.
+    why_undetected: |
+      Nothing renders in a test here, and each of the three was written at a different time by a
+      different pass. The design-system guide covers colour, type scale and spacing; it says nothing
+      about how an icon and a label sit next to each other, which is why three answers coexist.
+    fix: |
+      NOT DONE. The right shape is a component - an icon-and-label pair with one alignment - rather
+      than a third correction in place. `.constitution/project/design-system-guide.md` gains the rule
+      when it exists.
+    status: open
+
+  - id: BUG-71
+    title: The frameless window has no shadow, so it merges into whatever is behind it
+    found: "2026-08-28"
+    found_by: the owner - "warnanya nyatu kalau kebetulan sama"
+    component: settings
+    severity: low
+    contradicts: [FR-26, NFR-16]
+    root_cause: code
+    evidence: |
+      `AppWindow`'s outer Rectangle carries `border-width: 1px` in `border-strong` and nothing else.
+      `FR-26` makes the window frameless, so that 1px border is the ONLY thing separating the
+      application from the desktop behind it - and against a window of a similar colour there is
+      effectively no separation at all.
+
+      Every other floating surface in this product already has a lift: the capture overlay's panels
+      use `overlay-shadow`, the Assemble preview uses a 32px drop shadow, the Marker badges use
+      `marker-shadow`. The application window itself is the one that does not.
+    impact: |
+      The Reviewer cannot tell where Snapdown ends and the window behind it begins. On a frameless
+      window that is not a polish issue - it is the only affordance a title bar would have given.
+    why_undetected: |
+      `FR-26` promises a frameless window and says nothing about what replaces the frame. Nothing
+      else in the corpus does either.
+    fix: |
+      NOT DONE, and it needs a Win32 decision rather than a Slint one: a shadow OUTSIDE the window's
+      own bounds needs the compositor (`DwmExtendFrameIntoClientArea`, or a window style with
+      `CS_DROPSHADOW`). Drawing it inside the Slint root would eat client area and clip at the edge.
+      Costed here so the next reader does not start by trying the easy version.
+    status: open
+
+  - id: BUG-72
+    title: CAP-11 has a domain type and a burner and no way to store or place an annotation
+    found: "2026-08-28"
+    found_by: the owner, asking for the shape/callout/blur/arrow/text tools
+    component: finding
+    severity: high
+    contradicts: [FR-30, FR-31, FR-32, FR-33, "CAP-11"]
+    root_cause: code
+    evidence: |
+      `CAP-11` promises four things - `FR-30` shapes and arrows, `FR-31` blur redaction, `FR-32` text
+      and callouts, `FR-33` interactive handles. What exists:
+
+        crates/snapdown-core/src/domain/finding.rs   AnnotationShape { Rect, Arrow, Callout, Blur }
+        crates/snapdown-store/src/image/burner.rs    burn_all draws all four
+
+      What does not:
+
+        NO `visual_annotation` TABLE. `migrations.rs` creates schema_version, setting, finding, note,
+          marker, bundle, bundle_item, access_key, publication - and nothing else
+        NO PORT METHOD. `create_finding` takes `(finding, note, markers)`; there is no
+          add_annotation, no update, no delete
+        NO READ. `finding_store.rs` hardcodes `visual_annotations: vec![]` at both read paths, so a
+          FindingDetail can never carry one
+        NO UI. The seven tool buttons set `active-tool-index` and draw their own selected state
+
+      So the capability is roughly a quarter built, and the built quarter is the part nobody can
+      reach - the same shape as `BUG-55`, one level up: a whole capability rather than a callback.
+    impact: |
+      `FR-30` to `FR-33` are unmet, and the order they have to be built in is not the order they look
+      like they should be. Wiring the toolbar first would produce annotations that vanish on restart,
+      because there is nowhere to put them.
+
+      It also answers `OQ-4` - "numbered markers are sufficient annotation for a machine audience" -
+      in the negative. That assumption's own stated cost was "reviewers add shape annotations by hand
+      elsewhere and the loop is broken again", and the owner is now asking for the tools. `CAP-11`
+      exists because of that, and nothing has been built for it since.
+    why_undetected: |
+      The domain type and the burner are both real, both tested, and both look like progress. The
+      burner even has five passing tests over shapes it will never be handed.
+
+      Nothing in the corpus asks whether a promised capability can be PERSISTED. `V12` checks an `LC`
+      is registered, `inventory.py` checks a screen has a file - neither looks at the schema.
+    fix: |
+      DONE, 2026-08-28, in the order below. Two things in the plan above turned out to be wrong and
+      both are corrected here rather than quietly.
+
+        1. schema - migration 8, `visual_annotation(id, finding_id, position, data, created_at)`,
+           `ON DELETE CASCADE`, indexed on `(finding_id, position)`. One JSON column rather than the
+           union of five shapes' fields: nothing queries inside an annotation, every read is "all of
+           this Finding's, in order", and a column per field is a table of mostly-NULLs whose
+           validity would live in Rust anyway
+        2. ports - `add_annotation` / `update_annotation` / `delete_annotation` on `FindingStore`,
+           and BOTH read paths now populate `visual_annotations`. `list_findings` had its own
+           `vec![]`, so fixing only `get_finding` would have left the Editor's own load path empty
+        3. **the burn did NOT "only need to be handed real data".** `AnnotationShape::Text` fell into
+           a `_ => {}` and was never drawn at all, and a Callout's `text` was discarded by a `..`, so
+           `FR-32` burned an empty bubble. The bubble also took `COLOR_MARKER_FILL` - the Marker
+           badge's red - and ignored `bg_color`. Fixed with `ab_glyph` (already in the lockfile via
+           Slint, so no new dependency) and a copy of `IBMPlexSans-Medium.ttf` in the store crate's
+           own assets, since the burn happens there and must not reach into the desktop app's
+        4. the canvas - `components/annotation.slint`, drag-to-create for all five tools, move, and
+           `FR-33`'s handles: eight on a box, two on an Arrow's endpoints, one on a Callout's tail.
+           Escape deselects and Delete/Backspace removes, through a `FocusScope` scoped to the canvas
+           so Backspace keeps its older meaning inside every note field
+        5. the Properties panel - text, size, family and alignment, shown for Text and Callout only,
+           exactly as the owner scoped it. `text_align` is a NEW field on both variants: the owner
+           asked for it ("justify page") and `FR-32` does not mention it
+
+      **`undo`/`redo` was already promised and the row above was wrong to say otherwise.** `FR-33`'s
+      own consequences read *"Redo/Undo history is supported for canvas additions, moves, edits, and
+      deletions"*. It is built - an in-memory stack per Finding, cleared when another is opened, with
+      the Undo and Redo toolbar buttons wired to it. One honest limit is recorded in the code: undoing
+      a DELETE re-adds the annotation on top rather than at the z-position it held.
+
+      `crop` remains out and is now refused rather than deferred - it is a named non-goal in
+      `SRS-finding.md` and in the Product Brief, and PRD §5 now says so with its reason. The toolbar's
+      Crop button stays inert on purpose.
+
+      Proven: 11 store tests, 7 burn tests that DECODE their output per `AGENTS.md`, and four guards
+      re-checked by mutation (z-order, the second read path, shape validation, the cascade).
+    decision: none - `CAP-11` was already accepted; nothing here contradicts an `AD-`.
+    status: fixed
+
+  - id: BUG-73
+    title: The annotation canvas as first shipped - a drag that fought the pointer, a mosaic called a
+      blur, and four gestures that guessed
+    found: "2026-08-28"
+    found_by: the owner, testing `BUG-72` the hour it landed
+    component: finding
+    severity: high
+    contradicts: [FR-30, FR-31, FR-32, FR-33]
+    root_cause: code
+    evidence: |
+      Fifteen points, reported against the build that closed `BUG-72`. Four of them were the same
+      defect and one of them was mine to have caught:
+
+      1. **The drag fought the pointer** - "patah2 choppy/flicker", and a resize that "tidak ikuti
+         mouse". A FEEDBACK LOOP: a Slint `TouchArea` reports `mouse-x` relative to its own origin,
+         and every hit area was bound to the LIVE geometry it was itself producing. Each frame moved
+         the origin under the pointer, so the next frame's delta was measured from somewhere new.
+         The shape jittered, lagged, and on a resize barely moved at all.
+
+      2. **A mosaic was called a blur.** `apply_box_blur` averaged each `radius`-sized BLOCK to one
+         flat colour. That is pixelation. The owner saw the squares.
+
+      3. **The canvas showed a grey box where a redaction would be**, because Slint 1.17 has no
+         content blur - `blur` exists only on `BoxShadow`. The stand-in was defended in a comment as
+         "the safer error". It was not: a preview that does not look like the output is not a
+         preview, and the Reviewer approves what they see.
+
+      4. **A click drew a default-sized shape.** Written deliberately, to avoid a validation error on
+         a zero-area drag. Wrong: an annotation names a REGION, and a tap names none.
+
+      5. **A Callout was a dark filled plate with white text**, alone among five shapes.
+
+      6. **A Callout's tail followed its bubble.** Moving the bubble out of the way of something -
+         the commonest reason to move one - re-pointed the tail at whatever ended up underneath.
+
+      7. **The Callout and Arrow gestures started at the wrong end.** The press should name the thing
+         being pointed AT.
+
+      8. **Text burned white**, invisible on a white capture.
+
+      9. **Backspace deleted the annotation.** Straight from `FR-30`'s wording, and incompatible with
+         the words being typed on the canvas.
+
+      10. **The Properties panel floated over the canvas**, covering the screenshot it described.
+
+      11. **A Marker could not be moved once placed.** The only remedy was delete-and-replace, and
+          `delete_marker` renumbers - so correcting a Marker's POSITION rewrote its line number.
+
+      12. **The tray's Capture raised the Editor before capturing it.** `OpenEditorAfterCapture` has
+          been a settings key since the schema was written and nothing had ever read it.
+    impact: |
+      `FR-30` to `FR-33` were reachable and unusable. Point 1 alone made every shape feel broken, and
+      points 2 and 3 together meant a Reviewer could approve a redaction on the strength of a preview
+      that resembled neither the input nor the output.
+
+      Point 11 is the quietest and the worst: a mis-placed Marker could only be fixed by a delete
+      that silently renumbered the Note's line references.
+    why_undetected: |
+      Every one of these is a property of a gesture, and nothing in this repository drives a gesture.
+      The eleven wiring guards check that a component is MOUNTED and that a callback is HANDLED -
+      which is the class of defect that keeps recurring here - and a mounted, handled, correctly
+      persisted annotation can still fight the pointer.
+
+      The mosaic had a passing test. It asserted that neighbouring pixels inside the region were
+      IDENTICAL, which is the mosaic's own signature - the test encoded the defect as the
+      requirement, the same shape as the `SCN-04` misreading in `BUG-64`.
+    fix: |
+      DONE, 2026-08-28.
+
+        1. hit areas anchored to COMMITTED geometry, visuals to live. The grip follows the drag; the
+           grab area does not, so the delta is measured from a fixed origin. Same rule applied to the
+           Marker drag added under point 11
+        2. `blur_rect` - three separable box passes, O(pixels), clamped to the region so no
+           unredacted neighbour bleeds back in. Default radius 8 -> 18: 8 was a mosaic BLOCK size and
+           as a blur radius it barely softened 12px text
+        3. the canvas draws the REAL blurred crop, produced by `blur_rect` itself through
+           `blur_preview` in `main.rs`. What is on screen is what lands in the file
+        4. `drag-is-real` - 8 image pixels in the longer direction, or nothing is drawn
+        5. the Callout is an outlined red bubble with red words; `annotation-callout-bg` and
+           `annotation-callout-text` are gone from `theme.slint` and `burner.rs` alike
+        6. `with_geometry` carries a Callout's tail through unchanged
+        7. the press point is the tail's target; the bubble takes the far 70% of the drag
+        8. red is the default ink for `Text` and `Callout`
+        9. Delete only. `FR-30` names Backspace too and this deliberately does not implement it -
+           recorded in `backspace_does_not_delete_an_annotation` with the reason
+        10. the panel moved into the inspector above the Marker Notes; size, family, align in that
+            order; the WORDS are typed on the shape itself
+        11. `marker-moved` -> `update_marker`, position only
+        12. the tray's Capture goes straight to capture and reveals the Editor when it lands;
+            `OpenEditorAfterCapture` is read for the hotkey path, default off per `BG-6`
+
+      One consequence to know about: a Text or Callout is moved by its 12px border band, because the
+      inner area is the text field. Six new guards, and the anti-mosaic one was verified by mutating
+      the blur back into a mosaic.
+    decision: none - no `AD-` was contradicted; every point was a code defect or a UX choice the
+      owner corrected.
+    status: fixed
+
+  - id: BUG-74
+    title: A Callout that lost its tail, an Arrow grabbed by a rectangle, and a Properties tab that
+      had never been connected
+    found: "2026-08-28"
+    found_by: the owner, second pass over `CAP-11`
+    component: finding
+    severity: high
+    contradicts: [FR-30, FR-32, FR-33]
+    root_cause: code
+    evidence: |
+      Drag, resize and Marker movement were confirmed fixed. What remained:
+
+      1. **A Callout's tail snapped to the bubble's own corner on mouse-up.** Visible during the drag
+         and gone the moment it committed. `commit-drawing` inset the bubble in SLINT and passed the
+         inset corner as `x1,y1`; `shape_from_drag` then took `x1,y1` as the tail's target. The tail
+         was therefore anchored to the bubble it was supposed to point away from. Two halves of one
+         geometry, derived in two places.
+
+      2. **The Callout was an outline.** Made outlined in the previous round, from a misreading of
+         the owner's "merah". A Callout is a LABEL - it needs a ground of its own to be read against,
+         which is also the only way its words can be white while the other four shapes are red.
+
+      3. **A Text or Callout could not be moved, and could not be typed into.** The text field was
+         permanently over the shape's middle, so the click that should have selected and moved it
+         landed in a field instead - and the field was inside an annotation that had never been
+         selected, so nothing showed it had focus.
+
+      4. **An Arrow was grabbed by its bounding box.** Over a diagonal that is mostly empty canvas,
+         and the Reviewer could not click through it to draw underneath. Its head was also a filled
+         triangle at +/-0.4rad while `draw_arrow` burns a chevron at +/-153 degrees - two different
+         heads, and the canvas one came visibly loose from the shaft as the arrow turned.
+
+      5. **A blur showed nothing until it was committed.** The drag preview built a synthetic
+         `AnnotationData` whose `preview` image was empty, so the one shape whose whole point is what
+         it looks like was invisible while being drawn.
+
+      6. **The blur default was a number that had been wrong twice.** 8, inherited from a mosaic
+         BLOCK size, barely softened text; the 18 that replaced it flattened a large region to one
+         smear.
+
+      7. **The Properties tab was a placeholder.** A "Font Family" field pre-filled with
+         "IBM Plex Sans, sans-serif" bound to nothing, and a "Font Size: 14px" that was a `Text`, not
+         a control. It has been in the inspector since the Editor was built. The real controls went
+         to the canvas first, then to the Marker Notes tab, and only now to the tab named after them.
+    impact: |
+      `FR-32` was unreachable in practice: a Callout could be drawn and never written in. Point 1
+      made the Callout look broken on every single use, and point 7 is a control surface that has
+      been lying about being one for the whole life of the Editor.
+    why_undetected: |
+      Same reason as `BUG-73`, and it is becoming the standing answer for this component: every one
+      of these is a property of a GESTURE, and nothing in this repository drives a gesture. Fourteen
+      wiring guards check that a component is mounted, a callback handled, a port called - and all
+      fourteen passed against a Callout nobody could type into.
+
+      Point 7 is different and worse: it is the exact shape of `BUG-55`, and it survived the sweep
+      that found `BUG-55` because a placeholder with plausible content does not look like a stub.
+    fix: |
+      DONE, 2026-08-28.
+
+        1. the RAW gesture now reaches `shape_from_drag`, which derives the bubble AND the tail from
+           the same two points. The canvas no longer insets anything
+        2. filled, rounded (8px), with a solid triangular tail drawn before the bubble so the join
+           reads as one shape. `draw_filled_round_rect` and `draw_filled_triangle` in `burner.rs`;
+           the words are white on a Callout, alone among the five
+        3. single click selects and moves, double-click opens a `TextInput` that only exists while
+           editing and focuses itself through `init`. Deselecting leaves editing
+        4. eleven grab squares stepped along the segment BY FRACTION, so they neither gap on a long
+           arrow nor pile up on a short one; the head is now the burn's chevron at +/-153 degrees
+        5. the whole capture is blurred ONCE per Finding and cached, and every Blur - committed or
+           mid-drag - is a clipped 1:1 window onto it. A drag shows the real blur from its first
+           pixel, and N redactions cost one blur rather than N
+        6. `default_blur_radius` is a tenth of the region's shorter side, clamped to 4..20. Recorded
+           plainly in the burner: this is de-emphasis strength, not a redaction guarantee, and the
+           `blur_radius` field is the control for the harder case
+        7. the placeholder is gone and the real controls are in the tab; selecting a Text or Callout
+           opens it. An empty state says what to select rather than showing a dead form
+
+      The canvas and the burn now share three things that must not drift - the red, the arrow head
+      angle, and the blur default - and each has a guard naming the other side.
+    decision: none - no `AD-` was contradicted.
+    status: fixed
+
+  - id: BUG-75
+    title: A click that wrote to the database, which is why nothing could be typed into
+    found: "2026-08-28"
+    found_by: the owner, third pass over `CAP-11`
+    component: finding
+    severity: high
+    contradicts: [FR-32, FR-33]
+    root_cause: code
+    evidence: |
+      Double-click to type had been reported twice and "fixed" once by adding the double-click
+      handler. The handler was never the problem.
+
+      `commit-drag` fired `geometry-changed` on EVERY pointer release, because every press had begun
+      a drag - even one that moved nothing. Rust reloads the Finding after a geometry change, the
+      reload replaces the annotation model, the repeater rebuilds every `AnnotationItem`, and the
+      element that was about to receive the SECOND click of the double-click had already been
+      destroyed and replaced by a fresh one with `editing: false`.
+
+      So a plain click on the canvas cost a SQLite transaction and a full model rebuild, and the
+      gesture could never reach a live element. Both halves went unnoticed because each looks
+      harmless: the write stores the value it already had, and the rebuild is invisible.
+
+      Three more from the same pass:
+
+      - **the Callout's bubble was inset from the wrong corner.** `min + 0.3 * (max - min)` measures
+        from the smaller coordinate, so it only pointed the right way when the drag went down and to
+        the right. Dragging UP put the bubble's far edge exactly on the tail, and the arrow came out
+        flush with the bubble's own bottom line.
+      - **a blur over one line of text read as a plain white box.** Correct behaviour from the
+        filter - there is almost nothing to smear in a smooth area - and useless to the Reviewer,
+        who cannot tell a redaction from the page it sits on.
+      - **the drag preview drew a blue rectangle over the arrow being drawn**, which had been added
+        one round earlier for the Text tool and applied to all five.
+    impact: |
+      `FR-32` was unreachable for the third build running: a Callout could be drawn and never written
+      in. And every click on the canvas was writing to disk.
+    why_undetected: |
+      The double-click guard added in `BUG-74` asserted that the handler EXISTED. It did. Nothing
+      asserted that the element survived long enough to receive the second click - which is the kind
+      of thing only a driven gesture or a very specific reading of the reload path would catch.
+
+      This is the third round in a row where the guards passed and the feature did not work, and the
+      pattern is now clear enough to name: source-grep guards prove a JOIN exists. They cannot prove
+      a SEQUENCE works. `OQ-23`'s composition test class is still the missing piece.
+    fix: |
+      DONE, 2026-08-28.
+
+        - `commit-drag` and the tail commit both compare against the committed geometry and fire only
+          on a real change. This fixes the typing and removes a write and a reload from every click
+        - the Callout inset carries the drag's sign, so the bubble sits at the far end of the gesture
+          whichever way it was drawn
+        - the Callout's tail is an ARROW, reusing `draw_arrow` - one arrow geometry in this product,
+          the owner's Snagit reference, and a shape that can point at something far away without
+          becoming a thin wedge. `draw_filled_triangle` is gone
+        - a redaction is outlined 1px in both the canvas and the burn, so it is identifiable whatever
+          is under it, and the default radius softened to a fourteenth of the shorter side (3..16)
+        - the drag preview is the element alone; the blue ring is gone
+        - a Text is grown to at least one line of its own font size when the drag commits
+        - Size is a slider plus a typed number (`SdSlider`, new); one heading that does not rename
+          itself; the duplicate label is gone
+
+      Also delivered, and new rather than a fix: `FR-38` front-to-back ordering, and `FR-37`'s
+      context menu on the canvas and the filmstrip. The four ordering actions are buttons in the
+      Properties tab as well as menu entries, which is what keeps `FR-37`'s own rule - no entry with
+      no other route - true of the menu that introduced them.
+    decision: none - no `AD-` was contradicted.
+    status: fixed
+
+  - id: BUG-76
+    title: A slider drawn as a lens, two font-size defaults, and a deletion reachable only by
+      right-click
+    found: "2026-08-28"
+    found_by: the owner, fourth pass over `CAP-11`
+    component: finding
+    severity: medium
+    contradicts: [FR-13, FR-32, FR-36, FR-37]
+    root_cause: code
+    evidence: |
+      1. **The size slider drew a lens.** `border-radius: Theme.radius-pill` - 9999px - on a 4px-tall
+         bar. A radius above half the shorter side has no meaning, and the renderer resolved it into
+         a wide tapered shape. Photographed by the owner.
+
+      2. **Text and Callout had different default sizes**, 18 and 14, so two annotations placed on
+         the same capture did not match and one always had to be corrected.
+
+      3. **The empty-Callout prompt was drawn at 55% opacity** and read as transparent text with the
+         screenshot showing through it. Over an unknown capture, a half-opacity glyph does not say
+         "this is a hint"; it says "this is broken".
+
+      4. **The redaction outline added in `BUG-75` was rejected.** It was added so a blur over a
+         smooth area could still be seen. The owner's answer: a redaction disappears into the image,
+         it does not announce itself.
+
+      5. **The context menu was not the one the product already had.** The archived Tauri build's
+         filmstrip menu is in `archive/desktop-tauri/src/test/findings_view.test.tsx`: Assemble, Open
+         File Location, Copy Image, Delete - plus a Marker menu with Delete Marker. What shipped was
+         "Open on canvas" and "Add to / remove from selection", which the owner correctly called
+         useless: they are a click and a Ctrl+click.
+    impact: |
+      `FR-36` - copy the burned image - had never been implemented at all. `copy-image-clicked` was
+      declared in the UI, excused in `DELIBERATELY_UNHANDLED` as "no clipboard dependency is in the
+      workspace", and `clipboard-win` had been in the lockfile the whole time via Slint.
+    why_undetected: |
+      Points 1 and 3 are rendering, which nothing here renders. Point 2 is two literals in two arms
+      of one `match`, which reads as correct in either arm alone.
+
+      Point 5 is the interesting one: the archived Tauri build is in this repository, its context
+      menu is described entry-by-entry in a test file, and the menu was designed from scratch anyway.
+      Nothing points a reader at `archive/` when building a surface that already existed once.
+    fix: |
+      DONE, 2026-08-28.
+
+        - the slider's bars use a 2px radius; a `moved` callback drives a live `size-override` on the
+          canvas, so the font resizes under the pointer and is written once on release
+        - `DEFAULT_ANNOTATION_FONT_SIZE` - one number for both - and the chosen size is stored under
+          `annotation_font_size` as the default for the NEXT annotation. Forward only: a setting that
+          reached backwards would rewrite work already reviewed, and images already handed over
+        - the prompt is opaque
+        - the outline is gone from the canvas and the burn. The cost is written down rather than
+          argued: over a plain background a soft blur is very hard to see
+        - the menus are the archived build's, combined and extended: filmstrip gets Assemble / Copy
+          image / Open file location / Delete Finding; a Marker gets Delete Marker; bare canvas gets
+          Undo / Redo / Copy image / Open file location; an annotation keeps the four ordering
+          actions and Delete
+        - `FR-36` is implemented - `copy_burned_image` burns, encodes BMP (a DIB with a header) and
+          writes through `clipboard-win`. Removed from `DELIBERATELY_UNHANDLED`
+        - `FR-13`'s deletion is implemented, row then file, behind a confirmation. The Product Brief
+          rejects a recycle bin and names the alternative in as many words: "Confirmation once is the
+          safety, not a bin"
+    decision: none - no `AD-` was contradicted.
+    status: fixed
+
+  - id: BUG-77
+    title: Two context-menu entries are the only route to what they do, which `FR-37` forbids
+    found: "2026-08-28"
+    found_by: the guard `every_context_menu_entry_has_another_route`, while `BUG-76` was being fixed
+    component: finding
+    severity: low
+    contradicts: [FR-37, NFR-16]
+    root_cause: requirement
+    violates: FR-37
+    evidence: |
+      `FR-37`'s own consequences say: *"No entry exists that has no other route. A context menu is a
+      shortcut to what is already reachable, never the only way to reach something - NFR-16 forbids a
+      control that has to be discovered."*
+
+      Two entries break it, both added with the menu itself:
+
+        `reveal`          Open file location. Nothing else in the Editor shows a Finding's file.
+        `delete-finding`  Delete Finding. `FR-13` and `UC-7` PROMISE deletion, and right-click is now
+                          the only way a Reviewer can perform it.
+
+      The second is the one that matters. A promised capability whose only route must be discovered
+      is a capability most Reviewers will never find.
+    impact: |
+      `FR-13` is technically met and practically not: the code deletes, and the Reviewer has to
+      already know to right-click. Every other entry on every menu has a second route and is a
+      genuine shortcut.
+    why_undetected: |
+      It was detected - by the guard, in the same session, which is what the guard is for. It is
+      recorded rather than fixed because closing it is a UI decision the owner has not been asked
+      yet: a delete affordance on the filmstrip card, an item in a Finding panel, or an amendment to
+      `FR-37` if the owner considers right-click discoverable enough for a destructive action.
+    fix: |
+      NOT DONE, and deliberately open. Three ways to close it, in the order they cost:
+
+        1. a Delete control on the filmstrip card or in the Finding's own panel, and a Vault link
+           beside the file name in the readout strip
+        2. accept right-click as a route and amend `FR-37`'s consequence - which then needs an answer
+           for `NFR-16`, because a right-click menu IS a control that has to be discovered
+        3. leave deletion to the Library screen when `BUG-61` builds it, and drop the menu entry
+           until then
+
+      Option 1 is the one that keeps both requirements true. It is small, and it is the owner's call
+      rather than mine.
+    status: open
+
+  - id: BUG-78
+    title: A slider filled from its middle, Explorer opening the Desktop, and a deletion that took
+      one Finding when the corpus had always said Findings
+    found: "2026-08-28"
+    found_by: the owner, fifth pass
+    component: finding
+    severity: medium
+    contradicts: [FR-13, FR-37]
+    root_cause: code
+    evidence: |
+      1. **The slider's filled track grew out of the centre**, symmetrically. An element with no `x`
+         inside a plain Slint `Rectangle` is CENTRED, not left-aligned - the same default that made
+         the 9999px radius render as a lens in `BUG-76` rather than as a stub. Two symptoms, one
+         cause, and the first fix treated only the radius.
+
+      2. **"Open file location" opened the Desktop.** `Command::arg` applies Rust's own quoting, and
+         an argument containing a comma comes out wrapped AS A WHOLE, `"/select,C:\Vault\x.png"`.
+         Explorer cannot parse that, and its documented response to an unparseable switch is to open
+         the default folder. Compounding it, `image_path` is a Vault-relative key with forward
+         slashes, so the joined path was `C:\Vault/findings/x.png`, which Explorer rejects too.
+
+      3. **Deleting took one Finding.** And `FR-13` has always read *"Delete Findings"*, with a proof
+         of *"Deleting three Findings removes them from the Editor and leaves no trace of their three
+         image files"*. The corpus was right and the code was the mismatch - worth recording because
+         it is the opposite of this session's usual direction.
+    impact: |
+      Point 2 made a working feature look broken in the worst way: it opened SOMETHING, so it read as
+      pointing at the wrong file rather than as failing.
+    why_undetected: |
+      1 is rendering. 2 cannot be caught without running Explorer. 3 is the one that should have been
+      caught: `FR-13`'s own proof names three Findings, and the implementation was written from the
+      menu entry rather than from the requirement.
+    fix: |
+      DONE, 2026-08-28.
+
+        - `x: 0` on both slider bars, explicit and commented, because the default is not what it
+          looks like
+        - `raw_arg` with quotes around the PATH only, and `/` replaced with `\`
+        - `findings_to_delete` applies the filmstrip's own rule: a right-click ON the selection takes
+          all of it, a right-click outside takes only that one. The dialog and the menu entry both
+          say how many. A failure part-way through does not stop - it keeps going and reports the
+          count, because stopping leaves the Reviewer with half a deletion they confirmed and no way
+          to tell which half
+        - `FR-13`'s `writes:` gains `VisualAnnotation`, which the cascade has done since migration 8
+
+      The right-click-OUTSIDE-the-selection half is a decision rather than a request: the owner asked
+      only that a delete take the selection. It is the convention every file manager uses, and
+      without it a right-click on an unselected card would silently take eight others.
+    decision: none - no `AD-` was contradicted.
     status: fixed

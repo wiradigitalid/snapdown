@@ -40,7 +40,7 @@ erDiagram
     visual_annotation {
         TEXT id PK
         TEXT finding_id FK
-        TEXT kind
+        INTEGER position
         TEXT properties_json
         TEXT created_at
     }
@@ -52,9 +52,23 @@ erDiagram
 |---|---|---|
 | `id` | `TEXT` PK | UUIDv7 |
 | `finding_id` | `TEXT` FK, `ON DELETE CASCADE` | Finding this visual markup belongs to |
-| `kind` | `TEXT` | `shape`, `callout`, `blur`, `arrow`, `text` |
-| `properties_json` | `TEXT` | Normalized coordinates, dimensions, font size/family, tail points, stroke, text content |
+| `position` | `INTEGER` | Z-order, and creation order. What was drawn later covers what was drawn earlier — the burn walks this, so it is what the Reviewer saw on the canvas |
+| `properties_json` | `TEXT` | The whole `AnnotationShape`, serialised. Normalized coordinates, dimensions, font size/family/alignment, tail points, stroke, text content |
 | `created_at` | `TEXT` | RFC 3339 UTC |
+
+**As built, 2026-08-28** — this table was designed here and implemented four days later, in migration
+8 (`crates/snapdown-store/src/sqlite/migrations.rs`). Two columns above differ from what was designed,
+and the differences are stated rather than quietly absorbed:
+
+- **`kind` was designed and is not built.** `AnnotationShape` is `#[serde(tag = "kind")]`, so the tag
+  is already the first key inside `properties_json`. A column would be a second copy of one fact, and
+  a second copy is what goes stale. Nothing queries by kind — every read is *all of this Finding's, in
+  order* — so there is nothing for it to serve. Its designed values were also already wrong: the enum
+  serialises `Rect` as `rect`, not `shape`.
+- **`position` was not designed and is built.** The design has no z-order, and the burn cannot do
+  without one. Two overlapping Callouts have to land in the file the way they landed on the canvas.
+
+Indexed on `(finding_id, position)`, which is the only access path there is.
 
 ## Dictionary — `finding`
 

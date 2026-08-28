@@ -131,6 +131,14 @@ pub enum AnnotationShape {
         font_family: Option<String>,
         bg_color: Option<String>,
         text_color: Option<String>,
+        /// `start`, `center` or `end`. The Properties panel's third control, next to family and
+        /// size - the owner asked for it by name ("justify page") and `FR-32` does not mention it.
+        ///
+        /// `#[serde(default)]` because this variant was already serializable before the field
+        /// existed: without it, a row written by an earlier build fails to parse and
+        /// `read_annotations` reports the whole Finding as corrupt.
+        #[serde(default)]
+        text_align: Option<String>,
     },
     Blur {
         x: f64,
@@ -148,6 +156,8 @@ pub enum AnnotationShape {
         font_size: Option<f64>,
         font_family: Option<String>,
         text_color: Option<String>,
+        #[serde(default)]
+        text_align: Option<String>,
     },
 }
 

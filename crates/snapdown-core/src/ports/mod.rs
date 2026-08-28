@@ -6,7 +6,9 @@ pub use access_key_store::AccessKeyStore;
 pub use bundle_store::BundleStore;
 pub use publication_store::PublicationStore;
 
-use crate::domain::finding::{Finding, FindingDetail, Marker, Note};
+use crate::domain::finding::{
+    AnnotationShape, Finding, FindingDetail, Marker, Note, VisualAnnotation,
+};
 use crate::domain::setting::{Setting, SettingKey};
 use crate::error::CoreError;
 
@@ -81,6 +83,47 @@ pub trait FindingStore {
         &self,
         finding_id: &str,
         ordered_marker_ids: &[&str],
+    ) -> Result<(), CoreError>;
+
+    /// Places one visual annotation on a Finding (`CAP-11`).
+    ///
+    /// Deliberately NOT `add_marker`'s twin. A Marker carries an ordinal because `AD-1` binds it to
+    /// a Markdown line number; an annotation produces no Markdown at all - the PRD's own non-goal
+    /// says so - so it gets a `position` for z-order and nothing the Reviewer ever reads.
+    fn add_annotation(
+        &self,
+        finding_id: &str,
+        annotation_id: &str,
+        data: &AnnotationShape,
+        created_at: &str,
+    ) -> Result<VisualAnnotation, CoreError>;
+
+    /// Replaces one annotation's shape - a move, a resize, a re-typed callout.
+    ///
+    /// The whole shape, not a field of it: a `Rect` that becomes a different `Rect` and a `Callout`
+    /// whose text changed are the same write, and a per-field API would need five of them.
+    fn update_annotation(
+        &self,
+        finding_id: &str,
+        annotation_id: &str,
+        data: &AnnotationShape,
+    ) -> Result<VisualAnnotation, CoreError>;
+
+    fn delete_annotation(&self, finding_id: &str, annotation_id: &str) -> Result<(), CoreError>;
+
+    /// Rewrites the z-order of every annotation on a Finding, in one transaction.
+    ///
+    /// The whole order, not a move: "bring this forward" is a decision about a SEQUENCE, and
+    /// expressing it as a delta would put the arithmetic in the store, where it cannot see what the
+    /// Reviewer is looking at. The caller works out the order it wants; this makes it so.
+    ///
+    /// Deliberately the same shape as `reorder_markers`, and for the same reason - one way to say
+    /// "this collection is now in this order" - even though what the two orders MEAN differs: a
+    /// Marker's ordinal is a line number the Reviewer reads, a z-order is only what covers what.
+    fn reorder_annotations(
+        &self,
+        finding_id: &str,
+        ordered_annotation_ids: &[&str],
     ) -> Result<(), CoreError>;
 }
 

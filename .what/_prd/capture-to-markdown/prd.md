@@ -569,7 +569,7 @@ either visible or visibly indicated; nothing is discovered only by scrolling.
 
 **Capability:** CAP-11 — serves BG-1, BG-7.
 
-**Description:** While numbered Markers serve as the single structured bridge between visual screenshots and numbered lines in Markdown notes, visual walkthroughs and bug reports frequently require drawing attention to specific components, guiding spatial flow, or masking sensitive data (passwords, tokens, customer emails). Snapdown supports five visual overlay elements: transparent outlined Shapes, directional Arrows, Callout bubbles with font/tail control, floating Text, and Blur redaction boxes. These elements are interactive, resizable, and rendered directly onto the burnt image files without producing lines in the Markdown notes. Realizes UJ-5.
+**Description:** While numbered Markers serve as the single structured bridge between visual screenshots and numbered lines in Markdown notes, visual walkthroughs and bug reports frequently require drawing attention to specific components, guiding spatial flow, or masking sensitive data (passwords, tokens, customer emails). Snapdown supports five visual overlay elements: transparent outlined Shapes, directional Arrows, Callout bubbles with font/tail control, floating Text, and Blur redaction boxes. These elements are interactive, resizable, orderable front-to-back, and rendered directly onto the burnt image files without producing lines in the Markdown notes. Realizes UJ-5.
 
 **Functional Requirements:**
 
@@ -608,12 +608,88 @@ The Reviewer can manipulate any placed canvas annotation element using visual co
   - Pressing Escape deselects the active element.
   - Redo/Undo history is supported for canvas additions, moves, edits, and deletions.
 
+### 4.9 Getting a capture in and out by hand
+
+**Capability:** CAP-1, CAP-3, CAP-9 — serves BG-1, BG-7.
+
+**Description:** Four behaviours the Reviewer asked for on 2026-08-28 that the product had no promise
+for. They are recorded here in the order the corpus should have had them, and the record says plainly
+that it did not: `OQ-29` opened because seven behaviours were requested with no `FR-` covering any of
+them. Three of those seven are not here — `undo`/`redo` was already promised inside FR-33, and `crop`
+and destructive `resize` are named non-goals in §5 and in the Product Brief, so they are refused
+rather than promised.
+
+None of the four changes what a Finding IS. They are ways into and out of one.
+
+**Functional Requirements:**
+
+#### FR-34: Zoom the canvas to inspect a capture at more or less than natural size
+The Reviewer can zoom the canvas in and out and return it to natural size.
+- **Proof of done:** The image grows and shrinks on screen; a Marker placed at 200% is on the same
+  pixel when the canvas returns to 100%; the file on disk is unchanged by any of it.
+- **Consequences (testable):**
+  - Zoom is a view state, never a stored one. Reopening a Finding shows it at natural size.
+  - Marker and annotation coordinates stay normalised to the image, so nothing drifts with the zoom.
+  - Placing a Marker while zoomed puts it where the pointer is, not where the pointer would have been
+    at 100%.
+
+#### FR-35: Paste an image from the clipboard as a new Finding
+The Reviewer can paste an image held on the Windows clipboard and get a Finding from it.
+- **Proof of done:** With an image on the clipboard, Paste produces a Finding carrying those pixels;
+  it appears in the filmstrip and can be noted, marked and bundled like any capture.
+- **Consequences (testable):**
+  - The pasted image goes through the same Quality Budget a Capture does. A pasted 4K screenshot is
+    reduced exactly as a captured one would be, or BG-3 has a second door with no lock on it.
+  - A clipboard holding no image says so and does nothing, rather than creating an empty Finding.
+  - Its `source_monitor` says it was pasted. A Finding that claims a monitor it never came from is a
+    small lie the Reviewer would have no way to catch.
+
+#### FR-36: Copy a Finding's burned image to the clipboard
+The Reviewer can copy the image the way an agent would receive it.
+- **Proof of done:** Copy puts the image on the clipboard with its Markers and annotations burned in;
+  pasting it into a chat shows the numbered badges and the redaction boxes.
+- **Consequences (testable):**
+  - The bytes are what a Bundle would carry — the same burn, not a second rendering path that could
+    disagree with it.
+  - A redaction that is in the file is in the clipboard copy. This requirement is the one place the
+    Reviewer can hand over an image without a Bundle, and a blur that only existed in the Bundle
+    would make that path leak.
+
+#### FR-37: Reach a canvas or filmstrip action from a right-click context menu
+The Reviewer can right-click the canvas or a filmstrip card and reach the actions that apply to it.
+- **Proof of done:** Right-clicking a filmstrip card offers that Finding's own actions; right-clicking
+  an annotation offers Delete; every entry does the same thing as the control of the same name.
+- **Consequences (testable):**
+  - No entry exists that has no other route. A context menu is a shortcut to what is already
+    reachable, never the only way to reach something — NFR-16 forbids a control that has to be
+    discovered.
+  - The menu names the thing under the pointer. A right-click on empty canvas and a right-click on a
+    Callout do not offer the same list.
+
+#### FR-38: Change the front-to-back order of canvas annotations
+The Reviewer can move any placed annotation forward or backward through the others.
+- **Proof of done:** With two overlapping annotations, sending the upper one to the back puts the
+  other in front of it — on the canvas and in the burned image, which must agree.
+- **Consequences (testable):**
+  - Four movements: to the front, forward one, backward one, to the back.
+  - The captured image is always underneath every annotation. It is not in the order and cannot be
+    moved within it — it is the thing being annotated, not an annotation.
+  - Order is stored, so it survives closing the Editor.
+  - A movement that changes nothing writes nothing.
+
 ## 5. Non-Goals (Explicit)
 
 - Visual annotation elements (Shapes, Arrows, Callouts, Text, Blur) MUST NOT generate or alter structured lines in Markdown notes. Numbered Markers remain the sole structured finding bindings.
 - Snapdown is not a full-blown graphics illustration app (no gradient mesh, freehand pencil drawings, Bézier path editors).
 - Snapdown does not read what is in a screenshot. No OCR, no classification, no auto-captioning. The
   Reviewer's judgement is the payload.
+- **Editing the captured pixels after the fact — crop, rotate, or destructive resize.** Asked for on
+  2026-08-28 and refused, because it was already refused: the Product Brief and `SRS-finding` both
+  name it. It is load-bearing rather than merely tidy — `AD-9` promises a Bundle's image copy is
+  byte-identical to the Finding when nothing is drawn on it, and the Vault keeps no second copy, so a
+  destructive edit is the one operation in this product that cannot be undone by any means. The
+  Quality Budget is where an image's size is decided, once, on the way in. Reversing this is a `DEC-`,
+  not a story.
 - Snapdown is not a video or GIF recorder.
 - Snapdown is not multi-user. No accounts, no permissions, no shared Library, no second Reviewer.
 - Snapdown is not a sync client. Nothing leaves the machine as a background activity.

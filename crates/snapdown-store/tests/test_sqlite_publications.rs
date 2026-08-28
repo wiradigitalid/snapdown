@@ -9,7 +9,7 @@ fn migrations_apply_cleanly_and_create_publication_table() {
     let temp = NamedTempFile::new().unwrap();
     let store = SqlitePublicationStore::open(temp.path()).expect("open pub store");
 
-    assert_eq!(store.get_schema_version().unwrap(), 7);
+    assert_eq!(store.get_schema_version().unwrap(), 8);
 }
 
 #[test]

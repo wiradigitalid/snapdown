@@ -143,6 +143,41 @@ pub const MIGRATIONS: &[Migration] = &[
         ALTER TABLE finding ADD COLUMN budget_name TEXT;
     "#,
     },
+    // THIS TABLE WAS DESIGNED BEFORE IT WAS BUILT, and the design is
+    // `.how/finding/05-model/data-model.md`. `BUG-72` reported "NO `visual_annotation` TABLE", which
+    // was true of the code and not of the corpus - the shape had been specified and never
+    // implemented. The column names here are the ones that document chose.
+    //
+    // `properties_json` is one JSON column rather than the union of five shapes' fields.
+    // `AnnotationShape` is an internally-tagged enum whose five variants share almost nothing: an
+    // Arrow has two endpoints and no size, a Callout has a tail and a font, a Blur has a radius. A
+    // column per field would be a table of mostly-NULLs whose validity would live in Rust anyway.
+    //
+    // TWO DELIBERATE DEPARTURES from that design, both recorded in the data model beside it:
+    //
+    //   no `kind` column.  The design has one. `AnnotationShape` is `#[serde(tag = "kind")]`, so the
+    //     tag is ALREADY the first key inside `properties_json` - a column would be a second copy of
+    //     one fact, and the copy is the one that goes stale. Nothing queries by kind; every read is
+    //     "all of this Finding's, in order".
+    //   `position` added. The design has no z-order at all, and the burn needs one: what was drawn
+    //     later covers what was drawn earlier, and that is what the Reviewer saw on the canvas.
+    Migration {
+        version: 8,
+        description: "create visual_annotation table",
+        sql: r#"
+        CREATE TABLE IF NOT EXISTS visual_annotation (
+            id TEXT PRIMARY KEY,
+            finding_id TEXT NOT NULL,
+            position INTEGER NOT NULL,
+            properties_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(finding_id) REFERENCES finding(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_visual_annotation_finding
+            ON visual_annotation(finding_id, position);
+    "#,
+    },
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> Result<(), StoreError> {

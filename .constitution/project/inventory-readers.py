@@ -280,10 +280,12 @@ def derive_screen(root: Path) -> "Derived":   # noqa: F821
          desktop_ui / "screens" / "orphan-report-view.slint", "OrphanReport"),
         ("/bundles", "Editor — Bundles", "bundle", "Reviewer", "UC-10, UC-11, UC-23",
          desktop_ui / "screens" / "bundle-view.slint", "BundleView"),
-        # Assemble writes a Bundle (BUG-55), but the compose STEP - naming it, reviewing what goes in,
-        # reordering - does not exist. A generated name and an immediate write is not this screen.
+        # Built inside appwindow.slint as the Assemble & Review modal: the document is shown, named
+        # and edited before anything is written. Reported absent until 2026-08-28 because this row
+        # looked for a file the Slint app was never going to have - the same false gap the Marker
+        # canvas row had, and it cost the same thing: a reader who learns to skim the list.
         ("/bundles/compose` (modal)", "Compose Bundle", "bundle", "Reviewer", "UC-9",
-         desktop_ui / "components" / "bundle-composer.slint", "BundleComposer"),
+         desktop_ui / "appwindow.slint", "bundle-preview-open"),
         ("/bundles/:id", "Bundle detail", "bundle", "Reviewer", "UC-11, UC-12, UC-23",
          desktop_ui / "screens" / "bundle-view.slint", "BundleView"),
         ("/bundles/:id/publish` (modal)", "Publish and unpublish a Bundle", "sharing", "Reviewer", "UC-20, UC-22",

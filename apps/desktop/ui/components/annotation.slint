@@ -1,0 +1,625 @@
+import { Theme } from "../theme.slint";
+
+// One visual annotation, as the canvas draws it. `CAP-11` - `FR-30`, `FR-31`, `FR-32`, `FR-33`.
+//
+// FLAT, not a tagged union, because Slint has no enum inside a model: `kind` carries the tag and a
+// kind ignores the fields it does not use. Rust owns the real `AnnotationShape`; this is the
+// projection the canvas needs.
+//
+// TWO POINTS, not a point and a size, and the same two for every kind:
+//
+//   a box (rect · blur · text)   x1,y1 top-left        x2,y2 bottom-right
+//   an arrow                     x1,y1 the TAIL        x2,y2 the head
+//   a callout                    x1,y1 top-left of the bubble, x2,y2 bottom-right; the tail is its
+//                                own pair, because the owner asked that dragging the bubble leave
+//                                the tail where it was pointing
+//
+// One `geometry-changed` therefore serves a move, a resize and an arrow endpoint alike. Rust
+// normalizes a box so x1<x2 before storing, so the handles below can trust the order.
+//
+// Every coordinate is normalized to the image, never to the canvas. `font-size` is the exception and
+// is in IMAGE pixels - the canvas draws a Finding at its natural size, so one canvas pixel is one
+// image pixel and the same number means the same height here and in the burned PNG.
+export struct AnnotationData {
+    id: string,
+    kind: string,
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    tail-x: float,
+    tail-y: float,
+    text: string,
+    font-size: float,
+    font-family: string,
+    text-align: string,
+}
+
+export component AnnotationItem inherits Rectangle {
+    in property <AnnotationData> ann;
+    in property <bool> selected: false;
+    // The WHOLE capture, blurred once. A Blur annotation is a window onto it.
+    //
+    // Slint 1.17 has no content blur - `blur` exists only on `BoxShadow` - so Rust does it, with the
+    // burn's own `blur_rect`. Blurring the whole image once and clipping it beats cropping per
+    // annotation for two reasons: a drag can then show the real blur from the first pixel (a crop
+    // could only show the last committed one, stretched), and N redactions cost one blur rather than
+    // N. `main.rs` caches it per Finding.
+    in property <image> blurred-source;
+    // A font size being previewed, in image pixels. Zero means "use the stored one".
+    //
+    // The Properties panel's slider writes this while it is being dragged and the store only on
+    // release - the same show-locally-commit-once discipline the drag itself uses, and for the same
+    // reason: a SQLite write per frame would also reload the model and destroy this element.
+    in property <float> size-override: 0;
+    private property <float> shown-size:
+        root.size-override > 0 ? root.size-override : root.ann.font-size;
+
+    callback select-requested();
+    // Right-click, in WINDOW coordinates - `absolute-position` plus the pointer's offset inside the
+    // hit area. The menu is drawn by the window, which is the only thing that knows where its own
+    // edges are and can keep the menu inside them.
+    callback menu-requested(length, length);
+    callback geometry-changed(float, float, float, float);
+    callback tail-changed(float, float);
+    callback text-edited(string);
+
+    // Typing is entered deliberately, by double-click, and left by deselecting.
+    //
+    // A single click MOVES: *"klik pertama itu untuk move ... double klik mentrigger mengubah teks"*.
+    // The first attempt had the text field permanently on top of the shape's middle, which meant a
+    // Callout could only be dragged by a 12px border band - and the owner could not find it.
+    private property <bool> editing: false;
+    changed selected => {
+        if (!root.selected) { root.editing = false; }
+    }
+
+    background: transparent;
+
+    // --- live geometry -------------------------------------------------------
+    //
+    // A drag is shown locally and written once, on release. Writing on every `moved` would put a
+    // SQLite transaction on the mouse's event loop and reload the model out from under the drag.
+    private property <bool> dragging: false;
+    private property <float> d-x1;
+    private property <float> d-y1;
+    private property <float> d-x2;
+    private property <float> d-y2;
+
+    private property <float> lx1: root.dragging ? root.d-x1 : root.ann.x1;
+    private property <float> ly1: root.dragging ? root.d-y1 : root.ann.y1;
+    private property <float> lx2: root.dragging ? root.d-x2 : root.ann.x2;
+    private property <float> ly2: root.dragging ? root.d-y2 : root.ann.y2;
+
+    private property <bool> tail-dragging: false;
+    private property <float> d-tx;
+    private property <float> d-ty;
+    private property <float> ltx: root.tail-dragging ? root.d-tx : root.ann.tail-x;
+    private property <float> lty: root.tail-dragging ? root.d-ty : root.ann.tail-y;
+
+    // THE DRAWN box - follows the drag.
+    private property <length> bx: Math.min(root.lx1, root.lx2) * root.width;
+    private property <length> by: Math.min(root.ly1, root.ly2) * root.height;
+    private property <length> bw: Math.abs(root.lx2 - root.lx1) * root.width;
+    private property <length> bh: Math.abs(root.ly2 - root.ly1) * root.height;
+
+    // THE GRABBED box - the COMMITTED geometry, and it deliberately does not move during a drag.
+    //
+    // This is the whole of the chopping and lag the owner reported. A TouchArea reports `mouse-x`
+    // relative to ITS OWN origin. When that origin was bound to the live geometry, every frame moved
+    // the origin under the pointer, so the next frame's delta was measured from somewhere new: the
+    // shape jittered, fell behind the mouse, and on a resize barely followed at all. It was a
+    // feedback loop - the hit area was bound to the value it was producing.
+    //
+    // Anchoring the hit areas to the committed geometry breaks the loop. They are invisible, so
+    // their sitting still for the length of a drag costs nothing, and on release the model reloads
+    // and they land in the new place.
+    private property <length> gx: Math.min(root.ann.x1, root.ann.x2) * root.width;
+    private property <length> gy: Math.min(root.ann.y1, root.ann.y2) * root.height;
+    private property <length> gw: Math.abs(root.ann.x2 - root.ann.x1) * root.width;
+    private property <length> gh: Math.abs(root.ann.y2 - root.ann.y1) * root.height;
+
+    private property <bool> is-box: root.ann.kind != "arrow";
+    private property <bool> has-words: root.ann.kind == "callout" || root.ann.kind == "text";
+
+    function clamp01(v: float) -> float {
+        return Math.max(0.0, Math.min(1.0, v));
+    }
+
+    function begin-drag() {
+        root.d-x1 = root.ann.x1;
+        root.d-y1 = root.ann.y1;
+        root.d-x2 = root.ann.x2;
+        root.d-y2 = root.ann.y2;
+        root.dragging = true;
+    }
+
+    // A CLICK THAT MOVED NOTHING WRITES NOTHING, and this is why double-click could never open
+    // the text field.
+    //
+    // Every press began a drag and every release committed it, so a plain click wrote the same
+    // geometry back to SQLite. Rust reloads the Finding after a geometry change, the reload replaces
+    // the annotation model, the repeater rebuilds - and the `AnnotationItem` that was about to
+    // receive the SECOND click of the double-click had already been destroyed and replaced by a
+    // fresh one with `editing: false`. The gesture was never reaching a live element.
+    //
+    // Guarding on an actual change fixes the typing AND removes a pointless write and a full reload
+    // from every single click on the canvas.
+    function commit-drag() {
+        if (root.dragging) {
+            root.dragging = false;
+            if (root.d-x1 != root.ann.x1 || root.d-y1 != root.ann.y1
+                || root.d-x2 != root.ann.x2 || root.d-y2 != root.ann.y2) {
+                root.geometry-changed(root.d-x1, root.d-y1, root.d-x2, root.d-y2);
+            }
+        }
+    }
+
+    // --- the shape itself ----------------------------------------------------
+
+    // SHAPE: an outline, never a fill. `FR-30` - the Reviewer is boxing something in order to still
+    // see it.
+    if root.ann.kind == "rect" : Rectangle {
+        x: root.bx;
+        y: root.by;
+        width: root.bw;
+        height: root.bh;
+        background: transparent;
+        border-width: 3px;
+        border-color: Theme.annotation-stroke;
+    }
+
+    // BLUR: a window onto the pre-blurred capture.
+    //
+    // The blurred image is laid out at full canvas size and offset backwards, so the clip shows
+    // exactly the region under the box - at 1:1, never stretched. That is what makes a drag show the
+    // real blur while it is still being sized, which is what the owner asked for: *"sejak klik drag
+    // dia sudah draw blur, lalu saya resize sampai dititik mouse saya drop dragnya"*.
+    if root.ann.kind == "blur" : Rectangle {
+        x: root.bx;
+        y: root.by;
+        width: root.bw;
+        height: root.bh;
+        clip: true;
+        // NO OUTLINE. One was added so a redaction over a smooth area could still be seen, and the
+        // owner removed it: a redaction is meant to disappear into the image, not to announce
+        // itself. The cost is stated rather than argued away - over a plain background a soft blur
+        // is very hard to see, and the Reviewer has only the canvas to tell them it is there.
+
+        Image {
+            x: -parent.x;
+            y: -parent.y;
+            width: root.width;
+            height: root.height;
+            source: root.blurred-source;
+            image-fit: fill;
+        }
+    }
+
+    // CALLOUT: a filled, rounded bubble and an ARROW to the thing it names.
+    //
+    // An arrow, not a triangular tail. The owner supplied Snagit's callout as the reference - a
+    // filled plate with a proper arrow leaving it - and asked for it directly: *"Ganti aja semua jadi
+    // arrow (jangan segitiga)"*. It is also the better shape for the job: a triangle can only point
+    // at something close by before it becomes a long thin wedge, and a Callout usually names
+    // something well away from where its words will fit.
+    //
+    // The shaft leaves the bubble edge that faces the target, so it never crosses the plate, and the
+    // head is the same chevron `draw_arrow` burns - one arrow geometry in this product, not two.
+    if root.ann.kind == "callout" : Path {
+        x: 0; y: 0;
+        width: root.width;
+        height: root.height;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: root.width / 1px;
+        viewbox-height: root.height / 1px;
+        stroke: Theme.annotation-stroke;
+        stroke-width: 4px;
+
+        private property <length> tx: root.ltx * root.width;
+        private property <length> ty: root.lty * root.height;
+        // Where the shaft leaves the plate: the edge facing the target, at the point on that edge
+        // nearest to it, so the arrow reads as coming out of the bubble rather than out of its
+        // middle.
+        private property <bool> below: self.ty > root.by + root.bh;
+        private property <bool> above: self.ty < root.by;
+        private property <bool> right: self.tx > root.bx + root.bw;
+        private property <length> ex: self.below || self.above
+            ? Math.max(root.bx + 8px, Math.min(root.bx + root.bw - 8px, self.tx))
+            : (self.right ? root.bx + root.bw : root.bx);
+        private property <length> ey: self.below
+            ? root.by + root.bh
+            : (self.above
+                ? root.by
+                : Math.max(root.by + 8px, Math.min(root.by + root.bh - 8px, self.ty)));
+
+        private property <angle> heading: Math.atan2(
+            (self.ty - self.ey) / 1px, (self.tx - self.ex) / 1px);
+
+        commands: "M \{self.ex / 1px} \{self.ey / 1px} L \{self.tx / 1px} \{self.ty / 1px} "
+            + "M \{self.tx / 1px + 16 * Math.cos(self.heading + 153deg)} \{self.ty / 1px + 16 * Math.sin(self.heading + 153deg)} "
+            + "L \{self.tx / 1px} \{self.ty / 1px} "
+            + "L \{self.tx / 1px + 16 * Math.cos(self.heading - 153deg)} \{self.ty / 1px + 16 * Math.sin(self.heading - 153deg)}";
+    }
+
+    if root.ann.kind == "callout" : Rectangle {
+        x: root.bx;
+        y: root.by;
+        width: root.bw;
+        height: root.bh;
+        background: Theme.annotation-stroke;
+        border-radius: 8px;
+    }
+
+    // ARROW: shaft and head, both in image-pixel viewbox units so the stroke is not distorted by a
+    // non-square canvas. `x1,y1` is where the pointer went DOWN - the tail - and the head follows
+    // the pointer, which is what the owner asked for: "klik pertama itu anchor ekor arrownya".
+    if root.ann.kind == "arrow" : Path {
+        x: 0; y: 0;
+        width: root.width;
+        height: root.height;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: root.width / 1px;
+        viewbox-height: root.height / 1px;
+        stroke: Theme.annotation-stroke;
+        stroke-width: 4px;
+        commands: "M \{root.lx1 * root.width / 1px} \{root.ly1 * root.height / 1px} "
+            + "L \{root.lx2 * root.width / 1px} \{root.ly2 * root.height / 1px}";
+    }
+
+    if root.ann.kind == "arrow" : Path {
+        x: 0; y: 0;
+        width: root.width;
+        height: root.height;
+        viewbox-x: 0;
+        viewbox-y: 0;
+        viewbox-width: root.width / 1px;
+        viewbox-height: root.height / 1px;
+        stroke: Theme.annotation-stroke;
+        stroke-width: 4px;
+        // A CHEVRON, drawn exactly as `draw_arrow` draws it: two strokes leaving the tip at
+        // +/- 153 degrees from the shaft, 16 long. It was a filled triangle at +/- 0.4rad, which is
+        // a different head from the one the file gets - and the owner saw it come loose from the
+        // line as the arrow turned. Sharing the geometry is what stops the canvas and the burn
+        // disagreeing about which way an arrow points.
+        private property <angle> heading: Math.atan2(
+            (root.ly2 - root.ly1) * root.height / 1px,
+            (root.lx2 - root.lx1) * root.width / 1px);
+        private property <float> ex: root.lx2 * root.width / 1px;
+        private property <float> ey: root.ly2 * root.height / 1px;
+        commands: "M \{self.ex + 16 * Math.cos(self.heading + 153deg)} \{self.ey + 16 * Math.sin(self.heading + 153deg)} "
+            + "L \{self.ex} \{self.ey} "
+            + "L \{self.ex + 16 * Math.cos(self.heading - 153deg)} \{self.ey + 16 * Math.sin(self.heading - 153deg)}";
+    }
+
+    // --- moving it -----------------------------------------------------------
+    //
+    // Anchored to `gx/gy/gw/gh` - the committed box - for the feedback-loop reason above.
+
+    // One mover, called from every grab area, so a box and an arrow cannot drift apart in how they
+    // move. Both points shift by the same delta: a move must not resize.
+    function drag-move(dx: length, dy: length) {
+        root.d-x1 = root.clamp01(root.ann.x1 + dx / root.width);
+        root.d-y1 = root.clamp01(root.ann.y1 + dy / root.height);
+        root.d-x2 = root.clamp01(root.ann.x2 + dx / root.width);
+        root.d-y2 = root.clamp01(root.ann.y2 + dy / root.height);
+    }
+
+    // A box is grabbed anywhere inside it.
+    if root.is-box : TouchArea {
+        x: root.gx;
+        y: root.gy;
+        width: root.gw;
+        height: root.gh;
+        mouse-cursor: MouseCursor.move;
+
+        pointer-event(ev) => {
+            if (ev.kind == PointerEventKind.down) {
+                if (ev.button == PointerEventButton.right) {
+                    root.menu-requested(self.absolute-position.x + self.mouse-x,
+                                        self.absolute-position.y + self.mouse-y);
+                    return;
+                }
+                root.select-requested();
+                root.begin-drag();
+            }
+            if (ev.kind == PointerEventKind.up) {
+                root.commit-drag();
+            }
+        }
+        moved => {
+            if (self.pressed) {
+                root.drag-move(self.mouse-x - self.pressed-x, self.mouse-y - self.pressed-y);
+            }
+        }
+        // Double-click opens the words. Single click already selected and may have moved it, which
+        // is the order the owner asked for: *"klik sekali dari shape itu mentrigger move, tapi
+        // double klik mentrigger mengubah teks"*.
+        double-clicked => {
+            if (root.has-words) { root.editing = true; }
+        }
+    }
+
+    // AN ARROW IS GRABBED ON THE ARROW.
+    //
+    // It used to be a bounding box, and over a diagonal that is mostly empty canvas - the owner
+    // could not click through it to draw underneath, and reported it as an invisible rectangle:
+    // *"harusnya yang bisa dimove itu adalah kalau kita klik area si arrow"*.
+    //
+    // Eleven small squares stepped along the segment, rather than a real point-to-line distance.
+    // Slint has no rotated or arbitrary hit shape, and a chain of squares along the line is the
+    // closest thing that stays honest about where the arrow actually is. They overlap on a short
+    // arrow and leave no gap on a long one, because they are spaced by fraction and not by pixels.
+    if !root.is-box : Rectangle {
+        x: 0; y: 0;
+        width: root.width;
+        height: root.height;
+        background: transparent;
+
+        for f in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] : TouchArea {
+            x: (root.ann.x1 + (root.ann.x2 - root.ann.x1) * f) * root.width - 11px;
+            y: (root.ann.y1 + (root.ann.y2 - root.ann.y1) * f) * root.height - 11px;
+            width: 22px;
+            height: 22px;
+            mouse-cursor: MouseCursor.move;
+
+            pointer-event(ev) => {
+                if (ev.kind == PointerEventKind.down) {
+                    if (ev.button == PointerEventButton.right) {
+                        root.menu-requested(self.absolute-position.x + self.mouse-x,
+                                            self.absolute-position.y + self.mouse-y);
+                        return;
+                    }
+                    root.select-requested();
+                    root.begin-drag();
+                }
+                if (ev.kind == PointerEventKind.up) {
+                    root.commit-drag();
+                }
+            }
+            moved => {
+                if (self.pressed) {
+                    root.drag-move(self.mouse-x - self.pressed-x, self.mouse-y - self.pressed-y);
+                }
+            }
+        }
+    }
+
+    // --- the words, typed where they will appear -----------------------------
+    //
+    // Only while editing, which is entered by double-click. A text field permanently over the shape
+    // was the first attempt, and it took the click that should have moved it.
+    //
+    // `init => { self.focus(); }` is what makes the double-click land in the field: the element does
+    // not exist until `editing` becomes true, so there is nothing to focus beforehand.
+    if root.has-words && root.editing : TextInput {
+        x: root.bx + 10px;
+        y: root.by + 10px;
+        width: max(1px, root.bw - 20px);
+        height: max(1px, root.bh - 20px);
+        text: root.ann.text;
+        // White on a Callout's filled plate, red on a bare Text - the same pair the burn uses.
+        color: root.ann.kind == "callout" ? Theme.text-on-accent : Theme.annotation-stroke;
+        font-size: root.shown-size * 1px;
+        font-family: root.ann.font-family;
+        selection-background-color: Theme.annotation-select-ring;
+        selection-foreground-color: Theme.text-on-accent;
+        wrap: word-wrap;
+        horizontal-alignment: root.ann.text-align == "center"
+            ? TextHorizontalAlignment.center
+            : (root.ann.text-align == "end" ? TextHorizontalAlignment.right : TextHorizontalAlignment.left);
+        init => { self.focus(); }
+        edited => { root.text-edited(self.text); }
+    }
+
+    // The words as DRAWN, whenever they are not being typed.
+    if root.has-words && !root.editing : Text {
+        x: root.bx + 10px;
+        y: root.by + 10px;
+        width: max(1px, root.bw - 20px);
+        height: max(1px, root.bh - 20px);
+        text: root.ann.text == "" ? "Double-click to type" : root.ann.text;
+        color: root.ann.kind == "callout" ? Theme.text-on-accent : Theme.annotation-stroke;
+        // OPAQUE, prompt included. The prompt was drawn at 55% and read as transparent text with the
+        // capture showing through it - *"ada font di callout yang transparant"*. Dimming is the
+        // wrong signal here anyway: over an unknown screenshot, a half-opacity glyph is not "this is
+        // a hint", it is "this is broken".
+        font-size: root.shown-size * 1px;
+        font-family: root.ann.font-family;
+        wrap: word-wrap;
+        overflow: clip;
+        horizontal-alignment: root.ann.text-align == "center"
+            ? TextHorizontalAlignment.center
+            : (root.ann.text-align == "end" ? TextHorizontalAlignment.right : TextHorizontalAlignment.left);
+    }
+
+    // --- selection chrome ----------------------------------------------------
+
+    if root.selected && root.is-box : Rectangle {
+        x: root.bx - 1px;
+        y: root.by - 1px;
+        width: root.bw + 2px;
+        height: root.bh + 2px;
+        background: transparent;
+        border-width: 1px;
+        border-color: Theme.annotation-select-ring;
+    }
+
+    // `FR-33`'s eight bounding-box handles, in reading order from the top-left:
+    //
+    //   0 TL   1 T    2 TR
+    //   7 L           3 R
+    //   6 BL   5 B    4 BR
+    //
+    // Which edge a handle owns is derived from that ring rather than listed, so adding a ninth
+    // cannot disagree with a table somewhere else.
+    //
+    // The GRIP follows the drag; the GRAB AREA does not. Two elements rather than one, for the
+    // feedback-loop reason on `gx` - a handle whose TouchArea moved with the shape could never catch
+    // up with the pointer, which is exactly what a resize felt like.
+    if root.selected && root.is-box : Rectangle {
+        x: 0; y: 0;
+        width: root.width;
+        height: root.height;
+        background: transparent;
+
+        for i in [0, 1, 2, 3, 4, 5, 6, 7] : Rectangle {
+            x: 0; y: 0;
+            width: root.width;
+            height: root.height;
+            background: transparent;
+            // -1 left edge, 0 centre, +1 right edge; same for the vertical.
+            private property <float> hx: (i == 0 || i == 6 || i == 7) ? -1 : ((i == 2 || i == 3 || i == 4) ? 1 : 0);
+            private property <float> hy: (i == 0 || i == 1 || i == 2) ? -1 : ((i == 4 || i == 5 || i == 6) ? 1 : 0);
+
+            Rectangle {
+                x: root.bx + root.bw * (parent.hx + 1) / 2 - 5px;
+                y: root.by + root.bh * (parent.hy + 1) / 2 - 5px;
+                width: 10px;
+                height: 10px;
+                background: Theme.annotation-handle;
+                border-width: 1px;
+                border-color: Theme.annotation-handle-border;
+                border-radius: 2px;
+            }
+
+            TouchArea {
+                // 20px, not 10: a 10px grip is hard to hit, and the grab area costs nothing to
+                // enlarge because it is invisible.
+                x: root.gx + root.gw * (parent.hx + 1) / 2 - 10px;
+                y: root.gy + root.gh * (parent.hy + 1) / 2 - 10px;
+                width: 20px;
+                height: 20px;
+                mouse-cursor: parent.hx == 0
+                    ? MouseCursor.ns-resize
+                    : (parent.hy == 0
+                        ? MouseCursor.ew-resize
+                        : (parent.hx == parent.hy ? MouseCursor.nwse-resize : MouseCursor.nesw-resize));
+
+                pointer-event(ev) => {
+                    if (ev.kind == PointerEventKind.down) { root.begin-drag(); }
+                    if (ev.kind == PointerEventKind.up) { root.commit-drag(); }
+                }
+                moved => {
+                    if (self.pressed) {
+                        if (parent.hx == -1) {
+                            root.d-x1 = root.clamp01(root.ann.x1 + (self.mouse-x - self.pressed-x) / root.width);
+                        }
+                        if (parent.hx == 1) {
+                            root.d-x2 = root.clamp01(root.ann.x2 + (self.mouse-x - self.pressed-x) / root.width);
+                        }
+                        if (parent.hy == -1) {
+                            root.d-y1 = root.clamp01(root.ann.y1 + (self.mouse-y - self.pressed-y) / root.height);
+                        }
+                        if (parent.hy == 1) {
+                            root.d-y2 = root.clamp01(root.ann.y2 + (self.mouse-y - self.pressed-y) / root.height);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // An Arrow has two handles, not eight: `FR-33` says "2 endpoints for Arrow", and a bounding box
+    // around a diagonal would offer corners that are not on the arrow at all.
+    if root.selected && !root.is-box : Rectangle {
+        x: 0; y: 0;
+        width: root.width;
+        height: root.height;
+        background: transparent;
+
+        for end in [0, 1] : Rectangle {
+            x: 0; y: 0;
+            width: root.width;
+            height: root.height;
+            background: transparent;
+
+            Rectangle {
+                x: (end == 0 ? root.lx1 : root.lx2) * root.width - 5px;
+                y: (end == 0 ? root.ly1 : root.ly2) * root.height - 5px;
+                width: 10px;
+                height: 10px;
+                border-radius: Theme.radius-pill;
+                background: Theme.annotation-handle;
+                border-width: 1px;
+                border-color: Theme.annotation-handle-border;
+            }
+
+            TouchArea {
+                x: (end == 0 ? root.ann.x1 : root.ann.x2) * root.width - 10px;
+                y: (end == 0 ? root.ann.y1 : root.ann.y2) * root.height - 10px;
+                width: 20px;
+                height: 20px;
+                mouse-cursor: MouseCursor.crosshair;
+                pointer-event(ev) => {
+                    if (ev.kind == PointerEventKind.down) { root.begin-drag(); }
+                    if (ev.kind == PointerEventKind.up) { root.commit-drag(); }
+                }
+                moved => {
+                    if (self.pressed) {
+                        if (end == 0) {
+                            root.d-x1 = root.clamp01(root.ann.x1 + (self.mouse-x - self.pressed-x) / root.width);
+                            root.d-y1 = root.clamp01(root.ann.y1 + (self.mouse-y - self.pressed-y) / root.height);
+                        } else {
+                            root.d-x2 = root.clamp01(root.ann.x2 + (self.mouse-x - self.pressed-x) / root.width);
+                            root.d-y2 = root.clamp01(root.ann.y2 + (self.mouse-y - self.pressed-y) / root.height);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // `FR-33`'s ninth handle, and only for a Callout: the tail's target. Round rather than square, so
+    // it does not read as a resize grip. Moving the BUBBLE leaves this alone - the owner asked for
+    // that explicitly, and it is right: the tail names a place on the screenshot, and that place does
+    // not move because the bubble was tidied out of the way.
+    if root.selected && root.ann.kind == "callout" : Rectangle {
+        x: 0; y: 0;
+        width: root.width;
+        height: root.height;
+        background: transparent;
+
+        Rectangle {
+            x: root.ltx * root.width - 6px;
+            y: root.lty * root.height - 6px;
+            width: 12px;
+            height: 12px;
+            border-radius: Theme.radius-pill;
+            background: Theme.annotation-select-ring;
+            border-width: 1px;
+            border-color: Theme.annotation-handle;
+        }
+
+        TouchArea {
+            x: root.ann.tail-x * root.width - 11px;
+            y: root.ann.tail-y * root.height - 11px;
+            width: 22px;
+            height: 22px;
+            mouse-cursor: MouseCursor.crosshair;
+            pointer-event(ev) => {
+                if (ev.kind == PointerEventKind.down) {
+                    root.d-tx = root.ann.tail-x;
+                    root.d-ty = root.ann.tail-y;
+                    root.tail-dragging = true;
+                }
+                if (ev.kind == PointerEventKind.up && root.tail-dragging) {
+                    root.tail-dragging = false;
+                    // Same guard as `commit-drag`: a click on the tail handle that moved nothing
+                    // must not write and reload.
+                    if (root.d-tx != root.ann.tail-x || root.d-ty != root.ann.tail-y) {
+                        root.tail-changed(root.d-tx, root.d-ty);
+                    }
+                }
+            }
+            moved => {
+                if (self.pressed) {
+                    root.d-tx = root.clamp01(root.ann.tail-x + (self.mouse-x - self.pressed-x) / root.width);
+                    root.d-ty = root.clamp01(root.ann.tail-y + (self.mouse-y - self.pressed-y) / root.height);
+                }
+            }
+        }
+    }
+}

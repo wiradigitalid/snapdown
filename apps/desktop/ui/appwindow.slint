@@ -12,7 +12,10 @@ import { CornerBrackets } from "components/corner-brackets.slint";
 import { IconButton } from "components/icon-button.slint";
 import { SdTextField } from "components/text-field.slint";
 import { SdScrollBar } from "components/scrollbar.slint";
+import { SdSlider } from "components/slider.slint";
+import { SdContextMenu, MenuEntry } from "components/context-menu.slint";
 import { SdActionButton, SdSectionLabel, SdCaption, SdDocHeading } from "components/action-button.slint";
+import { AnnotationItem, AnnotationData } from "components/annotation.slint";
 
 import "../assets/fonts/IBMPlexSans-Medium.ttf";
 import "../assets/fonts/IBMPlexSans-SemiBold.ttf";
@@ -23,6 +26,7 @@ import "../assets/fonts/IBMPlexMono-SemiBold.ttf";
 import "../assets/fonts/IBMPlexMono-Bold.ttf";
 
 export { Theme }
+export { AnnotationData }
 
 export struct MarkerData {
     id: string,
@@ -1099,6 +1103,131 @@ export component AppWindow inherits Window {
     in-out property <[MarkerData]> markers: [];
     in-out property <[FindingThumb]> filmstrip-items: [];
 
+    // CANVAS ANNOTATIONS - `CAP-11`.
+    //
+    // A separate model from `markers` and not a superset of it, because the two are different
+    // promises: a Marker produces a numbered line in the Markdown, and `FR-30` to `FR-32` say in the
+    // PRD's own non-goals that an annotation produces none. They share a canvas and nothing else.
+    in-out property <[AnnotationData]> annotations: [];
+    // The active capture, blurred whole. Every Blur annotation - and the drag that is becoming one -
+    // is a clipped window onto this. See `blurred_capture` in `main.rs`.
+    in-out property <image> blurred-capture;
+    // At most one, by id. An index would be wrong the moment an annotation is deleted, which is the
+    // same trap the Shift-click anchor fell into (`BUG-67`).
+    //
+    // Set by RUST, never by the canvas, even though the click that changes it happens here. The
+    // Properties panel lives in the inspector beside the Marker Notes, and a Slint repeater cannot
+    // pick one row out of a model - so the five fields below are Rust's answer to "which one is
+    // selected, and what does it say". Having the canvas write the id directly and Rust write the
+    // rest would be two writers for one fact, and they would disagree the first time an annotation
+    // was deleted.
+    in-out property <string> selected-annotation-id: "";
+    in-out property <string> selected-annotation-kind: "";
+    in-out property <string> selected-annotation-text: "";
+    in-out property <float> selected-annotation-font-size: 14;
+    in-out property <string> selected-annotation-font-family: "IBM Plex Sans";
+    in-out property <string> selected-annotation-align: "start";
+    // Only a Text and a Callout carry words, and the owner scoped the panel to exactly those two.
+    // A font size being dragged on the slider, not yet committed. Zero means nothing is.
+    private property <float> live-font-size: 0;
+    private property <bool> selected-has-words:
+        root.selected-annotation-kind == "text" || root.selected-annotation-kind == "callout";
+
+    // The drag in progress on the canvas. Never written to the store - `commit-drawing` turns it
+    // into one `annotation-drawn` and it is gone.
+    private property <bool> drawing: false;
+    private property <float> draw-x1;
+    private property <float> draw-y1;
+    private property <float> draw-x2;
+    private property <float> draw-y2;
+
+    // Tool index to the kind it draws. The toolbar's indices are the ordinals the Reviewer sees
+    // (`1`..`6` on the buttons), so this is the single place the two vocabularies meet.
+    private property <string> active-tool-kind:
+        root.active-tool-index == 1 ? "rect"
+        : root.active-tool-index == 2 ? "callout"
+        : root.active-tool-index == 3 ? "blur"
+        : root.active-tool-index == 4 ? "arrow"
+        : root.active-tool-index == 5 ? "text"
+        : "";
+
+    // A CLICK IS NOT A DRAWING.
+    //
+    // This used to invent a default-sized shape for a click that never became a drag. The owner
+    // rejected it, and was right: *"Kalau cuma click pertama lalu lepas, maka jangan draw element.
+    // Jangan ada default ukuran."* An annotation is a statement about a REGION, and a tap does not
+    // name one - a default size would be the product guessing which region was meant.
+    //
+    // 8 image pixels in the longer direction. The canvas draws a Finding at natural size, so this is
+    // measured in the image's own pixels and does not change with the window.
+    private property <bool> drag-is-real:
+        Math.max(Math.abs(root.draw-x2 - root.draw-x1) * root.active-image.width,
+                 Math.abs(root.draw-y2 - root.draw-y1) * root.active-image.height) >= 8;
+
+    // A Callout's gesture is the other way round from a box's: the FIRST point is the tail's target.
+    //
+    // *"mouse click pertama itu adalah anchor dari ekor callout, tinggal di geser aja mousenya agar
+    // mengikuti besar callout dan posisi callout"* - so the press names the thing being pointed AT,
+    // and the drag carries the bubble away from it, growing as it goes. The bubble takes the far 70%
+    // of the drag so a visible tail always remains between the two.
+    private property <float> callout-bubble-x1: root.draw-x1 + (root.draw-x2 - root.draw-x1) * 0.3;
+    private property <float> callout-bubble-y1: root.draw-y1 + (root.draw-y2 - root.draw-y1) * 0.3;
+
+    // A Text is at least one line tall.
+    //
+    // A drag that is 6 image pixels high cannot render an 18px line, so the words would be clipped
+    // to nothing and the annotation would look empty. The canvas is the only place that knows the
+    // image's own height, which is what the normalised height has to be measured against.
+    //
+    // 1.4x the font size: ascender to descender plus the 10px inset the field and the drawn text
+    // both use, at the sizes the ladder offers.
+    private property <float> text-min-height:
+        root.active-image.height > 0
+            ? (root.draw-preview.font-size * 1.4 + 20) / root.active-image.height
+            : 0.0;
+
+    function commit-drawing() {
+        if (root.active-tool-kind == "" || !root.drag-is-real) {
+            return;
+        }
+        if (root.active-tool-kind == "text") {
+            root.annotation-drawn("text", root.draw-x1, root.draw-y1, root.draw-x2,
+                // Grown DOWNWARD from wherever the drag started, so the top edge stays where the
+                // Reviewer put it and only the unusable part of the height is corrected.
+                Math.max(root.draw-y2, Math.min(root.draw-y1, root.draw-y2) + root.text-min-height));
+            return;
+        }
+        // The RAW gesture, for every kind including a Callout. `shape_from_drag` owns the inset
+        // that separates a Callout's bubble from its tail, so both halves are derived from the same
+        // two points in one place. Sending the inset corner from here was what made the tail snap to
+        // the bubble's own top-left the moment the drag ended.
+        root.annotation-drawn(root.active-tool-kind,
+            root.draw-x1, root.draw-y1, root.draw-x2, root.draw-y2);
+    }
+
+    // What the drag looks like WHILE it is happening: the real element, not a rehearsal.
+    //
+    // The preview used to be one neutral blue rectangle for all five tools. The owner asked for the
+    // actual illustration - *"pas di click drag dia otomatis visual ilustrasi aslinya"* - and the way
+    // to guarantee it matches is to feed the same `AnnotationItem` the committed ones use, rather
+    // than draw a second approximation of each shape that could drift from it.
+    private property <AnnotationData> draw-preview: {
+        id: "",
+        kind: root.active-tool-kind,
+        x1: root.active-tool-kind == "callout" ? root.callout-bubble-x1 : root.draw-x1,
+        y1: root.active-tool-kind == "callout" ? root.callout-bubble-y1 : root.draw-y1,
+        x2: root.draw-x2,
+        y2: root.draw-y2,
+        tail-x: root.draw-x1,
+        tail-y: root.draw-y1,
+        text: "",
+        // One size for both, matching `DEFAULT_ANNOTATION_FONT_SIZE`. They were 18 and 14, so a
+        // Callout and a Text placed on the same capture did not match.
+        font-size: 18,
+        font-family: "IBM Plex Sans",
+        text-align: "start",
+    };
+
     // A transient result line for an action whose outcome is otherwise invisible. Assembling a
     // Bundle writes image files, a Markdown file and a database row and changes nothing on screen;
     // without this the owner cannot tell a success from a silent failure, which is exactly the
@@ -1152,6 +1281,111 @@ export component AppWindow inherits Window {
     callback marker-placed(float, float);
     callback delete-marker-clicked(string);
     callback marker-comment-edited(string, string);
+
+    // ANNOTATIONS - `CAP-11`. Six callbacks, and every one of them is handled in `main.rs`:
+    // `every_ui_callback_has_a_rust_handler_or_is_declared_unreachable` is what stops this becoming
+    // `BUG-55` again, where six callbacks and a file dialog were declared and joined to nothing.
+    //
+    // kind, and the drag's two corners - normalized. Rust decides what shape a kind makes.
+    callback annotation-drawn(string, float, float, float, float);
+    // id, and the new two corners. One callback for a move, a resize and an arrow endpoint alike.
+    callback annotation-geometry-changed(string, float, float, float, float);
+    callback annotation-tail-moved(string, float, float);
+    callback annotation-text-edited(string, string);
+    // id, font size in IMAGE pixels, family, alignment. The Properties panel's three controls, sent
+    // together because they are one form and a partial write would need three round trips.
+    callback annotation-style-changed(string, float, string, string);
+    callback annotation-deleted(string);
+    // Selection goes THROUGH Rust so the Properties panel's five mirrored fields are written by the
+    // same hand that writes the id. Pass "" to deselect.
+    callback annotation-selected(string);
+    // A Marker can be moved after it is placed. It could not be, and the owner asked for it:
+    // *"marker maunya bisa digeser2 meskipun sudah ditaruh"*.
+    callback marker-moved(string, float, float);
+    // id, and one of `front` · `forward` · `backward` · `back`.
+    callback annotation-reordered(string, string);
+    // The three the archived Tauri menu had and this one did not. `copy-image-clicked` already
+    // existed and was handled by nothing; it is handled now.
+    callback delete-finding-confirmed(string);
+    callback open-file-location-clicked(string);
+
+    // Deleting a Finding is irreversible - the row AND the file - so it is confirmed once.
+    //
+    // The Product Brief rejects a recycle bin in as many words and names the alternative:
+    // "Confirmation once is the safety, not a bin." A menu item that deleted a capture on a single
+    // click would be the one destructive action in this product with nothing between the pointer and
+    // the disk.
+    private property <string> pending-delete-finding: "";
+    // Captured when the dialog opens, so the wording cannot drift from what will actually go if the
+    // selection changes behind the dialog.
+    private property <int> pending-delete-count: 1;
+    // Whether the card that was right-clicked is part of the selection. The filmstrip's own rule:
+    // right-click ON the selection acts on all of it, right-click outside acts on one.
+    private property <bool> menu-target-selected: false;
+
+    // THE CONTEXT MENU - `FR-37`.
+    //
+    // One menu, two subjects: an annotation on the canvas, or a Finding in the filmstrip. Which one
+    // is open decides which entries are built, and both are built HERE rather than in Rust so the
+    // list can react to what is selected without a round trip.
+    //
+    // `FR-37` forbids an entry with no other route, and every entry below honours it: the four
+    // ordering actions are also buttons in the Properties tab, Delete is the key and the panel
+    // button, and the filmstrip's entries are all things a click already does.
+    private property <string> menu-subject: "";
+    private property <string> menu-target: "";
+    private property <length> menu-x;
+    private property <length> menu-y;
+
+    private property <[MenuEntry]> annotation-menu: [
+        { action: "front", label: "Bring to front", hint: "", separator: false, enabled: true },
+        { action: "forward", label: "Bring forward", hint: "", separator: false, enabled: true },
+        { action: "backward", label: "Send backward", hint: "", separator: false, enabled: true },
+        { action: "back", label: "Send to back", hint: "", separator: false, enabled: true },
+        { action: "", label: "", hint: "", separator: true, enabled: false },
+        { action: "delete", label: "Delete element", hint: "Del", separator: false, enabled: true },
+    ];
+
+    // The archived Tauri build's own filmstrip menu, entry for entry: Assemble, Copy Image, Open
+    // File Location, Delete. "Open on canvas" and "Add to selection" are gone - the owner called
+    // them useless and was right, they are a plain click and a Ctrl+click.
+    private property <[MenuEntry]> finding-menu: [
+        { action: "assemble", label: "Assemble selected...", hint: "", separator: false, enabled: root.selected-finding-count > 0 },
+        { action: "copy", label: "Copy image", hint: "", separator: false, enabled: true },
+        { action: "reveal", label: "Open file location", hint: "", separator: false, enabled: true },
+        { action: "", label: "", hint: "", separator: true, enabled: false },
+        { action: "delete-finding",
+          label: root.menu-target-selected && root.selected-finding-count > 1
+            ? "Delete " + root.selected-finding-count + " Findings..."
+            : "Delete Finding...",
+          hint: "", separator: false, enabled: true },
+    ];
+
+    // A Marker's own menu, which the archived build also had. One entry, because one is all a Marker
+    // has that is not already a drag.
+    private property <[MenuEntry]> marker-menu: [
+        { action: "delete-marker", label: "Delete Marker", hint: "", separator: false, enabled: true },
+    ];
+
+    // Bare canvas: the actions that belong to the Finding as a whole rather than to anything under
+    // the pointer.
+    private property <[MenuEntry]> canvas-menu: [
+        { action: "undo", label: "Undo", hint: "", separator: false, enabled: true },
+        { action: "redo", label: "Redo", hint: "", separator: false, enabled: true },
+        { action: "", label: "", hint: "", separator: true, enabled: false },
+        { action: "copy", label: "Copy image", hint: "", separator: false, enabled: root.active-finding-id != "" },
+        { action: "reveal", label: "Open file location", hint: "", separator: false, enabled: root.active-finding-id != "" },
+    ];
+
+    function open-menu(subject: string, target: string, x: length, y: length) {
+        root.menu-subject = subject;
+        root.menu-target = target;
+        root.menu-x = x;
+        root.menu-y = y;
+    }
+    // `FR-33`: "Redo/Undo history is supported for canvas additions, moves, edits, and deletions."
+    callback annotation-undo();
+    callback annotation-redo();
     callback bundle-preview-confirmed();
     callback bundle-preview-cancelled();
     // kind, finding-id, marker-id, text. One callback rather than four, because the document is one
@@ -1491,12 +1725,14 @@ export component AppWindow inherits Window {
                             height: 44px;
                             icon: @image-url("../assets/icons/undo.svg");
                             text: "Undo";
+                            clicked => { root.annotation-undo(); }
                         }
                         IconButton {
                             width: 40px;
                             height: 44px;
                             icon: @image-url("../assets/icons/redo.svg");
                             text: "Redo";
+                            clicked => { root.annotation-redo(); }
                         }
                     }
 
@@ -1585,6 +1821,35 @@ export component AppWindow inherits Window {
                         vertical-stretch: 1;
                         background: root.bg-card;
 
+                        // `FR-33`: "Pressing Escape deselects the active element", and `FR-30`:
+                        // "Deleting via Delete/Backspace keyboard keys ... removes the element".
+                        //
+                        // A FocusScope rather than a window-wide key handler, because the Editor is
+                        // full of text fields and Backspace has an older job in every one of them.
+                        // This takes focus only when an annotation is picked up, and any click into
+                        // a note hands it straight back.
+                        canvas-keys := FocusScope {
+                            width: 100%;
+                            height: 100%;
+
+                            key-pressed(event) => {
+                                if (event.text == Key.Escape) {
+                                    root.annotation-selected("");
+                                    return EventResult.accept;
+                                }
+                                // DELETE ONLY. Backspace used to do this too, straight from
+                                // `FR-30`'s wording, and the owner asked for it back: *"Tombol
+                                // backspace jangan mendelete element"*. The reason is the Callout -
+                                // its words are typed ON the canvas now, so Backspace inside a
+                                // Callout is a person deleting a letter, and one stray keystroke
+                                // outside the caret would take the whole annotation instead.
+                                if (event.text == Key.Delete && root.selected-annotation-id != "") {
+                                    root.annotation-deleted(root.selected-annotation-id);
+                                    return EventResult.accept;
+                                }
+                                return EventResult.reject;
+                            }
+
                         scroll-view := ScrollView {
                             width: 100%;
                             height: 100%;
@@ -1618,21 +1883,170 @@ export component AppWindow inherits Window {
                                     inset: 4px;
                                 }
 
-                                // Numbered Reticle Marker Overlay
-                                for m in root.markers : ReticleMarker {
-                                    x: m.x * parent.width - 15px;
-                                    y: m.y * parent.height - 15px;
-                                    ordinal: m.ordinal;
+                                // The drag, drawn as the thing it will become. Declared BEFORE
+                                // `canvas-surface`, so its own TouchAreas sit underneath and can
+                                // never steal the gesture that is producing it.
+                                if root.drawing && root.drag-is-real : AnnotationItem {
+                                    width: 100%;
+                                    height: 100%;
+                                    ann: root.draw-preview;
+                                    selected: false;
+                                    blurred-source: root.blurred-capture;
                                 }
 
-                                // Only the Marker tool places a Marker. The other six tools are
-                                // registered and unimplemented, and placing a Marker for them would
-                                // answer a click that asked for an arrow or a crop with a reticle.
-                                TouchArea {
-                                    mouse-cursor: root.active-tool-index == 0 ? MouseCursor.crosshair : MouseCursor.default;
+                                // THE DRAWING SURFACE.
+                                //
+                                // Declared BELOW the annotation layer on purpose. Slint hit-tests in
+                                // reverse declaration order, so a press that lands on an existing
+                                // annotation is taken by that annotation - select and move - and a
+                                // press on bare canvas falls through to here, where the active tool
+                                // decides what to make. That is the behaviour of every annotation
+                                // tool the Reviewer already knows, and it needs no seventh "select"
+                                // button on a toolbar that is already seven wide.
+                                //
+                                // The consequence, stated rather than hidden: a new shape cannot be
+                                // STARTED on top of an existing one. Start it beside and drag over.
+                                canvas-surface := TouchArea {
+                                    mouse-cursor: root.active-tool-index == 6
+                                        ? MouseCursor.default
+                                        : MouseCursor.crosshair;
+
+                                    pointer-event(ev) => {
+                                        if (ev.kind == PointerEventKind.down
+                                            && ev.button == PointerEventButton.right) {
+                                            root.open-menu("canvas", "",
+                                                self.absolute-position.x + self.mouse-x,
+                                                self.absolute-position.y + self.mouse-y);
+                                            return;
+                                        }
+                                        if (ev.kind == PointerEventKind.down) {
+                                            // A press on bare canvas is also how a selection is
+                                            // dropped. `FR-33` gives Escape the same job; this is
+                                            // the one the hand reaches for first.
+                                            root.annotation-selected("");
+                                            if (root.active-tool-index >= 1 && root.active-tool-index <= 5) {
+                                                root.draw-x1 = self.mouse-x / parent.width;
+                                                root.draw-y1 = self.mouse-y / parent.height;
+                                                root.draw-x2 = root.draw-x1;
+                                                root.draw-y2 = root.draw-y1;
+                                                root.drawing = true;
+                                            }
+                                        }
+                                        if (ev.kind == PointerEventKind.up && root.drawing) {
+                                            root.drawing = false;
+                                            root.commit-drawing();
+                                        }
+                                    }
+                                    moved => {
+                                        if (root.drawing) {
+                                            root.draw-x2 = Math.max(0.0, Math.min(1.0, self.mouse-x / parent.width));
+                                            root.draw-y2 = Math.max(0.0, Math.min(1.0, self.mouse-y / parent.height));
+                                        }
+                                    }
                                     clicked => {
                                         if (root.active-tool-index == 0) {
                                             root.marker-placed(self.mouse-x / parent.width, self.mouse-y / parent.height);
+                                        }
+                                    }
+                                }
+
+                                // The annotations themselves. Above the surface so they can be
+                                // picked up, below the Markers so a reticle is never buried.
+                                for a in root.annotations : AnnotationItem {
+                                    width: 100%;
+                                    height: 100%;
+                                    ann: a;
+                                    selected: a.id == root.selected-annotation-id;
+                                    blurred-source: root.blurred-capture;
+                                    // Only the selected one previews, and only while the slider is
+                                    // actually being dragged.
+                                    size-override: a.id == root.selected-annotation-id
+                                        ? root.live-font-size : 0;
+                                    menu-requested(x, y) => {
+                                        root.annotation-selected(a.id);
+                                        root.open-menu("annotation", a.id, x, y);
+                                    }
+                                    select-requested => {
+                                        root.annotation-selected(a.id);
+                                        // Picking up a Text or a Callout opens the tab that can
+                                        // change it. Without this the controls exist behind a tab
+                                        // nobody has a reason to click, which is how the panel
+                                        // ended up floating over the canvas in the first place.
+                                        if (a.kind == "text" || a.kind == "callout") {
+                                            root.active-tab-index = 1;
+                                        }
+                                        // Picking one up is what hands the canvas the keyboard.
+                                        // Without this Escape and Delete would go to whatever was
+                                        // focused before - most often a note field, where Delete
+                                        // has an older and much worse meaning.
+                                        canvas-keys.focus();
+                                    }
+                                    text-edited(body) => { root.annotation-text-edited(a.id, body); }
+                                    geometry-changed(x1, y1, x2, y2) => {
+                                        root.annotation-geometry-changed(a.id, x1, y1, x2, y2);
+                                    }
+                                    tail-changed(tx, ty) => { root.annotation-tail-moved(a.id, tx, ty); }
+                                }
+
+                                // Numbered Reticle Marker Overlay, now draggable.
+                                //
+                                // A Marker could be placed and never moved, which made a mis-click
+                                // permanent: the only remedy was delete and re-place, and deleting
+                                // renumbers everything after it, so correcting Marker 2's position
+                                // rewrote Marker 2's line number. The owner asked for the obvious
+                                // fix: *"marker maunya bisa digeser2 meskipun sudah ditaruh"*.
+                                //
+                                // Grip on the live position, grab area on the committed one - the
+                                // same rule `AnnotationItem` documents, and for the same reason.
+                                for m in root.markers : Rectangle {
+                                    x: 0; y: 0;
+                                    width: 100%;
+                                    height: 100%;
+                                    background: transparent;
+
+                                    private property <bool> dragging: false;
+                                    private property <float> dx;
+                                    private property <float> dy;
+                                    private property <float> lx: self.dragging ? self.dx : m.x;
+                                    private property <float> ly: self.dragging ? self.dy : m.y;
+
+                                    ReticleMarker {
+                                        x: parent.lx * parent.width - 15px;
+                                        y: parent.ly * parent.height - 15px;
+                                        ordinal: m.ordinal;
+                                    }
+
+                                    TouchArea {
+                                        x: m.x * parent.width - 15px;
+                                        y: m.y * parent.height - 15px;
+                                        width: 30px;
+                                        height: 30px;
+                                        mouse-cursor: MouseCursor.move;
+                                        pointer-event(ev) => {
+                                            if (ev.kind == PointerEventKind.down
+                                                && ev.button == PointerEventButton.right) {
+                                                root.open-menu("marker", m.id,
+                                                    self.absolute-position.x + self.mouse-x,
+                                                    self.absolute-position.y + self.mouse-y);
+                                                return;
+                                            }
+                                            if (ev.kind == PointerEventKind.down) {
+                                                parent.dx = m.x;
+                                                parent.dy = m.y;
+                                                parent.dragging = true;
+                                            }
+                                            if (ev.kind == PointerEventKind.up && parent.dragging) {
+                                                parent.dragging = false;
+                                                root.marker-moved(m.id, parent.dx, parent.dy);
+                                            }
+                                        }
+                                        moved => {
+                                            if (self.pressed) {
+                                                parent.dx = Math.max(0.0, Math.min(1.0,
+                                                    m.x + (self.mouse-x - self.pressed-x) / parent.width));
+                                                parent.dy = Math.max(0.0, Math.min(1.0,
+                                                    m.y + (self.mouse-y - self.pressed-y) / parent.height));
+                                            }
                                         }
                                     }
                                 }
@@ -1663,6 +2077,8 @@ export component AppWindow inherits Window {
                             y: parent.height - self.height - 3px;
                             width: parent.width - 8px - (scroll-view.viewport-height > scroll-view.visible-height ? 12px : 0px);
                         }
+
+                        } // canvas-keys
                     }
 
                     // Readout Status Strip
@@ -1812,6 +2228,17 @@ export component AppWindow inherits Window {
                                                         thumb.id,
                                                         event.modifiers.control,
                                                         event.modifiers.shift);
+                                                }
+                                                // Right-click raises the Finding's own menu.
+                                                // `FR-37`: every entry on it is something a click
+                                                // already does, so the menu is a shortcut and never
+                                                // the only route to anything.
+                                                if (event.kind == PointerEventKind.down
+                                                    && event.button == PointerEventButton.right) {
+                                                    root.menu-target-selected = thumb.is-selected;
+                                                    root.open-menu("finding", thumb.id,
+                                                        self.absolute-position.x + self.mouse-x,
+                                                        self.absolute-position.y + self.mouse-y);
                                                 }
                                             }
                                         }
@@ -2284,42 +2711,233 @@ export component AppWindow inherits Window {
                             }
                         }
 
+                        // THE PROPERTIES TAB - `FR-32`.
+                        //
+                        // What was here was a placeholder: a "Font Family" field pre-filled with
+                        // "IBM Plex Sans, sans-serif" that was bound to nothing, and a "Font Size:
+                        // 14px" that was a `Text`, not a control. It looked like a working panel and
+                        // was the same class of thing as `BUG-55` - built, mounted, joined to
+                        // nothing.
+                        //
+                        // The real controls arrived on the canvas first, floating over the capture.
+                        // The owner moved them twice: off the canvas, then into this tab, which is
+                        // where a tab called Properties should have led all along.
+                        //
+                        // Text and Callout only - *"hanya muncul di element text dan callout"*. A
+                        // Shape, an Arrow and a Blur carry no words, so the three controls would
+                        // change nothing. The WORDS are not here either: they are typed on the shape
+                        // itself, by double-click.
                         if root.active-tab-index == 1 : ScrollView {
                             vertical-stretch: 1;
 
-                                VerticalLayout {
-                                    padding: 16px;
-                                    spacing: 12px;
+                            VerticalLayout {
+                                padding: 16px;
+                                spacing: 8px;
+                                alignment: start;
 
-                                    Text {
-                                        text: "ELEMENT PROPERTIES";
-                                        font-size: 11px;
-                                        font-weight: 800;
-                                        color: root.text-secondary;
-                                        font-family: "IBM Plex Sans";
-                                    }
+                                // One heading, and it says the same thing whatever is selected.
+                                //
+                                // It used to become "CALLOUT PROPERTIES" or "TEXT PROPERTIES", and
+                                // there was a second copy of the same label inside the controls -
+                                // so selecting a Callout produced the word twice and the panel's own
+                                // title moved under the Reviewer. A panel is named for what it is,
+                                // not for what is currently in it.
+                                SdSectionLabel {
+                                    text: "ELEMENT PROPERTIES";
+                                }
 
-                                    Rectangle {
-                                        height: 120px;
-                                        background: root.bg-card;
-                                        border-radius: Theme.radius-sharp;
-                                        border-width: 1px;
-                                        border-color: root.border-strong;
+                                // ORDER - for ANY selected annotation, not only the two that
+                                // carry words.
+                                //
+                                // Also what keeps the context menu honest: `FR-37` forbids an entry
+                                // with no other route, and the four ordering items are on that menu.
+                                // Putting them here makes the menu a shortcut rather than the only
+                                // way to reach them.
+                                //
+                                // The SCREENSHOT is not in this order and cannot be. It is not an
+                                // annotation; it is the thing being annotated, and it is underneath
+                                // all of them by construction.
+                                if root.selected-annotation-id != "" : VerticalLayout {
+                                    spacing: 6px;
 
-                                        VerticalLayout {
-                                            padding: 12px;
-                                            spacing: 8px;
-                                            Text { text: "Font Family"; font-size: 11px; font-weight: 700; color: root.text-muted; font-family: "IBM Plex Sans"; }
-                                            SdTextField {
-                                                height: 32px;
-                                                pad: 8px;
-                                                text-size: 12px;
-                                                text: "IBM Plex Sans, sans-serif";
+                                    SdCaption { text: "Order"; }
+                                    HorizontalLayout {
+                                        spacing: 4px;
+                                        for step in [
+                                            { action: "front", label: "Front" },
+                                            { action: "forward", label: "Up" },
+                                            { action: "backward", label: "Down" },
+                                            { action: "back", label: "Back" },
+                                        ] : Rectangle {
+                                            horizontal-stretch: 1;
+                                            height: 26px;
+                                            border-radius: Theme.radius-sharp;
+                                            background: order-touch.has-hover ? root.bg-hover : root.bg-subtle;
+                                            order-touch := TouchArea {
+                                                mouse-cursor: MouseCursor.pointer;
+                                                clicked => {
+                                                    root.annotation-reordered(
+                                                        root.selected-annotation-id, step.action);
+                                                }
                                             }
-                                            Text { text: "Font Size: 14px"; font-size: 11px; font-weight: 700; color: root.text-muted; font-family: "IBM Plex Sans"; }
+                                            Text {
+                                                text: step.label;
+                                                font-size: 11px;
+                                                color: root.text-secondary;
+                                                horizontal-alignment: center;
+                                                vertical-alignment: center;
+                                                font-family: "IBM Plex Sans";
+                                            }
                                         }
                                     }
+
+                                    Rectangle { height: 1px; background: root.border-subtle; }
                                 }
+
+                                // An empty state that says what to do, rather than a dead form.
+                                //
+                                // Only when NOTHING is selected. With something selected there is
+                                // always the Order block above, so a line saying "select something"
+                                // underneath it would be describing a state the panel is not in.
+                                if root.selected-annotation-id == "" : Text {
+                                    text: "Right-click or select an element on the canvas. Size, font and alignment apply to Text and Callout.";
+                                    font-size: 12px;
+                                    color: root.text-muted;
+                                    wrap: word-wrap;
+                                    font-family: "IBM Plex Sans";
+                                }
+
+                                    if root.selected-has-words : VerticalLayout {
+                                        spacing: 6px;
+
+                                                SdCaption { text: "Size"; }
+                                        // A slider AND a number, because they answer different
+                                        // questions. The slider is for "a bit bigger than that",
+                                        // which is how a size is actually chosen against a
+                                        // screenshot; the field is for "18, the same as the last
+                                        // one". The five-step ladder that was here could do neither.
+                                        //
+                                        // Both are in IMAGE pixels. The canvas draws a Finding at
+                                        // natural size, so the number means the same thing here and
+                                        // in the burned PNG.
+                                        HorizontalLayout {
+                                            spacing: 8px;
+
+                                            SdSlider {
+                                                horizontal-stretch: 1;
+                                                y: 6px;
+                                                minimum: 8;
+                                                maximum: 72;
+                                                value: root.selected-annotation-font-size;
+                                                moved(size) => { root.live-font-size = size; }
+                                                changed(size) => {
+                                                    root.live-font-size = 0;
+                                                    root.annotation-style-changed(
+                                                        root.selected-annotation-id, size,
+                                                        root.selected-annotation-font-family,
+                                                        root.selected-annotation-align);
+                                                }
+                                            }
+
+                                            size-field := SdTextField {
+                                                width: 54px;
+                                                pad: 6px;
+                                                text-size: 12px;
+                                                commit-on-enter: true;
+                                                mono: true;
+                                                // Bound to the model, so dragging the slider moves
+                                                // the number too - and so a value the store refused
+                                                // reverts here rather than sitting in the field
+                                                // looking accepted.
+                                                text: Math.round(root.selected-annotation-font-size);
+                                                accepted => {
+                                                    // Clamped to the slider's own range: the field
+                                                    // is a second way to set one value, not a second
+                                                    // set of rules for it.
+                                                    root.annotation-style-changed(
+                                                        root.selected-annotation-id,
+                                                        Math.max(8, Math.min(72, Math.round(self.text.to-float()))),
+                                                        root.selected-annotation-font-family,
+                                                        root.selected-annotation-align);
+                                                }
+                                            }
+                                        }
+
+                                        SdCaption { text: "Style"; }
+                                        HorizontalLayout {
+                                            spacing: 4px;
+                                            // Two families, and only two, because the BURN ships these and
+                                            // nothing else. A system font picker here would let the Reviewer
+                                            // choose something the burned PNG cannot render, and the canvas
+                                            // would be the only place it ever appeared.
+                                            for family in ["IBM Plex Sans", "IBM Plex Mono"] : Rectangle {
+                                                horizontal-stretch: 1;
+                                                height: 26px;
+                                                border-radius: Theme.radius-sharp;
+                                                background: root.selected-annotation-font-family == family
+                                                    ? Theme.accent-primary
+                                                    : (fam-touch.has-hover ? root.bg-hover : root.bg-subtle);
+                                                fam-touch := TouchArea {
+                                                    mouse-cursor: MouseCursor.pointer;
+                                                    clicked => {
+                                                        root.annotation-style-changed(
+                                                            root.selected-annotation-id,
+                                                            root.selected-annotation-font-size, family,
+                                                            root.selected-annotation-align);
+                                                    }
+                                                }
+                                                Text {
+                                                    text: family == "IBM Plex Mono" ? "Mono" : "Sans";
+                                                    font-size: 11px;
+                                                    font-family: family;
+                                                    color: root.selected-annotation-font-family == family
+                                                        ? Theme.text-on-accent : root.text-secondary;
+                                                    horizontal-alignment: center;
+                                                    vertical-alignment: center;
+                                                }
+                                            }
+                                        }
+
+                                        SdCaption { text: "Align"; }
+                                        HorizontalLayout {
+                                            spacing: 4px;
+                                            for align in ["start", "center", "end"] : Rectangle {
+                                                horizontal-stretch: 1;
+                                                height: 26px;
+                                                border-radius: Theme.radius-sharp;
+                                                background: root.selected-annotation-align == align
+                                                    ? Theme.accent-primary
+                                                    : (align-touch.has-hover ? root.bg-hover : root.bg-subtle);
+                                                align-touch := TouchArea {
+                                                    mouse-cursor: MouseCursor.pointer;
+                                                    clicked => {
+                                                        root.annotation-style-changed(
+                                                            root.selected-annotation-id,
+                                                            root.selected-annotation-font-size,
+                                                            root.selected-annotation-font-family, align);
+                                                    }
+                                                }
+                                                Text {
+                                                    text: align == "start" ? "Left" : (align == "center" ? "Center" : "Right");
+                                                    font-size: 11px;
+                                                    color: root.selected-annotation-align == align
+                                                        ? Theme.text-on-accent : root.text-secondary;
+                                                    horizontal-alignment: center;
+                                                    vertical-alignment: center;
+                                                }
+                                            }
+                                        }
+
+                                        SdActionButton {
+                                            label: "Delete element";
+                                            primary: false;
+                                            height: 28px;
+                                            clicked => { root.annotation-deleted(root.selected-annotation-id); }
+                                        }
+
+                                        Rectangle { height: 1px; background: root.border-subtle; }
+                                    }
+                            }
                         }
 
                     }
@@ -2377,6 +2995,125 @@ export component AppWindow inherits Window {
             interval: 7s;
             running: root.toast-text != "";
             triggered => { root.toast-text = ""; }
+        }
+
+        // DELETING A FINDING - confirmed once, never twice, and never not at all.
+        //
+        // `UC-7` and the Product Brief both put the safety here rather than in a recycle bin: the row
+        // and the file go together and nothing keeps a copy. Declared before the context menu so the
+        // menu can raise it and be gone.
+        if root.pending-delete-finding != "" : Rectangle {
+            width: 100%;
+            height: 100%;
+            background: Theme.overlay-scrim;
+            TouchArea {
+                clicked => { root.pending-delete-finding = ""; }
+            }
+
+            Rectangle {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 380px;
+                height: confirm-body.preferred-height;
+                background: root.bg-card;
+                border-width: 1px;
+                border-color: root.border-strong;
+                border-radius: Theme.radius-sharp;
+                drop-shadow-blur: 32px;
+                drop-shadow-color: Theme.overlay-shadow;
+                TouchArea { }
+
+                confirm-body := VerticalLayout {
+                    padding: 20px;
+                    spacing: 14px;
+
+                    SdSectionLabel {
+                        text: root.pending-delete-count > 1
+                            ? "DELETE " + root.pending-delete-count + " FINDINGS?"
+                            : "DELETE THIS FINDING?";
+                    }
+
+                    Text {
+                        text: root.pending-delete-count > 1
+                            ? "All " + root.pending-delete-count + " selected captures go, with their Notes, Markers, annotations and image files. This cannot be undone."
+                            : "The capture, its Note, its Markers and its annotations go, and so does the image file. This cannot be undone.";
+                        font-size: 12px;
+                        color: root.text-secondary;
+                        wrap: word-wrap;
+                        font-family: "IBM Plex Sans";
+                    }
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: end;
+
+                        SdActionButton {
+                            label: "Keep it";
+                            primary: false;
+                            height: 30px;
+                            clicked => { root.pending-delete-finding = ""; }
+                        }
+                        SdActionButton {
+                            label: root.pending-delete-count > 1
+                                ? "Delete " + root.pending-delete-count : "Delete";
+                            height: 30px;
+                            clicked => {
+                                root.delete-finding-confirmed(root.pending-delete-finding);
+                                root.pending-delete-finding = "";
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // THE CONTEXT MENU - above the Editor, below the Assemble modal.
+        //
+        // Declared here rather than beside the thing it belongs to, because a menu drawn inside the
+        // canvas would be clipped by it: a right-click near the bottom of the image would open a
+        // menu with its lower half cut off.
+        if root.menu-subject != "" : SdContextMenu {
+            entries: root.menu-subject == "annotation"
+                ? root.annotation-menu
+                : (root.menu-subject == "finding"
+                    ? root.finding-menu
+                    : (root.menu-subject == "marker" ? root.marker-menu : root.canvas-menu));
+            at-x: root.menu-x;
+            at-y: root.menu-y;
+            dismissed => { root.menu-subject = ""; }
+            chosen(action) => {
+                // Read before the menu closes: closing clears the target.
+                if (action == "delete") {
+                    root.annotation-deleted(root.menu-target);
+                }
+                if (action == "front" || action == "forward"
+                    || action == "backward" || action == "back") {
+                    root.annotation-reordered(root.menu-target, action);
+                }
+                if (action == "delete-marker") {
+                    root.delete-marker-clicked(root.menu-target);
+                }
+                if (action == "assemble") {
+                    root.assemble-bundle-clicked();
+                }
+                if (action == "copy") {
+                    root.copy-image-clicked();
+                }
+                if (action == "reveal") {
+                    root.open-file-location-clicked(
+                        root.menu-subject == "finding" ? root.menu-target : root.active-finding-id);
+                }
+                if (action == "undo") { root.annotation-undo(); }
+                if (action == "redo") { root.annotation-redo(); }
+                // Deleting a capture is the one action here that cannot be taken back, so it asks
+                // first rather than firing from the menu.
+                if (action == "delete-finding") {
+                    root.pending-delete-count = root.menu-target-selected
+                        ? root.selected-finding-count : 1;
+                    root.pending-delete-finding = root.menu-target;
+                }
+                root.menu-subject = "";
+            }
         }
 
         // ASSEMBLE & REVIEW - the last thing declared, so it is above everything including the

@@ -1,0 +1,98 @@
+import { Theme } from "../theme.slint";
+
+// ONE slider for the whole product, for the same reason `SdTextField` is the one text field: the
+// `std-widgets` `Slider` paints itself from Slint's own style palette rather than from `theme.slint`,
+// and importing it is how the drift the text field documents got back in twice.
+//
+// It reports on RELEASE, not on every frame. The Properties panel writes through to SQLite and
+// reloads the Finding, and a slider that fired continuously would put a transaction and a full model
+// rebuild on the mouse's event loop - the same trap the annotation drag documents, and the same
+// answer: show the change locally, commit once.
+export component SdSlider inherits Rectangle {
+    in property <float> minimum: 0;
+    in property <float> maximum: 100;
+    in property <float> value: 0;
+
+    callback changed(float);
+    // Fires throughout the drag, for a caller that can show the value live. The Properties panel
+    // uses it to resize the Callout on the canvas as the slider moves, so the size is chosen against
+    // the screenshot rather than against a number.
+    callback moved(float);
+
+    height: 22px;
+
+    private property <bool> dragging: false;
+    private property <float> pending;
+    // What is drawn: the drag while there is one, the committed value otherwise.
+    private property <float> shown: root.dragging ? root.pending : root.value;
+    private property <float> span: Math.max(0.0001, root.maximum - root.minimum);
+    private property <float> fraction:
+        Math.max(0.0, Math.min(1.0, (root.shown - root.minimum) / root.span));
+
+    function at(position: length) -> float {
+        return root.minimum
+            + root.span * Math.max(0.0, Math.min(1.0, position / Math.max(1px, root.width)));
+    }
+
+    // The track, and the part of it behind the thumb.
+    //
+    // `x: 0` is not redundant. An element with no `x` inside a plain Rectangle is CENTRED, so the
+    // filled part grew symmetrically out of the middle instead of from the left - which is what the
+    // owner saw, and also what made the 9999px radius render as a lens rather than a stub.
+    Rectangle {
+        x: 0;
+        y: (parent.height - self.height) / 2;
+        width: 100%;
+        height: 4px;
+        // 2px, NOT `radius-pill`. `radius-pill` is 9999px, and on a 4px-tall bar that resolves into
+        // a wide tapered lens rather than a rounded bar - which is exactly what the owner
+        // photographed. A radius above half the shorter side has no meaning; here half is 2px.
+        border-radius: 2px;
+        background: Theme.bg-hover;
+    }
+
+    Rectangle {
+        x: 0;
+        y: (parent.height - self.height) / 2;
+        width: parent.width * root.fraction;
+        height: 4px;
+        border-radius: 2px;
+        background: Theme.accent-primary;
+    }
+
+    Rectangle {
+        x: (parent.width - 14px) * root.fraction;
+        y: (parent.height - self.height) / 2;
+        width: 14px;
+        height: 14px;
+        border-radius: Theme.radius-pill;
+        background: Theme.accent-primary;
+        border-width: 2px;
+        border-color: Theme.text-on-accent;
+        drop-shadow-blur: 3px;
+        drop-shadow-color: Theme.shadow-soft;
+    }
+
+    TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        pointer-event(ev) => {
+            if (ev.kind == PointerEventKind.down) {
+                root.pending = root.at(self.mouse-x);
+                root.dragging = true;
+                root.moved(Math.round(root.pending));
+            }
+            if (ev.kind == PointerEventKind.up && root.dragging) {
+                root.dragging = false;
+                // Rounded here rather than by the caller: this slider carries a font size, and a
+                // caller that forgot would store 17.6431 and show it in a control offering integers.
+                root.changed(Math.round(root.pending));
+            }
+        }
+        moved => {
+            if (self.pressed) {
+                root.pending = root.at(self.mouse-x);
+                root.moved(Math.round(root.pending));
+            }
+        }
+    }
+}

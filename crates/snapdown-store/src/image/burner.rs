@@ -1,3 +1,4 @@
+use ab_glyph::{point, Font, FontRef, Glyph, PxScale, ScaleFont};
 use image::{Rgba, RgbaImage};
 use snapdown_core::domain::finding::{AnnotationShape, Marker, VisualAnnotation};
 use snapdown_core::domain::image::ImageDimensions;
@@ -7,6 +8,62 @@ const COLOR_MARKER_FILL: Rgba<u8> = Rgba([220, 38, 38, 255]); // #dc2626 solid r
 const COLOR_MARKER_TEXT: Rgba<u8> = Rgba([255, 255, 255, 255]); // #ffffff solid white
 
 const BADGE_RADIUS: i32 = 14;
+
+/// How hard to blur a region that did not ask for a particular radius.
+///
+/// Proportional to the region, not a constant. A fixed radius is wrong at both ends: 8 - which is
+/// what this was, inherited from a MOSAIC BLOCK SIZE - barely softens 12px text, while the 18 that
+/// replaced it flattened a large area to a single smear. The owner asked for the middle: *"lebih
+/// soft mewakili apa yang dibelakangnya"* - soft enough to read as a blur, gentle enough that the
+/// shape behind it still shows.
+///
+/// A FOURTEENTH of the shorter side, floored at 3 and capped at 16. It was a tenth, 4 to 20, and
+/// over a single line of text that came out flat enough to read as a plain white box - which is what
+/// the owner reported. Less radius keeps some of the shape of what is underneath.
+///
+/// **This is de-emphasis strength, not a redaction guarantee**, and the softer default makes that
+/// more true rather than less. A blur that still suggests a word is a blur somebody could guess. The
+/// honest control for a real redaction is a bigger radius, and `blur_radius` is there for it.
+fn default_blur_radius(width: i32, height: i32) -> f64 {
+    let short = width.min(height).max(1) as f64;
+    (short / 14.0).clamp(3.0, 16.0)
+}
+
+/// The face a Callout and a Text annotation are burned in.
+///
+/// A second copy of the desktop app's `IBMPlexSans-Medium.ttf`, deliberately. The burn happens in
+/// this crate and the canvas renders in `apps/desktop`; neither may reach into the other's assets,
+/// and a store crate that renders text owns the face it renders with. `apps/desktop` picks the same
+/// family by name from its own copy, which is what keeps the canvas preview and the burned PNG
+/// agreeing about how wide a word is.
+///
+/// One face, not four. `FR-32` asks for a font family control, and the honest answer here is that
+/// the burn has one family - so `font_family` is read, and anything other than IBM Plex Sans falls
+/// back to it rather than silently drawing nothing.
+const FONT_BYTES: &[u8] = include_bytes!("../../assets/fonts/IBMPlexSans-Medium.ttf");
+
+/// `#rrggbb` or `#rrggbbaa`, and the fallback when it is neither.
+///
+/// A colour the Reviewer cannot see is worse than the wrong colour: a Callout drawn in a colour that
+/// failed to parse would be invisible over the screenshot, and nothing would say so. So a bad value
+/// takes the default rather than erroring - the annotation still lands, and the geometry, which is
+/// what the Reviewer actually pointed at, is preserved.
+fn parse_hex(value: &Option<String>, fallback: Rgba<u8>) -> Rgba<u8> {
+    let Some(raw) = value else { return fallback };
+    let hex = raw.trim().trim_start_matches('#');
+    let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
+    match hex.len() {
+        6 => match (byte(0), byte(2), byte(4)) {
+            (Some(r), Some(g), Some(b)) => Rgba([r, g, b, 255]),
+            _ => fallback,
+        },
+        8 => match (byte(0), byte(2), byte(4), byte(6)) {
+            (Some(r), Some(g), Some(b), Some(a)) => Rgba([r, g, b, a]),
+            _ => fallback,
+        },
+        _ => fallback,
+    }
+}
 
 const DIGIT_3X5: [[u8; 5]; 10] = [
     [0b111, 0b101, 0b101, 0b101, 0b111], // 0
@@ -95,8 +152,8 @@ impl MarkerBurner {
                 let by = (y * dimensions.height as f64).round() as i32;
                 let bw = (width * dimensions.width as f64).round() as i32;
                 let bh = (height * dimensions.height as f64).round() as i32;
-                let radius = blur_radius.unwrap_or(8.0) as i32;
-                Self::apply_box_blur(&mut image_rgba, bx, by, bw, bh, radius);
+                let radius = blur_radius.unwrap_or_else(|| default_blur_radius(bw, bh)) as i32;
+                Self::blur_rect(&mut image_rgba, bx, by, bw, bh, radius);
             }
         }
 
@@ -108,30 +165,32 @@ impl MarkerBurner {
                     y,
                     width,
                     height,
+                    stroke_color,
                     stroke_width,
-                    ..
                 } => {
                     let rx = (x * dimensions.width as f64).round() as i32;
                     let ry = (y * dimensions.height as f64).round() as i32;
                     let rw = (width * dimensions.width as f64).round() as i32;
                     let rh = (height * dimensions.height as f64).round() as i32;
                     let sw = stroke_width.unwrap_or(3.0) as i32;
-                    Self::draw_rect_outline(&mut image_rgba, rx, ry, rw, rh, sw, COLOR_MARKER_FILL);
+                    let stroke = parse_hex(stroke_color, COLOR_MARKER_FILL);
+                    Self::draw_rect_outline(&mut image_rgba, rx, ry, rw, rh, sw, stroke);
                 }
                 AnnotationShape::Arrow {
                     start_x,
                     start_y,
                     end_x,
                     end_y,
+                    color,
                     stroke_width,
-                    ..
                 } => {
                     let x0 = (start_x * dimensions.width as f64).round() as i32;
                     let y0 = (start_y * dimensions.height as f64).round() as i32;
                     let x1 = (end_x * dimensions.width as f64).round() as i32;
                     let y1 = (end_y * dimensions.height as f64).round() as i32;
                     let sw = stroke_width.unwrap_or(4.0) as i32;
-                    Self::draw_arrow(&mut image_rgba, x0, y0, x1, y1, sw, COLOR_MARKER_FILL);
+                    let stroke = parse_hex(color, COLOR_MARKER_FILL);
+                    Self::draw_arrow(&mut image_rgba, x0, y0, x1, y1, sw, stroke);
                 }
                 AnnotationShape::Callout {
                     x,
@@ -140,6 +199,11 @@ impl MarkerBurner {
                     height,
                     tail_x,
                     tail_y,
+                    text,
+                    font_size,
+                    bg_color,
+                    text_color,
+                    text_align,
                     ..
                 } => {
                     let cx = (x * dimensions.width as f64).round() as i32;
@@ -150,9 +214,54 @@ impl MarkerBurner {
                     let ty = (tail_y * dimensions.height as f64).round() as i32;
                     let rect_box = [cx, cy, cw, ch];
                     let tail = [tx, ty];
-                    Self::draw_callout_box(&mut image_rgba, rect_box, tail, COLOR_MARKER_FILL);
+                    // The bubble took `COLOR_MARKER_FILL` - the Marker badge's red - and discarded
+                    // `bg_color` entirely. A Callout is a plate to read words off, not a badge.
+                    let plate = parse_hex(bg_color, COLOR_MARKER_FILL);
+                    Self::draw_callout_box(&mut image_rgba, rect_box, tail, plate);
+                    // And then the words, which were never drawn at all: `text` was discarded by the
+                    // `..` this arm used to have, so `FR-32` burned an empty bubble.
+                    Self::draw_text(
+                        &mut image_rgba,
+                        rect_box,
+                        text,
+                        font_size.unwrap_or(14.0) as f32,
+                        text_align.as_deref().unwrap_or("start"),
+                        // WHITE on a Callout, alone among the five. The bubble is a filled red
+                        // plate, so red words on it would be invisible - the reason the other four
+                        // draw in red is the same reason this one does not.
+                        parse_hex(text_color, COLOR_MARKER_TEXT),
+                    );
                 }
-                _ => {}
+                AnnotationShape::Text {
+                    x,
+                    y,
+                    width,
+                    height,
+                    text,
+                    font_size,
+                    text_color,
+                    text_align,
+                    ..
+                } => {
+                    // This arm did not exist. `Text` fell into a `_ => {}` and was silently dropped
+                    // from every burned image, which is half of `FR-32` gone without a trace.
+                    let tx = (x * dimensions.width as f64).round() as i32;
+                    let ty = (y * dimensions.height as f64).round() as i32;
+                    let tw = (width * dimensions.width as f64).round() as i32;
+                    let th = (height * dimensions.height as f64).round() as i32;
+                    Self::draw_text(
+                        &mut image_rgba,
+                        [tx, ty, tw, th],
+                        text,
+                        font_size.unwrap_or(18.0) as f32,
+                        text_align.as_deref().unwrap_or("start"),
+                        // Red, like every other annotation. It was white, which is invisible on a
+                        // white screenshot and was the owner's report: "Font dari element Text masih
+                        // putih, harusnya semua merah default warna dari element".
+                        parse_hex(text_color, COLOR_MARKER_FILL),
+                    );
+                }
+                AnnotationShape::Blur { .. } => {} // Already burned in step 1.
             }
         }
 
@@ -173,7 +282,159 @@ impl MarkerBurner {
         Ok(output_bytes)
     }
 
-    fn apply_box_blur(img: &mut RgbaImage, x: i32, y: i32, w: i32, h: i32, radius: i32) {
+    /// Lays a string out inside a box and burns it, wrapping on spaces.
+    ///
+    /// `size` is in the IMAGE's own pixels, not in points and not normalized. That is what keeps the
+    /// canvas preview honest: the canvas draws a Finding at its natural size, so one canvas pixel is
+    /// one image pixel and the same number means the same height in both places.
+    ///
+    /// Overflow is clipped, not shrunk. A Callout whose text outgrows its bubble is the Reviewer's
+    /// to resize - silently reflowing to a smaller face would make the burned image disagree with
+    /// the canvas they were looking at when they wrote it.
+    fn draw_text(
+        img: &mut RgbaImage,
+        rect: [i32; 4],
+        text: &str,
+        size: f32,
+        align: &str,
+        color: Rgba<u8>,
+    ) {
+        if text.trim().is_empty() {
+            return;
+        }
+        let Ok(font) = FontRef::try_from_slice(FONT_BYTES) else {
+            // The face is compiled in, so this cannot happen at runtime - but it is a Result, and
+            // `AGENTS.md` is explicit that an `unwrap` here is a panic that takes the tray, the
+            // hotkeys and the overlay with it. Losing the words is survivable; losing the app is not.
+            return;
+        };
+        let scale = PxScale::from(size);
+        let scaled = font.as_scaled(scale);
+        let line_height = scaled.height() + scaled.line_gap();
+        let [bx, by, bw, bh] = rect;
+        // The bubble's own padding, so the words do not touch its edge.
+        let pad = (size * 0.4).round() as i32;
+        let inner_w = (bw - pad * 2).max(1) as f32;
+
+        let advance = |s: &str| -> f32 {
+            let mut w = 0.0;
+            let mut previous: Option<ab_glyph::GlyphId> = None;
+            for ch in s.chars() {
+                let id = font.glyph_id(ch);
+                if let Some(prev) = previous {
+                    w += scaled.kern(prev, id);
+                }
+                w += scaled.h_advance(id);
+                previous = Some(id);
+            }
+            w
+        };
+
+        // Wrap on spaces. A single word wider than the box is left long and clipped rather than
+        // broken mid-word: a broken URL reads as two wrong URLs.
+        let mut lines: Vec<String> = Vec::new();
+        for paragraph in text.split('\n') {
+            let mut line = String::new();
+            for word in paragraph.split_whitespace() {
+                let candidate = if line.is_empty() {
+                    word.to_string()
+                } else {
+                    format!("{line} {word}")
+                };
+                if advance(&candidate) <= inner_w || line.is_empty() {
+                    line = candidate;
+                } else {
+                    lines.push(std::mem::take(&mut line));
+                    line = word.to_string();
+                }
+            }
+            lines.push(line);
+        }
+
+        let img_w = img.width() as i32;
+        let img_h = img.height() as i32;
+
+        for (index, line) in lines.iter().enumerate() {
+            if line.is_empty() {
+                continue;
+            }
+            let baseline_y = by as f32 + pad as f32 + scaled.ascent() + line_height * index as f32;
+            // A line whose baseline has left the box is not drawn. Clipping per glyph would still
+            // paint the top half of the first overflowing line.
+            if baseline_y - scaled.ascent() > (by + bh) as f32 {
+                break;
+            }
+            let line_w = advance(line);
+            let start_x = match align {
+                "center" => bx as f32 + (bw as f32 - line_w) / 2.0,
+                "end" => bx as f32 + bw as f32 - pad as f32 - line_w,
+                _ => bx as f32 + pad as f32,
+            };
+
+            let mut caret = start_x;
+            let mut previous: Option<ab_glyph::GlyphId> = None;
+            for ch in line.chars() {
+                let id = font.glyph_id(ch);
+                if let Some(prev) = previous {
+                    caret += scaled.kern(prev, id);
+                }
+                let glyph: Glyph = id.with_scale_and_position(scale, point(caret, baseline_y));
+                caret += scaled.h_advance(id);
+                previous = Some(id);
+
+                let Some(outlined) = font.outline_glyph(glyph) else {
+                    continue; // A space has no outline, and neither does a glyph the face lacks.
+                };
+                let bounds = outlined.px_bounds();
+                outlined.draw(|gx, gy, coverage| {
+                    let px = bounds.min.x as i32 + gx as i32;
+                    let py = bounds.min.y as i32 + gy as i32;
+                    if px < 0 || py < 0 || px >= img_w || py >= img_h {
+                        return;
+                    }
+                    // Also clipped to the annotation's own box, so a long word stops at the bubble
+                    // rather than running out across the screenshot.
+                    if px < bx || py < by || px >= bx + bw || py >= by + bh {
+                        return;
+                    }
+                    let alpha = coverage * (color[3] as f32 / 255.0);
+                    if alpha <= 0.0 {
+                        return;
+                    }
+                    let under = *img.get_pixel(px as u32, py as u32);
+                    let mix =
+                        |a: u8, b: u8| ((a as f32) * (1.0 - alpha) + (b as f32) * alpha) as u8;
+                    img.put_pixel(
+                        px as u32,
+                        py as u32,
+                        Rgba([
+                            mix(under[0], color[0]),
+                            mix(under[1], color[1]),
+                            mix(under[2], color[2]),
+                            under[3].max((alpha * 255.0) as u8),
+                        ]),
+                    );
+                });
+            }
+        }
+    }
+
+    /// Blurs one rectangle of an image, in place.
+    ///
+    /// This used to be a MOSAIC and was called a blur. It averaged each `radius`-sized block to a
+    /// single flat colour, which is pixelation - visually a grid of squares, and the owner said so:
+    /// *"maunya blurnya jangan mosaik begitu"*. A real blur is a weighted average over a moving
+    /// window, and every pixel gets its own.
+    ///
+    /// Three box passes rather than a true Gaussian kernel. Convolving a box three times converges
+    /// on a Gaussian to within a few percent - the standard cheap approximation - and each pass is a
+    /// sliding sum, so the whole thing is O(pixels) regardless of how wide the radius is. A real
+    /// Gaussian at radius 24 would be a 49-tap kernel per axis for a result nobody could distinguish.
+    ///
+    /// **The window is clamped to the rectangle, never sampled outside it.** Pulling in neighbours
+    /// would bleed unredacted pixels back into the redaction from the edges, which is the one
+    /// direction a redaction must not be wrong in.
+    pub fn blur_rect(img: &mut RgbaImage, x: i32, y: i32, w: i32, h: i32, radius: i32) {
         let img_w = img.width() as i32;
         let img_h = img.height() as i32;
 
@@ -186,43 +447,87 @@ impl MarkerBurner {
             return;
         }
 
-        let block_size = radius.max(4);
+        let width = (x1 - x0) as usize;
+        let height = (y1 - y0) as usize;
+        // The radius is bounded by the region: a 24px blur over an 8px-tall strip would otherwise
+        // read every row into every row and flatten it to one colour - a mosaic again, by accident.
+        let radius = (radius.max(1) as usize)
+            .min(width.max(1) / 2)
+            .min(height.max(1) / 2)
+            .max(1);
 
-        for by in (y0..y1).step_by(block_size as usize) {
-            for bx in (x0..x1).step_by(block_size as usize) {
-                let bw_actual = (x1 - bx).min(block_size);
-                let bh_actual = (y1 - by).min(block_size);
+        // One f32 per channel. u8 sums would round on every one of the six passes, and the rounding
+        // is what leaves banding in a large flat area.
+        let mut buffer: Vec<[f32; 4]> = Vec::with_capacity(width * height);
+        for py in y0..y1 {
+            for px in x0..x1 {
+                let p = img.get_pixel(px as u32, py as u32);
+                buffer.push([p[0] as f32, p[1] as f32, p[2] as f32, p[3] as f32]);
+            }
+        }
 
-                let mut r_sum: u32 = 0;
-                let mut g_sum: u32 = 0;
-                let mut b_sum: u32 = 0;
-                let mut a_sum: u32 = 0;
-                let mut count: u32 = 0;
+        let mut scratch: Vec<[f32; 4]> = vec![[0.0; 4]; width * height];
 
-                for py in by..(by + bh_actual) {
-                    for px in bx..(bx + bw_actual) {
-                        let p = img.get_pixel(px as u32, py as u32);
-                        r_sum += p[0] as u32;
-                        g_sum += p[1] as u32;
-                        b_sum += p[2] as u32;
-                        a_sum += p[3] as u32;
-                        count += 1;
+        for _ in 0..3 {
+            Self::box_pass(&buffer, &mut scratch, width, height, radius, true);
+            Self::box_pass(&scratch, &mut buffer, width, height, radius, false);
+        }
+
+        for (index, pixel) in buffer.iter().enumerate() {
+            let px = x0 + (index % width) as i32;
+            let py = y0 + (index / width) as i32;
+            img.put_pixel(
+                px as u32,
+                py as u32,
+                Rgba([
+                    pixel[0].round().clamp(0.0, 255.0) as u8,
+                    pixel[1].round().clamp(0.0, 255.0) as u8,
+                    pixel[2].round().clamp(0.0, 255.0) as u8,
+                    pixel[3].round().clamp(0.0, 255.0) as u8,
+                ]),
+            );
+        }
+    }
+
+    /// One separable box pass, horizontal or vertical, with the window clamped to the edges.
+    fn box_pass(
+        source: &[[f32; 4]],
+        target: &mut [[f32; 4]],
+        width: usize,
+        height: usize,
+        radius: usize,
+        horizontal: bool,
+    ) {
+        let (outer, inner) = if horizontal {
+            (height, width)
+        } else {
+            (width, height)
+        };
+        let at = |line: usize, offset: usize| {
+            if horizontal {
+                line * width + offset
+            } else {
+                offset * width + line
+            }
+        };
+
+        for line in 0..outer {
+            for position in 0..inner {
+                let lo = position.saturating_sub(radius);
+                let hi = (position + radius).min(inner - 1);
+                let mut sum = [0.0f32; 4];
+                for offset in lo..=hi {
+                    let pixel = source[at(line, offset)];
+                    for channel in 0..4 {
+                        sum[channel] += pixel[channel];
                     }
                 }
-
-                if let (Some(r), Some(g), Some(b), Some(a)) = (
-                    r_sum.checked_div(count),
-                    g_sum.checked_div(count),
-                    b_sum.checked_div(count),
-                    a_sum.checked_div(count),
-                ) {
-                    let avg = Rgba([r as u8, g as u8, b as u8, a as u8]);
-                    for py in by..(by + bh_actual) {
-                        for px in bx..(bx + bw_actual) {
-                            img.put_pixel(px as u32, py as u32, avg);
-                        }
-                    }
+                let count = (hi - lo + 1) as f32;
+                let mut out = [0.0f32; 4];
+                for channel in 0..4 {
+                    out[channel] = sum[channel] / count;
                 }
+                target[at(line, position)] = out;
             }
         }
     }
@@ -338,74 +643,83 @@ impl MarkerBurner {
         }
     }
 
+    /// A Callout: a filled, rounded bubble and an ARROW to the thing it names.
+    ///
+    /// An arrow rather than a triangular tail, at the owner's direction and with Snagit's callout as
+    /// the reference. It is the better shape for the job too: a triangle can only point at something
+    /// close by before it becomes a long thin wedge, and a Callout usually names something well away
+    /// from where its words will fit.
+    ///
+    /// `draw_arrow` is reused rather than reimplemented, so there is exactly one arrow in this
+    /// product - one head angle, one shaft, and nothing that can drift between a Callout's tail and
+    /// an Arrow annotation.
     fn draw_callout_box(img: &mut RgbaImage, rect: [i32; 4], tail: [i32; 2], color: Rgba<u8>) {
         let [x, y, w, h] = rect;
         let [tx, ty] = tail;
-        let img_w = img.width() as i32;
-        let img_h = img.height() as i32;
 
-        let x0 = x.clamp(0, img_w);
-        let y0 = y.clamp(0, img_h);
-        let x1 = (x + w).clamp(0, img_w);
-        let y1 = (y + h).clamp(0, img_h);
-
-        // Draw solid filled callout bubble
-        for py in y0..y1 {
-            for px in x0..x1 {
-                img.put_pixel(px as u32, py as u32, color);
-            }
-        }
-
-        // Compute triangular tail base from closest edge
-        let cx = x0 + (x1 - x0) / 2;
-        let cy = y0 + (y1 - y0) / 2;
-
-        let dist_bottom = ty - y1;
-        let dist_top = y0 - ty;
-        let dist_right = tx - x1;
-        let dist_left = x0 - tx;
-
-        let max_dist = dist_bottom.max(dist_top).max(dist_right).max(dist_left);
-
-        let (b0, b1) = if max_dist == dist_bottom {
-            ((cx - 8, y1), (cx + 8, y1))
-        } else if max_dist == dist_top {
-            ((cx - 8, y0), (cx + 8, y0))
-        } else if max_dist == dist_right {
-            ((x1, cy - 8), (x1, cy + 8))
+        // The shaft leaves the edge FACING the target, at the point on that edge nearest to it, so
+        // the arrow reads as coming out of the bubble rather than out of its middle. Drawn first, so
+        // the plate covers where it starts.
+        let inset = 8;
+        let (ex, ey) = if ty > y + h {
+            ((tx.clamp(x + inset, x + w - inset)), y + h)
+        } else if ty < y {
+            ((tx.clamp(x + inset, x + w - inset)), y)
+        } else if tx > x + w {
+            (x + w, ty.clamp(y + inset, y + h - inset))
         } else {
-            ((x0, cy - 8), (x0, cy + 8))
+            (x, ty.clamp(y + inset, y + h - inset))
         };
+        Self::draw_arrow(img, ex, ey, tx, ty, 4, color);
 
-        Self::draw_filled_triangle(img, b0, b1, (tx, ty), color);
+        Self::draw_filled_round_rect(img, x, y, w, h, 8, color);
     }
 
-    fn draw_filled_triangle(
+    /// A filled rectangle with rounded corners.
+    ///
+    /// Corner rounding by distance from the corner's centre of curvature, which is the whole of it:
+    /// a pixel inside the corner box but further than `radius` from that centre is outside the shape.
+    /// No anti-aliasing - at the sizes a Callout is drawn, the step is a pixel and the alternative is
+    /// a coverage pass for something nobody will look at that closely.
+    fn draw_filled_round_rect(
         img: &mut RgbaImage,
-        p0: (i32, i32),
-        p1: (i32, i32),
-        p2: (i32, i32),
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        radius: i32,
         color: Rgba<u8>,
     ) {
         let img_w = img.width() as i32;
         let img_h = img.height() as i32;
-        let min_x = p0.0.min(p1.0).min(p2.0).clamp(0, img_w - 1);
-        let max_x = p0.0.max(p1.0).max(p2.0).clamp(0, img_w - 1);
-        let min_y = p0.1.min(p1.1).min(p2.1).clamp(0, img_h - 1);
-        let max_y = p0.1.max(p1.1).max(p2.1).clamp(0, img_h - 1);
+        let radius = radius.min(w / 2).min(h / 2).max(0);
 
-        for y in min_y..=max_y {
-            for x in min_x..=max_x {
-                let d0 = (p1.0 - p0.0) * (y - p0.1) - (p1.1 - p0.1) * (x - p0.0);
-                let d1 = (p2.0 - p1.0) * (y - p1.1) - (p2.1 - p1.1) * (x - p1.0);
-                let d2 = (p0.0 - p2.0) * (y - p2.1) - (p0.1 - p2.1) * (x - p2.0);
+        for py in y.max(0)..(y + h).min(img_h) {
+            for px in x.max(0)..(x + w).min(img_w) {
+                // Which corner, if any, this pixel falls in the box of.
+                let corner_x = if px < x + radius {
+                    Some(x + radius)
+                } else if px >= x + w - radius {
+                    Some(x + w - 1 - radius)
+                } else {
+                    None
+                };
+                let corner_y = if py < y + radius {
+                    Some(y + radius)
+                } else if py >= y + h - radius {
+                    Some(y + h - 1 - radius)
+                } else {
+                    None
+                };
 
-                let has_neg = (d0 < 0) || (d1 < 0) || (d2 < 0);
-                let has_pos = (d0 > 0) || (d1 > 0) || (d2 > 0);
-
-                if !(has_neg && has_pos) {
-                    img.put_pixel(x as u32, y as u32, color);
+                if let (Some(ox), Some(oy)) = (corner_x, corner_y) {
+                    let dx = (px - ox) as f64;
+                    let dy = (py - oy) as f64;
+                    if dx * dx + dy * dy > (radius as f64) * (radius as f64) {
+                        continue;
+                    }
                 }
+                img.put_pixel(px as u32, py as u32, color);
             }
         }
     }

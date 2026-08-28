@@ -4,7 +4,7 @@ mod hotkey;
 mod startup;
 mod tray;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -15,7 +15,9 @@ use global_hotkey::{GlobalHotKeyEvent, HotKeyState};
 use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, SharedString, VecModel};
 use snapdown_capture::{CaptureTarget, RegionCapturer};
 use snapdown_core::domain::bundle::{Bundle, BundleItem};
-use snapdown_core::domain::finding::{Finding, FindingDetail, Note, Region};
+use snapdown_core::domain::finding::{
+    AnnotationShape, Finding, FindingDetail, Note, Region, VisualAnnotation,
+};
 use snapdown_core::domain::image::ImageDimensions;
 use snapdown_core::domain::markdown::MarkdownSerializer;
 use snapdown_core::domain::setting::{
@@ -395,9 +397,13 @@ fn load_active_detail(window: &AppWindow, ctx: &AppContext, active_id: &str) {
         ctx.vault_path.join(&f.image_path)
     };
 
-    if let Ok(dyn_img) = image::open(&img_path) {
-        let rgba = dyn_img.to_rgba8();
-        window.set_active_image(rgba_to_slint_image(&rgba));
+    // Kept beyond the `set_active_image` call: a Blur annotation's preview is cut from these same
+    // pixels, so decoding once serves both.
+    let source_rgba = image::open(&img_path)
+        .ok()
+        .map(|decoded| decoded.to_rgba8());
+    if let Some(rgba) = source_rgba.as_ref() {
+        window.set_active_image(rgba_to_slint_image(rgba));
     }
 
     let filename = PathBuf::from(&f.image_path)
@@ -454,6 +460,23 @@ fn load_active_detail(window: &AppWindow, ctx: &AppContext, active_id: &str) {
         .collect();
     window.set_markers(ModelRc::from(Rc::new(VecModel::from(slint_markers))));
 
+    let slint_annotations: Vec<AnnotationData> =
+        detail.visual_annotations.iter().map(shape_to_ui).collect();
+
+    // Computed whenever the Finding has an image, not only when it already carries a redaction: the
+    // Reviewer may be about to draw one, and the drag has to show the real blur from its first pixel.
+    if let Some(rgba) = source_rgba.as_ref() {
+        window.set_blurred_capture(blurred_capture(&f.id, rgba));
+    }
+    window.set_annotations(ModelRc::from(Rc::new(VecModel::from(slint_annotations))));
+
+    // A selection that survived a reload is re-checked against what actually came back, and the
+    // Properties panel is rewritten from it. Deleting the selected annotation, or opening another
+    // Finding, would otherwise leave `FR-33`'s handles and the panel's font controls pointing at an
+    // id nothing in the model has - the same stale-id class as `BUG-67`.
+    let surviving = window.get_selected_annotation_id().to_string();
+    apply_selection_mirror(window, &detail.visual_annotations, &surviving);
+
     // The cost card's two inputs Slint cannot derive: a sum over the Marker model (Slint has no
     // fold) and an image estimate from the STORED dimensions rather than the readout string.
     //
@@ -470,6 +493,917 @@ fn load_active_detail(window: &AppWindow, ctx: &AppContext, active_id: &str) {
     window.set_image_token_estimate(
         (u64::from(f.image_width) * u64::from(f.image_height) / 750) as i32,
     );
+}
+
+// ANNOTATIONS - the translation between `AnnotationShape` and what the canvas can hold.
+//
+// The canvas speaks in two corners and a kind; the domain speaks in five variants with different
+// fields. Everything that converts between them lives here, in one place, because the alternative is
+// a `match` on `kind` inside each of six callbacks and six chances to forget a variant.
+
+/// The domain shape as the canvas draws it.
+///
+/// A box's two corners are ordered here, once, so `AnnotationItem`'s eight handles can trust that
+/// `x1 < x2`. A drag that ran right-to-left produces the same annotation as one that ran
+/// left-to-right, and the store never sees the difference.
+fn shape_to_ui(annotation: &VisualAnnotation) -> AnnotationData {
+    let boxed = |kind: &str,
+                 x: f64,
+                 y: f64,
+                 w: f64,
+                 h: f64,
+                 text: &str,
+                 size: f64,
+                 family: Option<&str>,
+                 align: Option<&str>| AnnotationData {
+        id: annotation.id.clone().into(),
+        kind: kind.into(),
+        x1: x as f32,
+        y1: y as f32,
+        x2: (x + w) as f32,
+        y2: (y + h) as f32,
+        tail_x: 0.0,
+        tail_y: 0.0,
+        text: text.into(),
+        font_size: size as f32,
+        font_family: family.unwrap_or(ANNOTATION_FONT).into(),
+        text_align: align.unwrap_or("start").into(),
+    };
+
+    match &annotation.data {
+        AnnotationShape::Rect {
+            x,
+            y,
+            width,
+            height,
+            ..
+        } => boxed("rect", *x, *y, *width, *height, "", 0.0, None, None),
+        AnnotationShape::Blur {
+            x,
+            y,
+            width,
+            height,
+            ..
+        } => boxed("blur", *x, *y, *width, *height, "", 0.0, None, None),
+        AnnotationShape::Text {
+            x,
+            y,
+            width,
+            height,
+            text,
+            font_size,
+            font_family,
+            text_align,
+            ..
+        } => boxed(
+            "text",
+            *x,
+            *y,
+            *width,
+            *height,
+            text,
+            font_size.unwrap_or(DEFAULT_ANNOTATION_FONT_SIZE),
+            font_family.as_deref(),
+            text_align.as_deref(),
+        ),
+        AnnotationShape::Callout {
+            x,
+            y,
+            width,
+            height,
+            tail_x,
+            tail_y,
+            text,
+            font_size,
+            font_family,
+            text_align,
+            ..
+        } => {
+            let mut data = boxed(
+                "callout",
+                *x,
+                *y,
+                *width,
+                *height,
+                text,
+                font_size.unwrap_or(DEFAULT_ANNOTATION_FONT_SIZE),
+                font_family.as_deref(),
+                text_align.as_deref(),
+            );
+            data.tail_x = *tail_x as f32;
+            data.tail_y = *tail_y as f32;
+            data
+        }
+        AnnotationShape::Arrow {
+            start_x,
+            start_y,
+            end_x,
+            end_y,
+            ..
+        } => AnnotationData {
+            id: annotation.id.clone().into(),
+            kind: "arrow".into(),
+            // An Arrow's two points are NOT ordered. Its direction is the whole content of the
+            // annotation - which end has the head is what the Reviewer is saying.
+            x1: *start_x as f32,
+            y1: *start_y as f32,
+            x2: *end_x as f32,
+            y2: *end_y as f32,
+            tail_x: 0.0,
+            tail_y: 0.0,
+            text: SharedString::new(),
+            font_size: 0.0,
+            font_family: ANNOTATION_FONT.into(),
+            text_align: "start".into(),
+        },
+    }
+}
+
+/// The one family the burn has, so the canvas cannot preview a face the PNG will not get.
+const ANNOTATION_FONT: &str = "IBM Plex Sans";
+
+/// The size a new Text or Callout starts at when nothing has been chosen yet.
+///
+/// ONE number for both. They were 18 and 14, which meant a Callout and a Text placed side by side on
+/// the same capture did not match and the Reviewer had to correct one of them every time.
+const DEFAULT_ANNOTATION_FONT_SIZE: f64 = 18.0;
+
+fn annotation_font_size_key() -> SettingKey {
+    SettingKey::Custom("annotation_font_size".to_string())
+}
+
+/// The size the next annotation will be created at.
+///
+/// Stored, so choosing 24 once means the next Callout is 24 too - the Reviewer's own default rather
+/// than ours. **Forward only.** Existing annotations keep the size they were given; a setting that
+/// reached backwards would silently rewrite work that had already been reviewed and, worse, would
+/// change images that had already been handed to an agent.
+///
+/// Clamped to the slider's range on the way out as well as in, so a hand-edited settings row cannot
+/// produce an annotation the panel has no way to show.
+fn default_annotation_font_size(ctx: &AppContext) -> f64 {
+    ctx.settings_store
+        .get(&annotation_font_size_key())
+        .ok()
+        .flatten()
+        .and_then(|setting| match setting.value {
+            SettingValue::Integer(size) => Some(size as f64),
+            _ => None,
+        })
+        .map(|size| size.clamp(8.0, 72.0))
+        .unwrap_or(DEFAULT_ANNOTATION_FONT_SIZE)
+}
+
+/// Remembers the size the Reviewer just chose, for the NEXT annotation.
+///
+/// Best-effort: a failure here loses a preference, not work, and the annotation itself has already
+/// been written. Reported to the console rather than to the Reviewer, who did not ask for a setting
+/// to be saved and would be told about a failure in something they never did.
+fn remember_annotation_font_size(ctx: &AppContext, size: f64) {
+    let clock = SystemClock::new();
+    let setting = Setting {
+        key: annotation_font_size_key(),
+        value: SettingValue::Integer(size.round() as i64),
+        updated_at: clock.now_rfc3339(),
+    };
+    if let Err(e) = ctx.settings_store.set(&setting) {
+        eprintln!("Could not remember the annotation font size: {e}");
+    }
+}
+
+/// The WHOLE capture, blurred once, for every Blur annotation to be a window onto.
+///
+/// Slint 1.17 has no content blur - `blur` exists only on `BoxShadow` - so this is Rust's answer, and
+/// it uses `MarkerBurner::blur_rect`: the SAME function the burn calls, not a second approximation of
+/// it. That is the point. A redaction preview that differs from the output is the one kind of
+/// preview that can get somebody hurt, because the Reviewer approves what they see.
+///
+/// Whole-image rather than a crop per annotation, for two reasons that both turned out to matter:
+///
+///   - a DRAG can show the real blur from its first pixel. A per-annotation crop can only ever show
+///     the last committed one, stretched, because the region being dragged does not exist yet.
+///   - N redactions cost one blur instead of N.
+///
+/// Cached per Finding, because the reload after every annotation edit would otherwise re-blur a
+/// megapixel image for a change that touched none of it.
+///
+/// The radius is the DEFAULT one, so an annotation carrying its own `blur_radius` previews slightly
+/// off. Nothing in the UI sets one; when something does, this becomes a cache keyed by radius too.
+fn blurred_capture(finding_id: &str, source: &image::RgbaImage) -> slint::Image {
+    BLURRED_CAPTURE.with(|cell| {
+        let mut cache = cell.borrow_mut();
+        if let Some((cached_id, cached)) = cache.as_ref() {
+            if cached_id == finding_id {
+                return cached.clone();
+            }
+        }
+        let mut blurred = source.clone();
+        let (w, h) = (blurred.width() as i32, blurred.height() as i32);
+        MarkerBurner::blur_rect(&mut blurred, 0, 0, w, h, default_canvas_blur_radius(w, h));
+        let image = rgba_to_slint_image(&blurred);
+        *cache = Some((finding_id.to_string(), image.clone()));
+        image
+    })
+}
+
+/// The same default the burn uses, kept in step with `default_blur_radius` in `burner.rs`.
+///
+/// Duplicated rather than exported, because it is the store's own default and exporting it would
+/// make the canvas a caller of a decision it does not own. If they drift, the preview lies - which
+/// is what `the_canvas_blur_matches_the_burn_default` exists to catch.
+fn default_canvas_blur_radius(width: i32, height: i32) -> i32 {
+    let short = f64::from(width.min(height).max(1));
+    (short / 14.0).clamp(3.0, 16.0) as i32
+}
+
+/// A fresh shape from the canvas: a kind and the drag's two corners.
+fn shape_from_drag(
+    kind: &str,
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+    font_size: f64,
+) -> Option<AnnotationShape> {
+    let x = x1.min(x2);
+    let y = y1.min(y2);
+    let width = (x2 - x1).abs();
+    let height = (y2 - y1).abs();
+
+    Some(match kind {
+        "rect" => AnnotationShape::Rect {
+            x,
+            y,
+            width,
+            height,
+            stroke_color: None,
+            stroke_width: None,
+        },
+        "blur" => AnnotationShape::Blur {
+            x,
+            y,
+            width,
+            height,
+            blur_radius: None,
+        },
+        "text" => AnnotationShape::Text {
+            x,
+            y,
+            width,
+            height,
+            text: String::new(),
+            font_size: Some(font_size),
+            font_family: Some(ANNOTATION_FONT.to_string()),
+            text_color: None,
+            text_align: None,
+        },
+        // A Callout's drag is the other way round from a box's: `x1,y1` is where the pointer went
+        // DOWN, which is the thing being pointed AT, and the bubble is carried away from it. The
+        // canvas used to do the inset itself and hand the INSET corner over as `x1,y1`, so the tail
+        // anchored to the bubble's own top-left and appeared to snap there the moment the drag
+        // ended - which is exactly what the owner saw: *"anchor ekor malah tereset ke node kiri
+        // bawah dari shape callout"*. The raw gesture arrives here now and the inset happens below,
+        // where both halves can be derived from the same two points.
+        "callout" => AnnotationShape::Callout {
+            // Inset FROM THE PRESS POINT, not from the top-left of the drag.
+            //
+            // This was `min + 0.3 * (max - min)`, which is the same distance but always measured
+            // from the smaller coordinate - so it only pointed the right way when the Reviewer
+            // happened to drag down and to the right. Drag UP and the bubble's far edge landed
+            // exactly on `y1`, which is where the tail is, and the arrow came out flush with the
+            // bubble's own bottom line: *"dia malah sejajar sama garis bawah shape"*.
+            //
+            // `x1 + (x2 - x1) * 0.3` carries the sign, so the bubble always sits at the far end of
+            // the gesture whichever way it was drawn.
+            x: (x1 + (x2 - x1) * 0.3).min(x2),
+            y: (y1 + (y2 - y1) * 0.3).min(y2),
+            width: width * 0.7,
+            height: height * 0.7,
+            // The press point itself, untouched by the inset above.
+            tail_x: x1.clamp(0.0, 1.0),
+            tail_y: y1.clamp(0.0, 1.0),
+            text: String::new(),
+            font_size: Some(font_size),
+            font_family: Some(ANNOTATION_FONT.to_string()),
+            bg_color: None,
+            text_color: None,
+            text_align: None,
+        },
+        "arrow" => AnnotationShape::Arrow {
+            start_x: x1,
+            start_y: y1,
+            end_x: x2,
+            end_y: y2,
+            color: None,
+            stroke_width: None,
+        },
+        _ => return None,
+    })
+}
+
+/// Moves or resizes a shape without touching anything else it carries.
+///
+/// A Callout that is dragged keeps its words, its size and its tail; the tail moves WITH the bubble,
+/// because a tail that stayed behind would be pointing at whatever happens to be under it now.
+fn with_geometry(shape: &AnnotationShape, x1: f64, y1: f64, x2: f64, y2: f64) -> AnnotationShape {
+    let nx = x1.min(x2);
+    let ny = y1.min(y2);
+    let nw = (x2 - x1).abs();
+    let nh = (y2 - y1).abs();
+
+    match shape {
+        AnnotationShape::Rect {
+            stroke_color,
+            stroke_width,
+            ..
+        } => AnnotationShape::Rect {
+            x: nx,
+            y: ny,
+            width: nw,
+            height: nh,
+            stroke_color: stroke_color.clone(),
+            stroke_width: *stroke_width,
+        },
+        AnnotationShape::Blur { blur_radius, .. } => AnnotationShape::Blur {
+            x: nx,
+            y: ny,
+            width: nw,
+            height: nh,
+            blur_radius: *blur_radius,
+        },
+        AnnotationShape::Text {
+            text,
+            font_size,
+            font_family,
+            text_color,
+            text_align,
+            ..
+        } => AnnotationShape::Text {
+            x: nx,
+            y: ny,
+            width: nw,
+            height: nh,
+            text: text.clone(),
+            font_size: *font_size,
+            font_family: font_family.clone(),
+            text_color: text_color.clone(),
+            text_align: text_align.clone(),
+        },
+        AnnotationShape::Callout {
+            tail_x,
+            tail_y,
+            text,
+            font_size,
+            font_family,
+            bg_color,
+            text_color,
+            text_align,
+            ..
+        } => AnnotationShape::Callout {
+            x: nx,
+            y: ny,
+            width: nw,
+            height: nh,
+            // THE TAIL DOES NOT FOLLOW THE BUBBLE. It used to, and the owner corrected it:
+            // *"Dragging shape dari callout jangan mengubah anchor point dari ekor - ekor harus
+            // dipindahkan terpisah."*
+            //
+            // They are right, and the reason is what a Callout is for. The tail names a place on the
+            // screenshot; the bubble is where the words happen to fit. Moving the bubble out of the
+            // way of something is the commonest reason to drag one at all, and carrying the tail
+            // along would re-point it at whatever now sits under it.
+            tail_x: *tail_x,
+            tail_y: *tail_y,
+            text: text.clone(),
+            font_size: *font_size,
+            font_family: font_family.clone(),
+            bg_color: bg_color.clone(),
+            text_color: text_color.clone(),
+            text_align: text_align.clone(),
+        },
+        AnnotationShape::Arrow {
+            color,
+            stroke_width,
+            ..
+        } => AnnotationShape::Arrow {
+            // Unordered, for the reason `shape_to_ui` gives: the head is the message.
+            start_x: x1,
+            start_y: y1,
+            end_x: x2,
+            end_y: y2,
+            color: color.clone(),
+            stroke_width: *stroke_width,
+        },
+    }
+}
+
+/// The Callout tail's own target, moved on its own.
+fn with_tail(shape: &AnnotationShape, tx: f64, ty: f64) -> AnnotationShape {
+    match shape {
+        AnnotationShape::Callout {
+            x,
+            y,
+            width,
+            height,
+            text,
+            font_size,
+            font_family,
+            bg_color,
+            text_color,
+            text_align,
+            ..
+        } => AnnotationShape::Callout {
+            x: *x,
+            y: *y,
+            width: *width,
+            height: *height,
+            tail_x: tx,
+            tail_y: ty,
+            text: text.clone(),
+            font_size: *font_size,
+            font_family: font_family.clone(),
+            bg_color: bg_color.clone(),
+            text_color: text_color.clone(),
+            text_align: text_align.clone(),
+        },
+        // Only a Callout has one. Returning the shape unchanged rather than erroring: the UI only
+        // offers the handle on a Callout, so reaching here means a stale id, not a bad request.
+        other => other.clone(),
+    }
+}
+
+/// The Properties panel writing back: the words, the size, the family, the alignment.
+///
+/// `None` for a field the caller is not changing. All four arrive together because the panel is one
+/// form - three round trips for one edit would each reload the model and take the caret with it.
+fn with_content(
+    shape: &AnnotationShape,
+    text: Option<&str>,
+    font_size: Option<f64>,
+    font_family: Option<&str>,
+    text_align: Option<&str>,
+) -> AnnotationShape {
+    match shape {
+        AnnotationShape::Text {
+            x,
+            y,
+            width,
+            height,
+            text: old_text,
+            font_size: old_size,
+            font_family: old_family,
+            text_color,
+            text_align: old_align,
+        } => AnnotationShape::Text {
+            x: *x,
+            y: *y,
+            width: *width,
+            height: *height,
+            text: text.map(str::to_string).unwrap_or_else(|| old_text.clone()),
+            font_size: font_size.or(*old_size),
+            font_family: font_family
+                .map(str::to_string)
+                .or_else(|| old_family.clone()),
+            text_color: text_color.clone(),
+            text_align: text_align.map(str::to_string).or_else(|| old_align.clone()),
+        },
+        AnnotationShape::Callout {
+            x,
+            y,
+            width,
+            height,
+            tail_x,
+            tail_y,
+            text: old_text,
+            font_size: old_size,
+            font_family: old_family,
+            bg_color,
+            text_color,
+            text_align: old_align,
+        } => AnnotationShape::Callout {
+            x: *x,
+            y: *y,
+            width: *width,
+            height: *height,
+            tail_x: *tail_x,
+            tail_y: *tail_y,
+            text: text.map(str::to_string).unwrap_or_else(|| old_text.clone()),
+            font_size: font_size.or(*old_size),
+            font_family: font_family
+                .map(str::to_string)
+                .or_else(|| old_family.clone()),
+            bg_color: bg_color.clone(),
+            text_color: text_color.clone(),
+            text_align: text_align.map(str::to_string).or_else(|| old_align.clone()),
+        },
+        // A Shape, an Arrow and a Blur carry no words. The Properties panel is not shown for them -
+        // the owner scoped it to "hanya muncul di element text dan callout" - so this is unreachable
+        // through the UI and is a no-op rather than an error for the same reason `with_tail` is.
+        other => other.clone(),
+    }
+}
+
+/// Reads one annotation back out of the store.
+///
+/// From the store rather than from the Slint model, because the model carries the CANVAS projection
+/// (two corners and a kind), and every edit here has to preserve the fields that projection drops:
+/// a colour, a stroke width, a blur radius. Editing the projection would quietly reset them.
+fn load_annotation(
+    ctx: &AppContext,
+    finding_id: &str,
+    annotation_id: &str,
+) -> Option<VisualAnnotation> {
+    ctx.finding_store
+        .get_finding(finding_id)
+        .ok()
+        .flatten()?
+        .visual_annotations
+        .into_iter()
+        .find(|a| a.id == annotation_id)
+}
+
+/// Writes the five fields the Properties panel reads.
+///
+/// The panel lives in the inspector beside the Marker Notes, and a Slint repeater cannot pick one
+/// row out of a model - so "which annotation is selected, and what does it say" is mirrored onto the
+/// window as scalars. One writer, here, so the mirror cannot disagree with the id: the canvas asks
+/// for a selection through `annotation-selected`, and every reload comes back through this too.
+///
+/// An id that matches nothing clears the panel rather than leaving the previous annotation's font on
+/// screen next to a different shape.
+fn apply_selection_mirror(window: &AppWindow, annotations: &[VisualAnnotation], id: &str) {
+    let selected = annotations.iter().find(|a| a.id == id);
+
+    let Some(selected) = selected else {
+        window.set_selected_annotation_id(SharedString::new());
+        window.set_selected_annotation_kind(SharedString::new());
+        window.set_selected_annotation_text(SharedString::new());
+        return;
+    };
+
+    window.set_selected_annotation_id(id.into());
+
+    // The canvas projection already answers all five, and re-deriving them here from the enum would
+    // be a second `match` that could disagree with `shape_to_ui`. No source image: the Properties
+    // panel has no use for a Blur preview, and cutting one would be work for nothing.
+    let projected = shape_to_ui(selected);
+    window.set_selected_annotation_kind(projected.kind);
+    window.set_selected_annotation_text(projected.text);
+    window.set_selected_annotation_font_size(projected.font_size);
+    window.set_selected_annotation_font_family(projected.font_family);
+    window.set_selected_annotation_align(projected.text_align);
+}
+
+/// The z-order one annotation should have after a "bring forward" or a "send to back".
+///
+/// Returns the WHOLE new order, because that is what the port takes and because the four movements
+/// are one idea - move this element to a new index - not four operations.
+///
+/// The SCREENSHOT is always underneath everything and is not in this list. It is not an annotation;
+/// it is the thing being annotated, and there is no index at which it could be moved.
+///
+/// `None` when the movement changes nothing - the first element sent backward, the last brought
+/// forward. The caller writes nothing rather than paying a transaction and a reload to store the
+/// order it already had.
+fn reordered(ids: &[String], target: &str, movement: &str) -> Option<Vec<String>> {
+    let from = ids.iter().position(|id| id == target)?;
+    let last = ids.len().checked_sub(1)?;
+
+    // Later in the list is drawn later, so it is nearer the front.
+    let to = match movement {
+        "front" => last,
+        "back" => 0,
+        "forward" => (from + 1).min(last),
+        "backward" => from.saturating_sub(1),
+        _ => return None,
+    };
+    if to == from {
+        return None;
+    }
+
+    let mut reordered = ids.to_vec();
+    let moved = reordered.remove(from);
+    reordered.insert(to, moved);
+    Some(reordered)
+}
+
+/// One reversible annotation edit. `FR-33`: "Redo/Undo history is supported for canvas additions,
+/// moves, edits, and deletions."
+#[derive(Clone)]
+enum AnnEdit {
+    Added {
+        id: String,
+    },
+    Removed {
+        annotation: VisualAnnotation,
+    },
+    Changed {
+        id: String,
+        before: AnnotationShape,
+        after: AnnotationShape,
+    },
+}
+
+thread_local! {
+    /// The undo and redo stacks, and the Finding they belong to.
+    ///
+    /// Scoped to ONE Finding and cleared when the Reviewer opens another. An undo stack that spanned
+    /// Findings would let Ctrl+Z remove a redaction from an image that is no longer on screen, and
+    /// the Reviewer would have no way to see that it had happened.
+    ///
+    /// In memory only. A history that survived a restart would be a fourth thing to keep consistent
+    /// with the store, and nothing in `CAP-11` asks for one.
+    static ANNOTATION_HISTORY: RefCell<(String, Vec<AnnEdit>, Vec<AnnEdit>)> =
+        const { RefCell::new((String::new(), Vec::new(), Vec::new())) };
+}
+
+/// Records an edit, and drops any redo future - the standard rule: a new edit after an undo
+/// replaces what was undone rather than branching.
+fn record_edit(finding_id: &str, edit: AnnEdit) {
+    ANNOTATION_HISTORY.with(|cell| {
+        let mut history = cell.borrow_mut();
+        if history.0 != finding_id {
+            *history = (finding_id.to_string(), Vec::new(), Vec::new());
+        }
+        history.1.push(edit);
+        history.2.clear();
+    });
+}
+
+/// One step back, or one step forward. `FR-33`.
+///
+/// Undo and redo are the same walk in opposite directions, so they are one function rather than two
+/// that have to be kept agreeing about what the inverse of each edit is.
+fn step_annotation_history(window: &AppWindow, ctx: &AppContext, undo: bool) {
+    let finding_id = window.get_active_finding_id().to_string();
+    if finding_id.is_empty() {
+        return;
+    }
+
+    let edit = ANNOTATION_HISTORY.with(|cell| {
+        let mut history = cell.borrow_mut();
+        if history.0 != finding_id {
+            // The history belongs to another Finding. Nothing to undo here, and applying it would
+            // edit an image the Reviewer is not looking at.
+            return None;
+        }
+        if undo {
+            history.1.pop()
+        } else {
+            history.2.pop()
+        }
+    });
+
+    let Some(edit) = edit else {
+        toast(
+            window,
+            if undo {
+                "Nothing to undo."
+            } else {
+                "Nothing to redo."
+            },
+            false,
+        );
+        return;
+    };
+
+    // What actually gets done, and what it costs to reverse it again. An `Added` undone becomes a
+    // `Removed` on the other stack carrying the whole annotation - which is what makes redo able to
+    // put back something that no longer exists in the store.
+    let outcome: Result<AnnEdit, CoreError> = match &edit {
+        AnnEdit::Added { id } => match load_annotation(ctx, &finding_id, id) {
+            Some(annotation) => ctx
+                .finding_store
+                .delete_annotation(&finding_id, id)
+                .map(|()| AnnEdit::Removed { annotation }),
+            None => Err(CoreError::NotFound(format!("Annotation {id} is gone"))),
+        },
+        AnnEdit::Removed { annotation } => ctx
+            .finding_store
+            .add_annotation(
+                &finding_id,
+                &annotation.id,
+                &annotation.data,
+                &annotation.created_at,
+            )
+            // Re-added, which puts it back on TOP rather than at the position it held. Stated
+            // plainly because it is a real difference: undoing the deletion of an annotation that
+            // something else covered will leave it in front. Restoring the position would mean a
+            // port method that takes one, and nothing else in the product needs it.
+            .map(|_| AnnEdit::Added {
+                id: annotation.id.clone(),
+            }),
+        AnnEdit::Changed { id, before, after } => {
+            let target = if undo { before } else { after };
+            ctx.finding_store
+                .update_annotation(&finding_id, id, target)
+                .map(|_| AnnEdit::Changed {
+                    id: id.clone(),
+                    before: before.clone(),
+                    after: after.clone(),
+                })
+        }
+    };
+
+    match outcome {
+        Ok(inverse) => {
+            ANNOTATION_HISTORY.with(|cell| {
+                let mut history = cell.borrow_mut();
+                // A `Changed` is its own inverse either way round, so it moves across unchanged and
+                // the direction alone decides which end it is read from next.
+                if undo {
+                    history.2.push(inverse);
+                } else {
+                    history.1.push(inverse);
+                }
+            });
+            window.set_selected_annotation_id(SharedString::new());
+            load_active_detail(window, ctx, &finding_id);
+        }
+        Err(e) => {
+            // The step is NOT pushed back on the stack it came off. A step that cannot be applied
+            // will not become applicable later, and leaving it there makes every subsequent undo
+            // fail on the same one.
+            toast(
+                window,
+                format!("Could not {} that: {e}", if undo { "undo" } else { "redo" }),
+                true,
+            );
+        }
+    }
+}
+
+/// Whether a hotkey capture should bring the Editor forward when it lands (`FR-18`).
+///
+/// Default OFF, and that default is `BG-6` in one line: the loop has to survive six captures in
+/// ninety seconds, and a window taking focus each time turns six captures into six dismissals.
+///
+/// A read failure is treated as off for the same reason - the quiet behaviour is the safe one to
+/// fall back to, because the Reviewer can always open the Editor and cannot un-steal focus.
+fn open_editor_after_capture(ctx: &AppContext) -> bool {
+    ctx.settings_store
+        .get(&SettingKey::OpenEditorAfterCapture)
+        .ok()
+        .flatten()
+        .map(|setting| matches!(setting.value, SettingValue::Boolean(true)))
+        .unwrap_or(false)
+}
+
+/// The Finding's image, burned, on the clipboard as a bitmap. `FR-36`.
+///
+/// The BURNED image, not the stored one: this is the one path in the product that hands an image
+/// over without a Bundle around it, so a redaction that existed only in the Bundle's copy would make
+/// this path leak. It is the same `burn_all` the Bundle uses, over the same Markers and annotations.
+///
+/// BMP rather than PNG because the Windows clipboard's image format is a DIB, and a BMP file is a
+/// DIB with a 14-byte header. `clipboard-win` strips the header; nothing here has to know the
+/// layout. The cost is a second encode of an image already encoded once, which is a few milliseconds
+/// on a keystroke the Reviewer initiated.
+#[cfg(windows)]
+fn copy_burned_image(ctx: &AppContext, finding_id: &str) -> Result<String, String> {
+    use image::codecs::bmp::BmpEncoder;
+    use image::ExtendedColorType;
+
+    let detail = ctx
+        .finding_store
+        .get_finding(finding_id)
+        .map_err(|e| format!("Could not read the Finding: {e}"))?
+        .ok_or_else(|| "That Finding is no longer in the Library.".to_string())?;
+
+    let source = ctx
+        .vault_store
+        .read_blob(&detail.finding.image_path)
+        .map_err(|e| format!("Could not read the image: {e}"))?;
+
+    let dims = ImageDimensions {
+        width: detail.finding.image_width,
+        height: detail.finding.image_height,
+    };
+    let burned =
+        MarkerBurner::burn_all(&source, &dims, &detail.markers, &detail.visual_annotations)
+            .map_err(|e| format!("Could not draw the annotations: {e}"))?;
+
+    let decoded = image::load_from_memory(&burned)
+        .map_err(|e| format!("Could not decode the burned image: {e}"))?;
+    // RGB, not RGBA. A DIB with an alpha channel is pasted as fully transparent by several
+    // applications - including Explorer's preview - and a screenshot has nothing to be transparent
+    // about anyway.
+    let rgb = decoded.to_rgb8();
+
+    let mut bmp = Vec::new();
+    BmpEncoder::new(&mut bmp)
+        .encode(
+            rgb.as_raw(),
+            rgb.width(),
+            rgb.height(),
+            ExtendedColorType::Rgb8,
+        )
+        .map_err(|e| format!("Could not encode for the clipboard: {e}"))?;
+
+    // `set_clipboard` opens, empties, writes and closes. Holding a `Clipboard` guard around it
+    // would take the lock twice and deadlock.
+    clipboard_win::set_clipboard(clipboard_win::formats::Bitmap, &bmp)
+        .map_err(|e| format!("Could not write to the clipboard: {e}"))?;
+
+    Ok(format!(
+        "Image copied, with its Markers and annotations ({} x {}).",
+        rgb.width(),
+        rgb.height()
+    ))
+}
+
+#[cfg(not(windows))]
+fn copy_burned_image(_ctx: &AppContext, _finding_id: &str) -> Result<String, String> {
+    Err("Copying an image to the clipboard is implemented on Windows only.".to_string())
+}
+
+/// Shows the Finding's file in the operating system's file manager, selected.
+///
+/// `explorer /select,<path>` rather than opening the folder: the Vault holds every capture in one
+/// directory, so opening it unselected leaves the Reviewer looking for a name they do not know.
+///
+/// `explorer.exe` returns a non-zero exit code on success, which is a documented quirk and not an
+/// error - so the status is deliberately not checked. A genuine failure to spawn still surfaces.
+#[cfg(windows)]
+fn open_file_location(ctx: &AppContext, image_path: &str) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+
+    let absolute = if PathBuf::from(image_path).is_absolute() {
+        PathBuf::from(image_path)
+    } else {
+        ctx.vault_path.join(image_path)
+    };
+    if !absolute.exists() {
+        return Err("That file is no longer in the Vault.".to_string());
+    }
+    // `raw_arg`, and backslashes, and quotes - all three, and all three are load-bearing.
+    //
+    // `.arg()` applies Rust's own quoting rules, which wrap an argument containing a comma or a
+    // space in quotes as a WHOLE: `"/select,C:\Vault\x.png"`. Explorer cannot parse that, and
+    // its documented behaviour when it cannot parse its switch is to open the default folder - so
+    // the owner got their Desktop. `raw_arg` passes the string through untouched, and the quotes go
+    // around the PATH only, where Explorer expects them.
+    //
+    // The separators matter too: `image_path` is stored with forward slashes (it is a Vault-relative
+    // key, not a Windows path), so joining it produces `C:\Vault/findings/x.png`, which Explorer
+    // also rejects.
+    let native = absolute.to_string_lossy().replace('/', "\\");
+    std::process::Command::new("explorer.exe")
+        .raw_arg(format!("/select,\"{native}\""))
+        .spawn()
+        .map_err(|e| format!("Could not open the file manager: {e}"))?;
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn open_file_location(_ctx: &AppContext, _image_path: &str) -> Result<(), String> {
+    Err("Showing a file in the file manager is implemented on Windows only.".to_string())
+}
+
+/// Which Findings a confirmed deletion should take.
+///
+/// The filmstrip's own rule, the one every file manager uses: a right-click ON the selection acts on
+/// the selection; a right-click outside it acts on the one thing under the pointer. Read from the UI
+/// model rather than the store, because "selected" is a property of what the Reviewer is looking at
+/// and exists nowhere else.
+fn findings_to_delete(window: &AppWindow, target: &str) -> Vec<String> {
+    let selected = selected_finding_ids(window);
+    if selected.iter().any(|id| id == target) {
+        selected
+    } else {
+        vec![target.to_string()]
+    }
+}
+
+/// Deletes a Finding, its row and its file. `FR-13`, `UC-7`.
+///
+/// The ROW FIRST, then the file. The other order can leave a Library entry pointing at a file that is
+/// gone, which is the orphan class `FR-15` exists to report; this order can only leave a file with no
+/// row, which the same sweeper finds and which costs disk rather than a broken Finding.
+///
+/// The blob failing is reported but does not undo the row: the Reviewer asked for this Finding to be
+/// gone, and it is gone from the Library. Saying so and leaving a file behind beats resurrecting
+/// something they just confirmed the deletion of.
+fn delete_finding_everywhere(ctx: &AppContext, finding_id: &str) -> Result<bool, String> {
+    let detail = ctx
+        .finding_store
+        .get_finding(finding_id)
+        .map_err(|e| format!("Could not read the Finding: {e}"))?
+        .ok_or_else(|| "That Finding is no longer in the Library.".to_string())?;
+
+    ctx.finding_store
+        .delete_finding(finding_id)
+        .map_err(|e| format!("Could not delete the Finding: {e}"))?;
+
+    // `true` means the row went and the file did not - an orphan, which `FR-15`'s sweeper will
+    // find. Returned rather than reported here so a multiple deletion can count them.
+    match ctx.vault_store.delete_blob(&detail.finding.image_path) {
+        Ok(()) => Ok(false),
+        Err(e) => {
+            eprintln!("Deleted Finding {finding_id} but left its image behind: {e}");
+            Ok(true)
+        }
+    }
 }
 
 /// The settings key the theme choice is stored under.
@@ -699,12 +1633,20 @@ where
             width: f.image_width,
             height: f.image_height,
         };
-        let burned_bytes = MarkerBurner::burn_markers(&source_bytes, &dims, &detail.markers)
-            .map_err(|e| {
-                format!(
-                    "Could not draw the Markers for Finding {position}: {e}. Nothing was written."
-                )
-            })?;
+        // `burn_all`, not `burn_markers`. The five annotation shapes have been drawable since the
+        // burner was written and were never handed any: `plan_bundle` passed the Markers and an
+        // empty slice, so a Bundle's copy carried the reticles and dropped every box, arrow, callout
+        // and - worst - every blur redaction. That is `BUG-72`, and this line is where it surfaced:
+        // a Finding could not HOLD an annotation, so there was never one to pass.
+        let burned_bytes = MarkerBurner::burn_all(
+            &source_bytes,
+            &dims,
+            &detail.markers,
+            &detail.visual_annotations,
+        )
+        .map_err(|e| {
+            format!("Could not draw the Markers for Finding {position}: {e}. Nothing was written.")
+        })?;
 
         let image_path = format!("bundles/{bundle_id}/finding_{position}_burned.png");
         // A deterministic item id. `id_from_parts` would hand every item in this loop the same
@@ -960,6 +1902,27 @@ fn write_bundle(ctx: &AppContext, pending: &PendingBundle) -> Result<String, Str
 }
 
 thread_local! {
+    /// The active Finding's capture, blurred whole, keyed by its id. See [`blurred_capture`].
+    static BLURRED_CAPTURE: RefCell<Option<(String, slint::Image)>> =
+        const { RefCell::new(None) };
+
+    /// Whether the Editor should come to the front once THIS capture lands.
+    ///
+    /// A capture no longer raises the Editor on its way in. It used to: both the tray's Capture item
+    /// and the global hotkey called `show()` and then started the capture, so the window appeared,
+    /// the overlay covered it a moment later, and the Reviewer saw a flash of an Editor they had not
+    /// asked for. The owner reported it from the tray: *"maunya jangan membuka snapdown editor lebih
+    /// dulu, langsung capture mode, dan langsung buka snapdown editor"*.
+    ///
+    /// Raising it AFTERWARDS is also the only version that respects `BG-6`. The hotkey's whole
+    /// promise is that the loop survives six captures in ninety seconds, and a window taking focus
+    /// each time turns six captures into six dismissals - which is why `OpenEditorAfterCapture`
+    /// exists as a setting. That setting had never been read by anything; this is what reads it.
+    ///
+    /// The tray's Capture item overrides it to true regardless, because reaching for a tray menu is
+    /// already leaving the flow: the Reviewer went looking for the application.
+    static REVEAL_EDITOR_AFTER_CAPTURE: Cell<bool> = const { Cell::new(false) };
+
     /// The Finding a Shift-click ranges FROM.
     ///
     /// It lives here rather than in a closure because two different things move the selection - a
@@ -1508,6 +2471,473 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
             .sum();
         win.set_marker_char_count(total as i32);
+    });
+
+    // ANNOTATIONS - `CAP-11`, `FR-30` to `FR-33`.
+    //
+    // The capability had a domain type and a burner and nothing in between: no table, no port
+    // method, no read, and seven toolbar buttons that set an index and did nothing with it. That is
+    // `BUG-72`, and it is `BUG-55` one level up - a whole capability built at both ends and joined
+    // in the middle by nothing.
+    //
+    // Every handler here reloads the Finding afterwards rather than pushing into the Slint model.
+    // The store owns z-order, and a model the UI edited directly would drift from it exactly the way
+    // the Marker ordinals would if `add_marker`'s result were guessed.
+    let win_weak_ad = main_window.as_weak();
+    let ctx_ad = ctx.clone();
+    main_window.on_annotation_drawn(move |kind, x1, y1, x2, y2| {
+        let Some(win) = win_weak_ad.upgrade() else {
+            return;
+        };
+        let finding_id = win.get_active_finding_id().to_string();
+        if finding_id.is_empty() {
+            toast(
+                &win,
+                "Open a Finding first - an annotation belongs to an image.",
+                true,
+            );
+            return;
+        }
+        let Some(shape) = shape_from_drag(
+            kind.as_str(),
+            f64::from(x1),
+            f64::from(y1),
+            f64::from(x2),
+            f64::from(y2),
+            default_annotation_font_size(&ctx_ad),
+        ) else {
+            return;
+        };
+        let clock = SystemClock::new();
+        let entropy = SystemEntropySource::new();
+        let annotation_id = id_from_parts(clock.now_unix_millis(), entropy.random_bytes_10());
+        match ctx_ad.finding_store.add_annotation(
+            &finding_id,
+            &annotation_id,
+            &shape,
+            &clock.now_rfc3339(),
+        ) {
+            Ok(_) => {
+                record_edit(
+                    &finding_id,
+                    AnnEdit::Added {
+                        id: annotation_id.clone(),
+                    },
+                );
+                // Selected on arrival, so the handles are already under the hand that drew it -
+                // and so a Callout or a Text can be typed into without a second click to find it.
+                // Set before the reload, which is what rewrites the Properties panel from it.
+                win.set_selected_annotation_id(annotation_id.into());
+                load_active_detail(&win, &ctx_ad, &finding_id);
+            }
+            Err(e) => toast(&win, format!("Could not draw that: {e}"), true),
+        }
+    });
+
+    let win_weak_ag = main_window.as_weak();
+    let ctx_ag = ctx.clone();
+    main_window.on_annotation_geometry_changed(move |id, x1, y1, x2, y2| {
+        let Some(win) = win_weak_ag.upgrade() else {
+            return;
+        };
+        let finding_id = win.get_active_finding_id().to_string();
+        if finding_id.is_empty() || id.is_empty() {
+            return;
+        }
+        let Some(existing) = load_annotation(&ctx_ag, &finding_id, id.as_str()) else {
+            return;
+        };
+        let moved = with_geometry(
+            &existing.data,
+            f64::from(x1),
+            f64::from(y1),
+            f64::from(x2),
+            f64::from(y2),
+        );
+        match ctx_ag
+            .finding_store
+            .update_annotation(&finding_id, id.as_str(), &moved)
+        {
+            Ok(_) => {
+                record_edit(
+                    &finding_id,
+                    AnnEdit::Changed {
+                        id: id.to_string(),
+                        before: existing.data,
+                        after: moved,
+                    },
+                );
+                load_active_detail(&win, &ctx_ag, &finding_id);
+            }
+            // A drag that ended outside the image is refused by the store, and saying so is better
+            // than a shape that springs back with no explanation.
+            Err(e) => toast(&win, format!("Could not move that: {e}"), true),
+        }
+    });
+
+    let win_weak_at = main_window.as_weak();
+    let ctx_at = ctx.clone();
+    main_window.on_annotation_tail_moved(move |id, tx, ty| {
+        let Some(win) = win_weak_at.upgrade() else {
+            return;
+        };
+        let finding_id = win.get_active_finding_id().to_string();
+        if finding_id.is_empty() || id.is_empty() {
+            return;
+        }
+        let Some(existing) = load_annotation(&ctx_at, &finding_id, id.as_str()) else {
+            return;
+        };
+        let pointed = with_tail(&existing.data, f64::from(tx), f64::from(ty));
+        match ctx_at
+            .finding_store
+            .update_annotation(&finding_id, id.as_str(), &pointed)
+        {
+            Ok(_) => {
+                record_edit(
+                    &finding_id,
+                    AnnEdit::Changed {
+                        id: id.to_string(),
+                        before: existing.data,
+                        after: pointed,
+                    },
+                );
+                load_active_detail(&win, &ctx_at, &finding_id);
+            }
+            Err(e) => toast(&win, format!("Could not move the tail: {e}"), true),
+        }
+    });
+
+    // The words, written through on every keystroke for the same reason the Observation Summary is:
+    // the alternative is a blur event that may never fire.
+    //
+    // It deliberately does NOT reload afterwards. A reload rebuilds the model, and rebuilding the
+    // model under a text field takes the caret out of the sentence being typed - the same trap
+    // `on_marker_comment_edited` documents.
+    let win_weak_ax = main_window.as_weak();
+    let ctx_ax = ctx.clone();
+    main_window.on_annotation_text_edited(move |id, text| {
+        let Some(win) = win_weak_ax.upgrade() else {
+            return;
+        };
+        let finding_id = win.get_active_finding_id().to_string();
+        if finding_id.is_empty() || id.is_empty() {
+            return;
+        }
+        let Some(existing) = load_annotation(&ctx_ax, &finding_id, id.as_str()) else {
+            return;
+        };
+        let typed = with_content(&existing.data, Some(text.as_str()), None, None, None);
+        if let Err(e) = ctx_ax
+            .finding_store
+            .update_annotation(&finding_id, id.as_str(), &typed)
+        {
+            eprintln!("Could not save the text for annotation {id}: {e}");
+            return;
+        }
+        // Not recorded as one undo step per keystroke - that would make Ctrl+Z delete one letter at
+        // a time and bury the move that came before it. The canvas still has to follow the typing,
+        // so the model row is updated in place instead of reloading.
+        let rows = win.get_annotations();
+        for index in 0..rows.row_count() {
+            if let Some(mut row) = rows.row_data(index) {
+                if row.id == id {
+                    row.text = text.clone();
+                    rows.set_row_data(index, row);
+                    break;
+                }
+            }
+        }
+    });
+
+    let win_weak_as = main_window.as_weak();
+    let ctx_as = ctx.clone();
+    main_window.on_annotation_style_changed(move |id, size, family, align| {
+        let Some(win) = win_weak_as.upgrade() else {
+            return;
+        };
+        let finding_id = win.get_active_finding_id().to_string();
+        if finding_id.is_empty() || id.is_empty() {
+            return;
+        }
+        let Some(existing) = load_annotation(&ctx_as, &finding_id, id.as_str()) else {
+            return;
+        };
+        let styled = with_content(
+            &existing.data,
+            None,
+            Some(f64::from(size)),
+            Some(family.as_str()),
+            Some(align.as_str()),
+        );
+        match ctx_as
+            .finding_store
+            .update_annotation(&finding_id, id.as_str(), &styled)
+        {
+            Ok(_) => {
+                // The size the Reviewer just chose becomes the default for the next annotation.
+                // Forward only - nothing already on the canvas is touched.
+                remember_annotation_font_size(&ctx_as, f64::from(size));
+                record_edit(
+                    &finding_id,
+                    AnnEdit::Changed {
+                        id: id.to_string(),
+                        before: existing.data,
+                        after: styled,
+                    },
+                );
+                load_active_detail(&win, &ctx_as, &finding_id);
+            }
+            Err(e) => toast(&win, format!("Could not restyle that: {e}"), true),
+        }
+    });
+
+    let win_weak_adel = main_window.as_weak();
+    let ctx_adel = ctx.clone();
+    main_window.on_annotation_deleted(move |id| {
+        let Some(win) = win_weak_adel.upgrade() else {
+            return;
+        };
+        let finding_id = win.get_active_finding_id().to_string();
+        if finding_id.is_empty() || id.is_empty() {
+            return;
+        }
+        let Some(existing) = load_annotation(&ctx_adel, &finding_id, id.as_str()) else {
+            return;
+        };
+        match ctx_adel
+            .finding_store
+            .delete_annotation(&finding_id, id.as_str())
+        {
+            Ok(()) => {
+                record_edit(
+                    &finding_id,
+                    AnnEdit::Removed {
+                        annotation: existing,
+                    },
+                );
+                win.set_selected_annotation_id(SharedString::new());
+                load_active_detail(&win, &ctx_adel, &finding_id);
+            }
+            Err(e) => toast(&win, format!("Could not delete that: {e}"), true),
+        }
+    });
+
+    // Selection is routed through Rust rather than assigned in Slint, so the id and the five
+    // mirrored fields the Properties panel reads are written by one hand. "" deselects.
+    let win_weak_asel = main_window.as_weak();
+    let ctx_asel = ctx.clone();
+    main_window.on_annotation_selected(move |id| {
+        let Some(win) = win_weak_asel.upgrade() else {
+            return;
+        };
+        if id.is_empty() {
+            apply_selection_mirror(&win, &[], "");
+            return;
+        }
+        let finding_id = win.get_active_finding_id().to_string();
+        let annotations = ctx_asel
+            .finding_store
+            .get_finding(&finding_id)
+            .ok()
+            .flatten()
+            .map(|detail| detail.visual_annotations)
+            .unwrap_or_default();
+        apply_selection_mirror(&win, &annotations, id.as_str());
+    });
+
+    // A Marker can be moved after it is placed.
+    //
+    // It could not be, and that made a mis-click permanent: the only remedy was delete and re-place,
+    // and `delete_marker` renumbers every Marker after it - so correcting Marker 2's POSITION also
+    // rewrote Marker 2's line number in the Note. This writes the position and nothing else.
+    let win_weak_mmv = main_window.as_weak();
+    let ctx_mmv = ctx.clone();
+    main_window.on_marker_moved(move |marker_id, x, y| {
+        let Some(win) = win_weak_mmv.upgrade() else {
+            return;
+        };
+        let finding_id = win.get_active_finding_id().to_string();
+        if finding_id.is_empty() || marker_id.is_empty() {
+            return;
+        }
+        // The comment comes from the model rather than the store: it is what the Reviewer is looking
+        // at, and `update_marker` takes the whole row, so reading it back would risk overwriting an
+        // edit still in the field with a staler copy.
+        let Some(marker) = win.get_markers().iter().find(|m| m.id == marker_id) else {
+            return;
+        };
+        match ctx_mmv.finding_store.update_marker(
+            &finding_id,
+            marker_id.as_str(),
+            f64::from(x),
+            f64::from(y),
+            marker.comment.as_str(),
+        ) {
+            Ok(_) => load_active_detail(&win, &ctx_mmv, &finding_id),
+            Err(e) => toast(&win, format!("Could not move the Marker: {e}"), true),
+        }
+    });
+
+    // Z-ORDER. Four movements, one port call, and the arithmetic in `reordered` where it can be
+    // read and tested rather than inside a callback.
+    //
+    // NOT recorded on the undo stack. `AnnEdit` describes a shape, and an order is a property of the
+    // collection rather than of any member of it - putting it there would mean either a fifth variant
+    // that holds a whole ordering or an undo that silently reorders something else. It is also the
+    // cheapest edit to reverse by hand: the opposite movement is right there in the same menu.
+    let win_weak_aord = main_window.as_weak();
+    let ctx_aord = ctx.clone();
+    main_window.on_annotation_reordered(move |id, movement| {
+        let Some(win) = win_weak_aord.upgrade() else {
+            return;
+        };
+        let finding_id = win.get_active_finding_id().to_string();
+        if finding_id.is_empty() || id.is_empty() {
+            return;
+        }
+        let Ok(Some(detail)) = ctx_aord.finding_store.get_finding(&finding_id) else {
+            return;
+        };
+        let ids: Vec<String> = detail
+            .visual_annotations
+            .iter()
+            .map(|a| a.id.clone())
+            .collect();
+
+        let Some(order) = reordered(&ids, id.as_str(), movement.as_str()) else {
+            // Already where it was asked to go. Saying so beats a silent no-op on a menu item the
+            // Reviewer just clicked.
+            toast(&win, "Already there.", false);
+            return;
+        };
+        let borrowed: Vec<&str> = order.iter().map(String::as_str).collect();
+        match ctx_aord
+            .finding_store
+            .reorder_annotations(&finding_id, &borrowed)
+        {
+            Ok(()) => load_active_detail(&win, &ctx_aord, &finding_id),
+            Err(e) => toast(&win, format!("Could not reorder that: {e}"), true),
+        }
+    });
+
+    // COPY IMAGE, OPEN FILE LOCATION, DELETE FINDING - the three entries the archived Tauri menu
+    // had and this build did not. `copy-image-clicked` has been declared and unhandled since the
+    // Editor was written; it was on `BUG-61`'s list and in `DELIBERATELY_UNHANDLED`.
+    let win_weak_cpy = main_window.as_weak();
+    let ctx_cpy = ctx.clone();
+    main_window.on_copy_image_clicked(move || {
+        let Some(win) = win_weak_cpy.upgrade() else {
+            return;
+        };
+        let finding_id = win.get_active_finding_id().to_string();
+        if finding_id.is_empty() {
+            toast(&win, "Open a Finding first.", true);
+            return;
+        }
+        match copy_burned_image(&ctx_cpy, &finding_id) {
+            Ok(message) => toast(&win, message, false),
+            Err(message) => toast(&win, message, true),
+        }
+    });
+
+    let win_weak_rev = main_window.as_weak();
+    let ctx_rev = ctx.clone();
+    main_window.on_open_file_location_clicked(move |finding_id| {
+        let Some(win) = win_weak_rev.upgrade() else {
+            return;
+        };
+        if finding_id.is_empty() {
+            return;
+        }
+        let path = ctx_rev
+            .finding_store
+            .get_finding(finding_id.as_str())
+            .ok()
+            .flatten()
+            .map(|detail| detail.finding.image_path);
+        let Some(path) = path else {
+            toast(&win, "That Finding is no longer in the Library.", true);
+            return;
+        };
+        if let Err(message) = open_file_location(&ctx_rev, &path) {
+            toast(&win, message, true);
+        }
+    });
+
+    // Already confirmed by the time this fires - the dialog is the safety, and it is in the UI so
+    // that no code path can reach the delete without passing it.
+    //
+    // WHAT gets deleted follows the file-manager rule the filmstrip already uses for clicks: if the
+    // Finding that was right-clicked is part of the selection, the whole selection goes; if it is
+    // not, only that one does. The owner asked for the first half - *"Delete finding harusnya
+    // menghapus semua selected finding"* - and the second half is what stops a right-click on an
+    // unselected card quietly taking eight others with it.
+    let win_weak_dfn = main_window.as_weak();
+    let ctx_dfn = ctx.clone();
+    main_window.on_delete_finding_confirmed(move |finding_id| {
+        let Some(win) = win_weak_dfn.upgrade() else {
+            return;
+        };
+        if finding_id.is_empty() {
+            return;
+        }
+
+        let targets = findings_to_delete(&win, finding_id.as_str());
+        let mut deleted = 0usize;
+        let mut orphaned = 0usize;
+        let mut first_error: Option<String> = None;
+
+        for target in &targets {
+            match delete_finding_everywhere(&ctx_dfn, target) {
+                Ok(orphan) => {
+                    deleted += 1;
+                    if orphan {
+                        orphaned += 1;
+                    }
+                }
+                // Kept going. Stopping at the first failure would leave the Reviewer with some of a
+                // deletion they confirmed and no way to tell which half.
+                Err(message) => {
+                    if first_error.is_none() {
+                        first_error = Some(message);
+                    }
+                }
+            }
+        }
+
+        // Reloaded with no active Finding: the one that was open may be among those that just went,
+        // and `load_findings_into_window` picks the first survivor.
+        load_findings_into_window(&win, &ctx_dfn, None);
+
+        let noun = if deleted == 1 { "Finding" } else { "Findings" };
+        let message = match (first_error, orphaned) {
+            (Some(error), _) => format!(
+                "{deleted} of {} deleted. The rest failed: {error}",
+                targets.len()
+            ),
+            (None, 0) => format!("{deleted} {noun} deleted, with their images."),
+            (None, n) => format!(
+                "{deleted} {noun} deleted. {n} image file(s) could not be removed and are now orphans."
+            ),
+        };
+        toast(&win, message, deleted != targets.len());
+    });
+
+    let win_weak_au = main_window.as_weak();
+    let ctx_au = ctx.clone();
+    main_window.on_annotation_undo(move || {
+        if let Some(win) = win_weak_au.upgrade() {
+            step_annotation_history(&win, &ctx_au, true);
+        }
+    });
+
+    let win_weak_ar = main_window.as_weak();
+    let ctx_ar = ctx.clone();
+    main_window.on_annotation_redo(move || {
+        if let Some(win) = win_weak_ar.upgrade() {
+            step_annotation_history(&win, &ctx_ar, false);
+        }
     });
 
     // BUNDLE ASSEMBLY.
@@ -2145,6 +3575,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         close_overlay();
                         if let Some(main) = main_weak.upgrade() {
                             load_findings_into_window(&main, &ctx_inner, finding_id.as_deref());
+                            // Reset either way: the flag describes ONE capture, and a stale `true`
+                            // would raise the Editor on the next hotkey press for no reason.
+                            let reveal = REVEAL_EDITOR_AFTER_CAPTURE.replace(false);
+                            if reveal && finding_id.is_some() {
+                                let _ = main.show();
+                                main.window().set_minimized(false);
+                            }
                         }
                     }
                 });
@@ -2405,6 +3842,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // through crossbeam channels rather than hooking into Slint's winit event loop directly.
     let window_for_events = main_window.as_weak();
     let hotkey_poll_registrar = hotkey_registrar.clone();
+    let ctx_hotkey = ctx.clone();
     let poll_timer = slint::Timer::default();
     poll_timer.start(
         slint::TimerMode::Repeated,
@@ -2415,7 +3853,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     match action {
                         TrayAction::Capture => {
                             if let Some(win) = window_for_events.upgrade() {
-                                win.show().unwrap();
+                                // Straight into capture. The Editor arrives when the capture does.
+                                REVEAL_EDITOR_AFTER_CAPTURE.set(true);
                                 win.invoke_capture_clicked();
                             }
                         }
@@ -2460,7 +3899,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         match action {
                             HotkeyAction::Capture => {
                                 if let Some(win) = window_for_events.upgrade() {
-                                    win.show().unwrap();
+                                    // The setting decides, and `BG-6` is why there is a setting:
+                                    // the hotkey exists to keep the Reviewer in the flow they are
+                                    // already in. Default off.
+                                    REVEAL_EDITOR_AFTER_CAPTURE
+                                        .set(open_editor_after_capture(&ctx_hotkey));
                                     win.invoke_capture_clicked();
                                 }
                             }

@@ -55,6 +55,29 @@ export global Theme {
     // overlay group below it does not follow the theme - the thing behind it is not our surface.
     out property <color> marker-shadow: #000000.with-alpha(0.35);
 
+    // 5b. Canvas Annotation Tokens (`CAP-11`)
+    //
+    // Theme-invariant, and for the strongest version of the reason `marker-shadow` gives: these are
+    // not drawn over our surface, they are drawn INTO the Reviewer's screenshot. `MarkerBurner` bakes
+    // them into the PNG, and a PNG has no theme. A token that followed `is-dark` would make the same
+    // Finding produce two different images depending on what the Reviewer's window looked like when
+    // they composed the Bundle.
+    //
+    // `annotation-stroke` is `COLOR_MARKER_FILL` in `burner.rs` and MUST stay equal to it - the
+    // canvas is a preview of the burn, and two reds would mean the preview lies.
+    //
+    // ONE colour for all five shapes, including a Callout's bubble and the words in it. The Callout
+    // had its own dark plate and white text; the owner asked for the same treatment every other
+    // shape gets, and dropping the pair also removed the question of which red a Callout was.
+    out property <color> annotation-stroke: #dc2626;
+
+    // Selection chrome - the ring and the eight handles of `FR-33`. This half is NOT burned; it is
+    // the editor talking to the Reviewer. It is still theme-invariant, for the overlay's reason: the
+    // thing behind it is a screenshot, not our surface.
+    out property <color> annotation-select-ring: #38bdf8;
+    out property <color> annotation-handle: #ffffff;
+    out property <color> annotation-handle-border: #0f172a;
+
     // The Capture action's label. It is the one control deliberately outside the accent blue - it is
     // the product's primary verb, and it reads as its own thing on the toolbar.
     //

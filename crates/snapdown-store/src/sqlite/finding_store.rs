@@ -2,7 +2,9 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use rusqlite::{Connection, OpenFlags, OptionalExtension, Transaction};
-use snapdown_core::domain::finding::{Finding, FindingDetail, Marker, Note};
+use snapdown_core::domain::finding::{
+    AnnotationShape, Finding, FindingDetail, Marker, Note, VisualAnnotation,
+};
 use snapdown_core::error::CoreError;
 use snapdown_core::ports::FindingStore;
 
@@ -262,11 +264,13 @@ impl FindingStore for SqliteFindingStore {
             markers.push(m.map_err(|e| CoreError::Validation(e.to_string()))?);
         }
 
+        let visual_annotations = read_annotations(&conn, id)?;
+
         Ok(Some(FindingDetail {
             finding,
             note,
             markers,
-            visual_annotations: vec![],
+            visual_annotations,
         }))
     }
 
@@ -364,11 +368,13 @@ impl FindingStore for SqliteFindingStore {
                 markers.push(m.map_err(|e| CoreError::Validation(e.to_string()))?);
             }
 
+            let visual_annotations = read_annotations(&conn, &finding.id)?;
+
             details.push(FindingDetail {
                 finding,
                 note,
                 markers,
-                visual_annotations: vec![],
+                visual_annotations,
             });
         }
 
@@ -682,6 +688,355 @@ impl FindingStore for SqliteFindingStore {
 
         Ok(())
     }
+
+    fn add_annotation(
+        &self,
+        finding_id: &str,
+        annotation_id: &str,
+        data: &AnnotationShape,
+        created_at: &str,
+    ) -> Result<VisualAnnotation, CoreError> {
+        validate_shape(data)?;
+
+        let json = serde_json::to_string(data)
+            .map_err(|e| CoreError::Validation(format!("Annotation could not be written: {e}")))?;
+
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        let tx = conn
+            .transaction()
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        let finding_exists: bool = tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM finding WHERE id = ?1);",
+                rusqlite::params![finding_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        if !finding_exists {
+            return Err(CoreError::NotFound(format!(
+                "Finding not found: {finding_id}"
+            )));
+        }
+
+        // Read inside the transaction, so two annotations placed in the same millisecond cannot both
+        // claim the same z-order.
+        let next_position: i64 = tx
+            .query_row(
+                "SELECT COALESCE(MAX(position), 0) + 1 FROM visual_annotation WHERE finding_id = ?1;",
+                rusqlite::params![finding_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        tx.execute(
+            r#"
+            INSERT INTO visual_annotation (id, finding_id, position, properties_json, created_at)
+            VALUES (?1, ?2, ?3, ?4, ?5);
+            "#,
+            rusqlite::params![annotation_id, finding_id, next_position, json, created_at],
+        )
+        .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        tx.commit()
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        Ok(VisualAnnotation {
+            id: annotation_id.to_string(),
+            finding_id: finding_id.to_string(),
+            data: data.clone(),
+            created_at: created_at.to_string(),
+        })
+    }
+
+    fn update_annotation(
+        &self,
+        finding_id: &str,
+        annotation_id: &str,
+        data: &AnnotationShape,
+    ) -> Result<VisualAnnotation, CoreError> {
+        validate_shape(data)?;
+
+        let json = serde_json::to_string(data)
+            .map_err(|e| CoreError::Validation(format!("Annotation could not be written: {e}")))?;
+
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        // `created_at` is read back rather than invented: an update is not a creation, and the field
+        // is the only record of when the Reviewer actually drew this.
+        let created_at: Option<String> = conn
+            .query_row(
+                "SELECT created_at FROM visual_annotation WHERE id = ?1 AND finding_id = ?2;",
+                rusqlite::params![annotation_id, finding_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        let created_at = created_at.ok_or_else(|| {
+            CoreError::NotFound(format!(
+                "Annotation {annotation_id} not found on finding {finding_id}"
+            ))
+        })?;
+
+        conn.execute(
+            "UPDATE visual_annotation SET properties_json = ?1 WHERE id = ?2 AND finding_id = ?3;",
+            rusqlite::params![json, annotation_id, finding_id],
+        )
+        .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        Ok(VisualAnnotation {
+            id: annotation_id.to_string(),
+            finding_id: finding_id.to_string(),
+            data: data.clone(),
+            created_at,
+        })
+    }
+
+    fn delete_annotation(&self, finding_id: &str, annotation_id: &str) -> Result<(), CoreError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        let rows_affected = conn
+            .execute(
+                "DELETE FROM visual_annotation WHERE id = ?1 AND finding_id = ?2;",
+                rusqlite::params![annotation_id, finding_id],
+            )
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        if rows_affected == 0 {
+            return Err(CoreError::NotFound(format!(
+                "Annotation {annotation_id} not found on finding {finding_id}"
+            )));
+        }
+
+        // The survivors are NOT renumbered, and that is the difference from `delete_marker`.
+        //
+        // A Marker's ordinal is what the Reviewer reads in the Markdown, so a gap in it is a defect.
+        // An annotation's `position` is only z-order, and z-order is an ordering, not a sequence:
+        // renumbering would rewrite every remaining row to change nothing anyone can see.
+        Ok(())
+    }
+
+    fn reorder_annotations(
+        &self,
+        finding_id: &str,
+        ordered_annotation_ids: &[&str],
+    ) -> Result<(), CoreError> {
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        let tx = conn
+            .transaction()
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        let existing: Vec<String> = {
+            let mut stmt = tx
+                .prepare(
+                    "SELECT id FROM visual_annotation WHERE finding_id = ?1 ORDER BY position ASC;",
+                )
+                .map_err(|e| CoreError::Validation(e.to_string()))?;
+            let rows = stmt
+                .query_map(rusqlite::params![finding_id], |row| row.get(0))
+                .map_err(|e| CoreError::Validation(e.to_string()))?;
+            let mut ids = Vec::new();
+            for row in rows {
+                ids.push(row.map_err(|e| CoreError::Validation(e.to_string()))?);
+            }
+            ids
+        };
+
+        // The whole set or nothing. A partial order would leave the annotations it omitted at
+        // positions the caller never reasoned about, and the result would be an order nobody chose.
+        if existing.len() != ordered_annotation_ids.len() {
+            return Err(CoreError::Validation(format!(
+                "Reorder count mismatch: finding has {} annotations, provided {}",
+                existing.len(),
+                ordered_annotation_ids.len()
+            )));
+        }
+        for id in ordered_annotation_ids {
+            if !existing.iter().any(|known| known == id) {
+                return Err(CoreError::Validation(format!(
+                    "Annotation {id} does not belong to finding {finding_id}"
+                )));
+            }
+        }
+
+        // `position` carries no UNIQUE constraint, so this needs no shift-out-of-the-way pass the
+        // way `reorder_markers` does. It is still one transaction: a half-applied z-order is an
+        // order nobody chose either.
+        for (index, annotation_id) in ordered_annotation_ids.iter().enumerate() {
+            tx.execute(
+                "UPDATE visual_annotation SET position = ?1 WHERE id = ?2 AND finding_id = ?3;",
+                rusqlite::params![(index + 1) as i64, annotation_id, finding_id],
+            )
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+        }
+
+        tx.commit()
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        Ok(())
+    }
+}
+
+/// Refuses a shape the burner would draw somewhere nobody can see.
+///
+/// Every coordinate in `AnnotationShape` is normalized to the image, the same convention
+/// `Marker::validate_coordinates` enforces - and it is enforced here for the same reason: the burner
+/// multiplies by the image's real dimensions, so an out-of-range value does not fail, it draws
+/// off-canvas and is silently lost. A redaction box that lands off-canvas leaves the password on the
+/// image.
+///
+/// Extent is checked as a fraction rather than as a second point: a zero-width box is a mis-click,
+/// not a drawing, and a width that runs past the edge is clipped by the burner rather than refused -
+/// dragging a box off the edge of the image is a normal thing to do.
+fn validate_shape(shape: &AnnotationShape) -> Result<(), CoreError> {
+    fn point(name: &str, x: f64, y: f64) -> Result<(), CoreError> {
+        if !(0.0..=1.0).contains(&x) || x.is_nan() {
+            return Err(CoreError::Validation(format!(
+                "{name} x must be in [0.0, 1.0], got {x}"
+            )));
+        }
+        if !(0.0..=1.0).contains(&y) || y.is_nan() {
+            return Err(CoreError::Validation(format!(
+                "{name} y must be in [0.0, 1.0], got {y}"
+            )));
+        }
+        Ok(())
+    }
+
+    fn extent(name: &str, width: f64, height: f64) -> Result<(), CoreError> {
+        // NaN first: `width <= 0.0` is FALSE for NaN, so the order here is what catches it.
+        if width.is_nan() || height.is_nan() || width <= 0.0 || height <= 0.0 {
+            return Err(CoreError::Validation(format!(
+                "{name} must have a positive width and height, got {width} x {height}"
+            )));
+        }
+        Ok(())
+    }
+
+    match shape {
+        AnnotationShape::Rect {
+            x,
+            y,
+            width,
+            height,
+            ..
+        } => {
+            point("Rect", *x, *y)?;
+            extent("Rect", *width, *height)
+        }
+        AnnotationShape::Blur {
+            x,
+            y,
+            width,
+            height,
+            ..
+        } => {
+            point("Blur", *x, *y)?;
+            extent("Blur", *width, *height)
+        }
+        AnnotationShape::Text {
+            x,
+            y,
+            width,
+            height,
+            ..
+        } => {
+            point("Text", *x, *y)?;
+            extent("Text", *width, *height)
+        }
+        AnnotationShape::Arrow {
+            start_x,
+            start_y,
+            end_x,
+            end_y,
+            ..
+        } => {
+            point("Arrow start", *start_x, *start_y)?;
+            point("Arrow end", *end_x, *end_y)
+        }
+        AnnotationShape::Callout {
+            x,
+            y,
+            width,
+            height,
+            tail_x,
+            tail_y,
+            ..
+        } => {
+            point("Callout", *x, *y)?;
+            extent("Callout", *width, *height)?;
+            point("Callout tail", *tail_x, *tail_y)
+        }
+    }
+}
+
+/// Every visual annotation on one Finding, in z-order.
+///
+/// Shared by both read paths on purpose. They already carried two copies of the note query and two
+/// of the marker query, and the `visual_annotations: vec![]` this replaces was written twice too -
+/// which is exactly how `get_finding` and `list_findings` came to disagree about what a Finding is.
+fn read_annotations(
+    conn: &Connection,
+    finding_id: &str,
+) -> Result<Vec<VisualAnnotation>, CoreError> {
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT id, finding_id, properties_json, created_at
+            FROM visual_annotation
+            WHERE finding_id = ?1
+            ORDER BY position ASC;
+            "#,
+        )
+        .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+    let rows = stmt
+        .query_map(rusqlite::params![finding_id], |row| {
+            let id: String = row.get(0)?;
+            let owner: String = row.get(1)?;
+            let data: String = row.get(2)?;
+            let created_at: String = row.get(3)?;
+            Ok((id, owner, data, created_at))
+        })
+        .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+    let mut annotations = Vec::new();
+    for row in rows {
+        let (id, owner, data, created_at) =
+            row.map_err(|e| CoreError::Validation(e.to_string()))?;
+        // A row whose JSON will not parse is a corrupt row, and it is reported rather than skipped.
+        // Silently dropping it would show the Reviewer an image missing the redaction box they drew
+        // over a password - which is the one failure in `CAP-11` that cannot be taken back.
+        let shape: AnnotationShape = serde_json::from_str(&data).map_err(|e| {
+            CoreError::Validation(format!(
+                "Annotation {id} on Finding {owner} could not be read: {e}"
+            ))
+        })?;
+        annotations.push(VisualAnnotation {
+            id,
+            finding_id: owner,
+            data: shape,
+            created_at,
+        });
+    }
+
+    Ok(annotations)
 }
 
 fn renumber_markers_transaction(tx: &Transaction, finding_id: &str) -> Result<(), CoreError> {

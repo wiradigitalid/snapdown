@@ -32,5 +32,16 @@ tiny_http = "0.12"
 ureq = "2.9"
 base64 = "0.22"
 winreg = "0.52"
+# Already in the lockfile - Slint depends on it for text - so this declares something already being
+# built rather than adding a dependency. Windows only, which is the only platform this app targets.
+clipboard-win = "5.4"
 xcap = "0.9.8"
-image = { version = "0.25.10", default-features = false, features = ["png"] }
+# `bmp` alongside `png`: the Windows clipboard takes a DIB, and a BMP is a DIB with a 14-byte
+# header on it. `FR-36` copies the BURNED image, so it has to be encoded twice - PNG for the file,
+# BMP for the clipboard.
+image = { version = "0.25.10", default-features = false, features = ["png", "bmp"] }
+# Text inside a Callout or a Text annotation, burned into the image (`FR-32`).
+#
+# Already in the lockfile - Slint depends on it - so this is a direct declaration of something
+# already being built, not a new dependency. Pure Rust, no C toolchain, which `AD-` rules out.
+ab_glyph = "0.2"

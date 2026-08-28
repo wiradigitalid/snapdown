@@ -13,7 +13,7 @@ fn migrations_apply_to_an_empty_database() {
     let db_path = tmp.path().to_path_buf();
 
     let store = SqliteSettingsStore::open(&db_path).unwrap();
-    assert_eq!(store.get_schema_version().unwrap(), 7);
+    assert_eq!(store.get_schema_version().unwrap(), 8);
     assert!(store.is_empty().unwrap());
 }
 
@@ -24,7 +24,7 @@ fn migrations_are_idempotent() {
 
     {
         let store = SqliteSettingsStore::open(&db_path).unwrap();
-        assert_eq!(store.get_schema_version().unwrap(), 7);
+        assert_eq!(store.get_schema_version().unwrap(), 8);
 
         let clock = SystemClock::new();
         let setting = Setting::new(
@@ -38,7 +38,7 @@ fn migrations_are_idempotent() {
     // Reopen existing database
     {
         let store2 = SqliteSettingsStore::open(&db_path).unwrap();
-        assert_eq!(store2.get_schema_version().unwrap(), 7);
+        assert_eq!(store2.get_schema_version().unwrap(), 8);
 
         let s = store2.get(&SettingKey::VaultPath).unwrap();
         assert!(s.is_some());

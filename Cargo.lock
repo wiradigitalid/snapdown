@@ -5561,6 +5561,7 @@ name = "snapdown-desktop"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "clipboard-win",
  "embed-resource",
  "global-hotkey",
  "i-slint-backend-winit",
@@ -5582,6 +5583,7 @@ dependencies = [
 name = "snapdown-store"
 version = "0.1.0"
 dependencies = [
+ "ab_glyph",
  "chrono",
  "image",
  "rand 0.8.7",

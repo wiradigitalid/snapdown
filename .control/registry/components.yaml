@@ -17,8 +17,11 @@ product_components:
     title: Finding
     why: One observation — a captured region, the Note about it, the Markers on it — held as one
       object from the hotkey press until it is deleted.
-    caps: [CAP-1, CAP-2, CAP-3, CAP-5]
-    owns: [Finding, Note, Marker]
+    caps: [CAP-1, CAP-2, CAP-3, CAP-5, CAP-10, CAP-11]
+    # `VisualAnnotation` added 2026-08-28 with migration 8. `owns` is the write authorisation, so a
+    # component storing an entity it does not list here is writing outside its own boundary - which
+    # is what this field exists to make visible.
+    owns: [Finding, Note, Marker, VisualAnnotation]
     containers: [desktop-app]
     # Raised catalog-of-record depth on 2026-08-23: guarded -> deep. The code already runs, so what
     # G4 produces here is an AS-BUILT RECORD under sdd-guide.md's evidence labels, not a design.
