@@ -53,6 +53,7 @@ fn through_reducer(img: &RgbaImage) -> Vec<u8> {
     let resolved = ResolvedPair {
         max_long_edge: img.width().max(img.height()),
         encoder_quality: 90,
+        resize_percent: 100,
     };
     ImageReducer::reduce_image(&source, dims, &resolved, false)
         .expect("reduction must succeed")
@@ -181,4 +182,138 @@ fn the_encoder_does_not_pay_four_times_the_time_for_three_percent() {
          1254x1254 import, for 3% fewer bytes. If that trade is being revisited, re-measure in a \
          RELEASE build - the debug figures are 15x higher and led this decision astray once already"
     );
+}
+
+/// A quantised capture is dramatically smaller and visually identical. `BUG-63`, `FR-4`.
+///
+/// The owner's ask, in their words: *"bagaimana kualitas gambar sama (kasat mata), tapi secara
+/// storage dia makin kecil"*. This is the assertion that the answer is real rather than plausible -
+/// it DECODES both outputs and compares them pixel by pixel, per `AGENTS.md`: *"an image test that
+/// asserts a signature and a dimension is a test that a fake header passes"*.
+#[test]
+fn quality_below_lossless_is_far_smaller_and_visually_identical() {
+    let img = antialiased_like(640, 400);
+
+    let lossless = encode_at(&img, 100);
+    let high = encode_at(&img, 92);
+
+    assert!(
+        high.len() * 100 / lossless.len() < 60,
+        "quality 92 must be well under 60% of lossless. Measured 26% on the development fixture; \
+         got {}% here ({} vs {} bytes)",
+        high.len() * 100 / lossless.len(),
+        high.len(),
+        lossless.len()
+    );
+
+    // VISUALLY IDENTICAL, decoded and compared. 92 keeps 7 bits per channel, so the worst a channel
+    // can move is one step of two - which is below the threshold anyone can see on a screenshot.
+    let decoded = image::load_from_memory(&high)
+        .expect("the quantised output must be a real, decodable PNG")
+        .to_rgba8();
+    assert_eq!(decoded.dimensions(), img.dimensions());
+
+    let mut worst = 0i32;
+    for (before, after) in img.pixels().zip(decoded.pixels()) {
+        for channel in 0..3 {
+            worst = worst.max((i32::from(before[channel]) - i32::from(after[channel])).abs());
+        }
+        assert_eq!(after[3], 255, "an opaque capture must stay opaque");
+    }
+    assert!(
+        worst <= 2,
+        "no channel may move by more than one quantisation step at quality 92; worst was {worst}"
+    );
+}
+
+/// Lossless means lossless.
+#[test]
+fn quality_100_changes_no_pixel_at_all() {
+    let img = antialiased_like(320, 200);
+    let decoded = image::load_from_memory(&encode_at(&img, 100))
+        .expect("decodable")
+        .to_rgba8();
+    for (before, after) in img.pixels().zip(decoded.pixels()) {
+        assert_eq!(
+            before.0, after.0,
+            "quality 100 must not touch a single channel"
+        );
+    }
+}
+
+/// Re-encoding does not lose a second time.
+///
+/// The burn re-encodes a Finding that was already quantised at capture. If quantisation were not
+/// idempotent, every Bundle would degrade the image again - and a Finding bundled three times would
+/// be visibly worse than one bundled once.
+#[test]
+fn quantising_twice_changes_nothing() {
+    let img = antialiased_like(200, 120);
+    let once = image::load_from_memory(&encode_at(&img, 82))
+        .expect("decodable")
+        .to_rgba8();
+    let twice = image::load_from_memory(&encode_at(&once, 82))
+        .expect("decodable")
+        .to_rgba8();
+    for (a, b) in once.pixels().zip(twice.pixels()) {
+        assert_eq!(
+            a.0, b.0,
+            "a second pass at the same quality must be a no-op"
+        );
+    }
+}
+
+/// A capture with too many colours falls through to RGB rather than failing.
+#[test]
+fn an_image_that_does_not_fit_a_palette_still_encodes() {
+    // A full-range gradient in two dimensions: far more than 256 distinct colours after quantisation.
+    let mut img = RgbaImage::new(300, 300);
+    for (x, y, px) in img.enumerate_pixels_mut() {
+        *px = Rgba([(x % 256) as u8, (y % 256) as u8, ((x + y) % 256) as u8, 255]);
+    }
+    let bytes = encode_at(&img, 82);
+    let decoded = image::load_from_memory(&bytes)
+        .expect("the fallback path must still produce a decodable PNG")
+        .to_rgba8();
+    assert_eq!(decoded.dimensions(), img.dimensions());
+}
+
+/// Antialiased strokes over a gradient - where a real capture's colour count comes from.
+///
+/// The flat-band `screenshot_like` fixture has five colours, which no amount of quantisation improves
+/// and which PNG already compresses almost perfectly. It is the wrong fixture for this question.
+fn antialiased_like(width: u32, height: u32) -> RgbaImage {
+    let mut img = RgbaImage::new(width, height);
+    for (x, y, px) in img.enumerate_pixels_mut() {
+        let g = (230 + (y * 25 / height.max(1))).min(255) as u8;
+        let mut c = [g, g, 252];
+        let phase = x % 7;
+        if (y / 18) % 3 != 2 && y % 18 > 3 && y % 18 < 14 {
+            if phase == 0 {
+                c = [24, 24, 28];
+            } else if phase == 1 || phase == 6 {
+                let blend = 90 + ((x * 13 + y * 7) % 90) as u8;
+                c = [blend, blend, blend.saturating_add(6)];
+            }
+        }
+        *px = Rgba([c[0], c[1], c[2], 255]);
+    }
+    img
+}
+
+fn encode_at(img: &RgbaImage, quality: u8) -> Vec<u8> {
+    let resolved = ResolvedPair {
+        max_long_edge: 4096,
+        encoder_quality: quality,
+        resize_percent: 100,
+    };
+    let dims = ImageDimensions::new(img.width(), img.height()).unwrap();
+    ImageReducer::reduce_image(
+        &as_png_rgb(img, CompressionType::Fast, FilterType::Adaptive),
+        dims,
+        &resolved,
+        false,
+    )
+    .expect("reduce must succeed")
+    .bytes
 }

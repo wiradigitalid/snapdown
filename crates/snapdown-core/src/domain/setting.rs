@@ -112,14 +112,17 @@ impl NamedBudget {
             Self::Sharp => Some(ResolvedPair {
                 max_long_edge: PRESET_SHARP_LONG_EDGE,
                 encoder_quality: PRESET_SHARP_QUALITY,
+                resize_percent: 100,
             }),
             Self::Balanced => Some(ResolvedPair {
                 max_long_edge: PRESET_BALANCED_LONG_EDGE,
                 encoder_quality: PRESET_BALANCED_QUALITY,
+                resize_percent: 100,
             }),
             Self::Small => Some(ResolvedPair {
                 max_long_edge: PRESET_SMALL_LONG_EDGE,
                 encoder_quality: PRESET_SMALL_QUALITY,
+                resize_percent: 100,
             }),
             Self::Auto | Self::Custom => None,
         }
@@ -137,14 +140,45 @@ impl NamedBudget {
     }
 }
 
+/// Below a quarter, a capture is a thumbnail rather than a reduced screenshot, and the text in it is
+/// gone. The floor is a promise about legibility, not a technical limit.
+pub const MIN_RESIZE_PERCENT: u8 = 25;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResolvedPair {
     pub max_long_edge: u32,
     pub encoder_quality: u8,
+    /// Scale every capture to this percentage of its own size, before the cap applies.
+    ///
+    /// A RATIO, and the cap above is a CAP - they are different tools and the product now has both,
+    /// which is what the owner asked for. The distinction, written down because it was argued once
+    /// already and the argument is what decides which number to reach for:
+    ///
+    ///   the CAP   bounds the worst case. A 4K capture is brought down; a 300px tooltip is left
+    ///             alone, because it is already cheap.
+    ///   the RATIO always shrinks. 80% takes a fifth off everything, tooltip included.
+    ///
+    /// For an agent audience the cap is the better default - reading cost tracks pixel AREA (`OQ-2`),
+    /// so bounding the worst case is what bounds the bill. The ratio is for the Reviewer who wants
+    /// everything a little smaller regardless, and 100 means it does nothing.
+    #[serde(default = "default_resize_percent")]
+    pub resize_percent: u8,
+}
+
+fn default_resize_percent() -> u8 {
+    100
 }
 
 impl ResolvedPair {
     pub fn new(max_long_edge: u32, encoder_quality: u8) -> Result<Self, CoreError> {
+        Self::with_resize(max_long_edge, encoder_quality, 100)
+    }
+
+    pub fn with_resize(
+        max_long_edge: u32,
+        encoder_quality: u8,
+        resize_percent: u8,
+    ) -> Result<Self, CoreError> {
         if !(MIN_LONG_EDGE_PX..=MAX_LONG_EDGE_PX).contains(&max_long_edge) {
             return Err(CoreError::Validation(format!(
                 "max_long_edge must be between {MIN_LONG_EDGE_PX} and {MAX_LONG_EDGE_PX}, got {max_long_edge}"
@@ -155,9 +189,15 @@ impl ResolvedPair {
                 "encoder_quality must be between {MIN_ENCODER_QUALITY} and {MAX_ENCODER_QUALITY}, got {encoder_quality}"
             )));
         }
+        if !(MIN_RESIZE_PERCENT..=100).contains(&resize_percent) {
+            return Err(CoreError::Validation(format!(
+                "resize_percent must be between {MIN_RESIZE_PERCENT} and 100, got {resize_percent}"
+            )));
+        }
         Ok(Self {
             max_long_edge,
             encoder_quality,
+            resize_percent,
         })
     }
 }
@@ -167,16 +207,19 @@ pub fn derive_auto_budget(region_long_edge: u32) -> ResolvedPair {
         ResolvedPair {
             max_long_edge: 1280,
             encoder_quality: 92,
+            resize_percent: 100,
         }
     } else if region_long_edge <= 1920 {
         ResolvedPair {
             max_long_edge: 1600,
             encoder_quality: 82,
+            resize_percent: 100,
         }
     } else {
         ResolvedPair {
             max_long_edge: 1600,
             encoder_quality: 70,
+            resize_percent: 100,
         }
     }
 }
@@ -222,6 +265,7 @@ impl From<QualityBudgetRaw> for QualityBudget {
                 let pair = ResolvedPair {
                     max_long_edge: edge,
                     encoder_quality: qual,
+                    resize_percent: 100,
                 };
                 return Self {
                     named: NamedBudget::Custom,
@@ -269,6 +313,7 @@ impl QualityBudget {
             NamedBudget::Custom => self.custom_pair.unwrap_or(ResolvedPair {
                 max_long_edge: DEFAULT_MAX_LONG_EDGE_PX,
                 encoder_quality: DEFAULT_ENCODER_QUALITY,
+                resize_percent: 100,
             }),
             NamedBudget::Auto => derive_auto_budget(region_long_edge),
         }
@@ -374,6 +419,7 @@ mod tests {
             ResolvedPair {
                 max_long_edge: 2560,
                 encoder_quality: 90,
+                resize_percent: 100,
             }
         );
 
@@ -383,6 +429,7 @@ mod tests {
             ResolvedPair {
                 max_long_edge: 1600,
                 encoder_quality: 75,
+                resize_percent: 100,
             }
         );
 
@@ -392,6 +439,7 @@ mod tests {
             ResolvedPair {
                 max_long_edge: 1280,
                 encoder_quality: 50,
+                resize_percent: 100,
             }
         );
     }

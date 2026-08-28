@@ -43,8 +43,27 @@ impl ImageDimensions {
     }
 
     /// Computes downscaled dimensions according to a ResolvedPair.
+    /// The RATIO first, then the CAP.
+    ///
+    /// In that order because they mean different things and the order is what keeps both honest. The
+    /// ratio says "everything a fifth smaller"; the cap says "nothing larger than this". Applying the
+    /// cap first and then the ratio would take a fifth off the CAP rather than off the capture, so a
+    /// 4K screen and a 2K screen would come out the same size and the ratio would silently stop being
+    /// a ratio.
+    ///
+    /// A ratio of 100 changes nothing, which is the default, so the cap-only behaviour every existing
+    /// Finding was reduced under is unchanged.
     pub fn compute_reduced_dimensions_for_pair(&self, pair: &ResolvedPair) -> Self {
-        self.compute_reduced_dimensions_with_edge(pair.max_long_edge)
+        let scaled = if pair.resize_percent >= 100 {
+            self.clone()
+        } else {
+            let scale = f64::from(pair.resize_percent) / 100.0;
+            Self {
+                width: ((f64::from(self.width) * scale).round().max(1.0)) as u32,
+                height: ((f64::from(self.height) * scale).round().max(1.0)) as u32,
+            }
+        };
+        scaled.compute_reduced_dimensions_with_edge(pair.max_long_edge)
     }
 
     /// Computes downscaled dimensions according to a QualityBudget.

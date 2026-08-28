@@ -31,6 +31,6 @@ global-hotkey = "0.8.0"
 
 [target.'cfg(windows)'.dependencies]
 i-slint-backend-winit = "1.17.1"
-windows = { version = "0.62.2", features = ["Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Threading", "Win32_Security"] }
+windows = { version = "0.62.2", features = ["Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Controls", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Graphics_Dwm", "Win32_System_Threading", "Win32_Security"] }
 clipboard-win = { workspace = true }
 winreg = { workspace = true }

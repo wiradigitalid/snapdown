@@ -85,10 +85,6 @@ const KNOWN_STUBS: &[(&str, &str)] = &[
         "bundles-drawer-clicked",
         "the drawer is always open; nothing toggles it",
     ),
-    (
-        "settings-clicked",
-        "the Settings surface has no Slint implementation (DEC-007's recorded cost)",
-    ),
 ];
 
 fn snake(name: &str) -> String {

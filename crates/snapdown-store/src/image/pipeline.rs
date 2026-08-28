@@ -32,21 +32,180 @@ pub struct ReducedImageResult {
 ///
 /// Note the first measurement was taken in a DEBUG build and read 596 ms for what is 18 ms in
 /// release. `AGENTS.md` records that trap about this repository; it caught this decision too.
-pub(crate) fn encode_png(image: &RgbaImage, width: u32, height: u32) -> Result<Vec<u8>, CoreError> {
+/// How many bits per channel a quality number keeps.
+///
+/// The ladder, and the measurements it was chosen from - a 1280x800 screenshot-like fixture with
+/// antialiased glyph shoulders and a gradient, which is where a real capture's colour count actually
+/// comes from:
+///
+/// ```text
+///   lossless          32117 bytes  100%
+///   7 bits/channel    23562 bytes   73%   max channel error 1
+///   6 bits/channel    22967 bytes   71%   max channel error 2
+///   5 bits/channel    22482 bytes   70%   max channel error 6
+///   4 bits/channel    21774 bytes   67%   max channel error 14
+/// ```
+///
+/// Note where it flattens: quantising harder than 6 bits buys almost nothing in RGB, because PNG's
+/// own entropy coding is already doing the work. The real win is what quantisation UNLOCKS - see
+/// `encode_png`.
+fn bits_for_quality(quality: u8) -> u32 {
+    match quality {
+        90..=u8::MAX => 7,
+        70..=89 => 6,
+        40..=69 => 5,
+        _ => 4,
+    }
+}
+
+/// Rounds every colour channel to `keep` bits.
+///
+/// ROUNDS, never truncates. Truncating darkens every mid-grey by up to half a step, which over a
+/// whole screenshot reads as the image having been dimmed.
+///
+/// Idempotent: quantising an already-quantised value returns it unchanged, so re-encoding a Finding -
+/// which the burn does - loses nothing a second time. `quantising_twice_changes_nothing` asserts it.
+fn quantise(image: &RgbaImage, keep: u32) -> RgbaImage {
+    let step = 1u16 << (8 - keep);
+    let ceiling = ((1u16 << keep) - 1) * step;
+    let mut out = image.clone();
+    for pixel in out.pixels_mut() {
+        for channel in 0..3 {
+            let value = u16::from(pixel[channel]);
+            pixel[channel] = (((value + step / 2) / step) * step).min(ceiling).min(255) as u8;
+        }
+    }
+    out
+}
+
+/// Encodes a PNG, applying the Quality Budget's `encoder_quality`.
+///
+/// **`encoder_quality` finally does something.** It was stored and read by nothing for the life of
+/// the product (`BUG-63`), because the obvious reading of it - a JPEG-style quality dial - does not
+/// exist in PNG: PNG is lossless and has no such knob. The corpus had designed a two-lever budget
+/// and shipped one lever.
+///
+/// What it does instead is the answer to the question the owner actually asked - *"bagaimana kualitas
+/// gambar sama (kasat mata), tapi secara storage dia makin kecil"*:
+///
+///   1. round every channel to N bits, N from the quality number
+///   2. if the result is opaque and fits in 256 colours, write an INDEXED PNG - one byte per pixel
+///      plus a palette, instead of three bytes per pixel
+///   3. otherwise write RGB or RGBA as before
+///
+/// Step 2 is where the size goes. On the same fixture the ladder above was measured on:
+///
+/// ```text
+///   lossless           32117 bytes  100%
+///   indexed @7 bits     8403 bytes   26%   60 colours   max channel error 1
+///   indexed @6 bits     7756 bytes   24%   52 colours   max channel error 2
+/// ```
+///
+/// A 74% reduction for a per-channel error of one. That works because a UI screenshot is flat colour
+/// and text, and this product exists to capture UI screenshots - so the common case is the one that
+/// benefits. A capture with real photographic content will exceed 256 colours, fall through to step
+/// 3, and still come out around 27% smaller.
+///
+/// `quality: 100` means lossless, and skips all of it. Nothing is thrown away that the Reviewer did
+/// not ask to have thrown away.
+pub(crate) fn encode_png(
+    image: &RgbaImage,
+    width: u32,
+    height: u32,
+    quality: u8,
+) -> Result<Vec<u8>, CoreError> {
+    let fully_opaque = image.pixels().all(|p| p[3] == 255);
+
+    if quality >= 100 {
+        return encode_png_lossless(image, width, height, fully_opaque);
+    }
+
+    let reduced = quantise(image, bits_for_quality(quality));
+
+    if fully_opaque {
+        if let Some(bytes) = encode_png_indexed(&reduced, width, height)? {
+            return Ok(bytes);
+        }
+    }
+    encode_png_lossless(&reduced, width, height, fully_opaque)
+}
+
+/// An indexed PNG, or `None` when the image needs more than 256 colours.
+///
+/// `None` rather than an error: too many colours is not a failure, it is a capture that happens to
+/// carry photographic content, and the caller has a perfectly good path for it.
+fn encode_png_indexed(
+    image: &RgbaImage,
+    width: u32,
+    height: u32,
+) -> Result<Option<Vec<u8>>, CoreError> {
+    let mut palette: Vec<[u8; 3]> = Vec::with_capacity(256);
+    let mut lookup: std::collections::HashMap<[u8; 3], u8> = std::collections::HashMap::new();
+    let mut indices = Vec::with_capacity((width as usize) * (height as usize));
+
+    for pixel in image.pixels() {
+        let colour = [pixel[0], pixel[1], pixel[2]];
+        match lookup.get(&colour) {
+            Some(index) => indices.push(*index),
+            None => {
+                if palette.len() == 256 {
+                    return Ok(None);
+                }
+                let index = palette.len() as u8;
+                palette.push(colour);
+                lookup.insert(colour, index);
+                indices.push(index);
+            }
+        }
+    }
+
+    let mut plte = Vec::with_capacity(palette.len() * 3);
+    for colour in &palette {
+        plte.extend_from_slice(colour);
+    }
+
+    let mut out = Vec::new();
+    let mut encoder = png::Encoder::new(&mut out, width, height);
+    encoder.set_color(png::ColorType::Indexed);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder.set_palette(plte);
+    encoder.set_compression(png::Compression::Default);
+    // NoFilter, and measured: on indexed data every filter makes the output LARGER, because a
+    // palette index has no numeric relationship to its neighbour - subtracting one from the next is
+    // noise, not a delta.
+    encoder.set_filter(png::FilterType::NoFilter);
+    let mut writer = encoder
+        .write_header()
+        .map_err(|e| CoreError::Validation(format!("Failed to write indexed PNG header: {e}")))?;
+    writer
+        .write_image_data(&indices)
+        .map_err(|e| CoreError::Validation(format!("Failed to write indexed PNG data: {e}")))?;
+    drop(writer);
+
+    Ok(Some(out))
+}
+
+/// The original encoder, unchanged in behaviour and now one branch of three.
+///
+/// `CompressionType::Default` with `FilterType::Adaptive`, and Rgb8 when nothing is transparent.
+/// `PngEncoder::new` uses `CompressionType::Fast`, which measured 20-70% larger on this product's own
+/// captures; `Best` was rejected because it cost far more time than it saved bytes.
+fn encode_png_lossless(
+    image: &RgbaImage,
+    width: u32,
+    height: u32,
+    fully_opaque: bool,
+) -> Result<Vec<u8>, CoreError> {
     let mut out = Vec::new();
     let encoder =
         PngEncoder::new_with_quality(&mut out, CompressionType::Default, FilterType::Adaptive);
 
-    // A capture is always opaque, so this is the normal path rather than an optimisation for an
-    // unusual case. An imported PNG that really has transparency keeps it.
-    let opaque = image.pixels().all(|px| px.0[3] == u8::MAX);
-    if opaque {
-        let mut rgb = Vec::with_capacity((width as usize) * (height as usize) * 3);
-        for px in image.pixels() {
-            rgb.extend_from_slice(&px.0[..3]);
-        }
+    if fully_opaque {
+        // Three bytes a pixel instead of four. A screenshot has nothing to be transparent about, and
+        // the alpha plane is a quarter of the data for a channel that is 255 everywhere.
+        let rgb = image::DynamicImage::ImageRgba8(image.clone()).to_rgb8();
         encoder
-            .write_image(&rgb, width, height, ExtendedColorType::Rgb8)
+            .write_image(rgb.as_raw(), width, height, ExtendedColorType::Rgb8)
             .map_err(|e| CoreError::Validation(format!("Failed to encode PNG: {e}")))?;
     } else {
         encoder
@@ -73,8 +232,13 @@ impl ImageReducer {
 
         let target_dims = original_dims.compute_reduced_dimensions_for_pair(resolved);
 
-        // Downscale if image exceeds max long edge, otherwise retain without upscaling (BR-40, BR-41)
-        let target_image = if original_dims.long_edge() > resolved.max_long_edge {
+        // Resize when the target differs from the original, which now happens for TWO reasons: the
+        // long-edge cap, and the resize ratio. It used to test the cap alone, so a ratio of 80% would
+        // have computed smaller dimensions and then handed back the full-size pixels under them -
+        // a Finding whose stored width and actual width disagreed.
+        let target_image = if target_dims.width != original_dims.width
+            || target_dims.height != original_dims.height
+        {
             image::imageops::resize(
                 &decoded_rgba,
                 target_dims.width,
@@ -85,7 +249,12 @@ impl ImageReducer {
             decoded_rgba
         };
 
-        let out_bytes = encode_png(&target_image, target_dims.width, target_dims.height)?;
+        let out_bytes = encode_png(
+            &target_image,
+            target_dims.width,
+            target_dims.height,
+            resolved.encoder_quality,
+        )?;
 
         let (thumb_bytes, thumb_dims) = if generate_thumbnail {
             let t_dims = target_dims.compute_thumbnail_dimensions(320);
@@ -95,7 +264,14 @@ impl ImageReducer {
                 t_dims.height,
                 image::imageops::FilterType::Lanczos3,
             );
-            let t_bytes = encode_png(&thumb_img, t_dims.width, t_dims.height)?;
+            // The same quality as the full image. A thumbnail is the most palette-friendly
+            // thing this product produces, so it benefits from the indexed path most of all.
+            let t_bytes = encode_png(
+                &thumb_img,
+                t_dims.width,
+                t_dims.height,
+                resolved.encoder_quality,
+            )?;
             (Some(t_bytes), Some(t_dims))
         } else {
             (None, None)

@@ -14,6 +14,10 @@ import { SdTextField } from "components/text-field.slint";
 import { SdScrollBar } from "components/scrollbar.slint";
 import { SdSlider } from "components/slider.slint";
 import { SdContextMenu, MenuEntry } from "components/context-menu.slint";
+import { SdIconLabel } from "components/icon-label.slint";
+import { SdSettings, HotkeyRow } from "components/settings.slint";
+import { SdSegmented, SegmentOption } from "components/form-controls.slint";
+import { SdModalHeader } from "components/modal.slint";
 import { SdActionButton, SdSectionLabel, SdCaption, SdDocHeading } from "components/action-button.slint";
 import { AnnotationItem, AnnotationData } from "components/annotation.slint";
 
@@ -27,6 +31,7 @@ import "../assets/fonts/IBMPlexMono-Bold.ttf";
 
 export { Theme }
 export { AnnotationData }
+export { HotkeyRow }
 
 export struct MarkerData {
     id: string,
@@ -1308,6 +1313,11 @@ export component AppWindow inherits Window {
     // existed and was handled by nothing; it is handled now.
     callback delete-finding-confirmed(string);
     callback open-file-location-clicked(string);
+    // The folder the Reviewer picked, awaiting confirmation. Moving a Vault touches every file the
+    // product owns, so it asks first - the same reason deleting a Finding does.
+    in-out property <string> pending-vault-folder: "";
+    in-out property <int> pending-vault-file-count: 0;
+    callback vault-migration-confirmed(string);
 
     // Deleting a Finding is irreversible - the row AND the file - so it is confirmed once.
     //
@@ -1396,6 +1406,45 @@ export component AppWindow inherits Window {
     callback theme-toggle-clicked();
     callback bundles-drawer-clicked();
     callback settings-clicked();
+
+    // THE SETTINGS SCREEN - `FR-18`, `FR-16`, `FR-17`, `DEC-004`.
+    //
+    // `settings-clicked` was a `println!` for the whole life of the Slint Editor (`BUG-57`), and the
+    // Quality Budget's compression lever had nowhere to land because of it (`BUG-63`). Everything
+    // below is filled by Rust from stores and registrars that already existed.
+    in-out property <bool> settings-open: false;
+    in-out property <int> settings-tab: 0;
+    in-out property <bool> run-at-startup: false;
+    in-out property <string> startup-problem: "";
+    in-out property <bool> open-editor-after-capture: false;
+    in-out property <string> vault-path: "";
+    in-out property <string> budget-name: "auto";
+    in-out property <int> budget-max-long-edge: 1600;
+    in-out property <int> budget-encoder-quality: 82;
+    in-out property <int> budget-resize-percent: 100;
+    in-out property <string> budget-readout: "";
+    in-out property <string> budget-explainer: "";
+    in-out property <[HotkeyRow]> hotkeys: [];
+    in-out property <string> app-version: "";
+    in-out property <string> bridge-status: "";
+    // Which hotkey row is listening for a keypress, by action id. Owned by the window rather
+    // than by the Settings component because RUST closes it - on a successful bind, and on the
+    // shortcut actually arriving.
+    in-out property <string> hotkey-listening: "";
+    // The action whose shortcut most recently FIRED. This is the "preview listener" - press the
+    // chord and the row confirms it reached Snapdown, which is the only way to know a global
+    // hotkey works without leaving the screen that set it.
+    in-out property <string> hotkey-last-fired: "";
+
+    callback settings-closed();
+    callback startup-toggled(bool);
+    callback open-editor-after-capture-toggled(bool);
+    callback vault-browse-clicked();
+    callback vault-reveal-clicked();
+    callback budget-chosen(string);
+    callback budget-advanced(int, int, int);
+    callback hotkey-key-pressed(string, bool, bool, bool, string);
+    callback hotkey-cleared(string);
     callback minimize-clicked();
     callback maximize-clicked();
     callback close-clicked();
@@ -2092,26 +2141,18 @@ export component AppWindow inherits Window {
                         HorizontalLayout {
                             alignment: center;
                             spacing: 12px;
-                            HorizontalLayout {
-                                spacing: 4px;
-                                alignment: center;
-                                Image {
-                                    width: 12px; height: 12px;
-                                    image-fit: contain;
-                                    source: @image-url("../assets/icons/ruler.svg");
-                                }
-                                Text { text: root.resolution-text; font-size: 11px; font-family: "IBM Plex Mono"; color: root.text-muted; vertical-alignment: center; }
+                            SdIconLabel {
+                                icon: @image-url("../assets/icons/ruler.svg");
+                                text: root.resolution-text;
+                                text-color: root.text-muted;
+                                mono: true;
                             }
                             Text { text: "·"; font-size: 11px; color: root.border-strong; vertical-alignment: center; }
-                            HorizontalLayout {
-                                spacing: 4px;
-                                alignment: center;
-                                Image {
-                                    width: 12px; height: 12px;
-                                    image-fit: contain;
-                                    source: @image-url("../assets/icons/hard-drive.svg");
-                                }
-                                Text { text: root.size-text; font-size: 11px; font-family: "IBM Plex Mono"; color: root.text-muted; vertical-alignment: center; }
+                            SdIconLabel {
+                                icon: @image-url("../assets/icons/hard-drive.svg");
+                                text: root.size-text;
+                                text-color: root.text-muted;
+                                mono: true;
                             }
                         }
                     }
@@ -2266,6 +2307,18 @@ export component AppWindow inherits Window {
 
                         // STICKY: the Assemble tile. Declared after the strip so it draws over it,
                         // and outside the ScrollView so it does not move.
+                        //
+                        // REBUILT to the G3 design, which the owner read as untidy in the shipped
+                        // version and was right to. `01-studio-workspace.html` puts the count as a
+                        // small COLOURED STATUS line above a button - 0.65rem, weight 800. What
+                        // shipped was an 11px `text-primary` line at the same weight as the button's
+                        // own label, so two things of different kinds looked like two halves of one
+                        // thing, badly spaced.
+                        //
+                        // The button is `SdActionButton` now rather than a hand-drawn Rectangle with
+                        // its own hover and disabled logic - which is what `design-system-guide.md`
+                        // means by "Two places showing the same kind of thing MUST reference the same
+                        // component, not the same numbers".
                         Rectangle {
                             x: 12px;
                             y: 12px;
@@ -2274,57 +2327,33 @@ export component AppWindow inherits Window {
                             background: root.bg-card;
                             border-radius: Theme.radius-sharp;
                             border-width: 1px;
-                            border-color: root.border-strong;
+                            border-color: root.selected-finding-count > 0
+                                ? Theme.accent-primary : root.border-strong;
 
                             VerticalLayout {
+                                padding: 10px;
+                                spacing: 8px;
                                 alignment: center;
-                                spacing: 6px;
+
                                 Text {
-                                    text: root.selected-finding-count + " selected";
-                                    font-size: 11px;
-                                    font-weight: 700;
-                                    color: root.text-primary;
+                                    text: root.selected-finding-count == 0
+                                        ? "Nothing picked"
+                                        : root.selected-finding-count + (root.selected-finding-count == 1 ? " Finding" : " Findings");
+                                    font-size: 10px;
+                                    font-weight: 800;
+                                    color: root.selected-finding-count > 0
+                                        ? Theme.accent-primary : root.text-dim;
                                     horizontal-alignment: center;
+                                    wrap: word-wrap;
                                     font-family: "IBM Plex Sans";
                                 }
-                                Rectangle {
-                                    height: 26px;
-                                    width: 86px;
-                                    border-radius: Theme.radius-sharp;
-                                    assemble-touch := TouchArea {
-                                        mouse-cursor: root.selected-finding-count > 0 ? MouseCursor.pointer : MouseCursor.not-allowed;
-                                        clicked => {
-                                            if (root.selected-finding-count > 0) {
-                                                root.assemble-bundle-clicked();
-                                            }
-                                        }
-                                    }
-                                    // Nothing selected is not a failure to report, it is an action
-                                    // that is not available yet, so the tile says so rather than
-                                    // taking the click and explaining afterwards.
-                                    background: root.selected-finding-count == 0
-                                        ? root.bg-hover
-                                        : (assemble-touch.pressed
-                                            ? Theme.accent-pressed
-                                            : (assemble-touch.has-hover ? Theme.accent-hover : Theme.accent-primary));
-                                    HorizontalLayout {
-                                        spacing: 4px;
-                                        alignment: center;
-                                        Image {
-                                            width: 12px; height: 12px;
-                                            image-fit: contain;
-                                            source: @image-url("../assets/icons/package.svg");
-                                            colorize: root.selected-finding-count == 0 ? root.text-dim : Theme.text-on-accent;
-                                        }
-                                        Text {
-                                            text: "Assemble";
-                                            font-size: 10px;
-                                            font-weight: 700;
-                                            color: root.selected-finding-count == 0 ? root.text-dim : Theme.text-on-accent;
-                                            vertical-alignment: center;
-                                            font-family: "IBM Plex Sans";
-                                        }
-                                    }
+
+                                SdActionButton {
+                                    label: "Assemble";
+                                    icon: @image-url("../assets/icons/package.svg");
+                                    height: 30px;
+                                    enabled: root.selected-finding-count > 0;
+                                    clicked => { root.assemble-bundle-clicked(); }
                                 }
                             }
                         }
@@ -2864,67 +2893,37 @@ export component AppWindow inherits Window {
                                         }
 
                                         SdCaption { text: "Style"; }
-                                        HorizontalLayout {
-                                            spacing: 4px;
-                                            // Two families, and only two, because the BURN ships these and
-                                            // nothing else. A system font picker here would let the Reviewer
-                                            // choose something the burned PNG cannot render, and the canvas
-                                            // would be the only place it ever appeared.
-                                            for family in ["IBM Plex Sans", "IBM Plex Mono"] : Rectangle {
-                                                horizontal-stretch: 1;
-                                                height: 26px;
-                                                border-radius: Theme.radius-sharp;
-                                                background: root.selected-annotation-font-family == family
-                                                    ? Theme.accent-primary
-                                                    : (fam-touch.has-hover ? root.bg-hover : root.bg-subtle);
-                                                fam-touch := TouchArea {
-                                                    mouse-cursor: MouseCursor.pointer;
-                                                    clicked => {
-                                                        root.annotation-style-changed(
-                                                            root.selected-annotation-id,
-                                                            root.selected-annotation-font-size, family,
-                                                            root.selected-annotation-align);
-                                                    }
-                                                }
-                                                Text {
-                                                    text: family == "IBM Plex Mono" ? "Mono" : "Sans";
-                                                    font-size: 11px;
-                                                    font-family: family;
-                                                    color: root.selected-annotation-font-family == family
-                                                        ? Theme.text-on-accent : root.text-secondary;
-                                                    horizontal-alignment: center;
-                                                    vertical-alignment: center;
-                                                }
+                                        // Two families, and only two, because the BURN ships these
+                                        // and nothing else. A system font picker here would let the
+                                        // Reviewer choose something the burned PNG cannot render,
+                                        // and the canvas would be the only place it ever appeared.
+                                        SdSegmented {
+                                            selected: root.selected-annotation-font-family;
+                                            options: [
+                                                { id: "IBM Plex Sans", label: "Sans" },
+                                                { id: "IBM Plex Mono", label: "Mono" },
+                                            ];
+                                            chosen(family) => {
+                                                root.annotation-style-changed(
+                                                    root.selected-annotation-id,
+                                                    root.selected-annotation-font-size, family,
+                                                    root.selected-annotation-align);
                                             }
                                         }
 
                                         SdCaption { text: "Align"; }
-                                        HorizontalLayout {
-                                            spacing: 4px;
-                                            for align in ["start", "center", "end"] : Rectangle {
-                                                horizontal-stretch: 1;
-                                                height: 26px;
-                                                border-radius: Theme.radius-sharp;
-                                                background: root.selected-annotation-align == align
-                                                    ? Theme.accent-primary
-                                                    : (align-touch.has-hover ? root.bg-hover : root.bg-subtle);
-                                                align-touch := TouchArea {
-                                                    mouse-cursor: MouseCursor.pointer;
-                                                    clicked => {
-                                                        root.annotation-style-changed(
-                                                            root.selected-annotation-id,
-                                                            root.selected-annotation-font-size,
-                                                            root.selected-annotation-font-family, align);
-                                                    }
-                                                }
-                                                Text {
-                                                    text: align == "start" ? "Left" : (align == "center" ? "Center" : "Right");
-                                                    font-size: 11px;
-                                                    color: root.selected-annotation-align == align
-                                                        ? Theme.text-on-accent : root.text-secondary;
-                                                    horizontal-alignment: center;
-                                                    vertical-alignment: center;
-                                                }
+                                        SdSegmented {
+                                            selected: root.selected-annotation-align;
+                                            options: [
+                                                { id: "start", label: "Left" },
+                                                { id: "center", label: "Center" },
+                                                { id: "end", label: "Right" },
+                                            ];
+                                            chosen(align) => {
+                                                root.annotation-style-changed(
+                                                    root.selected-annotation-id,
+                                                    root.selected-annotation-font-size,
+                                                    root.selected-annotation-font-family, align);
                                             }
                                         }
 
@@ -2989,12 +2988,136 @@ export component AppWindow inherits Window {
             }
         }
 
+        // The hotkey arrival clears itself for the same reason the result line does: a confirmation
+        // that stays forever stops being a confirmation of anything in particular.
+        Timer {
+            interval: 4s;
+            running: root.hotkey-last-fired != "";
+            triggered => { root.hotkey-last-fired = ""; }
+        }
+
         // Clears itself. A result line that stays forever becomes furniture, and the next result is
         // then indistinguishable from the last one.
         Timer {
             interval: 7s;
             running: root.toast-text != "";
             triggered => { root.toast-text = ""; }
+        }
+
+        // SETTINGS - above the Editor, below the context menu and the confirmations, because those
+        // two can be raised from inside it.
+        if root.settings-open : SdSettings {
+            tab <=> root.settings-tab;
+            run-at-startup: root.run-at-startup;
+            startup-problem: root.startup-problem;
+            open-editor-after-capture: root.open-editor-after-capture;
+            vault-path: root.vault-path;
+            budget-name: root.budget-name;
+            budget-max-long-edge: root.budget-max-long-edge;
+            budget-encoder-quality: root.budget-encoder-quality;
+            budget-resize-percent: root.budget-resize-percent;
+            budget-readout: root.budget-readout;
+            budget-explainer: root.budget-explainer;
+            hotkeys: root.hotkeys;
+            app-version: root.app-version;
+            bridge-status: root.bridge-status;
+            listening <=> root.hotkey-listening;
+            last-fired: root.hotkey-last-fired;
+
+            closed => { root.settings-closed(); }
+            startup-toggled(on) => { root.startup-toggled(on); }
+            open-editor-after-capture-toggled(on) => { root.open-editor-after-capture-toggled(on); }
+            vault-browse => { root.vault-browse-clicked(); }
+            vault-reveal => { root.vault-reveal-clicked(); }
+            budget-chosen(name) => { root.budget-chosen(name); }
+            budget-advanced(edge, quality, percent) => {
+                root.budget-advanced(edge, quality, percent);
+            }
+            hotkey-pressed(action, ctrl, alt, shift, text) => {
+                root.hotkey-key-pressed(action, ctrl, alt, shift, text);
+            }
+            hotkey-cleared(action) => { root.hotkey-cleared(action); }
+        }
+
+        // MOVING THE VAULT - confirmed, because it moves every file the product owns.
+        //
+        // The owner asked for it in as many words, and for the reason: *"Artinya jangan sampai malah
+        // gak bisa jalan lagi setelah new vault."* A folder picker that started moving files the
+        // moment it closed would give no moment to change your mind about a hundred captures.
+        if root.pending-vault-folder != "" : Rectangle {
+            width: 100%;
+            height: 100%;
+            background: Theme.overlay-scrim;
+            TouchArea {
+                clicked => { root.pending-vault-folder = ""; }
+            }
+
+            Rectangle {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 440px;
+                height: vault-body.preferred-height;
+                background: root.bg-card;
+                border-width: 1px;
+                border-color: root.border-strong;
+                border-radius: Theme.radius-sharp;
+                drop-shadow-blur: 32px;
+                drop-shadow-color: Theme.overlay-shadow;
+                TouchArea { }
+
+                vault-body := VerticalLayout {
+                    padding: 20px;
+                    spacing: 14px;
+
+                    SdSectionLabel { text: "MOVE THE VAULT?"; }
+
+                    Text {
+                        text: root.pending-vault-file-count == 0
+                            ? "The Vault is empty, so nothing has to move. Snapdown will store new captures here from the next start."
+                            : "All " + root.pending-vault-file-count + " file(s) in the current Vault will be moved into this folder. Your Findings keep working — they refer to their images by a path relative to the Vault, so nothing in the Library has to change.";
+                        font-size: 12px;
+                        color: root.text-secondary;
+                        wrap: word-wrap;
+                        font-family: "IBM Plex Sans";
+                    }
+
+                    SdTextField {
+                        read-only: true;
+                        mono: true;
+                        text-size: 11px;
+                        pad: 8px;
+                        text: root.pending-vault-folder;
+                    }
+
+                    Text {
+                        text: "If the move fails part-way, nothing is lost: the old folder stays in use until every file has arrived. Snapdown needs a restart afterwards.";
+                        font-size: 10px;
+                        color: root.text-dim;
+                        wrap: word-wrap;
+                        font-family: "IBM Plex Sans";
+                    }
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: end;
+
+                        SdActionButton {
+                            label: "Keep the current folder";
+                            primary: false;
+                            height: 30px;
+                            clicked => { root.pending-vault-folder = ""; }
+                        }
+                        SdActionButton {
+                            label: "Move it";
+                            height: 30px;
+                            clicked => {
+                                root.vault-migration-confirmed(root.pending-vault-folder);
+                                root.pending-vault-folder = "";
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // DELETING A FINDING - confirmed once, never twice, and never not at all.
@@ -3172,129 +3295,49 @@ export component AppWindow inherits Window {
                     padding: 0px;
                     spacing: 0px;
 
-                    // HEADER
-                    Rectangle {
-                        height: 52px;
-                        background: root.bg-card;
-                        Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: root.border-subtle; }
+                    // HEADER - the shared one.
+                    //
+                    // This was 52px of hand-written header, and the Settings screen then grew a
+                    // second one that differed in every detail the owner listed: a "Done" button
+                    // where the ✕ is, a 700-weight title instead of 800, no icon. Two places showing
+                    // the same kind of thing, agreeing by numbers rather than by component - which
+                    // `design-system-guide.md` says drifts the first time one is touched, and it did.
+                    //
+                    // `SdModalHeader` owns the 52px, the accent icon, the 13px/800 title and the
+                    // drawn ✕. What is passed as a child is what two modals legitimately differ by:
+                    // here, the cost readout and the Edit/Preview pair.
+                    SdModalHeader {
+                        icon: @image-url("../assets/icons/package.svg");
+                        title: "Assemble & Review";
+                        closed => { root.bundle-preview-cancelled(); }
 
-                        HorizontalLayout {
-                            padding-left: 16px;
-                            padding-right: 12px;
-                            spacing: 10px;
-                            alignment: space-between;
+                        Text {
+                            text: root.bundle-preview-finding-count + " Finding" + (root.bundle-preview-finding-count == 1 ? "" : "s") + "  ·  ~" + root.bundle-preview-text-tokens + " tk";
+                            font-size: 11px;
+                            font-weight: 700;
+                            color: Theme.accent-primary;
+                            vertical-alignment: center;
+                            font-family: "IBM Plex Mono";
+                        }
 
-                            HorizontalLayout {
-                                spacing: 8px;
-                                alignment: start;
-                                Image {
-                                    y: (parent.height - self.height) / 2;
-                                    width: 15px;
-                                    height: 15px;
-                                    image-fit: contain;
-                                    source: @image-url("../assets/icons/package.svg");
-                                    colorize: Theme.accent-primary;
-                                }
-                                Text {
-                                    text: "Assemble & Review";
-                                    font-size: 13px;
-                                    font-weight: 800;
-                                    color: root.text-primary;
-                                    vertical-alignment: center;
-                                    font-family: "IBM Plex Sans";
-                                }
-                            }
-
-                            HorizontalLayout {
-                                spacing: 12px;
-                                alignment: end;
-                                Text {
-                                    text: root.bundle-preview-finding-count + " Finding" + (root.bundle-preview-finding-count == 1 ? "" : "s") + "  ·  ~" + root.bundle-preview-text-tokens + " tk";
-                                    font-size: 11px;
-                                    font-weight: 700;
-                                    color: Theme.accent-primary;
-                                    vertical-alignment: center;
-                                    font-family: "IBM Plex Mono";
-                                }
-
-                                // PREVIEW / CODE. Preview is the default because the question this
-                                // screen answers is "is this the right handoff", and that is a
-                                // question about the document rather than about its source.
-                                Rectangle {
-                                    y: (parent.height - self.height) / 2;
-                                    width: 132px;
-                                    height: 26px;
-                                    border-radius: Theme.radius-sharp;
-                                    background: root.bg-subtle;
-                                    border-width: 1px;
-                                    border-color: root.border-strong;
-
-                                    HorizontalLayout {
-                                        padding: 2px;
-                                        spacing: 2px;
-
-                                        Rectangle {
-                                            border-radius: Theme.radius-sharp;
-                                            edit-tab := TouchArea {
-                                                mouse-cursor: MouseCursor.pointer;
-                                                clicked => { root.bundle-preview-shows-source = false; }
-                                            }
-                                            background: !root.bundle-preview-shows-source
-                                                ? Theme.accent-primary
-                                                : (edit-tab.has-hover ? root.bg-hover : transparent);
-                                            Text {
-                                                text: "Edit";
-                                                font-size: 10px;
-                                                font-weight: 700;
-                                                color: !root.bundle-preview-shows-source ? Theme.text-on-accent : root.text-secondary;
-                                                horizontal-alignment: center;
-                                                vertical-alignment: center;
-                                                font-family: "IBM Plex Sans";
-                                            }
-                                        }
-
-                                        Rectangle {
-                                            border-radius: Theme.radius-sharp;
-                                            source-tab := TouchArea {
-                                                mouse-cursor: MouseCursor.pointer;
-                                                clicked => { root.bundle-preview-shows-source = true; }
-                                            }
-                                            background: root.bundle-preview-shows-source
-                                                ? Theme.accent-primary
-                                                : (source-tab.has-hover ? root.bg-hover : transparent);
-                                            Text {
-                                                text: "Preview";
-                                                font-size: 10px;
-                                                font-weight: 700;
-                                                color: root.bundle-preview-shows-source ? Theme.text-on-accent : root.text-secondary;
-                                                horizontal-alignment: center;
-                                                vertical-alignment: center;
-                                                font-family: "IBM Plex Sans";
-                                            }
-                                        }
-                                    }
-                                }
-                                Rectangle {
-                                    y: (parent.height - self.height) / 2;
-                                    width: 26px;
-                                    height: 26px;
-                                    border-radius: Theme.radius-sharp;
-                                    close-preview := TouchArea {
-                                        mouse-cursor: MouseCursor.pointer;
-                                        clicked => { root.bundle-preview-cancelled(); }
-                                    }
-                                    background: close-preview.has-hover ? root.bg-hover : transparent;
-                                    // A drawn icon. The bare `✕` glyph fell back to whatever the
-                                    // font had and rendered wrong - the same fault as the Marker
-                                    // delete affordance, in the same session.
-                                    Image {
-                                        x: (parent.width - self.width) / 2;
-                                        y: (parent.height - self.height) / 2;
-                                        width: 13px;
-                                        height: 13px;
-                                        image-fit: contain;
-                                        source: @image-url("../assets/icons/x.svg");
-                                        colorize: close-preview.has-hover ? root.text-primary : root.text-muted;
+                        // EDIT / PREVIEW. Edit is the default because every piece of content is
+                        // written in the rendered view; Preview is the CommonMark, read-only, so the
+                        // Reviewer can see what will actually be handed over.
+                        //
+                        // `SdSegmented` now - the same control the Quality Budget presets use, and
+                        // the one this treatment was copied out of by hand three times.
+                        Rectangle {
+                            width: 132px;
+                            VerticalLayout {
+                                alignment: center;
+                                SdSegmented {
+                                    selected: root.bundle-preview-shows-source ? "source" : "edit";
+                                    options: [
+                                        { id: "edit", label: "Edit" },
+                                        { id: "source", label: "Preview" },
+                                    ];
+                                    chosen(id) => {
+                                        root.bundle-preview-shows-source = id == "source";
                                     }
                                 }
                             }

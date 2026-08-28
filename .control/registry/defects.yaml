@@ -3817,43 +3817,45 @@ defects:
       Eighth instance of this repository's signature shape, and the first one where the missing join
       is a NUMBER rather than a call.
     fix: |
-      NOT DONE. It needs a decision, and the decision is the owner's because it changes a dependency.
+      DONE, 2026-08-28, and the answer is not the one the row assumed.
 
-        (a) Real lossy WebP. What the corpus specifies, and the right answer for both content types -
-            it handles flat UI and photographs well. Needs the `webp` crate over `libwebp-sys`, which
-            is a C dependency built with `cc`. New build surface on CI and on every machine here.
-        (b) JPEG, which `image` can already encode with a quality parameter and no new dependency.
-            REJECTED unless the owner wants it: it is 2x WORSE than PNG on the product's main content
-            and puts ringing around text, which is the thing a Reviewer is pointing at.
-        (c) Pick the format per image - PNG for flat content, lossy for photographic. Correct in
-            principle and the detection is real work; also two formats in the Vault.
-        (d) Keep PNG and retire the quality half of the budget from the corpus: `FR-5`/`FR-6` become
-            a long-edge budget only, and the three presets differ by resolution alone. Cheapest, and
-            honest, but it withdraws a promise rather than meeting it.
+      The row assumed a format change - WebP lossy, or JPEG. Neither was needed. What `encoder_quality`
+      means now is a two-step reduction that keeps PNG:
 
-      `root_cause` is `architecture` rather than `code` because no amount of code fixes it: the
-      format is the decision. It stays open until a `DEC-` says which of the four holds.
-    surface: |
-      The Settings screen this is changed from is already DESIGNED and not built.
-      `.how/settings/01-ux/assets/06a-settings-general.html` lays out "MULTIMODAL QUALITY BUDGET"
-      with Auto / Sharp / Balanced / Small, a live readout ("Latest capture: 184 KB · 1408 px ·
-      Auto"), and a collapsed "Advanced Compression Settings (Dimensions & Quality)". So whatever is
-      decided here has a place to be set from - it is on `BUG-61`'s list as `/settings`.
+        1. round every colour channel to N bits, N from the quality number
+        2. if the result is opaque and fits in 256 colours, write an INDEXED PNG - one byte per pixel
+           plus a palette, instead of three bytes per pixel
 
-      Worth separating two ideas that sound alike, because the owner raised the second and the
-      product implements the first:
+      Measured on a 1280x800 fixture with antialiased glyph shoulders and a gradient, which is where a
+      real capture's colour count comes from:
 
-        a CAP  - `max_long_edge`, what the budget uses today. Bounds the worst case and leaves a
-                 small image alone. A 1254x1254 import under a 1600 cap is untouched, which is why
-                 it came back the same size
-        a RATIO - "reduce to 80%". Always shrinks, including images that were already cheap
+        lossless           32117 bytes  100%
+        7 bits, RGB        23562 bytes   73%   max channel error 1
+        7 bits, INDEXED     8403 bytes   26%   max channel error 1
+        6 bits, INDEXED     7756 bytes   24%   max channel error 2
 
-      For an agent audience the cost tracks pixel AREA (`OQ-2`), so a cap is the right primitive: it
-      bounds what a handoff can cost. The presets may still be too generous, but that is a number,
-      not an algorithm. What is actually missing is the second half of the pair - the quality lever
-      this row is about.
-    related: BUG-62
-    status: open
+      A 74% reduction for a per-channel error of one. It works because a UI screenshot is flat colour
+      and text, and this product exists to capture UI screenshots - so the common case is the one that
+      benefits. A capture carrying photographic content exceeds 256 colours, falls through to step 2's
+      `else`, and still comes out around 27% smaller.
+
+      Quality 100 stays lossless and skips all of it.
+
+      Three things worth recording beyond the fix:
+
+      - **Quantisation is idempotent**, which is why the burn can re-encode a Finding without
+        degrading it a second time. `quantising_twice_changes_nothing` asserts it, because a Bundle
+        composed three times would otherwise be visibly worse than one composed once.
+      - **The burn uses the FINDING's quality**, not a fresh choice. Encoding the handoff lossless
+        while the Finding was quantised would make the copy larger than the original.
+      - **An existing test caught the change honestly.**
+        `a_reduced_image_decodes_and_its_pixels_are_the_scaled_source` compares pixel-for-pixel
+        against a Lanczos3 resize, and went red at +/-1. That is the encoder now being lossy, exactly
+        as designed. The test is pinned to quality 100 rather than loosened: its subject is the
+        reducer's arithmetic, and the perceptual claims live in `test_png_encoding.rs` where they can
+        fail for their own reasons.
+    decision: DEC-010
+    status: fixed
 
   - id: BUG-64
     title: A Marker with no note line was never burned onto the Bundle's image, which is the opposite of what SCN-04 requires
@@ -4139,10 +4141,23 @@ defects:
       different pass. The design-system guide covers colour, type scale and spacing; it says nothing
       about how an icon and a label sit next to each other, which is why three answers coexist.
     fix: |
-      NOT DONE. The right shape is a component - an icon-and-label pair with one alignment - rather
-      than a third correction in place. `.constitution/project/design-system-guide.md` gains the rule
-      when it exists.
-    status: open
+      DONE, 2026-08-28, and the diagnosis in `evidence` was right about the shape and wrong about the
+      cause.
+
+      It is not that the alignments disagree. It is that a Slint layout places a child with a FIXED
+      size at the start of the cross axis - the top, in a horizontal row - while a `Text` stretches to
+      the row's full height and centres its glyphs inside itself. So a 12px icon beside an 11px label
+      sits a couple of pixels high every time, and `alignment: center` on the row cannot fix it:
+      that property is the row's HORIZONTAL alignment.
+
+      `components/icon-label.slint` gives the icon a full-height box of its own and centres it in
+      that. The inspector's tab bar had already worked this out by hand; the readout strip and the
+      Assemble tile had not. One component now, so a fourth pairing cannot arrive with a fourth
+      answer.
+
+      Recorded twice by the owner before it was fixed, which is the honest note here: it was written
+      down as `NOT DONE` and then not picked up.
+    status: fixed
 
   - id: BUG-71
     title: The frameless window has no shadow, so it merges into whatever is behind it
@@ -4168,11 +4183,17 @@ defects:
       `FR-26` promises a frameless window and says nothing about what replaces the frame. Nothing
       else in the corpus does either.
     fix: |
-      NOT DONE, and it needs a Win32 decision rather than a Slint one: a shadow OUTSIDE the window's
-      own bounds needs the compositor (`DwmExtendFrameIntoClientArea`, or a window style with
-      `CS_DROPSHADOW`). Drawing it inside the Slint root would eat client area and clip at the edge.
-      Costed here so the next reader does not start by trying the easy version.
-    status: open
+      DONE, 2026-08-28, and the costing in this row was right: it needed the compositor, not a drawn
+      rectangle. `DwmExtendFrameIntoClientArea` with a one-pixel margin, plus `DWMNCRP_ENABLED` -
+      without the policy DWM has no frame to draw a shadow around on a frameless window, and the
+      extend call is a no-op.
+
+      Applied after `show()`, because the native window does not exist until then and there is no
+      handle to give a shadow to.
+
+      Failure is logged and ignored. A window with no shadow is a cosmetic loss, and there is no
+      version of this worth refusing to start over.
+    status: fixed
 
   - id: BUG-72
     title: CAP-11 has a domain type and a burner and no way to store or place an annotation
@@ -4663,4 +4684,285 @@ defects:
       only that a delete take the selection. It is the convention every file manager uses, and
       without it a right-click on an unselected card would silently take eight others.
     decision: none - no `AD-` was contradicted.
+    status: fixed
+
+  - id: BUG-79
+    title: The Settings screen did not exist, so four promised preferences and one licence obligation
+      had nowhere to live
+    found: "2026-08-28"
+    found_by: the owner, asking for it by name after `CAP-11` closed
+    component: settings
+    severity: high
+    contradicts: [FR-16, FR-17, FR-18, NFR-16]
+    root_cause: code
+    evidence: |
+      `on_settings_clicked` was `println!("Open Settings clicked")` for the whole life of the Slint
+      Editor - one of the three stubs in `BUG-57`, and recorded there as `DEC-007`'s accepted cost.
+
+      What sat behind it, all built, all unreachable:
+
+        `DesktopStartupRegistrar`   is_enabled/enable/disable, plus `reconcile_startup_on_boot`
+        `DesktopHotkeyRegistrar`    validate_and_rebind, clear, get_bindings, get_startup_failures
+        `QualityBudget`             the whole domain type, presets and resolution
+        `SettingKey::VaultPath`     read at startup and never writable
+        `OpenEditorAfterCapture`    read for the first time in `BUG-73`; no UI
+        `NTL-1`                     Slint's attribution obligation, recorded as owed and unpaid
+
+      The design has been in `.how/settings/01-ux/assets/06a-settings-general.html` and
+      `06b-settings-hotkeys.html` since G3, four tabs and all.
+
+      This is the repository's signature failure one surface up from `BUG-72`: not a component
+      mounted nowhere, but a whole SCREEN missing over machinery that was finished.
+    impact: |
+      `FR-16` (Vault folder), `FR-17` (hotkeys) and `FR-18` (run at startup) were unreachable. The
+      Reviewer could not change a hotkey, see where their captures were going, or turn off autostart.
+      `BUG-63`'s compression lever had no home, which is why it stayed open through four rounds of
+      Editor work.
+
+      And `NTL-1` is a licence term, not a nicety: Slint's Royalty-free licence requires the
+      acknowledgement in the product.
+    why_undetected: |
+      It WAS detected, twice, and left: `BUG-57` recorded the stub and `NTL-1` recorded the
+      attribution. Neither was acted on because neither was blocking anything the owner was testing -
+      which is the failure mode of a register that is read for status rather than for work.
+    fix: |
+      DONE, 2026-08-28. `components/settings.slint`, four tabs, following the G3 design.
+
+        General & Quality  run at startup (with the registry read failure reported rather than shown
+                           as `false`, which would be a toggle that lies); open-Editor-after-capture
+                           with `BG-6`'s reason next to it; the Vault path, read-only, with Explorer;
+                           the four Quality Budget presets with a live readout; and the advanced pair
+                           behind a disclosure, exactly as designed
+        Hotkeys            both actions, click-then-press, Escape to cancel, with the OS registration
+                           state and `BR-27`'s conflict message shown per row
+        Local Agent Bridge states plainly that it is blocked by `BUG-59` rather than showing a panel
+                           that cannot work
+        About             version, MIT, and `NTL-1`'s Slint attribution plus IBM Plex's OFL
+
+      Two honest refusals on the screen itself:
+
+        - **Encoder quality is shown and disabled**, with `BUG-63`'s reason written next to it. Hiding
+          it would make the Quality Budget look like it has one lever when the corpus designed two,
+          and a Reviewer would never learn why their Small captures are the same size as their Sharp
+          ones.
+        - **Changing the Vault folder says it is not built.** Moving the Vault is not a settings
+          write: the captures in it have to move too or every Finding breaks, and that code exists
+          only in the archived Tauri build. A folder picker that changed the setting and left the
+          files would silently break the whole Library.
+
+      Setting either advanced number by hand makes the budget `Custom`, because `Auto` resolves a
+      different pair per capture and the two cannot both be true.
+
+      `settings-clicked` is out of `KNOWN_STUBS` - the guard demanded it, by name.
+    decision: none - `DEC-007` recorded the missing screen as a cost of moving to Slint, and this
+      pays it rather than contradicting it.
+    status: fixed
+
+  - id: BUG-80
+    title: The sixth report of design-system inconsistency, and the first one with a component to fix
+      it rather than an instance
+    found: "2026-08-28"
+    found_by: the owner, on the Settings screen the same day it shipped
+    component: settings
+    severity: medium
+    contradicts: [NFR-16]
+    root_cause: code
+    evidence: |
+      `design-system-guide.md` opens by counting five reports of this in one week and naming what they
+      had in common: *"Every time, the agent fixed the instance and left the cause."* This is the
+      sixth, and the guide's own rule predicted it - *"Two places showing the same kind of thing MUST
+      reference the same component, not the same numbers."*
+
+      Four disagreements, all with a modal that had shipped days earlier:
+
+        header    Assemble & Review: 52px, 15px accent icon, 13px/800 title, drawn ✕.
+                  Settings: 52px, no icon, 15px/700 title, a "Done" BUTTON where the ✕ goes.
+        toggles   pill-shaped switches. The guide: "`radius-sharp` for every control. `radius-pill`
+                  only for a status chip, never a button." The G3 design specifies a 14px checkbox.
+        presets   four cards with wrapping two-line descriptions, so no two were the same height.
+                  The design specifies a segmented control - `.segmented-btn` in the asset.
+        tabs      a left sidebar. The design and the Editor's own inspector both use a horizontal row.
+
+      And a fifth, reported separately in the same message: the sticky Assemble tile put an 11px
+      `text-primary` count at the same weight as the button label under it, so two things of
+      different kinds read as two badly-spaced halves of one. The design has the count as a small
+      coloured STATUS line - 0.65rem, weight 800.
+    impact: |
+      Cosmetic per instance and cumulative in aggregate: this is the sixth report, and each previous
+      fix left the next screen free to drift the same way.
+    why_undetected: |
+      The guide existed and was followed for COLOUR, which is mechanically guarded, and not for
+      structure, which was not. `colour_lives_only_in_theme_slint` is why no colour literal appeared;
+      nothing played the same role for a header, a control shape or a segmented row.
+    fix: |
+      DONE, 2026-08-28, and the fix is components rather than corrections.
+
+        `components/modal.slint`          `SdModalHeader` (icon, title, `@children`, drawn ✕) and
+                                         `SdCard`. Both modals use the header now
+        `components/form-controls.slint`  `SdSegmented` and `SdCheckbox`. The segmented treatment had
+                                         been hand-drawn FOUR times - Edit/Preview, the budget
+                                         presets, the font pair, the alignment triple - and the four
+                                         had drifted in height, radius and label size
+        `components/icon-label.slint`     from `BUG-70`, same session
+
+      The Assemble tile is rebuilt on `SdActionButton` rather than a hand-drawn Rectangle with its own
+      hover and disabled logic.
+
+      `test_design_system.rs` is the part that makes this the last time: it fails when a SECOND copy
+      of a treatment appears, which is the moment drift becomes possible rather than the moment it is
+      noticed. Five guards - one header, one segmented set, the pill rule, the drawn tick, and the
+      designed structure of the Settings screen itself.
+
+      Two of the five guards had to be made comment-blind, because an assertion that a string is
+      ABSENT matches the comment explaining why it was removed. That has now happened twice; the
+      helper is in both files.
+    decision: "none - the guide is `status: Draft` and was followed, not overridden."
+    status: fixed
+
+  - id: BUG-81
+    title: The Vault folder could not be changed, and the migration was believed to be missing
+    found: "2026-08-28"
+    found_by: the owner, asking for the Settings menus to be brought to life
+    component: settings
+    severity: medium
+    contradicts: [FR-16]
+    root_cause: code
+    evidence: |
+      `FR-16` promises the Reviewer can choose where captures are stored. The first Settings build
+      refused it, and the reason recorded on screen was that the migration code *"lives only in the
+      archived Tauri build"*.
+
+      That was wrong, and wrong in a way worth writing down: there is barely any migration to write.
+      `finding.image_path` is a Vault-RELATIVE key, decided when the schema was written and stated in
+      the data model - *"Relative to the Vault root, never absolute. A Vault move must not rewrite
+      rows."* So moving the files IS the migration. The database is not touched at all.
+
+      A decision made at G3 to keep a Vault move cheap had been forgotten, and the feature was
+      refused on the strength of the forgetting.
+    impact: |
+      `FR-16` was unmet, and the reason given for it being unmet was false.
+    why_undetected: |
+      The refusal was written the same day, by the same hand, and it read as researched: it named a
+      real file in the archive. Nobody checked whether the thing that file did was still needed.
+    fix: |
+      DONE, 2026-08-28. `migrate_vault` moves `findings/` and `bundles/`, recursing into a Bundle's
+      own directory so its Markdown's relative links keep resolving. `rename` first - instant within a
+      volume - falling back to copy-then-remove across volumes, and the REMOVE IS CHECKED: `AGENTS.md`
+      records the archived version of this swallowing both `fs::remove_file` results with `let _ =`,
+      which silently doubled the disk the Vault used.
+
+      Order: move everything, THEN write the setting. A failure part-way leaves the old Vault
+      authoritative and the old setting in place, so nothing is lost and nothing is half-pointing.
+
+      One honest limit, stated on screen: it needs a restart. `AppContext` carries the vault path and
+      an open `VaultBlobStore` and is cloned into every callback in `main.rs`; swapping it live means
+      a lock every one of those closures has to take, which is a larger change than the feature for a
+      folder that moves once. Nothing is inconsistent in the meantime - the paths are relative and
+      already resolve against the new root.
+    decision: none.
+    status: fixed
+
+  - id: BUG-82
+    title: The hotkey editor could not say why a combination was refused, and the Vault moved without
+      asking
+    found: "2026-08-28"
+    found_by: the owner, pointing at `wira-desk` as the reference
+    component: settings
+    severity: medium
+    contradicts: [FR-16, FR-17, NFR-16]
+    root_cause: code
+    evidence: |
+      The Settings screen shipped with a hotkey field that had one path: compose a string, hand it to
+      `validate_and_rebind`, show whatever came back. So three very different situations produced the
+      same silence or the same generic refusal:
+
+        holding Ctrl on the way to Ctrl+Shift+S    silently ignored, indistinguishable from broken
+        pressing a bare letter                     silently ignored
+        picking a chord Windows owns               a raw error, after the OS had been asked
+
+      And `on_vault_browse_clicked` started moving files the moment the picker closed. A hundred
+      captures with no moment to change your mind, which is what the owner objected to: *"Artinya
+      jangan sampai malah gak bisa jalan lagi setelah new vault."*
+    impact: |
+      `FR-17` was reachable and unusable - a Reviewer whose chord was refused had nothing to work
+      from. `FR-16` was reachable and frightening.
+    why_undetected: |
+      Both were built the same day and tested by the person who wrote them, who knew which chords
+      would work.
+
+      The deeper reason is worth recording: the product this repository should have been reading is in
+      the same folder. `wira-desk` at `D:/Developer/wiradigital.id/wira-desk` has solved the hotkey
+      problem properly - a seven-case `ShortcutError`, a reserved-chord table naming the OWNER of each
+      combination, canonical strings so two presses of one chord cannot store two strings, and a
+      `KeyCheckVerdict` that separates "registered" from "actually received". None of it was looked at
+      until the owner pointed.
+    fix: |
+      DONE, 2026-08-28. Taken from `wira-desk`, adapted rather than copied:
+
+        `ShortcutRefusal`     three cases with their own sentences, each saying what to do next.
+                              `NoModifier` explains that a bare key would fire while typing;
+                              `UnsupportedKey` names the key; `Reserved` names the OWNER
+        `reserved_chord`      a short table of combinations Windows or a universal editing shortcut
+                              owns, with advice where anything can be done. Deliberately short - a
+                              long list of chords nobody would try is a list nobody maintains
+        canonical strings     modifiers always in one order, key always upper case, so two presses of
+                              one combination cannot store two strings that fail to compare equal
+        `Ok(None)`            a third state: the press is INCOMPLETE, not wrong. Telling the Reviewer
+                              off for holding Ctrl would make the field impossible to use
+        arrival check         the row confirms when the chord ACTUALLY FIRES. Registration only means
+                              Windows accepted it; another application's low-level hook can still
+                              swallow the keystroke, and this is the only proof available without
+                              leaving the screen. `wira-desk`'s `KeyCheckVerdict` makes the same
+                              distinction
+
+      A contested chord with advice is BOUND and warned about rather than refused: Snapdown often wins
+      the race for it, and refusing outright would be the product deciding something it does not know.
+
+      The Vault move now asks first, names the folder and counts the files, and says plainly that the
+      Findings keep working - they refer to their images by a Vault-relative path, so nothing in the
+      Library changes.
+    decision: none.
+    status: fixed
+
+  - id: BUG-83
+    title: Resize had one lever where the owner needed two
+    found: "2026-08-28"
+    found_by: the owner
+    component: finding
+    severity: low
+    contradicts: [FR-4]
+    root_cause: requirement
+    violates: FR-4
+    evidence: |
+      The Quality Budget bounded the LONG EDGE and nothing else. That was argued for, in this
+      session, and the argument was sound as far as it went: for an agent audience reading cost tracks
+      pixel area (`OQ-2`), so a cap is what bounds the bill, and a ratio would shrink captures that
+      were already cheap.
+
+      What the argument missed is that the Reviewer may simply want everything smaller. A cap cannot
+      express that: a capture already under it is left alone by definition. The owner asked for the
+      other tool by name - *"automatic resize, misal ke 80% default, bisa diset sesuai user, bukan
+      hanya soal batas atas"*.
+    impact: |
+      A Reviewer who wanted every capture a fifth smaller had no way to say so.
+    why_undetected: |
+      It is not a defect in the usual sense - `FR-4` promises reduction under a budget and says
+      nothing about which shape the budget takes. Recorded as `requirement` rather than `code` because
+      the gap was in what had been specified, and the specification is what changed.
+    fix: |
+      DONE, 2026-08-28. `ResolvedPair` gains `resize_percent`, defaulting to 100 so nothing already
+      stored is affected, with a floor of 25 - below a quarter a capture is a thumbnail and the text
+      in it is gone.
+
+      **The ratio applies BEFORE the cap**, and the order is load-bearing: applying the cap first and
+      then the ratio would take a fifth off the CAP rather than off the capture, so a 4K screen and a
+      2K screen would come out identical and the ratio would silently stop being a ratio.
+
+      One real defect surfaced while wiring it: the reducer decided whether to resize by testing the
+      CAP alone, so a ratio would have computed smaller dimensions and then stored the full-size
+      pixels under them - a Finding whose recorded width and actual width disagreed. It now tests the
+      computed dimensions against the original.
+
+      `FR-4`'s consequences gain the ratio.
+    decision: none - `FR-4` is amended rather than contradicted.
     status: fixed

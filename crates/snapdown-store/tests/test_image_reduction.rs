@@ -43,7 +43,14 @@ fn a_reduced_image_decodes_and_its_pixels_are_the_scaled_source() {
     let input_bytes = create_test_png(src_w, src_h);
     let orig_dims = ImageDimensions::new(src_w, src_h).unwrap();
 
-    let resolved = ResolvedPair::new(400, 80).unwrap();
+    // QUALITY 100. This test's whole subject is whether the reducer's arithmetic is right - that it
+    // resizes with Lanczos3 and writes back what it computed - and at any lower quality the encoder
+    // deliberately rounds colour, so the comparison below would be measuring the quantiser instead.
+    //
+    // The lossy path has its own tests, in `test_png_encoding.rs`, which assert the size it buys and
+    // the ceiling on what it costs. Splitting them is what keeps this one able to fail for one
+    // reason.
+    let resolved = ResolvedPair::new(400, 100).unwrap();
     let result = ImageReducer::reduce_image(&input_bytes, orig_dims, &resolved, false).unwrap();
 
     // Must decode cleanly as valid PNG
@@ -55,7 +62,8 @@ fn a_reduced_image_decodes_and_its_pixels_are_the_scaled_source() {
     assert_eq!(result.dimensions.width, 400);
     assert_eq!(result.dimensions.height, 300);
 
-    // Verify scaled source pixels match expected Lanczos3 resized pixels
+    // Verify scaled source pixels match expected Lanczos3 resized pixels, EXACTLY - which is what
+    // quality 100 promises and what makes this an arithmetic test rather than a perceptual one.
     let src_image = image::load_from_memory(&input_bytes).unwrap().to_rgba8();
     let expected_resized =
         image::imageops::resize(&src_image, 400, 300, image::imageops::FilterType::Lanczos3);

@@ -1,0 +1,141 @@
+import { Theme } from "../theme.slint";
+
+// One option in a segmented control.
+export struct SegmentOption {
+    id: string,
+    label: string,
+}
+
+// A SEGMENTED CONTROL: one bordered trough, N equal buttons, one of them active.
+//
+// This treatment already existed, drawn by hand, in the Assemble & Review header (Edit / Preview) and
+// again in the Properties tab (Sans / Mono, Left / Center / Right) and again in the Settings budget
+// row. `design-system-guide.md` is explicit about what happens next: *"A new visual treatment MUST
+// become a component there before it is used twice - the second use is what makes drift possible."*
+// It was used four times before this file existed, and the four had drifted.
+//
+// It is also what the G3 design specifies for the Quality Budget - `.segmented-btn` in
+// `06a-settings-general.html` - so this is the designed control, not an invention.
+export component SdSegmented inherits Rectangle {
+    in property <[SegmentOption]> options;
+    in property <string> selected;
+    in property <bool> mono: false;
+    in property <length> label-size: 10px;
+
+    callback chosen(string);
+
+    height: 26px;
+    border-radius: Theme.radius-sharp;
+    background: Theme.bg-subtle;
+    border-width: 1px;
+    border-color: Theme.border-strong;
+
+    HorizontalLayout {
+        padding: 2px;
+        spacing: 2px;
+
+        for option in root.options : Rectangle {
+            border-radius: Theme.radius-sharp;
+            background: root.selected == option.id
+                ? Theme.accent-primary
+                : (segment-touch.has-hover ? Theme.bg-hover : transparent);
+
+            segment-touch := TouchArea {
+                mouse-cursor: MouseCursor.pointer;
+                clicked => { root.chosen(option.id); }
+            }
+
+            Text {
+                text: option.label;
+                font-size: root.label-size;
+                font-weight: 700;
+                color: root.selected == option.id ? Theme.text-on-accent : Theme.text-secondary;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                overflow: elide;
+                font-family: root.mono ? "IBM Plex Mono" : "IBM Plex Sans";
+            }
+        }
+    }
+}
+
+// A CHECKBOX with a label and an optional hint under it.
+//
+// A checkbox, not a switch. The G3 design specifies `<input type="checkbox">` at 14px in the accent
+// colour, and `design-system-guide.md` puts the reason under it: *"Corner radius: `radius-sharp` for
+// every control. `radius-pill` only for a status chip, never a button."* A pill-shaped switch was
+// drawn here first and the owner rejected it on sight - it was the one control in the product with a
+// shape nothing else has.
+export component SdCheckbox inherits HorizontalLayout {
+    in property <bool> checked;
+    in property <string> text;
+    in property <string> hint;
+
+    callback toggled(bool);
+
+    spacing: 8px;
+
+    Rectangle {
+        width: 15px;
+        // A full-height box so the tick can be centred against the FIRST line of a wrapped label -
+        // the same reason `SdIconLabel` exists, and the same trap: a fixed-size child in a layout
+        // is placed at the top of the cross axis.
+        VerticalLayout {
+            alignment: start;
+            Rectangle {
+                width: 15px;
+                height: 15px;
+                border-radius: Theme.radius-sharp;
+                background: root.checked ? Theme.accent-primary : Theme.bg-card;
+                border-width: 1px;
+                border-color: root.checked ? Theme.accent-primary : Theme.border-strong;
+
+                // A drawn tick, not the `✓` glyph. The bare glyph fell back to whatever the font
+                // had and rendered wrong twice in this product - the Marker delete affordance and
+                // the modal close both had to become images for the same reason.
+                if root.checked : Path {
+                    x: 3px;
+                    y: 3px;
+                    width: 9px;
+                    height: 9px;
+                    viewbox-x: 0;
+                    viewbox-y: 0;
+                    viewbox-width: 9;
+                    viewbox-height: 9;
+                    stroke: Theme.text-on-accent;
+                    stroke-width: 1.6px;
+                    commands: "M 0.5 4.5 L 3.3 7.3 L 8.5 1.4";
+                }
+            }
+        }
+    }
+
+    VerticalLayout {
+        horizontal-stretch: 1;
+        spacing: 3px;
+        alignment: start;
+
+        Text {
+            text: root.text;
+            font-size: 13px;
+            color: Theme.text-primary;
+            wrap: word-wrap;
+            font-family: "IBM Plex Sans";
+        }
+
+        if root.hint != "" : Text {
+            text: root.hint;
+            font-size: 10px;
+            color: Theme.text-dim;
+            wrap: word-wrap;
+            font-family: "IBM Plex Sans";
+        }
+    }
+
+    // Declared last so it is above both, and covers the label as well as the box: a 15px target is
+    // not a target, and the label is the part people aim at.
+    TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.toggled(!root.checked); }
+    }
+}

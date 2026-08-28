@@ -16,6 +16,7 @@ chrono = { workspace = true }
 rand = { workspace = true }
 image = { workspace = true }
 ab_glyph = { workspace = true }
+png = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -13,7 +13,7 @@ use image::codecs::png::PngEncoder;
 use image::{ExtendedColorType, ImageEncoder, Rgba, RgbaImage};
 use snapdown_core::domain::finding::{AnnotationShape, VisualAnnotation};
 use snapdown_core::domain::image::ImageDimensions;
-use snapdown_store::image::MarkerBurner;
+use snapdown_store::image::{MarkerBurner, LOSSLESS};
 
 const W: u32 = 400;
 const H: u32 = 300;
@@ -54,7 +54,8 @@ fn ann(id: &str, data: AnnotationShape) -> VisualAnnotation {
 
 fn burn(source: &[u8], annotations: &[VisualAnnotation]) -> RgbaImage {
     let dims = ImageDimensions::new(W, H).unwrap();
-    let bytes = MarkerBurner::burn_all(source, &dims, &[], annotations).expect("burn must succeed");
+    let bytes = MarkerBurner::burn_all(source, &dims, &[], annotations, LOSSLESS)
+        .expect("burn must succeed");
     image::load_from_memory(&bytes)
         .expect("the burned output must be a real, decodable PNG")
         .to_rgba8()
@@ -458,7 +459,7 @@ fn a_later_annotation_covers_an_earlier_one() {
 fn a_finding_with_no_markers_and_no_annotations_is_copied_byte_for_byte() {
     let source = white_png();
     let dims = ImageDimensions::new(W, H).unwrap();
-    let out = MarkerBurner::burn_all(&source, &dims, &[], &[]).unwrap();
+    let out = MarkerBurner::burn_all(&source, &dims, &[], &[], LOSSLESS).unwrap();
     assert_eq!(
         out, source,
         "with nothing to draw the Bundle's copy is the Finding's own bytes"

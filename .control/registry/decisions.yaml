@@ -107,3 +107,17 @@ decisions:
     serves: [CAP-1]
     touches: []
     created: "2026-08-26"
+  - id: DEC-009
+    title: The design system stays hand-authored in two theme columns, and takes one idea from Graphite rather than its palette
+    status: draft
+    file: .control/decisions/DEC-009-design-system-stays-hand-authored.md
+    serves: [CAP-9]
+    touches: []
+    created: "2026-08-27"
+  - id: DEC-010
+    title: "`encoder_quality` means colour precision and a palette, not an encoder dial"
+    status: draft
+    file: .control/decisions/DEC-010-encoder-quality-is-colour-precision.md
+    serves: [CAP-2]
+    touches: []
+    created: "2026-08-28"

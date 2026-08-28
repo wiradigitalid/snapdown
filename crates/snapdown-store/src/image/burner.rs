@@ -7,6 +7,10 @@ use snapdown_core::error::CoreError;
 const COLOR_MARKER_FILL: Rgba<u8> = Rgba([220, 38, 38, 255]); // #dc2626 solid red
 const COLOR_MARKER_TEXT: Rgba<u8> = Rgba([255, 255, 255, 255]); // #ffffff solid white
 
+/// Encode nothing away. Used by `burn_markers`, which has no Finding to read a quality from, and
+/// by every test that asserts on exact bytes.
+pub const LOSSLESS: u8 = 100;
+
 const BADGE_RADIUS: i32 = 14;
 
 /// How hard to blur a region that did not ask for a particular radius.
@@ -88,15 +92,23 @@ impl MarkerBurner {
         dimensions: &ImageDimensions,
         markers: &[Marker],
     ) -> Result<Vec<u8>, CoreError> {
-        Self::burn_all(input_bytes, dimensions, markers, &[])
+        Self::burn_all(input_bytes, dimensions, markers, &[], LOSSLESS)
     }
 
     /// Burns both numbered markers and rich visual annotations (Shapes, Blur, Arrow, Callout, Text) into image bytes.
+    /// `quality` is the Finding's own `encoder_quality`, not a fresh choice.
+    ///
+    /// The burned copy is what actually reaches the agent, so encoding it lossless while the Finding
+    /// itself was quantised would make the HANDOFF larger than the original - the one place in this
+    /// product where bytes matter most, paying for precision that was already thrown away.
+    ///
+    /// Quantisation is idempotent, so re-encoding at the same level costs nothing a second time.
     pub fn burn_all(
         input_bytes: &[u8],
         dimensions: &ImageDimensions,
         markers: &[Marker],
         annotations: &[VisualAnnotation],
+        quality: u8,
     ) -> Result<Vec<u8>, CoreError> {
         let decoded = image::load_from_memory(input_bytes).map_err(|e| {
             CoreError::Validation(format!("Failed to decode image for burning: {e}"))
@@ -276,8 +288,12 @@ impl MarkerBurner {
         // The same encoder the capture path uses. A burned copy is what actually reaches the agent,
         // so it is the one place in the product where bytes matter most - see `encode_png` for the
         // measurements and for why `CompressionType::Best` was rejected.
-        let output_bytes =
-            crate::image::pipeline::encode_png(&image_rgba, dimensions.width, dimensions.height)?;
+        let output_bytes = crate::image::pipeline::encode_png(
+            &image_rgba,
+            dimensions.width,
+            dimensions.height,
+            quality,
+        )?;
 
         Ok(output_bytes)
     }
@@ -866,7 +882,7 @@ mod tests {
             created_at: "2026-08-25T00:00:00Z".into(),
         };
 
-        let burned = MarkerBurner::burn_all(&input, &dims, &[], &[shape, blur]).unwrap();
+        let burned = MarkerBurner::burn_all(&input, &dims, &[], &[shape, blur], LOSSLESS).unwrap();
         let decoded = image::load_from_memory(&burned).unwrap();
         assert_eq!(decoded.width(), 400);
         assert_eq!(decoded.height(), 300);

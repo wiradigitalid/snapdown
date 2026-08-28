@@ -227,6 +227,11 @@ legible enough to read the UI text in it.
 **Consequences (testable):**
 - An image already within the long-edge limit is not upscaled.
 - Aspect ratio is preserved; the image is never stretched or cropped to fit.
+- The budget carries **two** reduction levers, and they are different tools. A **maximum long edge**
+  bounds the worst case and leaves a capture already under it alone. A **resize percentage** applies
+  to every capture regardless of its size. The percentage is applied first and the maximum to the
+  result — the other order would take the share off the maximum rather than off the capture, and two
+  captures of different sizes would come out identical.
 - Reduction never blocks the overlay from closing.
 - Exactly one image file per Finding exists in the Vault after reduction.
 

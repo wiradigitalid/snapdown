@@ -428,8 +428,10 @@ fn the_assemble_tile_does_not_scroll_with_the_filmstrip() {
     // Anchored on the tile's own readout, not on `assemble-bundle-clicked` - the toolbar fires that
     // callback too, and from further up the file, so `find` would have located the wrong element and
     // this test would have failed while describing something true.
+    // The tile's own count line. It said `N selected`; `BUG-80` rebuilt it to the G3 design, which
+    // words the count as "N Findings" and dims it to "Nothing picked" when there is no selection.
     let tile = app
-        .find("root.selected-finding-count + \" selected\"")
+        .find("? \"Nothing picked\"")
         .expect("the Assemble tile must show how many Findings are selected");
 
     assert!(

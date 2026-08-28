@@ -1,0 +1,641 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { SdTextField } from "text-field.slint";
+import { SdActionButton, SdSectionLabel, SdCaption } from "action-button.slint";
+import { SdSlider } from "slider.slint";
+import { SdSegmented, SegmentOption, SdCheckbox } from "form-controls.slint";
+import { SdModalHeader, SdCard } from "modal.slint";
+
+// One hotkey, as the Settings screen shows it.
+export struct HotkeyRow {
+    // `capture` or `open_editor` - the domain's own `HotkeyAction` names, so nothing has to translate.
+    action: string,
+    label: string,
+    why: string,
+    shortcut: string,
+    // Registered with the OS right now. False means the combination was taken by something else, or
+    // the registration failed at startup.
+    active: bool,
+    problem: string,
+}
+
+// THE SETTINGS SCREEN.
+//
+// `settings-clicked` was a `println!` for the whole life of the Slint Editor - one of the three stubs
+// in `BUG-57`, and the reason `BUG-63`'s compression lever had nowhere to land. Everything here is a
+// WIRE to Rust that already existed: the startup registrar, the hotkey registrar, the Quality Budget
+// domain type and the vault path setting were all built and only the screen was missing.
+//
+// STRUCTURE FOLLOWS `06a-settings-general.html` and `06b-settings-hotkeys.html`, and the first build
+// of this screen did not - which is what the owner reported. The four differences, and what the
+// design says:
+//
+//   header      icon + title left, ✕ right. Not a "Done" button in the corner. `SdModalHeader` now,
+//               shared with Assemble & Review, which had it right already
+//   tabs        a HORIZONTAL row under the header - the same shape as the inspector's own tab bar,
+//               which is the surface the owner has approved. Not a left sidebar
+//   groups      each in a sunken `SdCard`. Not bare dividers
+//   presets     one segmented control. Not four cards with wrapping descriptions
+//   footer      the auto-save note on the left, the primary action on the right
+//
+// A full-screen overlay rather than a routed view, because the Editor has no router and adding one to
+// reach a preferences screen would be a larger change than the screen.
+export component SdSettings inherits Rectangle {
+    in-out property <int> tab: 0;
+
+    in property <bool> run-at-startup;
+    in property <string> startup-problem;
+    in property <bool> open-editor-after-capture;
+    in property <string> vault-path;
+
+    in property <string> budget-name;
+    in property <int> budget-max-long-edge;
+    in property <int> budget-encoder-quality;
+    in property <int> budget-resize-percent;
+    in property <string> budget-readout;
+    in property <string> budget-explainer;
+
+    in property <[HotkeyRow]> hotkeys;
+    in property <string> app-version;
+    in property <string> bridge-status;
+
+    callback closed();
+    callback startup-toggled(bool);
+    callback open-editor-after-capture-toggled(bool);
+    callback vault-browse();
+    callback vault-reveal();
+    callback budget-chosen(string);
+    callback budget-advanced(int, int, int);
+    // action, ctrl, alt, shift, and the key's own text. RUST composes the shortcut string, because
+    // Rust is where `validate_and_rebind` decides whether it is one.
+    callback hotkey-pressed(string, bool, bool, bool, string);
+    callback hotkey-cleared(string);
+
+    // Which row is listening, by action. "" is none. Two-way, because Rust closes it: on a
+    // successful bind, and on the shortcut arriving.
+    in-out property <string> listening: "";
+    // The action whose shortcut last fired, so a row can confirm it reached Snapdown.
+    in property <string> last-fired: "";
+    private property <bool> advanced-open: false;
+
+    width: 100%;
+    height: 100%;
+    background: Theme.overlay-scrim;
+
+    // Swallows a click on the scrim. Deliberately does NOT close: this screen writes as you change
+    // things, and a stray click dismissing it would read as having lost the change.
+    TouchArea { }
+
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: min(760px, parent.width - 64px);
+        height: min(600px, parent.height - 64px);
+        background: Theme.bg-app;
+        border-width: 1px;
+        border-color: Theme.border-strong;
+        border-radius: Theme.radius-sharp;
+        drop-shadow-blur: 40px;
+        drop-shadow-color: Theme.overlay-shadow;
+        clip: true;
+
+        VerticalLayout {
+            SdModalHeader {
+                icon: @image-url("../../assets/icons/settings.svg");
+                title: "Settings";
+                closed => { root.closed(); }
+            }
+
+            // --- tabs, horizontal, as designed and as the inspector already does ------
+            Rectangle {
+                height: 40px;
+                background: Theme.bg-subtle;
+                Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.border-subtle; }
+
+                HorizontalLayout {
+                    padding-left: 16px;
+                    padding-right: 16px;
+                    spacing: 4px;
+                    alignment: start;
+
+                    for entry[index] in [
+                        { label: "General & Quality" },
+                        { label: "Hotkeys" },
+                        { label: "Agent Bridge" },
+                        { label: "About" },
+                    ] : Rectangle {
+                        width: tab-label.preferred-width + 24px;
+                        background: transparent;
+
+                        // The active marker is a 2.5px bar under the label, which is exactly what the
+                        // inspector's tab bar does. A filled pill would be a second vocabulary for
+                        // one idea.
+                        Rectangle {
+                            y: parent.height - self.height;
+                            width: 100%;
+                            height: root.tab == index ? 2.5px : 0px;
+                            background: Theme.accent-primary;
+                        }
+
+                        tab-touch := TouchArea {
+                            mouse-cursor: MouseCursor.pointer;
+                            clicked => { root.tab = index; }
+                        }
+
+                        tab-label := Text {
+                            text: entry.label;
+                            font-size: 12px;
+                            font-weight: root.tab == index ? 700 : 500;
+                            color: root.tab == index
+                                ? Theme.accent-primary
+                                : (tab-touch.has-hover ? Theme.text-primary : Theme.text-muted);
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            font-family: "IBM Plex Sans";
+                        }
+                    }
+                }
+            }
+
+            // --- panels ---------------------------------------------------------------
+            Rectangle {
+                vertical-stretch: 1;
+                background: Theme.bg-app;
+
+                ScrollView {
+                    width: 100%;
+                    height: 100%;
+
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 16px;
+                        alignment: start;
+
+                        // ===== GENERAL & QUALITY ==========================================
+                        if root.tab == 0 : SdCard {
+                            SdSectionLabel { text: "STARTUP"; }
+
+                            SdCheckbox {
+                                checked: root.run-at-startup;
+                                text: "Run Snapdown at Windows startup";
+                                hint: "Snapdown sits in the tray from login, so the capture shortcut works without opening anything first.";
+                                toggled(on) => { root.startup-toggled(on); }
+                            }
+
+                            if root.startup-problem != "" : Text {
+                                text: root.startup-problem;
+                                font-size: 10px;
+                                color: Theme.semantic-error;
+                                wrap: word-wrap;
+                                font-family: "IBM Plex Sans";
+                            }
+
+                            SdCheckbox {
+                                checked: root.open-editor-after-capture;
+                                text: "Open the Editor after a hotkey capture";
+                                hint: "Off by default, so a run of captures is not interrupted by a window taking focus each time. Turn it on if you usually annotate straight away.";
+                                toggled(on) => { root.open-editor-after-capture-toggled(on); }
+                            }
+                        }
+
+                        if root.tab == 0 : SdCard {
+                            SdSectionLabel { text: "WHERE CAPTURES ARE STORED"; }
+
+                            SdTextField {
+                                read-only: true;
+                                mono: true;
+                                text-size: 11px;
+                                pad: 8px;
+                                text: root.vault-path;
+                            }
+
+                            HorizontalLayout {
+                                spacing: 6px;
+                                alignment: start;
+                                SdActionButton {
+                                    label: "Choose folder...";
+                                    primary: false;
+                                    height: 28px;
+                                    clicked => { root.vault-browse(); }
+                                }
+                                SdActionButton {
+                                    label: "Show in Explorer";
+                                    primary: false;
+                                    height: 28px;
+                                    clicked => { root.vault-reveal(); }
+                                }
+                            }
+
+                            SdCaption {
+                                text: "Changing this moves everything already stored, and asks first. Snapdown restarts into the new folder.";
+                            }
+                        }
+
+                        if root.tab == 0 : SdCard {
+                            // NO `DEC-004` CHIP, though the G3 design has one.
+                            //
+                            // The design asset was drawn for an internal audience and cites the
+                            // decision that set the defaults. On the Reviewer's screen that is method
+                            // jargon: a code they cannot look up, attached to a control they can.
+                            // `wira-desk` states the same rule for the same reason - its own error
+                            // messages "never surface a TOML path to the user", because a user should
+                            // not have to know an internal key to understand what they are changing.
+                            //
+                            // This is a deliberate departure from the design, recorded here so the
+                            // next reader does not restore it as a fidelity fix.
+                            SdSectionLabel { text: "IMAGE SIZE AND QUALITY"; }
+
+                            SdSegmented {
+                                selected: root.budget-name;
+                                label-size: 11px;
+                                options: [
+                                    { id: "auto", label: "Auto" },
+                                    { id: "sharp", label: "Sharp" },
+                                    { id: "balanced", label: "Balanced" },
+                                    { id: "small", label: "Small" },
+                                ];
+                                chosen(id) => { root.budget-chosen(id); }
+                            }
+
+                            SdCaption { text: root.budget-explainer; }
+
+                            // The mono readout box the design specifies.
+                            if root.budget-readout != "" : Rectangle {
+                                height: readout.preferred-height + 12px;
+                                background: Theme.bg-card;
+                                border-width: 1px;
+                                border-color: Theme.border-subtle;
+                                border-radius: Theme.radius-sharp;
+                                readout := Text {
+                                    x: 10px;
+                                    y: 6px;
+                                    width: parent.width - 20px;
+                                    text: root.budget-readout;
+                                    font-size: 11px;
+                                    color: Theme.text-primary;
+                                    wrap: word-wrap;
+                                    font-family: "IBM Plex Mono";
+                                }
+                            }
+
+                            // The design's dashed-top disclosure.
+                            Rectangle {
+                                height: 24px;
+                                Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.border-subtle; }
+                                HorizontalLayout {
+                                    padding-top: 6px;
+                                    spacing: 5px;
+                                    alignment: start;
+                                    Text {
+                                        text: root.advanced-open ? "▾" : "▸";
+                                        font-size: 10px;
+                                        color: Theme.accent-primary;
+                                        vertical-alignment: center;
+                                    }
+                                    Text {
+                                        text: "Fine-tune size and quality";
+                                        font-size: 10px;
+                                        font-weight: 700;
+                                        color: Theme.accent-primary;
+                                        vertical-alignment: center;
+                                        font-family: "IBM Plex Sans";
+                                    }
+                                }
+                                TouchArea {
+                                    mouse-cursor: MouseCursor.pointer;
+                                    clicked => { root.advanced-open = !root.advanced-open; }
+                                }
+                            }
+
+                            if root.advanced-open : VerticalLayout {
+                                spacing: 6px;
+
+                                // THE RATIO, first, because it is the one that always applies.
+                                //
+                                // The owner asked for it in as many words: *"automatic resize, misal
+                                // ke 80% default, bisa diset sesuai user, bukan hanya soal batas
+                                // atas"*. The cap below it bounds the worst case; this takes a
+                                // fixed share off everything, including a capture already small
+                                // enough that the cap leaves it alone.
+                                SdCaption { text: "Resize every capture to"; }
+                                HorizontalLayout {
+                                    spacing: 10px;
+                                    SdSlider {
+                                        horizontal-stretch: 1;
+                                        y: 4px;
+                                        minimum: 25;
+                                        maximum: 100;
+                                        value: root.budget-resize-percent;
+                                        changed(percent) => {
+                                            root.budget-advanced(root.budget-max-long-edge,
+                                                root.budget-encoder-quality, percent);
+                                        }
+                                    }
+                                    Text {
+                                        width: 60px;
+                                        text: root.budget-resize-percent + "%";
+                                        font-size: 11px;
+                                        color: Theme.text-primary;
+                                        horizontal-alignment: right;
+                                        vertical-alignment: center;
+                                        font-family: "IBM Plex Mono";
+                                    }
+                                }
+                                SdCaption {
+                                    text: root.budget-resize-percent >= 100
+                                        ? "Captures keep the size they were taken at. Lower this to shrink every one of them by the same share."
+                                        : "Applied to every capture, including small ones. The limit below only catches the large ones.";
+                                }
+
+                                SdCaption { text: "Never wider or taller than"; }
+                                HorizontalLayout {
+                                    spacing: 10px;
+                                    SdSlider {
+                                        horizontal-stretch: 1;
+                                        y: 4px;
+                                        minimum: 480;
+                                        maximum: 3840;
+                                        value: root.budget-max-long-edge;
+                                        changed(edge) => {
+                                            root.budget-advanced(edge,
+                                                root.budget-encoder-quality,
+                                                root.budget-resize-percent);
+                                        }
+                                    }
+                                    Text {
+                                        width: 60px;
+                                        text: root.budget-max-long-edge + " px";
+                                        font-size: 11px;
+                                        color: Theme.text-primary;
+                                        horizontal-alignment: right;
+                                        vertical-alignment: center;
+                                        font-family: "IBM Plex Mono";
+                                    }
+                                }
+                                SdCaption {
+                                    text: "Nothing is stored wider or taller than this. A capture already under it is left alone.";
+                                }
+
+                                SdCaption { text: "Colour accuracy"; }
+                                HorizontalLayout {
+                                    spacing: 10px;
+                                    SdSlider {
+                                        horizontal-stretch: 1;
+                                        y: 4px;
+                                        minimum: 10;
+                                        maximum: 100;
+                                        value: root.budget-encoder-quality;
+                                        changed(quality) => {
+                                            root.budget-advanced(root.budget-max-long-edge, quality,
+                                                root.budget-resize-percent);
+                                        }
+                                    }
+                                    Text {
+                                        width: 60px;
+                                        text: root.budget-encoder-quality;
+                                        font-size: 11px;
+                                        color: Theme.text-primary;
+                                        horizontal-alignment: right;
+                                        vertical-alignment: center;
+                                        font-family: "IBM Plex Mono";
+                                    }
+                                }
+                                SdCaption {
+                                    text: root.budget-encoder-quality >= 100
+                                        ? "Every colour kept exactly. The largest a capture can be, and the safest for photographs."
+                                        : "Rounds colour slightly so a screenshot can be stored as a palette — usually about a quarter of the size, with nothing you can see by eye.";
+                                }
+                            }
+                        }
+
+                        // ===== HOTKEYS ====================================================
+                        if root.tab == 1 : SdCard {
+                            SdSectionLabel { text: "KEYBOARD SHORTCUTS"; }
+                            SdCaption {
+                                text: "Click a shortcut, hold Ctrl or Alt and press a key. Escape cancels. After it is set, press the combination anywhere to check it reaches Snapdown.";
+                            }
+
+                            for row in root.hotkeys : Rectangle {
+                                height: hotkey-body.preferred-height;
+                                background: Theme.bg-card;
+                                border-width: 1px;
+                                border-color: root.listening == row.action
+                                    ? Theme.border-focus : Theme.border-subtle;
+                                border-radius: Theme.radius-sharp;
+
+                                hotkey-body := VerticalLayout {
+                                    padding: 12px;
+                                    spacing: 6px;
+
+                                    HorizontalLayout {
+                                        spacing: 12px;
+
+                                        VerticalLayout {
+                                            horizontal-stretch: 1;
+                                            spacing: 3px;
+                                            Text {
+                                                text: row.label;
+                                                font-size: 13px;
+                                                color: Theme.text-primary;
+                                                font-family: "IBM Plex Sans";
+                                            }
+                                            Text {
+                                                text: row.why;
+                                                font-size: 10px;
+                                                color: Theme.text-dim;
+                                                wrap: word-wrap;
+                                                font-family: "IBM Plex Sans";
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            width: 180px;
+                                            VerticalLayout {
+                                                alignment: start;
+                                                Rectangle {
+                                                    height: 28px;
+                                                    border-radius: Theme.radius-sharp;
+                                                    background: root.listening == row.action
+                                                        ? Theme.accent-surface : Theme.bg-subtle;
+                                                    border-width: 1px;
+                                                    border-color: root.listening == row.action
+                                                        ? Theme.border-focus : Theme.border-strong;
+
+                                                    Text {
+                                                        text: root.listening == row.action
+                                                            ? "Press keys… (Esc)"
+                                                            : (row.shortcut == "" ? "Not set" : row.shortcut);
+                                                        font-size: 11px;
+                                                        color: row.shortcut == "" && root.listening != row.action
+                                                            ? Theme.text-dim : Theme.text-primary;
+                                                        horizontal-alignment: center;
+                                                        vertical-alignment: center;
+                                                        font-family: "IBM Plex Mono";
+                                                    }
+
+                                                    keys := FocusScope {
+                                                        // Only takes keys while this row is the one
+                                                        // listening, so the other rows cannot swallow
+                                                        // a keystroke meant for something else.
+                                                        enabled: root.listening == row.action;
+                                                        key-pressed(event) => {
+                                                            if (event.text == Key.Escape) {
+                                                                root.listening = "";
+                                                                return EventResult.accept;
+                                                            }
+                                                            root.hotkey-pressed(row.action,
+                                                                event.modifiers.control,
+                                                                event.modifiers.alt,
+                                                                event.modifiers.shift,
+                                                                event.text);
+                                                            // Left open: Rust rejects a
+                                                            // modifiers-only press, and closing here
+                                                            // would end the gesture on the first Ctrl.
+                                                            return EventResult.accept;
+                                                        }
+                                                    }
+
+                                                    TouchArea {
+                                                        mouse-cursor: MouseCursor.pointer;
+                                                        clicked => {
+                                                            root.listening = row.action;
+                                                            keys.focus();
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        Rectangle {
+                                            width: 7px;
+                                            VerticalLayout {
+                                                alignment: center;
+                                                Rectangle {
+                                                    width: 7px;
+                                                    height: 7px;
+                                                    border-radius: Theme.radius-pill;
+                                                    background: root.last-fired == row.action
+                                                        ? Theme.semantic-success
+                                                        : (row.active
+                                                            ? Theme.accent-primary
+                                                            : Theme.semantic-error);
+                                                }
+                                            }
+                                        }
+                                        // THREE STATES, not two, and the third is the useful one.
+                                        //
+                                        // "Registered" only means Windows accepted the binding. It
+                                        // does not mean the keystroke reaches Snapdown - a low-level
+                                        // hook in another application can swallow it first, and
+                                        // registration says nothing about that. So the row also
+                                        // confirms when the chord ACTUALLY ARRIVES, which is the only
+                                        // proof available without leaving this screen. Taken from
+                                        // `wira-desk`'s `KeyCheckVerdict`, which distinguishes
+                                        // "registered" from "received" for the same reason.
+                                        Text {
+                                            horizontal-stretch: 1;
+                                            text: root.last-fired == row.action
+                                                ? "Pressed just now — it reaches Snapdown."
+                                                : (row.problem != ""
+                                                    ? row.problem
+                                                    : (row.active
+                                                        ? "Registered with Windows. Press it to check it arrives."
+                                                        : "Not registered — another application is holding this combination."));
+                                            font-size: 10px;
+                                            color: root.last-fired == row.action
+                                                ? Theme.semantic-success
+                                                : (row.active ? Theme.text-dim : Theme.semantic-error);
+                                            vertical-alignment: center;
+                                            wrap: word-wrap;
+                                            font-family: "IBM Plex Sans";
+                                        }
+                                        SdActionButton {
+                                            label: "Clear";
+                                            primary: false;
+                                            height: 24px;
+                                            label-size: 10px;
+                                            clicked => { root.hotkey-cleared(row.action); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ===== AGENT BRIDGE ===============================================
+                        if root.tab == 2 : SdCard {
+                            SdSectionLabel { text: "AGENT BRIDGE"; }
+                            Text {
+                                text: root.bridge-status;
+                                font-size: 13px;
+                                color: Theme.text-secondary;
+                                wrap: word-wrap;
+                                font-family: "IBM Plex Sans";
+                            }
+                        }
+
+                        // ===== ABOUT ======================================================
+                        if root.tab == 3 : SdCard {
+                            SdSectionLabel { text: "SNAPDOWN"; }
+                            Text {
+                                text: root.app-version;
+                                font-size: 13px;
+                                color: Theme.text-primary;
+                                font-family: "IBM Plex Mono";
+                            }
+                            Text {
+                                text: "Snapdown turns a screenshot and a sentence into Markdown an agent can read. MIT licensed.";
+                                font-size: 13px;
+                                color: Theme.text-secondary;
+                                wrap: word-wrap;
+                                font-family: "IBM Plex Sans";
+                            }
+                        }
+
+                        if root.tab == 3 : SdCard {
+                            SdSectionLabel { text: "BUILT WITH"; }
+                            // `NTL-1`. Slint's Royalty-free licence requires this acknowledgement in
+                            // the product, and it had been recorded as owed and never paid.
+                            SdCaption {
+                                text: "This application uses Slint (https://slint.dev) under the terms of the Slint Royalty-free Desktop, Mobile, and Web Applications license.";
+                            }
+                            SdCaption {
+                                text: "Type set in IBM Plex, licensed under the SIL Open Font License 1.1.";
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --- footer, as designed --------------------------------------------------
+            Rectangle {
+                height: 52px;
+                background: Theme.bg-card;
+                Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.border-subtle; }
+
+                HorizontalLayout {
+                    padding-left: 16px;
+                    padding-right: 16px;
+                    spacing: 12px;
+
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        alignment: center;
+                        SdCaption { text: "Changes are saved as you make them."; }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        SdActionButton {
+                            label: "Done";
+                            height: 32px;
+                            clicked => { root.closed(); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -5,7 +5,7 @@ mod startup;
 mod tray;
 
 use std::cell::{Cell, RefCell};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -21,11 +21,11 @@ use snapdown_core::domain::finding::{
 use snapdown_core::domain::image::ImageDimensions;
 use snapdown_core::domain::markdown::MarkdownSerializer;
 use snapdown_core::domain::setting::{
-    HotkeyAction, QualityBudget, Setting, SettingKey, SettingValue,
+    HotkeyAction, NamedBudget, QualityBudget, ResolvedPair, Setting, SettingKey, SettingValue,
 };
 use snapdown_core::error::CoreError;
 use snapdown_core::ports::{
-    BlobStore, BundleStore, Clock, EntropySource, FindingStore, SettingsStore,
+    BlobStore, BundleStore, Clock, EntropySource, FindingStore, SettingsStore, StartupRegistrar,
 };
 use snapdown_core::util::id::id_from_parts;
 use snapdown_store::image::{ImageReducer, MarkerBurner};
@@ -1279,9 +1279,17 @@ fn copy_burned_image(ctx: &AppContext, finding_id: &str) -> Result<String, Strin
         width: detail.finding.image_width,
         height: detail.finding.image_height,
     };
-    let burned =
-        MarkerBurner::burn_all(&source, &dims, &detail.markers, &detail.visual_annotations)
-            .map_err(|e| format!("Could not draw the annotations: {e}"))?;
+    let burned = MarkerBurner::burn_all(
+        &source,
+        &dims,
+        &detail.markers,
+        &detail.visual_annotations,
+        detail
+            .finding
+            .resolved_encoder_quality
+            .unwrap_or(snapdown_store::image::LOSSLESS),
+    )
+    .map_err(|e| format!("Could not draw the annotations: {e}"))?;
 
     let decoded = image::load_from_memory(&burned)
         .map_err(|e| format!("Could not decode the burned image: {e}"))?;
@@ -1406,12 +1414,469 @@ fn delete_finding_everywhere(ctx: &AppContext, finding_id: &str) -> Result<bool,
     }
 }
 
+/// How many files the Vault holds, for the confirmation to name.
+///
+/// Counted rather than estimated: "all 143 files" is a sentence somebody can weigh, and "some files"
+/// is not.
+fn count_vault_files(root: &Path) -> usize {
+    fn walk(dir: &Path) -> usize {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return 0;
+        };
+        entries
+            .flatten()
+            .map(|entry| {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path)
+                } else {
+                    1
+                }
+            })
+            .sum()
+    }
+    ["findings", "bundles"]
+        .iter()
+        .map(|sub| walk(&root.join(sub)))
+        .sum()
+}
+
+/// Moves every file in the Vault to a new root. `FR-16`.
+///
+/// **The database is not touched, and that is not an oversight - it is why this is small.**
+/// `finding.image_path` is a Vault-RELATIVE key (`findings/xyz.png`), decided when the schema was
+/// written and stated in the data model: *"Relative to the Vault root, never absolute. A Vault move
+/// must not rewrite rows."* So moving the files and changing one setting is the whole migration.
+///
+/// Order matters and it is: move everything, THEN write the setting. The other way round leaves the
+/// product pointing at a folder the captures have not reached, and every Finding in the Library is
+/// broken until they do. This way a failure part-way leaves the old Vault authoritative and the old
+/// setting in place - the Reviewer sees an error and nothing is lost.
+///
+/// `fs::rename` first, because within one volume it is instant and atomic per file. It fails across
+/// volumes, so the fallback is copy-then-remove - and the remove is CHECKED. `AGENTS.md` records the
+/// archived version of this function swallowing both `fs::remove_file` results with `let _ =`, which
+/// left the old copies behind silently.
+fn migrate_vault(from: &Path, to: &Path) -> Result<usize, String> {
+    if from == to {
+        return Ok(0);
+    }
+    if !to.exists() {
+        std::fs::create_dir_all(to)
+            .map_err(|e| format!("Could not create {}: {e}", to.display()))?;
+    }
+    // A Vault inside the old Vault would copy itself into itself for ever.
+    if to.starts_with(from) {
+        return Err("That folder is inside the current Vault. Pick one beside it.".to_string());
+    }
+
+    let mut moved = 0usize;
+    // Only the two the product owns. Anything else in the folder is the Reviewer's and is left where
+    // it is - the Vault is a directory on their disk, not ours to tidy.
+    for sub in ["findings", "bundles"] {
+        let source = from.join(sub);
+        if !source.is_dir() {
+            continue;
+        }
+        let target = to.join(sub);
+        std::fs::create_dir_all(&target)
+            .map_err(|e| format!("Could not create {}: {e}", target.display()))?;
+
+        let entries = std::fs::read_dir(&source)
+            .map_err(|e| format!("Could not read {}: {e}", source.display()))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("Could not read {}: {e}", source.display()))?;
+            let name = entry.file_name();
+            let (src, dst) = (entry.path(), target.join(&name));
+
+            if src.is_dir() {
+                // A Bundle is a directory of burned copies. Recursed rather than flattened, so a
+                // Bundle keeps the folder its Markdown's relative links point into.
+                moved += migrate_vault_dir(&src, &dst)?;
+                continue;
+            }
+            move_one(&src, &dst)?;
+            moved += 1;
+        }
+    }
+    Ok(moved)
+}
+
+fn migrate_vault_dir(from: &Path, to: &Path) -> Result<usize, String> {
+    std::fs::create_dir_all(to).map_err(|e| format!("Could not create {}: {e}", to.display()))?;
+    let mut moved = 0usize;
+    let entries =
+        std::fs::read_dir(from).map_err(|e| format!("Could not read {}: {e}", from.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Could not read {}: {e}", from.display()))?;
+        let (src, dst) = (entry.path(), to.join(entry.file_name()));
+        if src.is_dir() {
+            moved += migrate_vault_dir(&src, &dst)?;
+        } else {
+            move_one(&src, &dst)?;
+            moved += 1;
+        }
+    }
+    Ok(moved)
+}
+
+/// One file, renamed if the volume allows it and copied if it does not.
+fn move_one(src: &Path, dst: &Path) -> Result<(), String> {
+    if std::fs::rename(src, dst).is_ok() {
+        return Ok(());
+    }
+    std::fs::copy(src, dst).map_err(|e| format!("Could not copy {}: {e}", src.display()))?;
+    // CHECKED. The archived version of this used `let _ =` here and left the old copies behind - a
+    // Vault "move" that silently doubled the disk it used.
+    std::fs::remove_file(src).map_err(|e| {
+        format!(
+            "Copied {} but could not remove the original: {e}",
+            src.display()
+        )
+    })?;
+    Ok(())
+}
+
+/// The domain's `HotkeyAction` for the id the Settings screen carries.
+///
+/// The ids ARE the domain's own snake_case names, so this is a parse rather than a mapping - and an
+/// unknown one returns `None` instead of defaulting, because defaulting would rebind the wrong action.
+fn hotkey_action_from_id(id: &str) -> Option<HotkeyAction> {
+    match id {
+        "capture" => Some(HotkeyAction::Capture),
+        "open_editor" => Some(HotkeyAction::OpenEditor),
+        _ => None,
+    }
+}
+
+/// The Quality Budget as it stands, or the default if nothing has been chosen.
+///
+/// A read failure takes the default rather than propagating: this feeds a settings screen, and a
+/// screen that refuses to open because one row would not parse is worse than one showing the value
+/// the product is actually using.
+fn current_budget(ctx: &AppContext) -> QualityBudget {
+    ctx.settings_store
+        .get(&SettingKey::QualityBudget)
+        .ok()
+        .flatten()
+        .and_then(|setting| match setting.value {
+            SettingValue::QualityBudget(budget) => Some(budget),
+            _ => None,
+        })
+        .unwrap_or_else(|| QualityBudget::new(NamedBudget::Auto, None))
+}
+
+fn store_budget(ctx: &AppContext, budget: &QualityBudget) -> Result<(), CoreError> {
+    ctx.settings_store.set(&Setting {
+        key: SettingKey::QualityBudget,
+        value: SettingValue::QualityBudget(budget.clone()),
+        updated_at: SystemClock::new().now_rfc3339(),
+    })
+}
+
+/// Why a key combination cannot become a shortcut.
+///
+/// Borrowed, structure and reasoning, from `wira-desk`'s `ShortcutError` - the owner's own other
+/// desktop product, at `D:/Developer/wiradigital.id/wira-desk`. What it gets right and this did not:
+/// each failure is a DISTINCT case with its own sentence, and the sentence says what to do next
+/// rather than only what went wrong.
+///
+/// The version this replaces had one path - compose a string, hand it to `validate_and_rebind`, show
+/// whatever error came back. So "you held Ctrl and nothing else" and "Windows owns Ctrl+Alt+Del" and
+/// "your other Snapdown hotkey already uses this" were the same silence or the same generic refusal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ShortcutRefusal {
+    /// A bare key with no modifier. Not a safe global shortcut: it would fire while typing, in every
+    /// application, for ever.
+    NoModifier,
+    /// A key this product cannot name to the OS.
+    UnsupportedKey(String),
+    /// Windows or the shell owns this chord. `advice` is empty when nothing can be done about it.
+    Reserved { owner: String, advice: String },
+}
+
+impl ShortcutRefusal {
+    /// One sentence, for the Reviewer, saying what to do next where there is something to do.
+    fn message(&self) -> String {
+        match self {
+            Self::NoModifier => {
+                "A shortcut needs at least one of Ctrl, Alt or Shift with it. A bare key would fire \
+                 while you type, in every application."
+                    .to_string()
+            }
+            Self::UnsupportedKey(key) => {
+                format!("Snapdown cannot register the {key} key as part of a shortcut.")
+            }
+            Self::Reserved { owner, advice } if advice.is_empty() => {
+                format!("Windows uses this combination to {owner}. It cannot be reassigned.")
+            }
+            Self::Reserved { owner, advice } => {
+                format!("Windows uses this combination to {owner}. {advice}")
+            }
+        }
+    }
+}
+
+/// Combinations Windows or a well-known tool already owns.
+///
+/// `wira-desk` carries the same table for `Win+` chords; this one covers the Ctrl/Alt/Shift space
+/// Snapdown's own hotkeys live in, and only the ones a Reviewer might plausibly reach for. It is
+/// deliberately short: a long list of chords nobody would try is a list nobody maintains.
+///
+/// The point is not to be exhaustive - the OS refuses what it refuses, and that is reported too. The
+/// point is that a REFUSAL WE CAN PREDICT should say WHO took it, before the Reviewer has to guess.
+fn reserved_chord(shortcut: &str) -> Option<ShortcutRefusal> {
+    let owner_and_advice: &[(&str, &str, &str)] = &[
+        (
+            "CommandOrControl+Alt+Delete",
+            "reach the secure sign-in screen",
+            "",
+        ),
+        (
+            "CommandOrControl+Shift+Escape",
+            "open Task Manager",
+            "",
+        ),
+        ("Alt+Tab", "switch windows", ""),
+        ("Alt+F4", "close the active window", ""),
+        (
+            "CommandOrControl+Shift+S",
+            "start a Snipping Tool capture on some Windows builds",
+            "Snapdown claims it first when it is running, so this is usually safe - but if a capture \
+             ever opens the wrong tool, that is why.",
+        ),
+        (
+            "CommandOrControl+C",
+            "copy",
+            "Pick something with Shift or Alt in it as well.",
+        ),
+        (
+            "CommandOrControl+V",
+            "paste",
+            "Pick something with Shift or Alt in it as well.",
+        ),
+        (
+            "CommandOrControl+X",
+            "cut",
+            "Pick something with Shift or Alt in it as well.",
+        ),
+        (
+            "CommandOrControl+Z",
+            "undo",
+            "Pick something with Shift or Alt in it as well.",
+        ),
+        (
+            "CommandOrControl+A",
+            "select all",
+            "Pick something with Shift or Alt in it as well.",
+        ),
+        (
+            "CommandOrControl+S",
+            "save, in almost every application",
+            "Pick something with Shift or Alt in it as well.",
+        ),
+    ];
+
+    owner_and_advice
+        .iter()
+        .find(|(chord, _, _)| chord.eq_ignore_ascii_case(shortcut))
+        .map(|(_, owner, advice)| ShortcutRefusal::Reserved {
+            owner: (*owner).to_string(),
+            advice: (*advice).to_string(),
+        })
+}
+
+/// Turns a Slint key event into the shortcut string `validate_and_rebind` expects.
+///
+/// Composed HERE and not in Slint, because the format is the hotkey registrar's business:
+/// `CommandOrControl+Shift+S`, matching `DEFAULT_HOTKEY_CAPTURE` so a rebind and a default read the
+/// same way in the database.
+///
+/// The CANONICAL shortcut string, or why this press is not one.
+///
+/// Canonical is the point, and it is `wira-desk`'s rule: *"Returns the canonical string to persist,
+/// so a caller cannot accidentally store the user's raw input in a non-canonical form."* Modifiers
+/// always in the same order, the key always upper case, so two presses of the same combination
+/// cannot store two different strings and then fail to compare equal.
+///
+/// `Ok(None)` is the third state and it matters: the press is INCOMPLETE, not wrong. The Reviewer
+/// holding Ctrl on the way to Ctrl+Shift+S is mid-gesture, and telling them off for it would make
+/// the field impossible to use.
+fn shortcut_from_key(
+    ctrl: bool,
+    alt: bool,
+    shift: bool,
+    text: &str,
+) -> Result<Option<String>, ShortcutRefusal> {
+    // A modifier arriving as its own key. Slint sends these as control characters.
+    let bare_modifier = [
+        "\u{11}", // Control
+        "\u{12}", // Shift
+        "\u{13}", // Alt
+        "\u{14}", // Meta
+    ];
+    if text.is_empty() || bare_modifier.contains(&text) {
+        // Mid-gesture. Not a refusal, and not a shortcut yet either.
+        return Ok(None);
+    }
+
+    if !ctrl && !alt && !shift {
+        return Err(ShortcutRefusal::NoModifier);
+    }
+    // Shift alone is not a modifier for this purpose: Shift+A is how you type a capital A.
+    if !ctrl && !alt {
+        return Err(ShortcutRefusal::NoModifier);
+    }
+
+    let key = if text.chars().count() == 1 {
+        let ch = text.chars().next().unwrap_or(' ');
+        if !ch.is_ascii_alphanumeric() {
+            return Err(ShortcutRefusal::UnsupportedKey(format!("'{ch}'")));
+        }
+        text.to_uppercase()
+    } else {
+        // A named key - `F5`, `Home`. Slint gives these as multi-character strings, and
+        // `global_hotkey` parses most of them; the ones it does not are refused by name below.
+        text.to_string()
+    };
+
+    let mut parts: Vec<&str> = Vec::new();
+    if ctrl {
+        parts.push("CommandOrControl");
+    }
+    if alt {
+        parts.push("Alt");
+    }
+    if shift {
+        parts.push("Shift");
+    }
+    let shortcut = format!("{}+{key}", parts.join("+"));
+
+    if let Some(refusal) = reserved_chord(&shortcut) {
+        // A `Reserved` entry with advice is a WARNING, not a wall - Snapdown may well win the race
+        // for it. Only the ones with no advice are impossible, and those are the OS's own.
+        if matches!(&refusal, ShortcutRefusal::Reserved { advice, .. } if advice.is_empty()) {
+            return Err(refusal);
+        }
+    }
+
+    Ok(Some(shortcut))
+}
+
 /// The settings key the theme choice is stored under.
 ///
 /// A function rather than two string literals at the two call sites: a typo in one of them would
 /// store the choice and never read it back, and nothing would fail.
 fn theme_setting_key() -> SettingKey {
     SettingKey::Custom("theme_dark".to_string())
+}
+
+/// Fills the Settings screen from the stores and the registrars.
+///
+/// Called every time it opens and after every change, so nothing on it is a copy that can drift from
+/// what the product is actually using - the mistake `BUG-45` is, one screen over.
+fn load_settings_into_window(
+    window: &AppWindow,
+    ctx: &AppContext,
+    startup: &dyn StartupRegistrar,
+    hotkeys: &DesktopHotkeyRegistrar,
+) {
+    match startup.is_enabled() {
+        Ok(enabled) => {
+            window.set_run_at_startup(enabled);
+            window.set_startup_problem(SharedString::new());
+        }
+        // Reported on the screen rather than swallowed. The registry key may be unreadable, and a
+        // toggle that silently shows `false` for that reason is a toggle that lies.
+        Err(e) => {
+            window.set_run_at_startup(false);
+            window.set_startup_problem(
+                format!("Windows startup registration could not be read: {e}").into(),
+            );
+        }
+    }
+
+    window.set_open_editor_after_capture(open_editor_after_capture(ctx));
+    window.set_vault_path(ctx.vault_path.display().to_string().into());
+
+    let budget = current_budget(ctx);
+    window.set_budget_name(budget.named.as_str().into());
+    let resolved = budget.resolve(u32::MAX);
+    window.set_budget_max_long_edge(resolved.max_long_edge as i32);
+    window.set_budget_encoder_quality(i32::from(resolved.encoder_quality));
+    window.set_budget_resize_percent(i32::from(resolved.resize_percent));
+    // Two lines, and they answer different questions. The explainer says what the CHOICE means; the
+    // readout says what it currently resolves to. The G3 design has both, and collapsing them into
+    // one leaves `Auto` able to say neither - its whole point is that it resolves differently per
+    // capture, so one line is either a description with no numbers or numbers that are a lie.
+    window.set_budget_explainer(
+        match budget.named {
+            NamedBudget::Auto => {
+                "Adaptive: decided per capture from the area actually selected. A tooltip stays sharp; a 4K dashboard is reduced."
+            }
+            NamedBudget::Sharp => "Largest and most legible. Costs an agent the most to read.",
+            NamedBudget::Balanced => "The default trade between legibility and cost.",
+            NamedBudget::Small => "Cheapest to send. Fine text may not survive it.",
+            NamedBudget::Custom => {
+                "Your own pair, applied to every capture regardless of its size."
+            }
+        }
+        .into(),
+    );
+    window.set_budget_readout(
+        match budget.named {
+            NamedBudget::Auto => "Resolved per capture  \u{b7}  no fixed pair".to_string(),
+            _ => format!(
+                "{} px long edge  \u{b7}  quality {}",
+                resolved.max_long_edge, resolved.encoder_quality
+            ),
+        }
+        .into(),
+    );
+
+    let bindings = hotkeys.get_bindings();
+    let failures = hotkeys.get_startup_failures();
+    let rows: Vec<HotkeyRow> = [
+        (
+            HotkeyAction::Capture,
+            "capture",
+            "Capture a region",
+            "Freezes the desktop and opens the selection overlay. The whole loop starts here.",
+        ),
+        (
+            HotkeyAction::OpenEditor,
+            "open_editor",
+            "Open the Editor",
+            "Brings the Editor forward without taking a capture.",
+        ),
+    ]
+    .into_iter()
+    .map(|(action, id, label, why)| {
+        let shortcut = bindings.get(&action).cloned().unwrap_or_default();
+        let problem = failures.get(&action).cloned().unwrap_or_default();
+        HotkeyRow {
+            action: id.into(),
+            label: label.into(),
+            why: why.into(),
+            shortcut: shortcut.clone().into(),
+            active: !shortcut.is_empty() && problem.is_empty(),
+            problem: problem.into(),
+        }
+    })
+    .collect();
+    window.set_hotkeys(ModelRc::from(Rc::new(VecModel::from(rows))));
+
+    window.set_app_version(format!("Snapdown {}", env!("CARGO_PKG_VERSION")).into());
+
+    // Stated plainly rather than shown as a working panel. `BUG-59`: the Bridge executable exists
+    // and the Local API it talks to does not, so there is nothing here to configure yet.
+    window.set_bridge_status(
+        "Not available yet. The Bridge lets an agent read your Findings directly, and the part \
+         of Snapdown it connects to has not been built - so there is nothing to configure here \
+         yet.\n\nUntil it exists, Assemble a Bundle and use Copy Markdown: an agent can read \
+         that file and the images beside it."
+            .into(),
+    );
 }
 
 /// Puts one sentence on screen, in the Editor's result line.
@@ -1643,6 +2108,11 @@ where
             &dims,
             &detail.markers,
             &detail.visual_annotations,
+            // The FINDING's own quality. Encoding the handoff lossless while the Finding was
+            // quantised would make the copy larger than the original, paying for precision that was
+            // already thrown away.
+            f.resolved_encoder_quality
+                .unwrap_or(snapdown_store::image::LOSSLESS),
         )
         .map_err(|e| {
             format!("Could not draw the Markers for Finding {position}: {e}. Nothing was written.")
@@ -1993,6 +2463,75 @@ fn set_capture_exclusion(window: &slint::Weak<AppWindow>, exclude: bool) {
 
 #[cfg(not(windows))]
 fn set_capture_exclusion(_window: &slint::Weak<AppWindow>, _exclude: bool) {}
+
+/// Gives the frameless window the shadow Windows draws for every other window. `BUG-71`, `FR-26`.
+///
+/// `FR-26` makes the window frameless, and the only thing separating it from the desktop was its own
+/// 1px border - so against a window of a similar colour there was no separation at all. Every other
+/// floating surface in this product already has a lift: the overlay's panels, the Assemble preview,
+/// the Marker badges.
+///
+/// `DwmExtendFrameIntoClientArea` is the answer rather than drawing one, and the reason is where the
+/// shadow has to be: OUTSIDE the window's own bounds. Anything Slint draws is inside them, so a
+/// drawn shadow would eat client area and clip at the edge. The recorded fix note in `BUG-71` says
+/// exactly this, and costed it so the next reader would not start with the easy version.
+///
+/// A one-pixel margin is enough. DWM's shadow comes from the window having a frame at all, not from
+/// how much of it is extended, and a larger margin starts showing the frame itself through the
+/// client area.
+///
+/// Failure is logged and ignored: a window with no shadow is a cosmetic loss, and there is no
+/// version of this worth refusing to start over.
+#[cfg(windows)]
+fn set_window_shadow(window: &AppWindow) {
+    use i_slint_backend_winit::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use i_slint_backend_winit::WinitWindowAccessor;
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::Graphics::Dwm::{
+        DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DWMNCRENDERINGPOLICY, DWMNCRP_ENABLED,
+        DWMWA_NCRENDERING_POLICY,
+    };
+    use windows::Win32::UI::Controls::MARGINS;
+
+    let applied = window.window().with_winit_window(|winit_win| {
+        let Ok(handle) = winit_win.window_handle() else {
+            return false;
+        };
+        let RawWindowHandle::Win32(win32) = handle.as_raw() else {
+            return false;
+        };
+        let hwnd = HWND(win32.hwnd.get() as *mut std::ffi::c_void);
+
+        // Non-client rendering has to be ENABLED for a frameless window, or DWM has no frame to draw
+        // a shadow around and the extend call is a no-op.
+        let policy = DWMNCRP_ENABLED;
+        let policy_ok = unsafe {
+            DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_NCRENDERING_POLICY,
+                std::ptr::from_ref::<DWMNCRENDERINGPOLICY>(&policy).cast(),
+                std::mem::size_of::<DWMNCRENDERINGPOLICY>() as u32,
+            )
+        }
+        .is_ok();
+
+        let margins = MARGINS {
+            cxLeftWidth: 1,
+            cxRightWidth: 1,
+            cyTopHeight: 1,
+            cyBottomHeight: 1,
+        };
+        let extended = unsafe { DwmExtendFrameIntoClientArea(hwnd, &margins) }.is_ok();
+        policy_ok && extended
+    });
+
+    if applied != Some(true) {
+        eprintln!("Could not give the window a drop shadow; it will have only its 1px border.");
+    }
+}
+
+#[cfg(not(windows))]
+fn set_window_shadow(_window: &AppWindow) {}
 
 /// The capture overlay, kept alive between captures.
 ///
@@ -3193,9 +3732,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Settings Toggle
-    main_window.on_settings_clicked(|| {
-        println!("Open Settings clicked");
-    });
+    // `on_settings_clicked` is wired further down, after the hotkey and startup registrars exist -
+    // the screen reads from both, and they are built late because `init_from_store` needs the
+    // settings store that `AppContext` carries.
 
     // Setup Capture callback.
     //
@@ -3824,7 +4363,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(not(windows))]
     let autostart_backend: Arc<dyn AutoStartBackend> = Arc::new(NoopAutoStartBackend);
 
-    let mut startup_registrar = DesktopStartupRegistrar::new(autostart_backend);
+    let mut startup_registrar = DesktopStartupRegistrar::new(autostart_backend.clone());
     let boot_clock = SystemClock::new();
     let is_autostart_launch = std::env::args().any(|arg| arg == "--autostart");
     let _ = reconcile_startup_on_boot(
@@ -3833,9 +4372,322 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &boot_clock,
     );
 
+    // ===== SETTINGS =====================================================================
+    //
+    // Wired here rather than with the rest, because it is the first surface that needs the hotkey and
+    // startup registrars, and those are built after `AppContext`. Nothing below invents state: every
+    // value comes from a store or a registrar that already existed and had no screen.
+    let startup_for_settings: Rc<DesktopStartupRegistrar> =
+        Rc::new(DesktopStartupRegistrar::new(autostart_backend.clone()));
+
+    {
+        let win = main_window.as_weak();
+        let ctx_open = ctx.clone();
+        let startup = startup_for_settings.clone();
+        let registrar = hotkey_registrar.clone();
+        main_window.on_settings_clicked(move || {
+            let Some(win) = win.upgrade() else {
+                return;
+            };
+            if let Ok(hotkeys) = registrar.lock() {
+                load_settings_into_window(&win, &ctx_open, startup.as_ref(), &hotkeys);
+            }
+            win.set_settings_open(true);
+        });
+    }
+
+    {
+        let win = main_window.as_weak();
+        main_window.on_settings_closed(move || {
+            if let Some(win) = win.upgrade() {
+                win.set_settings_open(false);
+            }
+        });
+    }
+
+    {
+        let win = main_window.as_weak();
+        let ctx_st = ctx.clone();
+        let startup = startup_for_settings.clone();
+        let registrar = hotkey_registrar.clone();
+        main_window.on_startup_toggled(move |on| {
+            let Some(win) = win.upgrade() else {
+                return;
+            };
+            let result = if on {
+                startup.enable()
+            } else {
+                startup.disable()
+            };
+            // The PREFERENCE is recorded whether or not the OS accepted it, which is `BR-112`'s
+            // reconciliation contract: `reconcile_startup_on_boot` reads this on every launch and
+            // re-applies it, so a registration refused today is retried tomorrow.
+            let _ = ctx_st.settings_store.set(&Setting {
+                key: SettingKey::RunAtStartup,
+                value: SettingValue::Boolean(on),
+                updated_at: SystemClock::new().now_rfc3339(),
+            });
+            if let Err(e) = result {
+                toast(&win, format!("Windows refused that: {e}"), true);
+            }
+            if let Ok(hotkeys) = registrar.lock() {
+                load_settings_into_window(&win, &ctx_st, startup.as_ref(), &hotkeys);
+            }
+        });
+    }
+
+    {
+        let win = main_window.as_weak();
+        let ctx_oe = ctx.clone();
+        main_window.on_open_editor_after_capture_toggled(move |on| {
+            let Some(win) = win.upgrade() else {
+                return;
+            };
+            match ctx_oe.settings_store.set(&Setting {
+                key: SettingKey::OpenEditorAfterCapture,
+                value: SettingValue::Boolean(on),
+                updated_at: SystemClock::new().now_rfc3339(),
+            }) {
+                Ok(()) => win.set_open_editor_after_capture(on),
+                Err(e) => toast(&win, format!("Could not save that: {e}"), true),
+            }
+        });
+    }
+
+    {
+        let win = main_window.as_weak();
+        let ctx_vr = ctx.clone();
+        main_window.on_vault_reveal_clicked(move || {
+            let Some(win) = win.upgrade() else {
+                return;
+            };
+            // The folder itself, so `/select` gets a target that exists even on an empty Vault.
+            let path = ctx_vr.vault_path.display().to_string();
+            if let Err(message) = open_file_location(&ctx_vr, &path) {
+                toast(&win, message, true);
+            }
+        });
+    }
+
+    {
+        let win = main_window.as_weak();
+        let ctx_vb = ctx.clone();
+        main_window.on_vault_browse_clicked(move || {
+            let Some(win) = win.upgrade() else {
+                return;
+            };
+            let Some(chosen) = rfd::FileDialog::new()
+                .set_title("Choose a folder for the Snapdown Vault")
+                .set_directory(&ctx_vb.vault_path)
+                .pick_folder()
+            else {
+                return;
+            };
+            if chosen == ctx_vb.vault_path {
+                return;
+            }
+            // ASKS, and moves nothing. The Reviewer gets to see the folder and the file count before
+            // a hundred captures start moving - the owner asked for exactly this.
+            win.set_pending_vault_file_count(count_vault_files(&ctx_vb.vault_path) as i32);
+            win.set_pending_vault_folder(chosen.display().to_string().into());
+        });
+    }
+
+    {
+        let win = main_window.as_weak();
+        let ctx_vm = ctx.clone();
+        let startup = startup_for_settings.clone();
+        let registrar = hotkey_registrar.clone();
+        main_window.on_vault_migration_confirmed(move |folder| {
+            let Some(win) = win.upgrade() else {
+                return;
+            };
+            let chosen = PathBuf::from(folder.to_string());
+
+            // The files first. A failure here leaves the old Vault authoritative and the setting
+            // unchanged, which is the only ordering where a half-finished move loses nothing.
+            let moved = match migrate_vault(&ctx_vm.vault_path, &chosen) {
+                Ok(count) => count,
+                Err(message) => {
+                    toast(&win, format!("Nothing was moved: {message}"), true);
+                    return;
+                }
+            };
+
+            if let Err(e) = ctx_vm.settings_store.set(&Setting {
+                key: SettingKey::VaultPath,
+                value: SettingValue::String(chosen.display().to_string()),
+                updated_at: SystemClock::new().now_rfc3339(),
+            }) {
+                toast(
+                    &win,
+                    format!(
+                        "{moved} file(s) moved to {}, but the setting could not be saved: {e}. Set                          the folder again before restarting, or move them back.",
+                        chosen.display()
+                    ),
+                    true,
+                );
+                return;
+            }
+
+            // A RESTART, and the screen says so rather than pretending otherwise.
+            //
+            // `AppContext` carries the vault path and an open `VaultBlobStore`, and it is cloned into
+            // every callback in this file. Swapping it live would mean wrapping both in a lock that
+            // every one of those closures then has to take - a change far larger than the feature,
+            // for a folder that moves once. Nothing is in an inconsistent state in the meantime: the
+            // paths are relative and they already resolve against the new root.
+            toast(
+                &win,
+                format!(
+                    "{moved} file(s) moved. Restart Snapdown to start using {}.",
+                    chosen.display()
+                ),
+                false,
+            );
+            win.set_vault_path(chosen.display().to_string().into());
+            if let Ok(hotkeys) = registrar.lock() {
+                load_settings_into_window(&win, &ctx_vm, startup.as_ref(), &hotkeys);
+            }
+        });
+    }
+
+    {
+        let win = main_window.as_weak();
+        let ctx_bp = ctx.clone();
+        let startup = startup_for_settings.clone();
+        let registrar = hotkey_registrar.clone();
+        main_window.on_budget_chosen(move |name| {
+            let Some(win) = win.upgrade() else {
+                return;
+            };
+            let named = match name.as_str() {
+                "sharp" => NamedBudget::Sharp,
+                "balanced" => NamedBudget::Balanced,
+                "small" => NamedBudget::Small,
+                _ => NamedBudget::Auto,
+            };
+            // A named preset drops any custom pair, which is what choosing a preset MEANS. Keeping
+            // the pair would leave the screen showing "Balanced" over numbers Balanced does not use.
+            if let Err(e) = store_budget(&ctx_bp, &QualityBudget::new(named, None)) {
+                toast(&win, format!("Could not save the budget: {e}"), true);
+                return;
+            }
+            if let Ok(hotkeys) = registrar.lock() {
+                load_settings_into_window(&win, &ctx_bp, startup.as_ref(), &hotkeys);
+            }
+        });
+    }
+
+    {
+        let win = main_window.as_weak();
+        let ctx_ba = ctx.clone();
+        let startup = startup_for_settings.clone();
+        let registrar = hotkey_registrar.clone();
+        main_window.on_budget_advanced(move |edge, quality, percent| {
+            let Some(win) = win.upgrade() else {
+                return;
+            };
+            // Setting either number by hand makes the budget Custom. It is not a decoration: `Auto`
+            // resolves a DIFFERENT pair per capture, so a hand-set pair and `Auto` cannot both be
+            // true - and `NamedBudget::Custom` is the domain's own word for that.
+            let pair = ResolvedPair {
+                max_long_edge: edge.clamp(480, 3840) as u32,
+                encoder_quality: quality.clamp(10, 100) as u8,
+                resize_percent: percent.clamp(25, 100) as u8,
+            };
+            if let Err(e) = store_budget(
+                &ctx_ba,
+                &QualityBudget::new(NamedBudget::Custom, Some(pair)),
+            ) {
+                toast(&win, format!("Could not save the budget: {e}"), true);
+                return;
+            }
+            if let Ok(hotkeys) = registrar.lock() {
+                load_settings_into_window(&win, &ctx_ba, startup.as_ref(), &hotkeys);
+            }
+        });
+    }
+
+    {
+        let win = main_window.as_weak();
+        let ctx_hk = ctx.clone();
+        let startup = startup_for_settings.clone();
+        let registrar = hotkey_registrar.clone();
+        main_window.on_hotkey_key_pressed(move |action, ctrl, alt, shift, text| {
+            let Some(win) = win.upgrade() else {
+                return;
+            };
+            let shortcut = match shortcut_from_key(ctrl, alt, shift, text.as_str()) {
+                // Mid-gesture: the Reviewer is holding Ctrl on the way to something. Say nothing.
+                Ok(None) => return,
+                Ok(Some(shortcut)) => shortcut,
+                // A refusal we could predict, named before the OS is even asked.
+                Err(refusal) => {
+                    toast(&win, refusal.message(), true);
+                    return;
+                }
+            };
+            let Some(target) = hotkey_action_from_id(action.as_str()) else {
+                return;
+            };
+            let outcome = registrar
+                .lock()
+                .map_err(|e| CoreError::Validation(e.to_string()))
+                .and_then(|mut hotkeys| hotkeys.validate_and_rebind(target, &shortcut));
+            match outcome {
+                Ok(()) => {
+                    // A chord we know is contested is bound AND warned about, because Snapdown often
+                    // wins the race for it - refusing outright would be the product deciding
+                    // something it does not know.
+                    let warning = reserved_chord(&shortcut).map(|r| r.message());
+                    match warning {
+                        Some(message) => toast(&win, format!("{shortcut} bound. {message}"), false),
+                        None => toast(&win, format!("{shortcut} bound."), false),
+                    }
+                    win.set_hotkey_listening(SharedString::new());
+                }
+                // `BR-27` refuses a combination another Snapdown action already holds, and the OS
+                // refuses one another application holds. Both come back here as text.
+                Err(e) => toast(&win, format!("{shortcut} was refused: {e}"), true),
+            }
+            if let Ok(hotkeys) = registrar.lock() {
+                load_settings_into_window(&win, &ctx_hk, startup.as_ref(), &hotkeys);
+            }
+        });
+    }
+
+    {
+        let win = main_window.as_weak();
+        let ctx_hc = ctx.clone();
+        let startup = startup_for_settings.clone();
+        let registrar = hotkey_registrar.clone();
+        main_window.on_hotkey_cleared(move |action| {
+            let Some(win) = win.upgrade() else {
+                return;
+            };
+            let Some(target) = hotkey_action_from_id(action.as_str()) else {
+                return;
+            };
+            let outcome = registrar
+                .lock()
+                .map_err(|e| CoreError::Validation(e.to_string()))
+                .and_then(|mut hotkeys| hotkeys.clear(target));
+            if let Err(e) = outcome {
+                toast(&win, format!("Could not clear that: {e}"), true);
+            }
+            if let Ok(hotkeys) = registrar.lock() {
+                load_settings_into_window(&win, &ctx_hc, startup.as_ref(), &hotkeys);
+            }
+        });
+    }
+
     // Per FR-18/BR-121: launching via Windows startup opens no window, tray icon only.
     if !is_autostart_launch {
         main_window.show()?;
+        // AFTER `show()`. The native window does not exist until then, so there is no handle to give
+        // a shadow to - which is why this is not in the setup above with the rest of the chrome.
+        set_window_shadow(&main_window);
     }
 
     // Poll tray-icon and global-hotkey events on the UI thread; both crates deliver events
@@ -3896,6 +4748,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     });
 
                     if let Some(action) = action {
+                        // Reported to the Settings screen before it is acted on, so a Reviewer who
+                        // has just bound a chord can press it and see the row confirm. Registration
+                        // alone does not prove delivery - another application's low-level hook can
+                        // swallow a keystroke Windows happily registered - and this is the only proof
+                        // available without leaving the screen.
+                        if let Some(win) = window_for_events.upgrade() {
+                            if win.get_settings_open() {
+                                win.set_hotkey_last_fired(
+                                    match action {
+                                        HotkeyAction::Capture => "capture",
+                                        HotkeyAction::OpenEditor => "open_editor",
+                                    }
+                                    .into(),
+                                );
+                            }
+                        }
                         match action {
                             HotkeyAction::Capture => {
                                 if let Some(win) = window_for_events.upgrade() {

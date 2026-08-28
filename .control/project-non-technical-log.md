@@ -22,3 +22,9 @@ Categories: `domain` · `account` · `legal` · `schedule` · `organisation`.
 | id | Fact | Stopped holding | Superseded by |
 |---|---|---|---|
 | — | — | — | — |
+
+**`NTL-1` discharged, 2026-08-28.** The Slint acknowledgement is in the product, on the About tab of
+the Settings screen (`apps/desktop/ui/components/settings.slint`), naming the Royalty-free Desktop,
+Mobile, and Web Applications licence and linking slint.dev. IBM Plex's SIL OFL 1.1 is acknowledged
+beside it. Asserted by `the_about_tab_carries_the_slint_attribution` so it cannot be edited away
+without a red test.

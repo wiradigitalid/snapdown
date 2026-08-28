@@ -1,0 +1,119 @@
+import { Theme } from "../theme.slint";
+
+// THE HEADER EVERY MODAL IN THIS PRODUCT WEARS.
+//
+// The owner reported it as *"window title bar dari assemble and review dengan setting itu berbeda"*,
+// and that is exactly what `design-system-guide.md` warns about: *"Two places showing the same kind
+// of thing MUST reference the same component, not the same numbers. Matching numbers drift the first
+// time one is touched."* The Assemble & Review header was 52px with a 15px accent icon, a 13px/800
+// title and a drawn ✕; the Settings header was 52px with a 15px/700 title and a "Done" BUTTON in the
+// corner. Two headers, two answers.
+//
+// The G3 design settles which one is right: `06a-settings-general.html` has icon + title on the left
+// and a ✕ on the right, with the primary action in a FOOTER. Assemble & Review already did that.
+//
+// Anything passed as a child lands to the left of the ✕ - a readout, a segmented control - so the
+// slot is where two modals legitimately differ.
+export component SdModalHeader inherits Rectangle {
+    in property <image> icon;
+    in property <string> title;
+
+    callback closed();
+
+    height: 52px;
+    background: Theme.bg-card;
+
+    Rectangle {
+        y: parent.height - 1px;
+        width: 100%;
+        height: 1px;
+        background: Theme.border-subtle;
+    }
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 12px;
+        spacing: 10px;
+
+        HorizontalLayout {
+            spacing: 8px;
+            Rectangle {
+                width: 15px;
+                Image {
+                    y: (parent.height - self.height) / 2;
+                    width: 15px;
+                    height: 15px;
+                    image-fit: contain;
+                    source: root.icon;
+                    colorize: Theme.accent-primary;
+                }
+            }
+            Text {
+                text: root.title;
+                font-size: 13px;
+                font-weight: 800;
+                color: Theme.text-primary;
+                vertical-alignment: center;
+                font-family: "IBM Plex Sans";
+            }
+        }
+
+        // Whatever the caller puts here, right-aligned beside the close.
+        HorizontalLayout {
+            horizontal-stretch: 1;
+            spacing: 12px;
+            alignment: end;
+            @children
+        }
+
+        Rectangle {
+            width: 26px;
+            VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 26px;
+                    height: 26px;
+                    border-radius: Theme.radius-sharp;
+                    background: close-touch.has-hover ? Theme.bg-hover : transparent;
+                    close-touch := TouchArea {
+                        mouse-cursor: MouseCursor.pointer;
+                        clicked => { root.closed(); }
+                    }
+                    // A drawn icon. The bare `✕` glyph fell back to whatever the font had and
+                    // rendered wrong - the same fault as the Marker delete affordance, in the same
+                    // session.
+                    Image {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        width: 13px;
+                        height: 13px;
+                        image-fit: contain;
+                        source: @image-url("../../assets/icons/x.svg");
+                        colorize: close-touch.has-hover ? Theme.text-primary : Theme.text-muted;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// A SUNKEN CARD around one group of settings.
+//
+// The G3 design puts every settings group in one of these - sunken surface, 1px border, 14px padding,
+// 8px gap - and the first build of the Settings screen used bare dividers instead. With four groups
+// on one scrolling column and nothing enclosing them, the owner's reading was that the placement
+// looked untidy, which it was: a divider says "these are different" and a card says "this is one
+// thing".
+export component SdCard inherits Rectangle {
+    background: Theme.bg-subtle;
+    border-width: 1px;
+    border-color: Theme.border-subtle;
+    border-radius: Theme.radius-sharp;
+    height: body.preferred-height;
+
+    body := VerticalLayout {
+        padding: 14px;
+        spacing: 8px;
+        @children
+    }
+}

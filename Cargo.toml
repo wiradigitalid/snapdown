@@ -45,3 +45,4 @@ image = { version = "0.25.10", default-features = false, features = ["png", "bmp
 # Already in the lockfile - Slint depends on it - so this is a direct declaration of something
 # already being built, not a new dependency. Pure Rust, no C toolchain, which `AD-` rules out.
 ab_glyph = "0.2"
+png = "0.17"

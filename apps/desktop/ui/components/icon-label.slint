@@ -1,0 +1,50 @@
+import { Theme } from "../theme.slint";
+
+// An icon and a label on the same optical line.
+//
+// This exists because the obvious way to write one is wrong, and it was written the obvious way in
+// three places. In a Slint layout, a child with a FIXED size is placed at the start of the cross
+// axis - the top, in a horizontal row - while a `Text` stretches to the row's full height and centres
+// its glyphs inside itself. So a 12px icon beside an 11px label sits a couple of pixels high, every
+// time, and no amount of `alignment: center` on the row fixes it: that property is the row's
+// HORIZONTAL alignment.
+//
+// The fix is to give the icon a full-height box of its own and centre it inside that. The inspector's
+// tab bar already did this by hand; the readout strip and the Assemble tile did not, which is
+// `BUG-70`. One component, so a fourth pairing cannot arrive with a fourth answer.
+export component SdIconLabel inherits HorizontalLayout {
+    in property <image> icon;
+    in property <string> text;
+    in property <length> icon-size: 12px;
+    in property <length> text-size: 11px;
+    in property <color> text-color: Theme.text-muted;
+    // Applied to the icon as well as the text, so a pairing cannot end up two colours.
+    in property <bool> colorize-icon: false;
+    in property <bool> mono: false;
+    in property <int> weight: 400;
+
+    spacing: 4px;
+
+    Rectangle {
+        width: root.icon-size;
+        // No height: the layout stretches this, which is the whole point - it gives the image
+        // somewhere to be centred in.
+        Image {
+            y: (parent.height - self.height) / 2;
+            width: root.icon-size;
+            height: root.icon-size;
+            image-fit: contain;
+            source: root.icon;
+            colorize: root.colorize-icon ? root.text-color : transparent;
+        }
+    }
+
+    Text {
+        text: root.text;
+        font-size: root.text-size;
+        font-weight: root.weight;
+        color: root.text-color;
+        vertical-alignment: center;
+        font-family: root.mono ? "IBM Plex Mono" : "IBM Plex Sans";
+    }
+}

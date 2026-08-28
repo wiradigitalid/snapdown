@@ -637,3 +637,178 @@ fn open_file_location_passes_explorer_a_switch_it_can_parse() {
         "and the separators must be native: `image_path` is a Vault-relative key with forward          slashes, so joining it yields a mixed path Explorer also rejects"
     );
 }
+
+/// The Settings screen is a WIRE to what already existed, not a second copy of it.
+///
+/// `settings-clicked` was a `println!` for the whole life of the Slint Editor (`BUG-57`), while the
+/// startup registrar, the hotkey registrar, the Quality Budget domain type and the vault path
+/// setting all sat built and unreachable. This asserts the screen reads from them rather than from
+/// state of its own - a preferences screen with its own copy of a preference is `BUG-45`.
+#[test]
+fn the_settings_screen_reads_from_the_registrars_and_the_store() {
+    let main = flat(&read("src/main.rs"));
+
+    assert!(
+        main.contains("fn load_settings_into_window("),
+        "one loader, called on open and after every change, so nothing on the screen is a copy that \
+         can drift from what the product is using"
+    );
+    for source in [
+        "startup.is_enabled()",
+        "open_editor_after_capture(ctx)",
+        "ctx.vault_path.display()",
+        "current_budget(ctx)",
+        "hotkeys.get_bindings()",
+        "hotkeys.get_startup_failures()",
+    ] {
+        assert!(
+            main.contains(source),
+            "`{source}` must feed the screen - that value already existed and had no surface"
+        );
+    }
+
+    // Every control writes through to the thing that owns it.
+    for (callback, target) in [
+        ("on_startup_toggled", "startup.enable()"),
+        (
+            "on_open_editor_after_capture_toggled",
+            "SettingKey::OpenEditorAfterCapture",
+        ),
+        ("on_budget_chosen", "store_budget("),
+        ("on_hotkey_key_pressed", "validate_and_rebind("),
+        ("on_hotkey_cleared", "hotkeys.clear(target)"),
+    ] {
+        assert!(
+            main.contains(callback) && main.contains(target),
+            "`{callback}` must reach `{target}`"
+        );
+    }
+
+    // A hand-set pair is Custom, because `Auto` resolves a different pair per capture and the two
+    // cannot both be true.
+    assert!(
+        main.contains("QualityBudget::new(NamedBudget::Custom, Some(pair))"),
+        "setting a number by hand must make the budget Custom, or the screen shows a preset name \
+         over numbers that preset does not use"
+    );
+
+    // A bare modifier must not bind.
+    let at = main
+        .find("fn shortcut_from_key(")
+        .expect("the shortcut composer must exist");
+    let body = &main[at..(at + 1600).min(main.len())];
+    assert!(
+        body.contains("return Err(ShortcutRefusal::NoModifier);"),
+        "a shortcut with no modifier would swallow a plain letter globally, in every application -          and it must be REFUSED WITH A REASON rather than silently dropped, which is the whole point          of the taxonomy borrowed from `wira-desk`"
+    );
+    assert!(
+        body.contains("Ok(None)"),
+        "and a bare modifier must be reported as mid-gesture, not as an error. The Reviewer holding          Ctrl on the way to Ctrl+Shift+S is not doing anything wrong"
+    );
+    assert!(
+        body.contains("CommandOrControl"),
+        "the composed string must match `DEFAULT_HOTKEY_CAPTURE`'s own format, or a rebind and a \
+         default read differently in the database"
+    );
+}
+
+/// The Slint attribution is finally in the product. `NTL-1`.
+#[test]
+fn the_about_tab_carries_the_slint_attribution() {
+    let settings = read("ui/components/settings.slint");
+
+    assert!(
+        settings.contains("https://slint.dev"),
+        "Slint's Royalty-free licence requires this acknowledgement IN the product. It was recorded \
+         as owed in `NTL-1` and never paid"
+    );
+    assert!(
+        settings.contains("Royalty-free"),
+        "and it has to name the licence, not just link the site"
+    );
+    assert!(
+        settings.contains("SIL Open Font License"),
+        "IBM Plex ships in the binary too"
+    );
+}
+
+/// `BUG-63` is closed: the encoder quality lever does something.
+///
+/// It was stored and read by nothing for the life of the product, because the obvious reading of it -
+/// a JPEG-style quality dial - does not exist in PNG. What it does instead is round colour and then
+/// store the capture as a PALETTE when it fits in 256, which on the measured fixture is 26% of the
+/// lossless size for a per-channel error of one.
+#[test]
+fn the_encoder_quality_lever_actually_encodes() {
+    let pipeline = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../crates/snapdown-store/src/image/pipeline.rs"),
+    )
+    .expect("the pipeline must be readable from here");
+    let flat_pipeline = flat(&pipeline);
+
+    assert!(
+        flat_pipeline.contains(
+            "pub(crate) fn encode_png( image: &RgbaImage, width: u32, height: u32, quality: u8,"
+        ),
+        "`encode_png` must TAKE the quality. It did not, which is the whole of `BUG-63`"
+    );
+    assert!(
+        pipeline.contains("fn bits_for_quality(quality: u8) -> u32"),
+        "the quality must map to something concrete - a bit depth - rather than being stored and          ignored"
+    );
+    assert!(
+        pipeline.contains("fn encode_png_indexed("),
+        "and the palette path is where the size actually goes: one byte per pixel instead of three"
+    );
+    assert!(
+        flat_pipeline.contains("if quality >= 100 { return encode_png_lossless("),
+        "100 must stay lossless. Nothing may be thrown away that the Reviewer did not ask to have          thrown away"
+    );
+
+    // The Finding's own quality reaches the burn, or the handoff is larger than the original.
+    let main = flat(&read("src/main.rs"));
+    assert!(
+        main.contains("f.resolved_encoder_quality .unwrap_or(snapdown_store::image::LOSSLESS)")
+            || main
+                .contains("f.resolved_encoder_quality.unwrap_or(snapdown_store::image::LOSSLESS)"),
+        "the Bundle's burn must use the FINDING's quality, not a fresh choice"
+    );
+
+    // And the screen no longer says it is dead.
+    let settings = read("ui/components/settings.slint");
+    assert!(
+        !settings.contains("Stored and not applied."),
+        "the disclaimer must be gone with the defect"
+    );
+    assert!(
+        !settings.contains("encoder-quality-live"),
+        "and so must the flag that marked it inert"
+    );
+}
+
+/// The resize ratio is a second tool beside the cap, not a replacement for it.
+#[test]
+fn the_resize_ratio_applies_before_the_cap() {
+    let image = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../crates/snapdown-core/src/domain/image.rs"),
+    )
+    .expect("the image domain must be readable from here");
+    let flat_image = flat(&image);
+
+    assert!(
+        flat_image.contains("scaled.compute_reduced_dimensions_with_edge(pair.max_long_edge)"),
+        "the ratio must be applied FIRST and the cap to the result. The other order takes a fifth          off the CAP rather than off the capture, so a 4K and a 2K screen come out the same size and          the ratio stops being a ratio"
+    );
+    assert!(
+        flat_image.contains("if pair.resize_percent >= 100 { self.clone() }"),
+        "100 must change nothing, so every Finding already reduced under the cap alone is unaffected"
+    );
+
+    let settings = read("ui/components/settings.slint");
+    assert!(
+        settings.contains("text: \"Resize every capture to\";"),
+        "and it needs a control of its own - the owner asked for a percentage, not a cap"
+    );
+}
