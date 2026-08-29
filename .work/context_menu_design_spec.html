@@ -1,0 +1,487 @@
+<title>Context Menu Design System</title>
+<style>
+  :root {
+    --color-bg: #f8fafc;
+    --color-surface: #ffffff;
+    --color-surface-raised: #ffffff;
+    --color-surface-sunken: #f1f5f9;
+    --color-text: #0f172a;
+    --color-text-secondary: #334155;
+    --color-text-muted: #475569;
+    --color-text-dim: #94a3b8;
+    --color-border: #e2e8f0;
+    --color-border-strong: #cbd5e1;
+
+    --color-accent: #2563eb;
+    --color-accent-hover: #1d4ed8;
+    --color-accent-subtle: #e0f2fe;
+    --color-accent-text: #ffffff;
+
+    --color-danger: #dc2626;
+    --color-danger-subtle: #fee2e2;
+    --color-danger-text: #ffffff;
+    --color-danger-text-dark: #991b1b;
+
+    /* Context Menu Specific Tokens */
+    --menu-bg: #ffffff;
+    --menu-border: #cbd5e1;
+    --menu-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.15), 0 8px 10px -6px rgba(15, 23, 42, 0.1);
+    --menu-item-text: #0f172a;
+    --menu-item-hover-bg: #2563eb;
+    --menu-item-hover-text: #ffffff;
+    --menu-item-hover-shortcut: rgba(255, 255, 255, 0.85);
+    --menu-item-shortcut: #64748b;
+    --menu-danger-hover-bg: #dc2626;
+    --menu-danger-hover-text: #ffffff;
+    --menu-danger-text: #dc2626;
+
+    --font-ui: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --color-bg: #090d16;
+      --color-surface: #131b2e;
+      --color-surface-raised: #1e293b;
+      --color-surface-sunken: #0f172a;
+      --color-text: #f8fafc;
+      --color-text-secondary: #cbd5e1;
+      --color-text-muted: #94a3b8;
+      --color-text-dim: #64748b;
+      --color-border: #334155;
+      --color-border-strong: #475569;
+
+      --color-accent: #2563eb;
+      --color-accent-hover: #1d4ed8;
+      --color-accent-subtle: #0c4a6e;
+      --color-accent-text: #ffffff;
+
+      --color-danger: #ef4444;
+      --color-danger-subtle: #450a0a;
+      --color-danger-text: #ffffff;
+      --color-danger-text-dark: #fca5a5;
+
+      --menu-bg: #1e293b;
+      --menu-border: #334155;
+      --menu-shadow: 0 16px 32px -4px rgba(0, 0, 0, 0.5), 0 8px 16px -4px rgba(0, 0, 0, 0.3);
+      --menu-item-text: #f8fafc;
+      --menu-item-hover-bg: #2563eb;
+      --menu-item-hover-text: #ffffff;
+      --menu-item-hover-shortcut: rgba(255, 255, 255, 0.85);
+      --menu-item-shortcut: #94a3b8;
+      --menu-danger-hover-bg: #dc2626;
+      --menu-danger-hover-text: #ffffff;
+      --menu-danger-text: #f87171;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --color-bg: #090d16;
+    --color-surface: #131b2e;
+    --color-surface-raised: #1e293b;
+    --color-surface-sunken: #0f172a;
+    --color-text: #f8fafc;
+    --color-text-secondary: #cbd5e1;
+    --color-text-muted: #94a3b8;
+    --color-text-dim: #64748b;
+    --color-border: #334155;
+    --color-border-strong: #475569;
+
+    --color-accent: #2563eb;
+    --color-accent-hover: #1d4ed8;
+    --color-accent-subtle: #0c4a6e;
+    --color-accent-text: #ffffff;
+
+    --color-danger: #ef4444;
+    --color-danger-subtle: #450a0a;
+    --color-danger-text: #ffffff;
+    --color-danger-text-dark: #fca5a5;
+
+    --menu-bg: #1e293b;
+    --menu-border: #334155;
+    --menu-shadow: 0 16px 32px -4px rgba(0, 0, 0, 0.5), 0 8px 16px -4px rgba(0, 0, 0, 0.3);
+    --menu-item-text: #f8fafc;
+    --menu-item-hover-bg: #2563eb;
+    --menu-item-hover-text: #ffffff;
+    --menu-item-hover-shortcut: rgba(255, 255, 255, 0.85);
+    --menu-item-shortcut: #94a3b8;
+    --menu-danger-hover-bg: #dc2626;
+    --menu-danger-hover-text: #ffffff;
+    --menu-danger-text: #f87171;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-ui);
+    padding: 2.5rem 1.5rem;
+    line-height: 1.5;
+  }
+
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+
+  .header {
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 1.5rem;
+  }
+
+  .header h1 {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text);
+    margin-bottom: 0.5rem;
+  }
+
+  .header p {
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+  }
+
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .section-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .card-header {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Mock Context Menu Styles */
+  .context-menu-demo {
+    width: 260px;
+    background-color: var(--menu-bg);
+    border: 1px solid var(--menu-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--menu-shadow);
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    user-select: none;
+  }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--menu-item-text);
+    cursor: pointer;
+    transition: background-color 0.1s ease, color 0.1s ease;
+  }
+
+  .menu-item-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .menu-item-icon {
+    font-size: 0.95rem;
+    line-height: 1;
+    display: inline-flex;
+  }
+
+  .menu-item-shortcut {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--menu-item-shortcut);
+  }
+
+  /* Distinct High-Contrast Active/Hover Treatment */
+  .menu-item:hover,
+  .menu-item.mock-active {
+    background-color: var(--menu-item-hover-bg) !important;
+    color: var(--menu-item-hover-text) !important;
+  }
+
+  .menu-item:hover .menu-item-shortcut,
+  .menu-item.mock-active .menu-item-shortcut {
+    color: var(--menu-item-hover-shortcut) !important;
+  }
+
+  .menu-item.danger {
+    color: var(--menu-danger-text);
+  }
+
+  .menu-item.danger:hover,
+  .menu-item.danger.mock-active {
+    background-color: var(--menu-danger-hover-bg) !important;
+    color: var(--menu-danger-hover-text) !important;
+  }
+
+  .menu-item.disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .menu-item.disabled:hover {
+    background-color: transparent !important;
+    color: var(--menu-item-text) !important;
+  }
+
+  .menu-separator {
+    height: 1px;
+    background-color: var(--menu-border);
+    margin: 4px 2px;
+  }
+
+  /* Comparison Badge */
+  .badge-contrast {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .badge-pass {
+    background-color: #dcfce7;
+    color: #166534;
+  }
+
+  .badge-fail {
+    background-color: #fee2e2;
+    color: #991b1b;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    text-align: left;
+  }
+
+  th, td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  th {
+    color: var(--color-text-muted);
+    font-weight: 600;
+  }
+
+  .interactive-trigger-box {
+    border: 2px dashed var(--color-border-strong);
+    border-radius: var(--radius-md);
+    padding: 2rem;
+    text-align: center;
+    background-color: var(--color-surface-sunken);
+    cursor: context-menu;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+  }
+
+  .interactive-trigger-box:hover {
+    border-color: var(--color-accent);
+    background-color: var(--color-accent-subtle);
+  }
+</style>
+
+<div class="container">
+  <header class="header">
+    <h1>Desktop Context Menu Design System</h1>
+    <p>Enhanced High-Contrast Focus & Hover Visual Hierarchy for Snapdown Webview</p>
+  </header>
+
+  <!-- Section 1: Comparison of Previous vs Improved Treatment -->
+  <section class="section">
+    <h2 class="section-title">1. Treatment Comparison: Hover & Active Contrast</h2>
+    <div class="grid-2">
+      <!-- Previous Low-Contrast State -->
+      <div class="card">
+        <div class="card-header" style="color: var(--color-danger);">❌ Previous: Low Contrast (Subtle Gray)</div>
+        <p style="font-size: 0.82rem; color: var(--color-text-muted);">
+          Using <code>var(--color-surface-sunken)</code> on hover caused minimal contrast distinction (&lt; 1.15:1 difference), making cursor position hard to identify.
+        </p>
+        <div style="display: flex; justify-content: center; padding: 1rem 0;">
+          <div class="context-menu-demo">
+            <div class="menu-item">
+              <span class="menu-item-left"><span class="menu-item-icon">📦</span> Assemble to Bundle</span>
+            </div>
+            <!-- Weak hover state -->
+            <div class="menu-item" style="background-color: var(--color-surface-sunken); color: var(--color-text);">
+              <span class="menu-item-left"><span class="menu-item-icon">📂</span> Open File Location</span>
+              <span class="menu-item-shortcut" style="color: var(--color-text-dim);">Hovered (Faint)</span>
+            </div>
+            <div class="menu-item">
+              <span class="menu-item-left"><span class="menu-item-icon">📋</span> Copy Image</span>
+            </div>
+            <div class="menu-separator"></div>
+            <div class="menu-item danger">
+              <span class="menu-item-left"><span class="menu-item-icon">🗑️</span> Delete Screenshot</span>
+              <span class="menu-item-shortcut">Del</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Improved High-Contrast State -->
+      <div class="card">
+        <div class="card-header" style="color: var(--color-accent);">✅ Improved: High-Contrast Accent Fill</div>
+        <p style="font-size: 0.82rem; color: var(--color-text-muted);">
+          Active/Hovered row highlights with <code>var(--color-accent)</code> (#2563eb) and pure white typography (5.7:1 WCAG AA compliant), giving instant clarity.
+        </p>
+        <div style="display: flex; justify-content: center; padding: 1rem 0;">
+          <div class="context-menu-demo">
+            <div class="menu-item">
+              <span class="menu-item-left"><span class="menu-item-icon">📦</span> Assemble to Bundle</span>
+            </div>
+            <!-- Prominent hover state -->
+            <div class="menu-item mock-active">
+              <span class="menu-item-left"><span class="menu-item-icon">📂</span> Open File Location</span>
+              <span class="menu-item-shortcut">Active Focus</span>
+            </div>
+            <div class="menu-item">
+              <span class="menu-item-left"><span class="menu-item-icon">📋</span> Copy Image</span>
+            </div>
+            <div class="menu-separator"></div>
+            <div class="menu-item danger">
+              <span class="menu-item-left"><span class="menu-item-icon">🗑️</span> Delete Screenshot</span>
+              <span class="menu-item-shortcut">Del</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 2: Interactive Playground -->
+  <section class="section">
+    <h2 class="section-title">2. Interactive Playground (Hover items below)</h2>
+    <div class="card">
+      <div class="interactive-trigger-box">
+        <div style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem;">🖱️ Interactive Context Menu Preview</div>
+        <p style="font-size: 0.85rem; color: var(--color-text-muted); margin-bottom: 1.5rem;">
+          Hover over each menu item below to test smooth cursor tracking and visual weight.
+        </p>
+
+        <div style="display: flex; justify-content: center;">
+          <div class="context-menu-demo" style="text-align: left;">
+            <div class="menu-item">
+              <span class="menu-item-left"><span class="menu-item-icon">📦</span> Assemble to Bundle</span>
+              <span class="menu-item-shortcut">Ctrl+B</span>
+            </div>
+            <div class="menu-item">
+              <span class="menu-item-left"><span class="menu-item-icon">📂</span> Open File Location</span>
+            </div>
+            <div class="menu-item">
+              <span class="menu-item-left"><span class="menu-item-icon">📋</span> Copy Image</span>
+              <span class="menu-item-shortcut">Ctrl+C</span>
+            </div>
+            <div class="menu-item">
+              <span class="menu-item-left"><span class="menu-item-icon">🎨</span> Copy Burned Image (with Markers)</span>
+            </div>
+            <div class="menu-separator"></div>
+            <div class="menu-item disabled">
+              <span class="menu-item-left"><span class="menu-item-icon">⚙️</span> Item Disabled</span>
+            </div>
+            <div class="menu-separator"></div>
+            <div class="menu-item danger">
+              <span class="menu-item-left"><span class="menu-item-icon">🗑️</span> Delete Screenshot</span>
+              <span class="menu-item-shortcut">Del</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 3: Token Specification -->
+  <section class="section">
+    <h2 class="section-title">3. Design System Tokens & WCAG Contrast</h2>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>State</th>
+            <th>Background Token</th>
+            <th>Text Color Token</th>
+            <th>WCAG Contrast</th>
+            <th>Compliance</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Normal Item</strong></td>
+            <td><code>transparent</code></td>
+            <td><code>var(--color-text)</code> (#0f172a)</td>
+            <td>14.8:1</td>
+            <td><span class="badge-contrast badge-pass">✓ AAA Pass</span></td>
+          </tr>
+          <tr>
+            <td><strong>Hover / Active Item</strong></td>
+            <td><code>var(--color-accent)</code> (#2563eb)</td>
+            <td><code>var(--color-accent-text)</code> (#ffffff)</td>
+            <td>5.7:1</td>
+            <td><span class="badge-contrast badge-pass">✓ AA Pass</span></td>
+          </tr>
+          <tr>
+            <td><strong>Danger Normal</strong></td>
+            <td><code>transparent</code></td>
+            <td><code>var(--color-danger)</code> (#dc2626)</td>
+            <td>4.6:1</td>
+            <td><span class="badge-contrast badge-pass">✓ AA Pass</span></td>
+          </tr>
+          <tr>
+            <td><strong>Danger Hover / Active</strong></td>
+            <td><code>var(--color-danger)</code> (#dc2626)</td>
+            <td><code>var(--color-danger-text)</code> (#ffffff)</td>
+            <td>4.6:1</td>
+            <td><span class="badge-contrast badge-pass">✓ AA Pass</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

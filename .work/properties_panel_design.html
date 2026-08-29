@@ -1,0 +1,814 @@
+<title>Snapdown Properties Panel Ergonomics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --color-bg: #f8fafc;
+    --color-surface: #ffffff;
+    --color-surface-raised: #ffffff;
+    --color-surface-sunken: #f1f5f9;
+    --color-surface-glass: rgba(255, 255, 255, 0.92);
+
+    --color-text: #0f172a;
+    --color-text-secondary: #334155;
+    --color-text-muted: #64748b;
+    --color-text-dim: #94a3b8;
+
+    --color-border: #e2e8f0;
+    --color-border-subtle: #f1f5f9;
+    --color-border-strong: #cbd5e1;
+
+    --color-accent: #2563eb;
+    --color-accent-hover: #1d4ed8;
+    --color-accent-subtle: #eff6ff;
+    --color-accent-text: #ffffff;
+
+    --color-danger: #dc2626;
+    --color-danger-subtle: #fef2f2;
+    --color-danger-border: #fecaca;
+    --color-danger-muted: #b91c1c;
+
+    --color-marker: #f59e0b;
+    --color-marker-text: #000000;
+    --color-marker-ring: #ffffff;
+
+    --font-ui: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --color-bg: #090d16;
+      --color-surface: #131b2e;
+      --color-surface-raised: #1e293b;
+      --color-surface-sunken: #0f172a;
+      --color-surface-glass: rgba(19, 27, 46, 0.92);
+
+      --color-text: #f8fafc;
+      --color-text-secondary: #cbd5e1;
+      --color-text-muted: #94a3b8;
+      --color-text-dim: #64748b;
+
+      --color-border: #334155;
+      --color-border-subtle: #1e293b;
+      --color-border-strong: #475569;
+
+      --color-accent: #2563eb;
+      --color-accent-hover: #1d4ed8;
+      --color-accent-subtle: #172554;
+      --color-accent-text: #ffffff;
+
+      --color-danger: #ef4444;
+      --color-danger-subtle: #450a0a;
+      --color-danger-border: #7f1d1d;
+      --color-danger-muted: #f87171;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --color-bg: #090d16;
+    --color-surface: #131b2e;
+    --color-surface-raised: #1e293b;
+    --color-surface-sunken: #0f172a;
+    --color-surface-glass: rgba(19, 27, 46, 0.92);
+
+    --color-text: #f8fafc;
+    --color-text-secondary: #cbd5e1;
+    --color-text-muted: #94a3b8;
+    --color-text-dim: #64748b;
+
+    --color-border: #334155;
+    --color-border-subtle: #1e293b;
+    --color-border-strong: #475569;
+
+    --color-accent: #2563eb;
+    --color-accent-hover: #1d4ed8;
+    --color-accent-subtle: #172554;
+    --color-accent-text: #ffffff;
+
+    --color-danger: #ef4444;
+    --color-danger-subtle: #450a0a;
+    --color-danger-border: #7f1d1d;
+    --color-danger-muted: #f87171;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-ui);
+    line-height: 1.5;
+    padding: var(--space-6);
+    min-height: 100vh;
+  }
+
+  .container {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .header-left h1 {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .header-left p {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin-top: 4px;
+  }
+
+  .theme-toggle {
+    display: flex;
+    background: var(--color-surface-sunken);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    padding: 3px;
+    gap: 4px;
+  }
+
+  .theme-btn {
+    border: none;
+    background: transparent;
+    padding: 6px 12px;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .theme-btn.active {
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Grid layout for comparison and live mockup */
+  .grid-layout {
+    display: grid;
+    grid-template-columns: 1fr 440px;
+    gap: var(--space-6);
+    align-items: start;
+  }
+
+  @media (max-width: 960px) {
+    .grid-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .card-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-text);
+    margin-bottom: var(--space-3);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: var(--radius-xs);
+    letter-spacing: 0.04em;
+  }
+
+  .badge-recommended {
+    background: var(--color-accent-subtle);
+    color: var(--color-accent);
+    border: 1px solid var(--color-accent);
+  }
+
+  .badge-danger {
+    background: var(--color-danger-subtle);
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger-border);
+  }
+
+  .delete-options {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin-top: var(--space-3);
+  }
+
+  .option-box {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    background: var(--color-surface-sunken);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .option-box:hover {
+    border-color: var(--color-accent);
+    background: var(--color-surface);
+  }
+
+  .option-box.active {
+    border-color: var(--color-accent);
+    background: var(--color-surface);
+    box-shadow: 0 0 0 2px var(--color-accent-subtle);
+  }
+
+  .option-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .option-name {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--color-text);
+  }
+
+  .option-desc {
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+  }
+
+  /* Interactive Properties Panel Live Preview */
+  .panel-frame {
+    width: 440px;
+    height: 720px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--color-surface);
+    flex-shrink: 0;
+  }
+
+  .panel-title {
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .panel-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .section-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+  }
+
+  .summary-textarea {
+    width: 100%;
+    height: 130px;
+    min-height: 130px;
+    max-height: 130px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xs);
+    background: var(--color-surface);
+    color: var(--color-text);
+    padding: var(--space-2);
+    font-family: var(--font-ui);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+  }
+
+  .summary-textarea:focus {
+    border-color: var(--color-accent);
+  }
+
+  .marker-card {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-sunken);
+    border-radius: var(--radius-sm);
+    padding: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .marker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .marker-pill {
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-full);
+    background: var(--color-marker);
+    color: var(--color-marker-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 800;
+    border: 2px solid var(--color-marker-ring);
+  }
+
+  .marker-label {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+  }
+
+  .marker-delete-btn {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 0.8rem;
+    border-radius: var(--radius-xs);
+  }
+
+  .marker-delete-btn:hover {
+    color: var(--color-danger);
+    background: var(--color-danger-subtle);
+  }
+
+  .marker-input {
+    width: 100%;
+    min-height: 48px;
+    padding: var(--space-2);
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: 0.75rem;
+    font-family: var(--font-ui);
+    resize: vertical;
+    outline: none;
+  }
+
+  /* STICKY BOTTOM SECTION */
+  .panel-sticky-bottom {
+    flex-shrink: 0;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    padding: var(--space-3) var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.03);
+  }
+
+  .sticky-token-box {
+    background: var(--color-surface-sunken);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .token-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+  }
+
+  .token-row.primary {
+    font-family: var(--font-ui);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+  }
+
+  .token-total {
+    font-family: var(--font-mono);
+    color: var(--color-accent);
+    font-weight: 800;
+  }
+
+  /* DELETE BUTTON VARIANTS */
+  /* Variant A: Calm Ghost Secondary Button (Recommended) */
+  .btn-delete-ghost {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--color-text-muted);
+    transition: all 0.15s ease;
+  }
+
+  .btn-delete-ghost:hover {
+    background: var(--color-danger-subtle);
+    color: var(--color-danger-muted);
+    border-color: var(--color-danger-border);
+  }
+
+  /* Variant B: Soft Subdued Border Button */
+  .btn-delete-subdued {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-sunken);
+    color: var(--color-text-secondary);
+    transition: all 0.15s ease;
+  }
+
+  .btn-delete-subdued:hover {
+    background: var(--color-danger-subtle);
+    color: var(--color-danger);
+    border-color: var(--color-danger-border);
+  }
+
+  /* Variant C: Loud Old Red Button (To Contrast) */
+  .btn-delete-loud {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    border: 1px solid var(--color-danger);
+    background: var(--color-danger-subtle);
+    color: var(--color-danger);
+  }
+
+  .add-marker-sim {
+    padding: 6px 12px;
+    background: var(--color-surface);
+    border: 1px dashed var(--color-border-strong);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-accent);
+    cursor: pointer;
+    text-align: center;
+  }
+
+  .add-marker-sim:hover {
+    background: var(--color-accent-subtle);
+    border-color: var(--color-accent);
+  }
+</style>
+
+<div class="container">
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <h1>📐 Properties Panel Ergonomics & Token Sticky Layout</h1>
+      <p>Solusi desain UI/UX: Sticky Bottom Token Cost + Desain Tenang untuk Tombol Hapus Screenshot (Anti-Eye Strain)</p>
+    </div>
+    <div class="theme-toggle">
+      <button class="theme-btn active" id="btn-theme-light" onclick="setTheme('light')">☀️ Light</button>
+      <button class="theme-btn" id="btn-theme-dark" onclick="setTheme('dark')">🌙 Dark</button>
+    </div>
+  </header>
+
+  <!-- Main Grid -->
+  <div class="grid-layout">
+    <!-- Left Column: Design Rationales & Button Variants -->
+    <div style="display: flex; flex-direction: column; gap: var(--space-5);">
+
+      <!-- Card 1: Problem & Solution Breakdown -->
+      <div class="card">
+        <div class="card-title">
+          <span>🎯 Problem & Architectural Solution</span>
+        </div>
+        <div style="font-size: 0.875rem; color: var(--color-text-secondary); display: flex; flex-direction: column; gap: var(--space-3); line-height: 1.6;">
+          <p>
+            <strong>1. Sticky Bottom Token Estimator</strong>: Ketika daftar Step Marker bertambah banyak (atau kosong 0 marker), panel tengah akan melakukan <em>scroll vertikal mandiri</em>. Area <strong>Estimated LLM Cost</strong> dan <strong>Action Footer</strong> dikunci secara <code>flex-shrink: 0; position: sticky; bottom: 0;</code> di bagian paling bawah panel. Pengguna selalu melihat biaya token tanpa perlu scroll ke bawah.
+          </p>
+          <p>
+            <strong>2. Tombol Hapus Anti-Sakit Mata (Calm Ergonomics)</strong>: Tombol hapus merah mencolok secara psikologis menimbulkan <em>alarm fatigue</em> dan mengganggu fokus saat bekerja berjam-jam. Di bawah adalah 3 varian desain tombol hapus untuk dipilih:
+          </p>
+        </div>
+
+        <div class="delete-options">
+          <!-- Option A -->
+          <div class="option-box active" id="opt-a" onclick="selectVariant('a')">
+            <div class="option-header">
+              <span class="option-name">Varian A: Quiet Ghost Button (Direkomendasikan ⭐)</span>
+              <span class="badge badge-recommended">Best Practice</span>
+            </div>
+            <p class="option-desc">
+              Normal: Teks & icon berwarna muted slate (abu-abu tenang) tanpa border menyala.<br>
+              Hover: Berubah lembut ke latar soft rose (<code>--color-danger-subtle</code>) dengan teks merah marun. Tidak mencolok di mata, namun tegas saat diarahkan kursor.
+            </p>
+          </div>
+
+          <!-- Option B -->
+          <div class="option-box" id="opt-b" onclick="selectVariant('b')">
+            <div class="option-header">
+              <span class="option-name">Varian B: Subdued Neutral Pill</span>
+              <span class="badge badge-recommended">Secondary Style</span>
+            </div>
+            <p class="option-desc">
+              Normal: Memiliki border tipis sunken neutral mirip tombol secondary biasa.<br>
+              Hover: Berubah menjadi danger border dan danger text. Sangat rapi dan terstruktur di grid footer.
+            </p>
+          </div>
+
+          <!-- Option C -->
+          <div class="option-box" id="opt-c" onclick="selectVariant('c')">
+            <div class="option-header">
+              <span class="option-name">Varian C: Loud Red Border (Desain Lama)</span>
+              <span class="badge badge-danger">Loud / Eye-strain</span>
+            </div>
+            <p class="option-desc">
+              Border merah dan teks merah menyala terus-menerus. Terasa terlalu agresif untuk screenshot queue rutin.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: Micro-Interactions & State Details -->
+      <div class="card">
+        <div class="card-title">
+          <span>⚡ Micro-interactions & Usability Highlights</span>
+        </div>
+        <ul style="font-size: 0.8125rem; color: var(--color-text-secondary); padding-left: 1.25rem; display: flex; flex-direction: column; gap: var(--space-2); line-height: 1.5;">
+          <li><strong>Independensi Scroll</strong>: Observation Summary (130px) + Step Marker Notes bergerak bersama di viewport scroll tengah, sementara Header dan Token Footer tetap diam di posisinya.</li>
+          <li><strong>Zero Jitter</strong>: Tidak ada layout shift saat marker ditambahkan dari 0 ke 5+.</li>
+          <li><strong>Konfirmasi Lembut</strong>: Hover pada tombol hapus memberi feedback visual langsung tanpa pop-up yang mengganggu flow kerja.</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Right Column: Interactive Live Preview of Properties Panel -->
+    <div style="display: flex; flex-direction: column; gap: var(--space-3); align-items: center;">
+      <div style="font-size: 0.75rem; font-weight: 700; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em;">
+        Live Interactive Preview (Coba Tambah Marker & Scroll)
+      </div>
+
+      <!-- The Live Panel Frame -->
+      <div class="panel-frame">
+        <!-- 1. Header (Sticky Top) -->
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>📝</span>
+            <span>Notes & Markers</span>
+          </div>
+          <span style="font-size: 0.65rem; font-family: var(--font-mono); background: var(--color-surface-sunken); padding: 2px 8px; border-radius: var(--radius-sm); color: var(--color-text-secondary); font-weight: 600;">
+            018f234a…
+          </span>
+        </div>
+
+        <!-- 2. Scrollable Middle Body -->
+        <div class="panel-scroll-area" id="panel-scroll">
+          <!-- Observation Summary -->
+          <div style="display: flex; flex-direction: column; gap: var(--space-1);">
+            <div class="section-label">Observation Summary</div>
+            <textarea class="summary-textarea" placeholder="Tuliskan ringkasan keseluruhan temuan di sini...">Tombol login mengalami overflow pada resolusi tablet 768px dan teks terpotong.</textarea>
+          </div>
+
+          <!-- Step Marker Notes Section -->
+          <div style="display: flex; flex-direction: column; gap: var(--space-2);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="section-label" id="marker-count-label">Step Marker Notes (2)</span>
+            </div>
+
+            <!-- List of Markers -->
+            <div id="marker-list" style="display: flex; flex-direction: column; gap: var(--space-2);">
+              <div class="marker-card">
+                <div class="marker-header">
+                  <div style="display: flex; align-items: center; gap: var(--space-2);">
+                    <div class="marker-pill">1</div>
+                    <span class="marker-label">Marker #1</span>
+                    <span style="font-size: 0.65rem; font-family: var(--font-mono); color: var(--color-text-muted);">(32%, 45%)</span>
+                  </div>
+                  <button class="marker-delete-btn" onclick="removeMarker(this)">🗑️</button>
+                </div>
+                <textarea class="marker-input" rows="2">Tombol submit terpotong ke bawah</textarea>
+              </div>
+
+              <div class="marker-card">
+                <div class="marker-header">
+                  <div style="display: flex; align-items: center; gap: var(--space-2);">
+                    <div class="marker-pill">2</div>
+                    <span class="marker-label">Marker #2</span>
+                    <span style="font-size: 0.65rem; font-family: var(--font-mono); color: var(--color-text-muted);">(68%, 52%)</span>
+                  </div>
+                  <button class="marker-delete-btn" onclick="removeMarker(this)">🗑️</button>
+                </div>
+                <textarea class="marker-input" rows="2">Padding container terlalu sempit (hanya 4px)</textarea>
+              </div>
+            </div>
+
+            <!-- Add simulated marker button -->
+            <button class="add-marker-sim" onclick="addSimulatedMarker()">+ Simulasikan Tambah Marker Baru</button>
+          </div>
+        </div>
+
+        <!-- 3. Sticky Bottom Section (Token Estimator + Calm Delete Button) -->
+        <div class="panel-sticky-bottom">
+          <!-- Token Estimator Box -->
+          <div class="sticky-token-box">
+            <div class="token-row primary">
+              <span>🪙 Estimated LLM Cost</span>
+              <span class="token-total" id="token-total-val">~2,410 tk</span>
+            </div>
+            <div class="token-row">
+              <span>🖼️ Image (1920×1080)</span>
+              <span>~2,765 tk</span>
+            </div>
+            <div class="token-row">
+              <span>📝 Notes (142 chars)</span>
+              <span>~38 tk</span>
+            </div>
+          </div>
+
+          <!-- Delete Screenshot Button Variant Preview -->
+          <div id="delete-btn-container">
+            <button type="button" class="btn-delete-ghost" id="active-delete-btn" onclick="alert('Screenshot dihapus dari queue!')">
+              <span>🗑️</span>
+              <span>Remove from Queue</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  function setTheme(theme) {
+    if (theme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.getElementById('btn-theme-dark').classList.add('active');
+      document.getElementById('btn-theme-light').classList.remove('active');
+    } else {
+      document.documentElement.setAttribute('data-theme', 'light');
+      document.getElementById('btn-theme-light').classList.add('active');
+      document.getElementById('btn-theme-dark').classList.remove('active');
+    }
+  }
+
+  let currentOrdinal = 3;
+
+  function addSimulatedMarker() {
+    const list = document.getElementById('marker-list');
+    const card = document.createElement('div');
+    card.className = 'marker-card';
+    card.innerHTML = `
+      <div class="marker-header">
+        <div style="display: flex; align-items: center; gap: var(--space-2);">
+          <div class="marker-pill">${currentOrdinal}</div>
+          <span class="marker-label">Marker #${currentOrdinal}</span>
+          <span style="font-size: 0.65rem; font-family: var(--font-mono); color: var(--color-text-muted);">(50%, ${20 + currentOrdinal * 10}%)</span>
+        </div>
+        <button class="marker-delete-btn" onclick="removeMarker(this)">🗑️</button>
+      </div>
+      <textarea class="marker-input" rows="2" placeholder="Catatan untuk marker #${currentOrdinal}..."></textarea>
+    `;
+    list.appendChild(card);
+    currentOrdinal++;
+    updateMarkerCount();
+
+    // Auto scroll down to illustrate middle scrolling while token box stays sticky
+    const scrollArea = document.getElementById('panel-scroll');
+    scrollArea.scrollTop = scrollArea.scrollHeight;
+  }
+
+  function removeMarker(btn) {
+    const card = btn.closest('.marker-card');
+    card.remove();
+    updateMarkerCount();
+  }
+
+  function updateMarkerCount() {
+    const count = document.querySelectorAll('#marker-list .marker-card').length;
+    document.getElementById('marker-count-label').textContent = `Step Marker Notes (${count})`;
+  }
+
+  function selectVariant(variant) {
+    document.querySelectorAll('.option-box').forEach(el => el.classList.remove('active'));
+    document.getElementById('opt-' + variant).classList.add('active');
+
+    const container = document.getElementById('delete-btn-container');
+    if (variant === 'a') {
+      container.innerHTML = `
+        <button type="button" class="btn-delete-ghost" onclick="alert('Screenshot dihapus dari queue!')">
+          <span>🗑️</span>
+          <span>Remove from Queue</span>
+        </button>
+      `;
+    } else if (variant === 'b') {
+      container.innerHTML = `
+        <button type="button" class="btn-delete-subdued" onclick="alert('Screenshot dihapus dari queue!')">
+          <span>🗑️</span>
+          <span>Remove Screenshot</span>
+        </button>
+      `;
+    } else if (variant === 'c') {
+      container.innerHTML = `
+        <button type="button" class="btn-delete-loud" onclick="alert('Screenshot dihapus dari queue!')">
+          <span>🗑️</span>
+          <span>Delete Screenshot from Queue</span>
+        </button>
+      `;
+    }
+  }
+</script>
