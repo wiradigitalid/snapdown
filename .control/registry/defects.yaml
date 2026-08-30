@@ -5095,9 +5095,19 @@ defects:
       the sequential branch was forced on, consistent with the ~1668ms this took before threading
       existed.
 
+      SECOND FOLLOW-UP, same day: SIMD was tried, not left un-attempted. A `Vec4` wrapping
+      `[f32; 4]` in one SSE2 `__m128` (via `std::arch::x86_64`, no new dependency, no runtime
+      feature detection needed - SSE2 is x86_64 baseline) replaced the per-channel loops in both
+      band functions. Measured back-to-back on this machine, release build: the explicit-SIMD
+      `Vec4` and a plain-array `Vec4` (identical code, intrinsics swapped for elementwise arithmetic
+      via a forced `#[cfg]`) were statistically indistinguishable - both ~51-56ms at 1080p,
+      ~91-106ms at 1440p, ~201-206ms at 4K. LLVM's autovectorizer was already turning the plain
+      fixed-4-element array loop into equivalent SIMD on this release build, so the explicit
+      intrinsics bought nothing and were reverted rather than merged for `unsafe` code and an
+      architecture-specific path that weren't earning their cost.
+
       STILL not fully closed at 4K: ~213ms is a 16x cumulative improvement over the original 3402ms
-      but still not strictly imperceptible. Further reduction would need SIMD (explicit
-      vectorization), a different kind of change again, and was left out here for the same reason
-      parallelism was left out of the first pass: it wasn't asked for yet. Ticket:
+      but still not strictly imperceptible, and the two approaches obviously available (algorithmic,
+      threading) are now exhausted along with SIMD. Ticket:
       `.scratch/filmstrip-blur-perf/issues/01-box-pass-no-longer-o-radius-per-pixel.md`.
     status: fixed

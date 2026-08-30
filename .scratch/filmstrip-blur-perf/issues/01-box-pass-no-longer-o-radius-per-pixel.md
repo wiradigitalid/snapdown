@@ -28,11 +28,21 @@ seeing again.
       sub-linear in core count because this is memory-bandwidth-bound, not compute-bound.
 
       **Still not fully closed at 4K**: ~213ms is a large cumulative improvement (16x from the
-      original 3402ms) but still not strictly imperceptible on the UI thread. Squeezing further would
-      need SIMD, which is a different kind of change again (explicit vectorization rather than an
-      execution-model change) — left out here the same way parallelism was left out of the first
-      pass, for the same reason: it wasn't asked for yet, and the ceiling of "safe algorithmic +
-      threading, same output" has now been reached.
+      original 3402ms) but still not strictly imperceptible on the UI thread.
+
+      **SIMD was tried and measured, not left un-attempted.** A `Vec4` type wrapping `[f32; 4]` in a
+      single SSE2 `__m128` (via `std::arch::x86_64` intrinsics, no new dependency, no runtime feature
+      detection needed since SSE2 is x86_64 baseline) replaced the per-channel `for channel in 0..4`
+      loops in both band functions. Measured back-to-back on this machine, release build, same
+      process: the explicit-SIMD `Vec4` and a plain-array `Vec4` (same code, intrinsics swapped for
+      elementwise arithmetic via a forced `#[cfg]`) came out statistically indistinguishable - both
+      ~51-56ms at 1080p, ~91-106ms at 1440p, ~201-206ms at 4K. Rust/LLVM's autovectorizer was already
+      turning the plain fixed-4-element array loop into equivalent SIMD instructions on this release
+      build; the explicit intrinsics added `unsafe` and an architecture-specific code path for no
+      measured benefit, so they were reverted rather than kept "for later" - carrying unsafe code
+      that isn't earning its cost is a worse position than not having tried. Do not re-attempt this
+      exact approach without a new measurement showing the autovectorizer stopped covering it (e.g.
+      after a Rust/LLVM version change, or a restructuring that defeats autovectorization).
 - [x] The blur preview and the burned output pixels are pixel-identical to before this change — same
       three-pass separable box blur, same radius, same output, no visual regression. Verified by
       `box_pass_matches_the_naive_full_window_resummation_it_replaced` in
