@@ -4,7 +4,7 @@
 
 Decisions are no longer looked up through the memlog — the memlog goes back to being just a pass log.
 
-**7 decisions** — applied: 5 · draft: 2.
+**11 decisions** — applied: 6 · draft: 5.
 
 | id | Title | Status | Type | Touches | File |
 | --- | --- | --- | --- | --- | --- |
@@ -15,3 +15,7 @@ Decisions are no longer looked up through the memlog — the memlog goes back to
 | `DEC-005` | The desktop experience is finished before `sharing` and `agent-access` are touched again | `applied` | — | `.control/registry/defects.yaml`, `.control/registry/waves.yaml`, `.how/_platform/inventory-screen.md`, `.how/bundle/01-ux/DESIGN.md`, `.how/bundle/SDD-bundle.md`, `.how/settings/01-ux/DESIGN.md`, `.how/settings/04-components/LC-028-editor-shell.md`, `.what/_product-brief/brief.md`, `.what/bundle/04-usecases/EXPERIENCE.md`, `.what/business-rules.md`, `.what/settings/04-usecases/EXPERIENCE.md` | `.control/decisions/DEC-005-desktop-first-ordering.md` |
 | `DEC-006` | Every stored image Snapdown writes is PNG | `draft` | — | — | `.control/decisions/DEC-006-stored-image-format-is-png.md` |
 | `DEC-007` | The desktop application's UI moves from a Tauri v2 + React webview to native Slint | `draft` | — | — | `.control/decisions/DEC-007-desktop-moves-to-slint.md` |
+| `DEC-008` | The capture overlay is one GPU-rendered window over the whole virtual desktop, built at start-up and reused | `draft` | — | — | `.control/decisions/DEC-008-capture-overlay-single-window.md` |
+| `DEC-009` | The design system stays hand-authored in two theme columns, and takes one idea from Graphite rather than its… | `draft` | — | — | `.control/decisions/DEC-009-design-system-stays-hand-authored.md` |
+| `DEC-010` | `encoder_quality` means colour precision and a palette, not an encoder dial | `draft` | — | — | `.control/decisions/DEC-010-encoder-quality-is-colour-precision.md` |
+| `DEC-011` | WDI Method owns the documents, mattpocock/skills owns the code, and documents follow the code | `applied` | — | `AGENTS.md`, `.agents/AGENTS.md`, `.cursorrules`, `.github/validate-baseline.txt`, `_bmad/custom/bmad-correct-course.toml`, `docs/agents/domain.md`, `.claude/skills/`, `.agents/skills/` | `.control/decisions/DEC-011-documents-are-wdi-code-is-mattpocock.md` |

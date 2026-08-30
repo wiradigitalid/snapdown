@@ -66,74 +66,103 @@ export component SdSegmented inherits Rectangle {
 // every control. `radius-pill` only for a status chip, never a button."* A pill-shaped switch was
 // drawn here first and the owner rejected it on sight - it was the one control in the product with a
 // shape nothing else has.
-export component SdCheckbox inherits HorizontalLayout {
+export component SdCheckbox inherits Rectangle {
     in property <bool> checked;
     in property <string> text;
     in property <string> hint;
 
     callback toggled(bool);
 
-    spacing: 8px;
+    // A plain `Rectangle` root, not a `HorizontalLayout` one: a Layout element manages its own
+    // DIRECT children as side-by-side cells, so a `TouchArea` declared as one of those children
+    // becomes its own narrow cell rather than an overlay covering the row - the click target this
+    // component means to have shrinks to nearly nothing. Overlaying the whole row needs the
+    // content and the `TouchArea` to be SIBLINGS under a non-layout root, exactly like
+    // `SdActionButton` does it.
+    HorizontalLayout {
+        spacing: 8px;
 
-    Rectangle {
-        width: 15px;
-        // A full-height box so the tick can be centred against the FIRST line of a wrapped label -
-        // the same reason `SdIconLabel` exists, and the same trap: a fixed-size child in a layout
-        // is placed at the top of the cross axis.
+        // An empty spacer, not the box itself: reserving the column's width is all a layout cell
+        // does here. The box is drawn separately below, positioned from `label-text`'s own
+        // RESOLVED geometry (`y`/`height`, not `preferred-height`) - referencing that from inside
+        // this same layout, as a layout-managed size or padding, fed back into the layout's own
+        // width measurement and produced a binding loop (`padding-top -> layoutinfo-h ->
+        // label-text.width -> label-text.preferred-height -> padding-top`). A plain sibling
+        // Rectangle outside the layout only reads the already-settled output, so there's nothing
+        // left to feed back into.
+        Rectangle {
+            width: 15px;
+        }
+
         VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 3px;
             alignment: start;
-            Rectangle {
-                width: 15px;
-                height: 15px;
-                border-radius: Theme.radius-sharp;
-                background: root.checked ? Theme.accent-primary : Theme.bg-card;
-                border-width: 1px;
-                border-color: root.checked ? Theme.accent-primary : Theme.border-strong;
 
-                // A drawn tick, not the `✓` glyph. The bare glyph fell back to whatever the font
-                // had and rendered wrong twice in this product - the Marker delete affordance and
-                // the modal close both had to become images for the same reason.
-                if root.checked : Path {
-                    x: 3px;
-                    y: 3px;
-                    width: 9px;
-                    height: 9px;
-                    viewbox-x: 0;
-                    viewbox-y: 0;
-                    viewbox-width: 9;
-                    viewbox-height: 9;
-                    stroke: Theme.text-on-accent;
-                    stroke-width: 1.6px;
-                    commands: "M 0.5 4.5 L 3.3 7.3 L 8.5 1.4";
-                }
+            label-text := Text {
+                text: root.text;
+                font-size: 13px;
+                color: Theme.text-primary;
+                wrap: word-wrap;
+                font-family: "IBM Plex Sans";
+            }
+
+            if root.hint != "" : Text {
+                text: root.hint;
+                font-size: 10px;
+                color: Theme.text-dim;
+                wrap: word-wrap;
+                font-family: "IBM Plex Sans";
             }
         }
     }
 
-    VerticalLayout {
-        horizontal-stretch: 1;
-        spacing: 3px;
-        alignment: start;
+    // A sibling of the layout above, not one of its cells - positioned from `label-text`'s own
+    // resolved `y`/`height` so it sits against the LABEL'S OWN first line, not the full row: a
+    // wrapped label's `preferred-height` would span every line and centre the box against the
+    // block's middle rather than its first line, but `label-text.height` is its own first-line
+    // metrics regardless of what the rest of the row does. No checkbox here wraps today; this
+    // still holds if one needs to.
+    //
+    // The `+ 0.5px` is a measured correction, not a rounding fudge: `label-text.height` is the
+    // FULL line box - ascent, cap-height and descender together - and IBM Plex Sans at 13px puts
+    // more of that box below the baseline (descender + line gap) than above the cap-height, so
+    // centring on the line box alone lands the square a shade above where the capital letters
+    // actually sit. Measured against a live screenshot (checkbox centre vs. the label's own
+    // cap-height bounds): no correction read ~1px high, `+ 1px` overshot to ~1px low - `0.5px`
+    // is the point in between. Slint does not expose ascent/cap-height metrics to derive this
+    // without a magic number.
+    checkbox-box := Rectangle {
+        x: 0px;
+        y: label-text.y + (label-text.height - self.height) / 2 + 0.5px;
+        width: 15px;
+        height: 15px;
+        border-radius: Theme.radius-sharp;
+        background: root.checked ? Theme.accent-primary : Theme.bg-card;
+        border-width: 1px;
+        border-color: root.checked ? Theme.accent-primary : Theme.border-strong;
 
-        Text {
-            text: root.text;
-            font-size: 13px;
-            color: Theme.text-primary;
-            wrap: word-wrap;
-            font-family: "IBM Plex Sans";
-        }
-
-        if root.hint != "" : Text {
-            text: root.hint;
-            font-size: 10px;
-            color: Theme.text-dim;
-            wrap: word-wrap;
-            font-family: "IBM Plex Sans";
+        // A drawn tick, not the `✓` glyph. The bare glyph fell back to whatever the font
+        // had and rendered wrong twice in this product - the Marker delete affordance and
+        // the modal close both had to become images for the same reason.
+        if root.checked : Path {
+            x: 3px;
+            y: 3px;
+            width: 9px;
+            height: 9px;
+            viewbox-x: 0;
+            viewbox-y: 0;
+            viewbox-width: 9;
+            viewbox-height: 9;
+            stroke: Theme.text-on-accent;
+            stroke-width: 1.6px;
+            commands: "M 0.5 4.5 L 3.3 7.3 L 8.5 1.4";
         }
     }
 
-    // Declared last so it is above both, and covers the label as well as the box: a 15px target is
-    // not a target, and the label is the part people aim at.
+    // A sibling of the layout above, not one of its cells - so it overlays the whole row (box and
+    // label both) instead of taking its own column. A 15px box is not a click target; the label is
+    // the part people actually aim at.
     TouchArea {
         mouse-cursor: MouseCursor.pointer;
         clicked => { root.toggled(!root.checked); }

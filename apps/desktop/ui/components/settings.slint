@@ -14,9 +14,12 @@ export struct HotkeyRow {
     why: string,
     shortcut: string,
     // Registered with the OS right now. False means the combination was taken by something else, or
-    // the registration failed at startup.
+    // the registration failed at startup, OR the row is switched off below.
     active: bool,
     problem: string,
+    // The Reviewer's own on/off switch, independent of `shortcut`: turning this off unregisters
+    // the combination without erasing it, so turning it back on remembers what it was.
+    enabled: bool,
 }
 
 // THE SETTINGS SCREEN.
@@ -66,17 +69,53 @@ export component SdSettings inherits Rectangle {
     callback vault-reveal();
     callback budget-chosen(string);
     callback budget-advanced(int, int, int);
-    // action, ctrl, alt, shift, and the key's own text. RUST composes the shortcut string, because
-    // Rust is where `validate_and_rebind` decides whether it is one.
-    callback hotkey-pressed(string, bool, bool, bool, string);
-    callback hotkey-cleared(string);
+    // action, ctrl, alt, shift, win, and the key's own text. RUST composes the shortcut string,
+    // because Rust is where `validate_and_rebind` decides whether it is one.
+    callback hotkey-pressed(string, bool, bool, bool, bool, string);
+    callback hotkey-enabled-toggled(string, bool);
+    // "Win" on Windows, "Command" on macOS - the physical key the sticky panel's chips label,
+    // decided once in Rust rather than guessed here.
+    in property <string> hotkey-meta-key-label: "Win";
 
     // Which row is listening, by action. "" is none. Two-way, because Rust closes it: on a
     // successful bind, and on the shortcut arriving.
     in-out property <string> listening: "";
     // The action whose shortcut last fired, so a row can confirm it reached Snapdown.
     in property <string> last-fired: "";
+    // The same event, worded for the Key Check panel - "Ctrl+Alt+S (Trigger a Capture) reached
+    // Snapdown just now." RUST composes the sentence; this component only shows it.
+    in property <string> last-fired-text: "";
     private property <bool> advanced-open: false;
+
+    // A value being dragged on its slider, not yet committed. 0 means nothing is - the same
+    // sentinel the Properties panel's `live-font-size` uses, and safe here for the same reason:
+    // every one of these three ranges starts above zero.
+    private property <float> live-resize-percent: 0;
+    private property <float> live-max-long-edge: 0;
+    private property <float> live-encoder-quality: 0;
+
+    // A validation or conflict message for the row currently being recorded, or the outcome of
+    // the last one - shown in the Hotkeys tab's own sticky bottom panel, never in the Editor
+    // window behind this screen. Rust sets this instead of calling the global toast for anything
+    // hotkey-related; `wira-desk`'s hotkey pane keeps its own feedback the same way.
+    // Two-way, like `listening`: Slint code inside this component clears it when a new row starts
+    // listening, and RUST sets it for everything else (a validation error, a conflict, a bind
+    // confirmation) - so both sides need write access.
+    in-out property <string> hotkey-feedback: "";
+    in-out property <bool> hotkey-feedback-is-error: true;
+    // Which modifiers are physically held right now, for the row that is listening. Purely local
+    // display state - Rust only ever sees the composed shortcut once a non-modifier key lands.
+    private property <bool> rec-ctrl: false;
+    private property <bool> rec-alt: false;
+    private property <bool> rec-shift: false;
+    private property <bool> rec-win: false;
+    // A live readout of the chord as it is composed, for the Key Check panel's readout chip. RUST
+    // sets this (`format_chord_preview` in `main.rs`), not Slint - a raw `event.text` echoed as-is
+    // can be an unreadable control character (Enter, an arrow key with no modifier held), and Rust
+    // already owns the job of deciding what a key event is worth showing. Two-way: cleared here on
+    // a new listen or an Escape cancel; left ALONE on a successful bind, so the panel keeps showing
+    // the chord that was just proven to work instead of blanking the moment it succeeds.
+    in-out property <string> chord-preview: "";
 
     width: 100%;
     height: 100%;
@@ -193,7 +232,7 @@ export component SdSettings inherits Rectangle {
                             SdCheckbox {
                                 checked: root.open-editor-after-capture;
                                 text: "Open the Editor after a hotkey capture";
-                                hint: "Off by default, so a run of captures is not interrupted by a window taking focus each time. Turn it on if you usually annotate straight away.";
+                                hint: "Off by default, so a run of captures is not interrupted by a window taking focus each time. Turn it on if you usually annotate straight away. A capture started from the tray icon always opens the Editor, regardless of this setting - reaching for the tray already means leaving the flow this exists to protect.";
                                 toggled(on) => { root.open-editor-after-capture-toggled(on); }
                             }
                         }
@@ -253,8 +292,17 @@ export component SdSettings inherits Rectangle {
                                     { id: "sharp", label: "Sharp" },
                                     { id: "balanced", label: "Balanced" },
                                     { id: "small", label: "Small" },
+                                    { id: "custom", label: "Custom" },
                                 ];
-                                chosen(id) => { root.budget-chosen(id); }
+                                chosen(id) => {
+                                    root.budget-chosen(id);
+                                    // Picking Custom without opening the disclosure would leave the
+                                    // Reviewer looking at a preset with no visible way to customise
+                                    // it - the controls it means are the same three sliders below.
+                                    if (id == "custom") {
+                                        root.advanced-open = true;
+                                    }
+                                }
                             }
 
                             SdCaption { text: root.budget-explainer; }
@@ -286,11 +334,30 @@ export component SdSettings inherits Rectangle {
                                     padding-top: 6px;
                                     spacing: 5px;
                                     alignment: start;
-                                    Text {
-                                        text: root.advanced-open ? "▾" : "▸";
-                                        font-size: 10px;
-                                        color: Theme.accent-primary;
-                                        vertical-alignment: center;
+                                    // A DRAWN triangle, not the `▸`/`▾` glyphs: the same trap the
+                                    // checkbox tick documents - a bare glyph falls back to whatever
+                                    // the font has, and here it had nothing, so the disclosure
+                                    // showed no icon at all. `VerticalLayout { alignment: center }`
+                                    // centres the fixed-size box against the row, the same fix the
+                                    // checkbox box needed against a wrapped label.
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Rectangle {
+                                            width: 8px;
+                                            height: 8px;
+                                            Path {
+                                                width: 8px;
+                                                height: 8px;
+                                                viewbox-width: 8;
+                                                viewbox-height: 8;
+                                                fill: Theme.accent-primary;
+                                                // Two shapes, not one rotated: `Rectangle` in this
+                                                // Slint version has no `rotation-angle` property.
+                                                commands: root.advanced-open
+                                                    ? "M 1 1 L 7 1 L 4 7 Z"
+                                                    : "M 1 1 L 7 4 L 1 7 Z";
+                                            }
+                                        }
                                     }
                                     Text {
                                         text: "Fine-tune size and quality";
@@ -307,8 +374,59 @@ export component SdSettings inherits Rectangle {
                                 }
                             }
 
+                            // Three groups (ratio, cap, colour), each its own tight cluster of
+                            // label + control + explainer, with more air BETWEEN groups than
+                            // WITHIN one and a hairline dividing them. Flat 6px spacing between
+                            // every line here used to read as one undifferentiated list - a
+                            // group's own explainer sat exactly as close to it as the NEXT
+                            // group's label, so nothing told the Reviewer where one control's
+                            // description ended and the next control's name began. The label
+                            // itself is bold now for the same reason: `SdCaption` alone reads at
+                            // the same weight as the explainer sentence under it, so the two were
+                            // visually the same kind of text despite meaning different things.
                             if root.advanced-open : VerticalLayout {
-                                spacing: 6px;
+                                spacing: 16px;
+
+                                // Mirrors of the six properties the Fine-tune textboxes below need
+                                // to resync on: aliased two-way so a `changed` on the ALIAS fires
+                                // exactly when the real one would. `changed` only accepts an
+                                // UNQUALIFIED identifier owned by the element it is declared on -
+                                // a textbox's own `changed root.live-resize-percent` does not parse
+                                // - so the watch has to live on the one element already sharing an
+                                // (uninterrupted-by-`if`) scope with both the sliders' callbacks and
+                                // the textboxes' ids: this disclosure, not the outer `SdCard`, which
+                                // sits behind the SEPARATE `root.advanced-open` conditional above.
+                                property <float> resize-mirror <=> root.live-resize-percent;
+                                property <int> resize-budget-mirror <=> root.budget-resize-percent;
+                                property <float> edge-mirror <=> root.live-max-long-edge;
+                                property <int> edge-budget-mirror <=> root.budget-max-long-edge;
+                                property <float> quality-mirror <=> root.live-encoder-quality;
+                                property <int> quality-budget-mirror <=> root.budget-encoder-quality;
+
+                                changed resize-mirror => {
+                                    resize-field.text = Math.round(root.live-resize-percent > 0
+                                        ? root.live-resize-percent : root.budget-resize-percent);
+                                }
+                                changed resize-budget-mirror => {
+                                    resize-field.text = Math.round(root.live-resize-percent > 0
+                                        ? root.live-resize-percent : root.budget-resize-percent);
+                                }
+                                changed edge-mirror => {
+                                    edge-field.text = Math.round(root.live-max-long-edge > 0
+                                        ? root.live-max-long-edge : root.budget-max-long-edge);
+                                }
+                                changed edge-budget-mirror => {
+                                    edge-field.text = Math.round(root.live-max-long-edge > 0
+                                        ? root.live-max-long-edge : root.budget-max-long-edge);
+                                }
+                                changed quality-mirror => {
+                                    quality-field.text = Math.round(root.live-encoder-quality > 0
+                                        ? root.live-encoder-quality : root.budget-encoder-quality);
+                                }
+                                changed quality-budget-mirror => {
+                                    quality-field.text = Math.round(root.live-encoder-quality > 0
+                                        ? root.live-encoder-quality : root.budget-encoder-quality);
+                                }
 
                                 // THE RATIO, first, because it is the one that always applies.
                                 //
@@ -317,7 +435,15 @@ export component SdSettings inherits Rectangle {
                                 // atas"*. The cap below it bounds the worst case; this takes a
                                 // fixed share off everything, including a capture already small
                                 // enough that the cap leaves it alone.
-                                SdCaption { text: "Resize every capture to"; }
+                                VerticalLayout {
+                                spacing: 6px;
+                                Text {
+                                    text: "Resize every capture to";
+                                    font-size: 10px;
+                                    font-weight: 700;
+                                    color: Theme.text-secondary;
+                                    font-family: "IBM Plex Sans";
+                                }
                                 HorizontalLayout {
                                     spacing: 10px;
                                     SdSlider {
@@ -325,29 +451,119 @@ export component SdSettings inherits Rectangle {
                                         y: 4px;
                                         minimum: 25;
                                         maximum: 100;
+                                        // The track is drawn 0-100 even though the value floors at
+                                        // 25: a percentage reads naturally against a full 0-100
+                                        // scale, and the owner's own question - *"kenapa 50% itu di
+                                        // posisi ini?"* - was exactly that a 25-100 track put 50% a
+                                        // third of the way along instead of in the middle. The
+                                        // domain floor (`MIN_RESIZE_PERCENT`) has not moved; only
+                                        // where it is drawn has. See `SdSlider`'s own comment on
+                                        // `track-minimum` for how dragging past it stops dead rather
+                                        // than bouncing back.
+                                        track-minimum: 0;
+                                        track-maximum: 100;
                                         value: root.budget-resize-percent;
+                                        moved(percent) => { root.live-resize-percent = percent; }
                                         changed(percent) => {
+                                            root.live-resize-percent = 0;
                                             root.budget-advanced(root.budget-max-long-edge,
                                                 root.budget-encoder-quality, percent);
                                         }
                                     }
-                                    Text {
+                                    HorizontalLayout {
                                         width: 60px;
-                                        text: root.budget-resize-percent + "%";
-                                        font-size: 11px;
-                                        color: Theme.text-primary;
-                                        horizontal-alignment: right;
-                                        vertical-alignment: center;
-                                        font-family: "IBM Plex Mono";
+                                        spacing: 2px;
+                                        resize-field := SdTextField {
+                                            horizontal-stretch: 1;
+                                            pad: 4px;
+                                            text-size: 11px;
+                                            mono: true;
+                                            commit-on-enter: true;
+                                            // Losing focus commits too, not just Enter: clicking the
+                                            // slider right beside this field, or clicking anywhere
+                                            // else on the screen, used to leave a typed number sitting
+                                            // uncommitted until the Reviewer remembered to press
+                                            // Enter - the owner's own words were "harusnya ketika
+                                            // textbox lost focus langsung render slider".
+                                            commit-on-blur: true;
+                                            // Live while dragging, committed otherwise - the same
+                                            // pattern the Properties panel's font-size field uses.
+                                            // Only the INITIAL value, though: `SdTextField.text` is
+                                            // a TWO-WAY alias onto the native `TextInput.text`
+                                            // (`text-field.slint`), and Slint drops a property's
+                                            // declarative binding the first time anything assigns
+                                            // to it directly - which is exactly what typing a key
+                                            // does. After that one edit this expression would never
+                                            // fire again, drag or preset alike -
+                                            // `09-slider-textbox-desync-after-manual-entry`, and the
+                                            // owner's own report that it survived that ticket:
+                                            // *"ketika sudah di textbox... geser2 slider malah gak
+                                            // render realtime"*. The `changed` handlers up on the
+                                            // enclosing `SdCard` have no such lifetime: they fire on
+                                            // every value change for as long as this tab exists and
+                                            // re-assert the text imperatively by id, resyncing after
+                                            // every edit rather than only before the first one.
+                                            text: Math.round(root.live-resize-percent > 0
+                                                ? root.live-resize-percent : root.budget-resize-percent);
+                                            accepted => {
+                                                root.budget-advanced(root.budget-max-long-edge,
+                                                    root.budget-encoder-quality,
+                                                    Math.max(25, Math.min(100, Math.round(self.text.to-float()))));
+                                            }
+                                        }
+                                        Text {
+                                            text: "%";
+                                            font-size: 11px;
+                                            color: Theme.text-dim;
+                                            vertical-alignment: center;
+                                            font-family: "IBM Plex Mono";
+                                        }
                                     }
+                                }
+                                // The slider's own ends, in numbers - the track itself now runs
+                                // 0-100, with the floor marked by the tick `SdSlider` draws on the
+                                // track rather than by starting the track there. Wrapped in the
+                                // same 10px-spacing-plus-60px-column shape as the slider/textbox row
+                                // above so "100%" lands under the slider's own right edge, not the
+                                // textbox beside it.
+                                HorizontalLayout {
+                                    spacing: 10px;
+                                    HorizontalLayout {
+                                        horizontal-stretch: 1;
+                                        Text {
+                                            text: "0%";
+                                            font-size: 9px;
+                                            color: Theme.text-dim;
+                                            font-family: "IBM Plex Mono";
+                                        }
+                                        Rectangle { horizontal-stretch: 1; }
+                                        Text {
+                                            text: "100%";
+                                            font-size: 9px;
+                                            color: Theme.text-dim;
+                                            font-family: "IBM Plex Mono";
+                                        }
+                                    }
+                                    Rectangle { width: 60px; }
                                 }
                                 SdCaption {
                                     text: root.budget-resize-percent >= 100
                                         ? "Captures keep the size they were taken at. Lower this to shrink every one of them by the same share."
                                         : "Applied to every capture, including small ones. The limit below only catches the large ones.";
                                 }
+                                }
 
-                                SdCaption { text: "Never wider or taller than"; }
+                                Rectangle { height: 1px; background: Theme.border-subtle; }
+
+                                VerticalLayout {
+                                spacing: 6px;
+                                Text {
+                                    text: "Never wider or taller than";
+                                    font-size: 10px;
+                                    font-weight: 700;
+                                    color: Theme.text-secondary;
+                                    font-family: "IBM Plex Sans";
+                                }
                                 HorizontalLayout {
                                     spacing: 10px;
                                     SdSlider {
@@ -356,27 +572,84 @@ export component SdSettings inherits Rectangle {
                                         minimum: 480;
                                         maximum: 3840;
                                         value: root.budget-max-long-edge;
+                                        moved(edge) => { root.live-max-long-edge = edge; }
                                         changed(edge) => {
+                                            root.live-max-long-edge = 0;
                                             root.budget-advanced(edge,
                                                 root.budget-encoder-quality,
                                                 root.budget-resize-percent);
                                         }
                                     }
-                                    Text {
-                                        width: 60px;
-                                        text: root.budget-max-long-edge + " px";
-                                        font-size: 11px;
-                                        color: Theme.text-primary;
-                                        horizontal-alignment: right;
-                                        vertical-alignment: center;
-                                        font-family: "IBM Plex Mono";
+                                    HorizontalLayout {
+                                        width: 72px;
+                                        spacing: 2px;
+                                        edge-field := SdTextField {
+                                            horizontal-stretch: 1;
+                                            pad: 4px;
+                                            text-size: 11px;
+                                            mono: true;
+                                            commit-on-enter: true;
+                                            commit-on-blur: true;
+                                            text: Math.round(root.live-max-long-edge > 0
+                                                ? root.live-max-long-edge : root.budget-max-long-edge);
+                                            accepted => {
+                                                root.budget-advanced(
+                                                    Math.max(480, Math.min(3840, Math.round(self.text.to-float()))),
+                                                    root.budget-encoder-quality,
+                                                    root.budget-resize-percent);
+                                            }
+                                        }
+                                        Text {
+                                            text: "px";
+                                            font-size: 11px;
+                                            color: Theme.text-dim;
+                                            vertical-alignment: center;
+                                            font-family: "IBM Plex Mono";
+                                        }
                                     }
+                                }
+                                HorizontalLayout {
+                                    spacing: 10px;
+                                    HorizontalLayout {
+                                        horizontal-stretch: 1;
+                                        Text {
+                                            text: "480px";
+                                            font-size: 9px;
+                                            color: Theme.text-dim;
+                                            font-family: "IBM Plex Mono";
+                                        }
+                                        Rectangle { horizontal-stretch: 1; }
+                                        Text {
+                                            text: "3840px";
+                                            font-size: 9px;
+                                            color: Theme.text-dim;
+                                            font-family: "IBM Plex Mono";
+                                        }
+                                    }
+                                    Rectangle { width: 72px; }
                                 }
                                 SdCaption {
                                     text: "Nothing is stored wider or taller than this. A capture already under it is left alone.";
                                 }
+                                }
 
-                                SdCaption { text: "Colour accuracy"; }
+                                Rectangle { height: 1px; background: Theme.border-subtle; }
+
+                                VerticalLayout {
+                                spacing: 6px;
+                                Text {
+                                    // "(compression)" because this IS the compression lever -
+                                    // the product deliberately has no separate dial for it
+                                    // (`DEC-010`: PNG stays PNG, this rounds colour channels and
+                                    // switches to an indexed palette instead), and a label that
+                                    // only says "Colour accuracy" reads as a colour-only control
+                                    // to a Reviewer who has not read that decision.
+                                    text: "Colour accuracy (compression)";
+                                    font-size: 10px;
+                                    font-weight: 700;
+                                    color: Theme.text-secondary;
+                                    font-family: "IBM Plex Sans";
+                                }
                                 HorizontalLayout {
                                     spacing: 10px;
                                     SdSlider {
@@ -384,26 +657,61 @@ export component SdSettings inherits Rectangle {
                                         y: 4px;
                                         minimum: 10;
                                         maximum: 100;
+                                        // Same 0-100 track as the resize slider above, for the same
+                                        // reason: a quality percentage reads against a full scale,
+                                        // and the floor tick shows why it stops at 10 rather than
+                                        // narrowing the track to hide it.
+                                        track-minimum: 0;
+                                        track-maximum: 100;
                                         value: root.budget-encoder-quality;
+                                        moved(quality) => { root.live-encoder-quality = quality; }
                                         changed(quality) => {
+                                            root.live-encoder-quality = 0;
                                             root.budget-advanced(root.budget-max-long-edge, quality,
                                                 root.budget-resize-percent);
                                         }
                                     }
-                                    Text {
+                                    quality-field := SdTextField {
                                         width: 60px;
-                                        text: root.budget-encoder-quality;
-                                        font-size: 11px;
-                                        color: Theme.text-primary;
-                                        horizontal-alignment: right;
-                                        vertical-alignment: center;
-                                        font-family: "IBM Plex Mono";
+                                        pad: 4px;
+                                        text-size: 11px;
+                                        mono: true;
+                                        commit-on-enter: true;
+                                        commit-on-blur: true;
+                                        text: Math.round(root.live-encoder-quality > 0
+                                            ? root.live-encoder-quality : root.budget-encoder-quality);
+                                        accepted => {
+                                            root.budget-advanced(root.budget-max-long-edge,
+                                                Math.max(10, Math.min(100, Math.round(self.text.to-float()))),
+                                                root.budget-resize-percent);
+                                        }
                                     }
+                                }
+                                HorizontalLayout {
+                                    spacing: 10px;
+                                    HorizontalLayout {
+                                        horizontal-stretch: 1;
+                                        Text {
+                                            text: "0";
+                                            font-size: 9px;
+                                            color: Theme.text-dim;
+                                            font-family: "IBM Plex Mono";
+                                        }
+                                        Rectangle { horizontal-stretch: 1; }
+                                        Text {
+                                            text: "100";
+                                            font-size: 9px;
+                                            color: Theme.text-dim;
+                                            font-family: "IBM Plex Mono";
+                                        }
+                                    }
+                                    Rectangle { width: 60px; }
                                 }
                                 SdCaption {
                                     text: root.budget-encoder-quality >= 100
                                         ? "Every colour kept exactly. The largest a capture can be, and the safest for photographs."
                                         : "Rounds colour slightly so a screenshot can be stored as a palette — usually about a quarter of the size, with nothing you can see by eye.";
+                                }
                                 }
                             }
                         }
@@ -412,7 +720,7 @@ export component SdSettings inherits Rectangle {
                         if root.tab == 1 : SdCard {
                             SdSectionLabel { text: "KEYBOARD SHORTCUTS"; }
                             SdCaption {
-                                text: "Click a shortcut, hold Ctrl or Alt and press a key. Escape cancels. After it is set, press the combination anywhere to check it reaches Snapdown.";
+                                text: "Click a shortcut, hold Ctrl, Alt or Win and press a key. Escape cancels. After it is set, press the combination anywhere to check it reaches Snapdown.";
                             }
 
                             for row in root.hotkeys : Rectangle {
@@ -430,22 +738,18 @@ export component SdSettings inherits Rectangle {
                                     HorizontalLayout {
                                         spacing: 12px;
 
-                                        VerticalLayout {
+                                        // The row's own name IS its on/off switch - "[ ] Capture a
+                                        // region" - rather than a separate "Enabled" checkbox buried
+                                        // in the footer below, which read as a second, unrelated
+                                        // control for the same fact. `SdCheckbox` already carries a
+                                        // title-plus-hint layout, which is exactly `row.label` and
+                                        // `row.why`.
+                                        SdCheckbox {
                                             horizontal-stretch: 1;
-                                            spacing: 3px;
-                                            Text {
-                                                text: row.label;
-                                                font-size: 13px;
-                                                color: Theme.text-primary;
-                                                font-family: "IBM Plex Sans";
-                                            }
-                                            Text {
-                                                text: row.why;
-                                                font-size: 10px;
-                                                color: Theme.text-dim;
-                                                wrap: word-wrap;
-                                                font-family: "IBM Plex Sans";
-                                            }
+                                            checked: row.enabled;
+                                            text: row.label;
+                                            hint: row.why;
+                                            toggled(on) => { root.hotkey-enabled-toggled(row.action, on); }
                                         }
 
                                         Rectangle {
@@ -463,7 +767,7 @@ export component SdSettings inherits Rectangle {
 
                                                     Text {
                                                         text: root.listening == row.action
-                                                            ? "Press keys… (Esc)"
+                                                            ? "Listening…"
                                                             : (row.shortcut == "" ? "Not set" : row.shortcut);
                                                         font-size: 11px;
                                                         color: row.shortcut == "" && root.listening != row.action
@@ -479,18 +783,37 @@ export component SdSettings inherits Rectangle {
                                                         // a keystroke meant for something else.
                                                         enabled: root.listening == row.action;
                                                         key-pressed(event) => {
+                                                            // Reflected on every key event, not just
+                                                            // modifier presses, so the chips in the
+                                                            // sticky panel below stay accurate for the
+                                                            // whole gesture - including the final,
+                                                            // non-modifier key that completes it.
+                                                            root.rec-ctrl = event.modifiers.control;
+                                                            root.rec-alt = event.modifiers.alt;
+                                                            root.rec-shift = event.modifiers.shift;
+                                                            root.rec-win = event.modifiers.meta;
                                                             if (event.text == Key.Escape) {
                                                                 root.listening = "";
+                                                                root.hotkey-feedback = "";
+                                                                root.chord-preview = "";
                                                                 return EventResult.accept;
                                                             }
                                                             root.hotkey-pressed(row.action,
                                                                 event.modifiers.control,
                                                                 event.modifiers.alt,
                                                                 event.modifiers.shift,
+                                                                event.modifiers.meta,
                                                                 event.text);
                                                             // Left open: Rust rejects a
                                                             // modifiers-only press, and closing here
                                                             // would end the gesture on the first Ctrl.
+                                                            return EventResult.accept;
+                                                        }
+                                                        key-released(event) => {
+                                                            root.rec-ctrl = event.modifiers.control;
+                                                            root.rec-alt = event.modifiers.alt;
+                                                            root.rec-shift = event.modifiers.shift;
+                                                            root.rec-win = event.modifiers.meta;
                                                             return EventResult.accept;
                                                         }
                                                     }
@@ -498,8 +821,26 @@ export component SdSettings inherits Rectangle {
                                                     TouchArea {
                                                         mouse-cursor: MouseCursor.pointer;
                                                         clicked => {
-                                                            root.listening = row.action;
-                                                            keys.focus();
+                                                            // A second click on the row already
+                                                            // listening CANCELS it, the same as
+                                                            // Escape - `wira-desk`'s own shortcut
+                                                            // button toggles the same way, so a
+                                                            // Reviewer never has to reach for the
+                                                            // keyboard just to back out.
+                                                            if (root.listening == row.action) {
+                                                                root.listening = "";
+                                                                root.hotkey-feedback = "";
+                                                                root.chord-preview = "";
+                                                            } else {
+                                                                root.listening = row.action;
+                                                                root.hotkey-feedback = "";
+                                                                root.rec-ctrl = false;
+                                                                root.rec-alt = false;
+                                                                root.rec-shift = false;
+                                                                root.rec-win = false;
+                                                                root.chord-preview = "";
+                                                                keys.focus();
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -507,58 +848,29 @@ export component SdSettings inherits Rectangle {
                                         }
                                     }
 
-                                    HorizontalLayout {
-                                        spacing: 8px;
-                                        Rectangle {
-                                            width: 7px;
-                                            VerticalLayout {
-                                                alignment: center;
-                                                Rectangle {
-                                                    width: 7px;
-                                                    height: 7px;
-                                                    border-radius: Theme.radius-pill;
-                                                    background: root.last-fired == row.action
-                                                        ? Theme.semantic-success
-                                                        : (row.active
-                                                            ? Theme.accent-primary
-                                                            : Theme.semantic-error);
-                                                }
-                                            }
-                                        }
-                                        // THREE STATES, not two, and the third is the useful one.
-                                        //
-                                        // "Registered" only means Windows accepted the binding. It
-                                        // does not mean the keystroke reaches Snapdown - a low-level
-                                        // hook in another application can swallow it first, and
-                                        // registration says nothing about that. So the row also
-                                        // confirms when the chord ACTUALLY ARRIVES, which is the only
-                                        // proof available without leaving this screen. Taken from
-                                        // `wira-desk`'s `KeyCheckVerdict`, which distinguishes
-                                        // "registered" from "received" for the same reason.
-                                        Text {
-                                            horizontal-stretch: 1;
-                                            text: root.last-fired == row.action
-                                                ? "Pressed just now — it reaches Snapdown."
-                                                : (row.problem != ""
-                                                    ? row.problem
-                                                    : (row.active
-                                                        ? "Registered with Windows. Press it to check it arrives."
-                                                        : "Not registered — another application is holding this combination."));
-                                            font-size: 10px;
-                                            color: root.last-fired == row.action
-                                                ? Theme.semantic-success
-                                                : (row.active ? Theme.text-dim : Theme.semantic-error);
-                                            vertical-alignment: center;
-                                            wrap: word-wrap;
-                                            font-family: "IBM Plex Sans";
-                                        }
-                                        SdActionButton {
-                                            label: "Clear";
-                                            primary: false;
-                                            height: 24px;
-                                            label-size: 10px;
-                                            clicked => { root.hotkey-cleared(row.action); }
-                                        }
+                                    // Only the states that are genuinely THIS ROW's own business,
+                                    // and only when there is one to report - collapses to nothing
+                                    // for the ordinary case (enabled, registered, no conflict), since
+                                    // whether the chord actually reaches Snapdown once pressed is the
+                                    // Key Check panel's job now, not repeated on every row. "Off" is
+                                    // checked first and separately from "not registered": the
+                                    // Reviewer switched this off on purpose, and reusing the conflict
+                                    // wording over a row that is simply disabled would be a false
+                                    // alarm about a problem that does not exist.
+                                    property <string> row-status:
+                                        !row.enabled
+                                            ? "Off. Turn it on to use this shortcut again."
+                                            : (row.problem != ""
+                                                ? row.problem
+                                                : (row.active
+                                                    ? ""
+                                                    : "Not registered — another application is holding this combination."));
+                                    if row-status != "" : Text {
+                                        text: row-status;
+                                        font-size: 10px;
+                                        color: !row.enabled ? Theme.text-dim : Theme.semantic-error;
+                                        wrap: word-wrap;
+                                        font-family: "IBM Plex Sans";
                                     }
                                 }
                             }
@@ -609,6 +921,204 @@ export component SdSettings inherits Rectangle {
                 }
             }
 
+            // --- Key Check, sticky at the bottom of the HOTKEYS TAB ONLY -----------------
+            //
+            // Adopted from `wira-desk`'s own `KeyCheck` component
+            // (`crates/settings/ui/components/key_check.slint`) at the owner's request - the green
+            // liveness dot, the "Key check" title, its caption, and a chip that reads back the chord
+            // as it is composed. One difference, also asked for: ONE row of four modifier chips
+            // instead of `wira-desk`'s 2x2 grid - Snapdown only ever tests two hotkeys at a time, so
+            // the wrap that grid buys `wira-desk` for its longer shortcut list buys nothing here.
+            //
+            // ALWAYS mounted while on this tab, not gated on `listening`/`hotkey-feedback` the way
+            // the first cut of this panel was - a panel that disappears the moment a bind succeeds
+            // cannot be the standing "does this reach Snapdown" tool it claims to be. Its chip row
+            // and readout chip are unconditional for the same reason: they must still be showing the
+            // chord that was just proven to work, not have blanked out from under it.
+            //
+            // Every hotkey-related message used to go through the same global toast as the rest of
+            // the app, which rendered over the main Editor window behind this screen rather than in
+            // the panel the Reviewer was actually looking at - this stays scoped to the tab instead.
+            if root.tab == 1 : Rectangle {
+                background: Theme.bg-card;
+                Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.border-subtle; }
+
+                // Takes keyboard focus for the WHOLE tab whenever no row's own shortcut button is
+                // recording one - so Key Check keeps detecting whatever is pressed at any time the
+                // Hotkeys tab is open, not only during an active "Listening…" session. Yields the
+                // moment a row starts recording (`enabled` turns false, since `root.listening` is no
+                // longer ""): that row's own `keys` FocusScope needs focus then, to actually decide
+                // whether the chord binds. `""` as the action reaches the same Rust handler every row
+                // uses, and Rust already treats an unrecognised action as "nothing to bind, just
+                // report the key state" (`hotkey_action_from_id` returns `None`).
+                background-keys := FocusScope {
+                    width: 0px;
+                    height: 0px;
+                    enabled: root.tab == 1 && root.listening == "";
+                    init => { self.focus(); }
+                    changed enabled => {
+                        if (self.enabled) {
+                            self.focus();
+                        }
+                    }
+                    key-pressed(event) => {
+                        root.rec-ctrl = event.modifiers.control;
+                        root.rec-alt = event.modifiers.alt;
+                        root.rec-shift = event.modifiers.shift;
+                        root.rec-win = event.modifiers.meta;
+                        root.hotkey-pressed("",
+                            event.modifiers.control,
+                            event.modifiers.alt,
+                            event.modifiers.shift,
+                            event.modifiers.meta,
+                            event.text);
+                        return EventResult.accept;
+                    }
+                    key-released(event) => {
+                        root.rec-ctrl = event.modifiers.control;
+                        root.rec-alt = event.modifiers.alt;
+                        root.rec-shift = event.modifiers.shift;
+                        root.rec-win = event.modifiers.meta;
+                        return EventResult.accept;
+                    }
+                }
+
+                VerticalLayout {
+                    padding: 10px;
+                    spacing: 8px;
+
+                    HorizontalLayout {
+                        spacing: 12px;
+                        alignment: space-between;
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            horizontal-stretch: 1;
+
+                            Rectangle {
+                                width: 8px;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Rectangle {
+                                        width: 8px;
+                                        height: 8px;
+                                        border-radius: Theme.radius-pill;
+                                        background: Theme.semantic-success;
+                                    }
+                                }
+                            }
+
+                            VerticalLayout {
+                                spacing: 2px;
+                                alignment: center;
+                                Text {
+                                    text: "Key check";
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    color: Theme.text-primary;
+                                    font-family: "IBM Plex Sans";
+                                }
+                                Text {
+                                    text: "Press any combination to verify what reaches Snapdown";
+                                    font-size: 10px;
+                                    color: Theme.text-dim;
+                                    wrap: word-wrap;
+                                    font-family: "IBM Plex Sans";
+                                }
+                            }
+                        }
+
+                        // Four columns, one row: Ctrl, `hotkey-meta-key-label`, Alt, Shift, in the
+                        // same fixed order `shortcut_from_key` composes the stored string in.
+                        HorizontalLayout {
+                            spacing: 4px;
+                            alignment: end;
+                            for chip in [
+                                { label: "Ctrl", held: root.rec-ctrl },
+                                { label: root.hotkey-meta-key-label, held: root.rec-win },
+                                { label: "Alt", held: root.rec-alt },
+                                { label: "Shift", held: root.rec-shift },
+                            ] : Rectangle {
+                                height: 20px;
+                                width: Math.max(44px, chip-label.preferred-width + 12px);
+                                border-radius: Theme.radius-sharp;
+                                background: chip.held ? Theme.accent-primary : Theme.bg-subtle;
+                                border-width: 1px;
+                                border-color: chip.held ? Theme.accent-primary : Theme.border-strong;
+                                chip-label := Text {
+                                    text: chip.label;
+                                    font-size: 10px;
+                                    font-weight: 700;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                    color: chip.held ? Theme.text-on-accent : Theme.text-dim;
+                                    font-family: "IBM Plex Sans";
+                                }
+                            }
+                        }
+
+                        // The readout chip - a live preview of the chord being composed, or "—" once
+                        // it is showing an outcome instead (bound, refused) and nothing is held.
+                        // Wide enough for the worst case that actually happens - all four modifiers
+                        // held at once with no completing key yet, "Ctrl + Win + Alt + Shift" - which
+                        // clipped at the first cut's 150px. Sized off the text itself with a floor,
+                        // rather than a second guessed constant, so it never clips again no matter
+                        // what `format_chord_preview` ends up composing.
+                        Rectangle {
+                            width: Math.max(170px, preview-label.preferred-width + 24px);
+                            height: 28px;
+                            border-radius: Theme.radius-sharp;
+                            background: Theme.bg-subtle;
+                            border-width: 1px;
+                            border-color: Theme.border-strong;
+                            preview-label := Text {
+                                text: root.chord-preview == "" ? "—" : root.chord-preview;
+                                font-size: 11px;
+                                font-weight: 600;
+                                color: root.chord-preview == "" ? Theme.text-dim : Theme.text-primary;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                font-family: "IBM Plex Mono";
+                            }
+                        }
+                    }
+
+                    // ONE notification line, not up to three stacked at once - a refusal replaces
+                    // the baseline placeholder rather than piling up underneath it. Priority, highest
+                    // first:
+                    //
+                    // 1. a REFUSAL (`hotkey-feedback` while `hotkey-feedback-is-error`) - whatever was
+                    //    just pressed could not become a shortcut, and that is the most specific,
+                    //    most actionable thing to say. A bind that merely SUCCEEDED does not appear
+                    //    here on purpose: "bound." is a weaker claim than what Key Check is for (does
+                    //    it REACH Snapdown), and showing it here read as Key Check declaring success
+                    //    on the registration's behalf. The row's own shortcut field already shows the
+                    //    new combination the moment it is set, which is confirmation enough.
+                    // 2. `last-fired-text` - a bound chord was just pressed and Rust's event loop
+                    //    (`main.rs`) confirmed it arrived. Clears itself on the same timer that clears
+                    //    `hotkey-last-fired`.
+                    // 3. the baseline placeholder - nothing else to report.
+                    property <string> notice-text:
+                        (root.hotkey-feedback != "" && root.hotkey-feedback-is-error)
+                            ? root.hotkey-feedback
+                            : (root.last-fired-text != ""
+                                ? root.last-fired-text
+                                : "Registered with Windows. Press it to check it arrives.");
+                    property <color> notice-color:
+                        (root.hotkey-feedback != "" && root.hotkey-feedback-is-error)
+                            ? Theme.semantic-error
+                            : (root.last-fired-text != "" ? Theme.semantic-success : Theme.text-dim);
+                    Text {
+                        text: notice-text;
+                        font-size: 10px;
+                        color: notice-color;
+                        wrap: word-wrap;
+                        font-family: "IBM Plex Sans";
+                    }
+                }
+            }
+
             // --- footer, as designed --------------------------------------------------
             Rectangle {
                 height: 52px;
@@ -629,7 +1139,10 @@ export component SdSettings inherits Rectangle {
                     VerticalLayout {
                         alignment: center;
                         SdActionButton {
-                            label: "Done";
+                            // "Close", not "Done": every change here already committed the moment
+                            // it was made (the caption to its left says so), so "Done" implied a
+                            // pending action this button was finishing - there was never one.
+                            label: "Close";
                             height: 32px;
                             clicked => { root.closed(); }
                         }

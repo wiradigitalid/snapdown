@@ -20,6 +20,11 @@ pub struct DesktopHotkeyRegistrar {
     settings_store: Arc<SqliteSettingsStore>,
     bindings: HashMap<HotkeyAction, String>,
     startup_failures: HashMap<HotkeyAction, String>,
+    // Separate from `bindings` on purpose: switching a hotkey off must not erase the
+    // combination it holds, or turning it back on would come back to "Not set" instead of the
+    // Reviewer's own choice. Defaults to enabled - an action with no row in the store yet has
+    // never been disabled.
+    enabled: HashMap<HotkeyAction, bool>,
 }
 
 impl DesktopHotkeyRegistrar {
@@ -32,6 +37,7 @@ impl DesktopHotkeyRegistrar {
             settings_store,
             bindings: HashMap::new(),
             startup_failures: HashMap::new(),
+            enabled: HashMap::new(),
         }
     }
 
@@ -58,13 +64,29 @@ impl DesktopHotkeyRegistrar {
                 }
             };
 
+            let enabled = match self.settings_store.get(&action.enabled_setting_key())? {
+                Some(Setting {
+                    value: SettingValue::Boolean(b),
+                    ..
+                }) => b,
+                // No row yet: never disabled.
+                _ => true,
+            };
+            self.enabled.insert(action, enabled);
+
             if shortcut.trim().is_empty() {
-                // Action is disabled/cleared
+                // Nothing assigned yet.
                 self.bindings.insert(action, String::new());
                 continue;
             }
 
             self.bindings.insert(action, shortcut.clone());
+
+            // A disabled action keeps its shortcut recorded but is never handed to the OS -
+            // that is the entire point of `enabled` existing separately from the shortcut.
+            if !enabled {
+                continue;
+            }
 
             // Attempt OS registration
             if let Some(backend) = &self.backend {
@@ -73,6 +95,67 @@ impl DesktopHotkeyRegistrar {
                 }
             }
         }
+
+        Ok(())
+    }
+
+    pub fn is_enabled(&self, action: HotkeyAction) -> bool {
+        self.enabled.get(&action).copied().unwrap_or(true)
+    }
+
+    /// Marks an action enabled after `validate_and_rebind` has already talked to the OS itself -
+    /// picking a fresh combination is how a Reviewer says they want it active, and coming back
+    /// from disabled with the row still reading "off" would be its own confusing state. Does not
+    /// touch the backend again: the caller already registered (or re-registered) the shortcut.
+    fn ensure_enabled_persisted(&mut self, action: HotkeyAction) -> Result<(), CoreError> {
+        if self.is_enabled(action) {
+            return Ok(());
+        }
+        let clock = SystemClock::new();
+        self.settings_store.set(&Setting::new(
+            action.enabled_setting_key(),
+            SettingValue::Boolean(true),
+            clock.now_rfc3339(),
+        ))?;
+        self.enabled.insert(action, true);
+        Ok(())
+    }
+
+    /// Flips the enabled toggle without touching the assigned shortcut - `wira-desk`'s own
+    /// distinction between "this row is off" and "this row was never bound".
+    pub fn set_enabled(&mut self, action: HotkeyAction, enabled: bool) -> Result<(), CoreError> {
+        if enabled == self.is_enabled(action) {
+            return Ok(());
+        }
+
+        let shortcut = self.bindings.get(&action).cloned().unwrap_or_default();
+
+        if enabled {
+            if !shortcut.trim().is_empty() {
+                if let Some(backend) = &self.backend {
+                    backend.register_shortcut(&shortcut).map_err(|_e| {
+                        CoreError::Validation(
+                            "This combination is already held by Windows or another application"
+                                .to_string(),
+                        )
+                    })?;
+                }
+                self.startup_failures.remove(&action);
+            }
+        } else if !shortcut.trim().is_empty() {
+            if let Some(backend) = &self.backend {
+                let _ = backend.unregister_shortcut(&shortcut);
+            }
+            self.startup_failures.remove(&action);
+        }
+
+        let clock = SystemClock::new();
+        self.settings_store.set(&Setting::new(
+            action.enabled_setting_key(),
+            SettingValue::Boolean(enabled),
+            clock.now_rfc3339(),
+        ))?;
+        self.enabled.insert(action, enabled);
 
         Ok(())
     }
@@ -125,17 +208,14 @@ impl DesktopHotkeyRegistrar {
         // BR-27: Two Snapdown actions cannot share the same hotkey combination
         for (other_action, bound_sc) in &self.bindings {
             if *other_action != action {
-                if bound_sc.eq_ignore_ascii_case(new_shortcut) {
-                    return Err(CoreError::Validation(
-                        "Another Snapdown action already uses this combination".to_string(),
-                    ));
-                }
-                if let Ok(other_parsed) = HotKey::from_str(bound_sc) {
-                    if parsed_new == other_parsed {
-                        return Err(CoreError::Validation(
-                            "Another Snapdown action already uses this combination".to_string(),
-                        ));
-                    }
+                let collides = bound_sc.eq_ignore_ascii_case(new_shortcut)
+                    || HotKey::from_str(bound_sc)
+                        .is_ok_and(|other_parsed| parsed_new == other_parsed);
+                if collides {
+                    return Err(CoreError::Validation(format!(
+                        "\"{}\" already uses this combination",
+                        other_action.label()
+                    )));
                 }
             }
         }
@@ -152,31 +232,25 @@ impl DesktopHotkeyRegistrar {
                 false
             };
 
-            if is_same && !self.startup_failures.contains_key(&action) {
-                // Update string representation in store and bindings if needed
-                if old != new_shortcut {
-                    let clock = SystemClock::new();
-                    self.settings_store.set(&Setting::new(
-                        action.to_setting_key(),
-                        SettingValue::String(new_shortcut.to_string()),
-                        clock.now_rfc3339(),
-                    ))?;
-                    self.bindings.insert(action, new_shortcut.to_string());
-                }
-                return Ok(());
-            }
+            if is_same {
+                // A disabled action was never handed to the backend, so it carries no startup
+                // failure of its own - it still needs the SAME re-registration a recovered
+                // startup failure does, not the plain no-op path below.
+                let needs_registration =
+                    self.startup_failures.contains_key(&action) || !self.is_enabled(action);
 
-            if is_same && self.startup_failures.contains_key(&action) {
-                // If it was failed on startup, try re-registering now
-                if let Some(backend) = &self.backend {
-                    backend.register_shortcut(new_shortcut).map_err(|_e| {
-                        CoreError::Validation(
-                            "This combination is already held by Windows or another application"
-                                .to_string(),
-                        )
-                    })?;
+                if needs_registration {
+                    if let Some(backend) = &self.backend {
+                        backend.register_shortcut(new_shortcut).map_err(|_e| {
+                            CoreError::Validation(
+                                "This combination is already held by Windows or another \
+                                 application"
+                                    .to_string(),
+                            )
+                        })?;
+                    }
+                    self.startup_failures.remove(&action);
                 }
-                self.startup_failures.remove(&action);
                 if old != new_shortcut {
                     let clock = SystemClock::new();
                     self.settings_store.set(&Setting::new(
@@ -186,6 +260,7 @@ impl DesktopHotkeyRegistrar {
                     ))?;
                     self.bindings.insert(action, new_shortcut.to_string());
                 }
+                self.ensure_enabled_persisted(action)?;
                 return Ok(());
             }
         }
@@ -215,6 +290,7 @@ impl DesktopHotkeyRegistrar {
 
         self.bindings.insert(action, new_shortcut.to_string());
         self.startup_failures.remove(&action);
+        self.ensure_enabled_persisted(action)?;
 
         Ok(())
     }
@@ -261,6 +337,10 @@ impl HotkeyRegistrar for DesktopHotkeyRegistrar {
         };
 
         if self.startup_failures.contains_key(&action) {
+            return false;
+        }
+
+        if !self.is_enabled(action) {
             return false;
         }
 
@@ -425,9 +505,11 @@ pub mod tests {
             other => panic!("Expected CoreError::Validation, got {other:?}"),
         };
 
+        // Names the action that already holds it, not just "another Snapdown action" - so the
+        // Reviewer knows which row to go change instead of guessing.
         assert_eq!(
             internal_msg,
-            "Another Snapdown action already uses this combination"
+            "\"Capture a region\" already uses this combination"
         );
         assert_eq!(
             os_msg,
@@ -582,5 +664,107 @@ pub mod tests {
             registrar.action_for_shortcut_str(initial_capture),
             Some(HotkeyAction::Capture)
         );
+    }
+
+    #[test]
+    fn disabling_a_hotkey_keeps_its_shortcut_but_stops_it_registering() {
+        let store = Arc::new(SqliteSettingsStore::open_in_memory().unwrap());
+        let backend = Arc::new(MockGlobalShortcutBackend::new());
+        let mut registrar = DesktopHotkeyRegistrar::new(store.clone(), Some(backend.clone()));
+        registrar.init_from_store().unwrap();
+
+        let shortcut = HotkeyAction::Capture.default_shortcut();
+        assert!(registrar.is_registered("capture"));
+
+        registrar.set_enabled(HotkeyAction::Capture, false).unwrap();
+
+        // Unregistered with the OS, but the shortcut itself is still the Reviewer's own choice -
+        // not erased to "Not set" the way `clear` would.
+        assert!(!registrar.is_registered("capture"));
+        assert!(!backend.is_registered(shortcut));
+        assert_eq!(registrar.get_shortcut("capture"), Some(shortcut.into()));
+
+        // Survives a restart: a fresh registrar reading the same store also comes back disabled.
+        let mut reloaded = DesktopHotkeyRegistrar::new(store, Some(backend.clone()));
+        reloaded.init_from_store().unwrap();
+        assert!(!reloaded.is_enabled(HotkeyAction::Capture));
+        assert!(!reloaded.is_registered("capture"));
+        assert_eq!(reloaded.get_shortcut("capture"), Some(shortcut.into()));
+        assert!(!backend.is_registered(shortcut));
+    }
+
+    #[test]
+    fn re_enabling_a_hotkey_registers_its_kept_shortcut_again() {
+        let store = Arc::new(SqliteSettingsStore::open_in_memory().unwrap());
+        let backend = Arc::new(MockGlobalShortcutBackend::new());
+        let mut registrar = DesktopHotkeyRegistrar::new(store, Some(backend.clone()));
+        registrar.init_from_store().unwrap();
+
+        let shortcut = HotkeyAction::Capture.default_shortcut();
+        registrar.set_enabled(HotkeyAction::Capture, false).unwrap();
+        assert!(!registrar.is_registered("capture"));
+
+        registrar.set_enabled(HotkeyAction::Capture, true).unwrap();
+
+        assert!(registrar.is_registered("capture"));
+        assert!(backend.is_registered(shortcut));
+        assert_eq!(registrar.get_shortcut("capture"), Some(shortcut.into()));
+    }
+
+    #[test]
+    fn re_enabling_a_hotkey_can_be_refused_if_something_else_claimed_it_meanwhile() {
+        let store = Arc::new(SqliteSettingsStore::open_in_memory().unwrap());
+        let backend = Arc::new(MockGlobalShortcutBackend::new());
+        let mut registrar = DesktopHotkeyRegistrar::new(store, Some(backend.clone()));
+        registrar.init_from_store().unwrap();
+
+        let shortcut = HotkeyAction::Capture.default_shortcut();
+        registrar.set_enabled(HotkeyAction::Capture, false).unwrap();
+
+        // Something else takes the combination while Capture sat disabled.
+        backend
+            .conflicts
+            .lock()
+            .unwrap()
+            .insert(shortcut.to_string());
+
+        let res = registrar.set_enabled(HotkeyAction::Capture, true);
+        assert!(res.is_err());
+        // Refused, and still disabled - not left in a half-enabled state.
+        assert!(!registrar.is_enabled(HotkeyAction::Capture));
+        assert!(!registrar.is_registered("capture"));
+    }
+
+    #[test]
+    fn disabling_a_hotkey_does_not_affect_the_other_action() {
+        let store = Arc::new(SqliteSettingsStore::open_in_memory().unwrap());
+        let backend = Arc::new(MockGlobalShortcutBackend::new());
+        let mut registrar = DesktopHotkeyRegistrar::new(store, Some(backend.clone()));
+        registrar.init_from_store().unwrap();
+
+        registrar.set_enabled(HotkeyAction::Capture, false).unwrap();
+
+        assert!(!registrar.is_registered("capture"));
+        assert!(registrar.is_registered("open_editor"));
+        assert!(backend.is_registered(HotkeyAction::OpenEditor.default_shortcut()));
+    }
+
+    #[test]
+    fn rebinding_a_disabled_action_registers_it_and_marks_it_enabled() {
+        let store = Arc::new(SqliteSettingsStore::open_in_memory().unwrap());
+        let backend = Arc::new(MockGlobalShortcutBackend::new());
+        let mut registrar = DesktopHotkeyRegistrar::new(store, Some(backend.clone()));
+        registrar.init_from_store().unwrap();
+
+        registrar.set_enabled(HotkeyAction::Capture, false).unwrap();
+        assert!(!registrar.is_registered("capture"));
+
+        registrar
+            .validate_and_rebind(HotkeyAction::Capture, "Ctrl+Alt+Q")
+            .unwrap();
+
+        assert!(registrar.is_enabled(HotkeyAction::Capture));
+        assert!(registrar.is_registered("capture"));
+        assert!(backend.is_registered("Ctrl+Alt+Q"));
     }
 }

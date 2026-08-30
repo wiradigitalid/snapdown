@@ -22,6 +22,12 @@ export component SdTextField inherits Rectangle {
     // a note that scrolls off to the right hides what has just been typed. Those two are compatible:
     // `TextInput::layout_info` in i-slint-core consults `wrap()` without regard for `single_line()`.
     in property <bool> commit-on-enter: false;
+    // Fires `accepted` when the field loses focus, not only on Enter. Off by default so a note or
+    // title field is not committed just because the Reviewer clicked somewhere else mid-thought;
+    // a numeric field paired with a slider wants both, since clicking the slider itself is a
+    // perfectly normal way to leave the field without ever pressing Enter - and the field is left
+    // showing what was typed, uncommitted, until it does.
+    in property <bool> commit-on-blur: false;
     in property <length> pad: 10px;
     // FLAT: no fill, and no border until it is hovered or focused.
     //
@@ -37,6 +43,17 @@ export component SdTextField inherits Rectangle {
     // Monospace, for text whose alignment carries meaning - the Assemble preview's Code view is
     // CommonMark, and a proportional font makes its structure unreadable.
     in property <bool> mono: false;
+    // Opt-in: hand Ctrl+C and Ctrl+Enter to the caller BEFORE `TextInput` consumes them.
+    //
+    // Default OFF, and that default is the point. This is the product's ONE text field, and the
+    // Editor's Observation Summary is the same component: a field that quietly stopped copying its
+    // own text would be a regression in a screen that never asked for any of this.
+    //
+    // Needed because the capture overlay's note field takes focus the moment the note panel appears,
+    // so by the time the Reviewer reaches for a chord this field owns the keyboard. Handling those
+    // chords in the overlay's own `FocusScope` cannot work - a focused `TextInput` gets the key
+    // first, and Ctrl+C never bubbles.
+    in property <bool> forward-copy-chords: false;
 
     in-out property <string> text <=> input.text;
     // The height the content wants, so a caller can simply omit `height` and let the field hug its
@@ -48,6 +65,20 @@ export component SdTextField inherits Rectangle {
 
     callback edited();
     callback accepted();
+    // A copy chord arrived while `forward-copy-chords` is on. Arguments: whether this field currently
+    // holds a text selection, and whether the chord is the unconditional image one (Ctrl+Enter).
+    //
+    // It RETURNS whether the caller consumed it. That return value is what keeps the text-vs-image
+    // rule in exactly one place: this component asks and obeys, it never decides. `false` means
+    // "not mine", and the event is rejected so `TextInput` performs its own native copy - which is
+    // also why nothing here calls `copy()` by hand and no double copy is possible.
+    callback copy-chord-pressed(bool, bool) -> bool;
+
+    changed has-focus => {
+        if (root.commit-on-blur && !root.has-focus) {
+            root.accepted();
+        }
+    }
 
     public function focus-input() {
         input.focus();
@@ -91,6 +122,32 @@ export component SdTextField inherits Rectangle {
         }
         accepted => {
             root.accepted();
+        }
+        // Slint documents this callback as the hook for handling keys BEFORE `TextInput` does, which
+        // is the only reason the overlay's copy chords can work at all while this field has focus.
+        //
+        // Ctrl+C does not arrive as the letter. It arrives as the ASCII control code ETX, which this
+        // product already learned once - see `displayable_key_text` in `main.rs`, whose whole reason
+        // for existing is "Ctrl+C's own text arriving as the ASCII control code rather than the
+        // letter". The letter forms are matched too, in case a future Slint or another platform sends
+        // those instead; matching only "c" is a shortcut that silently never fires.
+        //
+        // Selection state is `cursor-position-byte-offset != anchor-position-byte-offset`. Slint
+        // marks both of those "Internal, undocumented property, only exposed for tests" in its own
+        // `builtins.slint`. They are used deliberately: there is no public equivalent, and if a Slint
+        // upgrade removes them this file fails to COMPILE rather than silently losing the behaviour,
+        // which is the failure mode worth accepting.
+        key-pressed(event) => {
+            if (root.forward-copy-chords && event.modifiers.control && event.text == Key.Return) {
+                root.copy-chord-pressed(false, true) ? accept : reject
+            } else if (root.forward-copy-chords && event.modifiers.control
+                    && (event.text == "\u{3}" || event.text == "c" || event.text == "C")) {
+                root.copy-chord-pressed(
+                    input.cursor-position-byte-offset != input.anchor-position-byte-offset,
+                    false) ? accept : reject
+            } else {
+                reject
+            }
         }
     }
 

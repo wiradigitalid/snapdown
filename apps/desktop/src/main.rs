@@ -25,7 +25,8 @@ use snapdown_core::domain::setting::{
 };
 use snapdown_core::error::CoreError;
 use snapdown_core::ports::{
-    BlobStore, BundleStore, Clock, EntropySource, FindingStore, SettingsStore, StartupRegistrar,
+    BlobStore, BundleStore, Clock, EntropySource, FindingStore, HotkeyRegistrar, SettingsStore,
+    StartupRegistrar,
 };
 use snapdown_core::util::id::id_from_parts;
 use snapdown_store::image::{ImageReducer, MarkerBurner};
@@ -80,7 +81,7 @@ thread_local! {
 #[cfg(windows)]
 fn acquire_single_instance_lock() -> Option<windows::Win32::Foundation::HANDLE> {
     use windows::core::PCWSTR;
-    use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
+    use windows::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS};
     use windows::Win32::System::Threading::CreateMutexW;
 
     let wide_name: Vec<u16> = SINGLE_INSTANCE_MUTEX_NAME
@@ -92,6 +93,17 @@ fn acquire_single_instance_lock() -> Option<windows::Win32::Foundation::HANDLE> 
         match CreateMutexW(None, false, PCWSTR(wide_name.as_ptr())) {
             Ok(handle) => {
                 if GetLastError() == ERROR_ALREADY_EXISTS {
+                    // CLOSED, not leaked. `CreateMutexW` against an existing name still hands
+                    // back a valid handle to that same kernel object - an open handle IS a
+                    // reference keeping the object alive, from ANY process, including this one.
+                    // `main`'s retry loop calls this in a loop specifically to wait out a
+                    // relaunch racing its own predecessor's exit; leaving this handle open on
+                    // every failed attempt would mean the loop's OWN earlier attempts keep the
+                    // mutex alive by themselves, so `ERROR_ALREADY_EXISTS` never clears even
+                    // after the old process is long gone - the retry becomes permanent and
+                    // indistinguishable from no retry at all, which is exactly what shipped and
+                    // was reported back as "still no restart."
+                    let _ = CloseHandle(handle);
                     None
                 } else {
                     Some(handle)
@@ -1308,10 +1320,12 @@ fn copy_burned_image(ctx: &AppContext, finding_id: &str) -> Result<String, Strin
         )
         .map_err(|e| format!("Could not encode for the clipboard: {e}"))?;
 
-    // `set_clipboard` opens, empties, writes and closes. Holding a `Clipboard` guard around it
-    // would take the lock twice and deadlock.
-    clipboard_win::set_clipboard(clipboard_win::formats::Bitmap, &bmp)
-        .map_err(|e| format!("Could not write to the clipboard: {e}"))?;
+    // This used to read *"`set_clipboard` opens, empties, writes and closes"* and call it directly.
+    // The first half of that sentence is true and the "empties" is NOT, for the Bitmap format - see
+    // `put_bitmap_on_clipboard`, which is `BUG-84`. The Editor's Copy button therefore had the same
+    // second-copy-pastes-the-first-image defect as the copy-only path, and this comment is why it
+    // went unexamined.
+    put_bitmap_on_clipboard(&bmp)?;
 
     Ok(format!(
         "Image copied, with its Markers and annotations ({} x {}).",
@@ -1366,6 +1380,27 @@ fn open_file_location(ctx: &AppContext, image_path: &str) -> Result<(), String> 
 #[cfg(not(windows))]
 fn open_file_location(_ctx: &AppContext, _image_path: &str) -> Result<(), String> {
     Err("Showing a file in the file manager is implemented on Windows only.".to_string())
+}
+
+/// Opens a folder's OWN contents in Explorer - distinct from `open_file_location`, whose
+/// `/select,<path>` opens the PARENT of whatever path it is given with that path merely
+/// highlighted. Given the Vault root itself, `/select` would open the Vault's parent folder with
+/// the Vault highlighted, not what "Show in Explorer" on a Vault means.
+#[cfg(windows)]
+fn open_folder(path: &Path) -> Result<(), String> {
+    if !path.is_dir() {
+        return Err("That folder no longer exists.".to_string());
+    }
+    std::process::Command::new("explorer.exe")
+        .arg(path)
+        .spawn()
+        .map_err(|e| format!("Could not open the file manager: {e}"))?;
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn open_folder(_path: &Path) -> Result<(), String> {
+    Err("Showing a folder in the file manager is implemented on Windows only.".to_string())
 }
 
 /// Which Findings a confirmed deletion should take.
@@ -1498,6 +1533,12 @@ fn migrate_vault(from: &Path, to: &Path) -> Result<usize, String> {
             move_one(&src, &dst)?;
             moved += 1;
         }
+        // Best-effort, and deliberately not checked the way `move_one`'s `remove_file` is: nothing
+        // downstream depends on this directory being gone, unlike a leftover FILE, which would
+        // silently double the disk the Vault uses. An empty `findings`/`bundles` folder left behind
+        // is untidy, not incorrect - and it fails harmlessly if the Reviewer's own files (never
+        // ours to touch) are still in there.
+        let _ = std::fs::remove_dir(&source);
     }
     Ok(moved)
 }
@@ -1517,6 +1558,10 @@ fn migrate_vault_dir(from: &Path, to: &Path) -> Result<usize, String> {
             moved += 1;
         }
     }
+    // Same best-effort cleanup as `migrate_vault`'s own top-level `findings`/`bundles`: this
+    // directory (a Bundle's own folder, recursed into) is left empty once every file inside has
+    // moved, and nothing depends on reclaiming it.
+    let _ = std::fs::remove_dir(from);
     Ok(moved)
 }
 
@@ -1546,6 +1591,20 @@ fn hotkey_action_from_id(id: &str) -> Option<HotkeyAction> {
         "capture" => Some(HotkeyAction::Capture),
         "open_editor" => Some(HotkeyAction::OpenEditor),
         _ => None,
+    }
+}
+
+/// The Vault path as CONFIGURED (what a fresh launch would read at `AppContext::init` time), which
+/// is not always `ctx.vault_path` - the one thing that field cannot be, since it is frozen for the
+/// life of the process. Falls back the same way `init` does, so a mid-session read and a startup
+/// read never disagree about what "nothing chosen yet" means.
+fn configured_vault_path(ctx: &AppContext) -> PathBuf {
+    match ctx.settings_store.get(&SettingKey::VaultPath) {
+        Ok(Some(Setting {
+            value: SettingValue::String(s),
+            ..
+        })) => PathBuf::from(s),
+        _ => default_vault_path(),
     }
 }
 
@@ -1600,12 +1659,12 @@ impl ShortcutRefusal {
     fn message(&self) -> String {
         match self {
             Self::NoModifier => {
-                "A shortcut needs at least one of Ctrl, Alt or Shift with it. A bare key would fire \
-                 while you type, in every application."
+                "A shortcut needs at least one of Ctrl, Alt or Win with it. A bare key, or Shift on \
+                 its own, would fire while you type, in every application."
                     .to_string()
             }
             Self::UnsupportedKey(key) => {
-                format!("Snapdown cannot register the {key} key as part of a shortcut.")
+                format!("Snapdown cannot register {key} as part of a shortcut.")
             }
             Self::Reserved { owner, advice } if advice.is_empty() => {
                 format!("Windows uses this combination to {owner}. It cannot be reassigned.")
@@ -1619,9 +1678,10 @@ impl ShortcutRefusal {
 
 /// Combinations Windows or a well-known tool already owns.
 ///
-/// `wira-desk` carries the same table for `Win+` chords; this one covers the Ctrl/Alt/Shift space
-/// Snapdown's own hotkeys live in, and only the ones a Reviewer might plausibly reach for. It is
-/// deliberately short: a long list of chords nobody would try is a list nobody maintains.
+/// Covers the Ctrl/Alt/Shift/Win space Snapdown's own hotkeys live in, and only the ones a
+/// Reviewer might plausibly reach for; the `Win+` entries mirror the exact set `wira-desk`'s own
+/// Key Check panel documents in its tip line. It is deliberately short: a long list of chords
+/// nobody would try is a list nobody maintains.
 ///
 /// The point is not to be exhaustive - the OS refuses what it refuses, and that is reported too. The
 /// point is that a REFUSAL WE CAN PREDICT should say WHO took it, before the Reviewer has to guess.
@@ -1675,6 +1735,31 @@ fn reserved_chord(shortcut: &str) -> Option<ShortcutRefusal> {
             "save, in almost every application",
             "Pick something with Shift or Alt in it as well.",
         ),
+        // The `Win+` chords the shell itself intercepts before `RegisterHotKey` ever sees them -
+        // not a guess, but the exact set `wira-desk`'s own Key Check panel already documents in its
+        // tip line: "Windows reserves Win + 1..9, Win + E, Win + D, and Win + Ctrl + <-/->." Nothing
+        // else with `Win` in it is refused here; most other Win combinations register fine.
+        ("Super+1", "launch the first pinned taskbar app", ""),
+        ("Super+2", "launch the second pinned taskbar app", ""),
+        ("Super+3", "launch the third pinned taskbar app", ""),
+        ("Super+4", "launch the fourth pinned taskbar app", ""),
+        ("Super+5", "launch the fifth pinned taskbar app", ""),
+        ("Super+6", "launch the sixth pinned taskbar app", ""),
+        ("Super+7", "launch the seventh pinned taskbar app", ""),
+        ("Super+8", "launch the eighth pinned taskbar app", ""),
+        ("Super+9", "launch the ninth pinned taskbar app", ""),
+        ("Super+E", "open File Explorer", ""),
+        ("Super+D", "show the desktop", ""),
+        (
+            "CommandOrControl+Super+Left",
+            "move the active window or switch virtual desktops",
+            "",
+        ),
+        (
+            "CommandOrControl+Super+Right",
+            "move the active window or switch virtual desktops",
+            "",
+        ),
     ];
 
     owner_and_advice
@@ -1684,6 +1769,93 @@ fn reserved_chord(shortcut: &str) -> Option<ShortcutRefusal> {
             owner: (*owner).to_string(),
             advice: (*advice).to_string(),
         })
+}
+
+/// The physical key `global_hotkey`'s `CommandOrControl` token resolves to on this OS - `Ctrl` on
+/// Windows, `Cmd` on macOS. The stored/parsed shortcut string always says `CommandOrControl`
+/// (`DEFAULT_HOTKEY_CAPTURE` and every rebind after it), because that is the one spelling
+/// `HotKey::from_str` accepts on both platforms; only the DISPLAY needs to pick a side.
+#[cfg(target_os = "macos")]
+const PRIMARY_MODIFIER_DISPLAY: &str = "Cmd";
+#[cfg(not(target_os = "macos"))]
+const PRIMARY_MODIFIER_DISPLAY: &str = "Ctrl";
+
+/// The physical key the live-recording panel calls "the OS modifier key" - `Win` on Windows,
+/// `Command` on macOS. Distinct from `PRIMARY_MODIFIER_DISPLAY`: this labels the raw `meta` key as
+/// it is held during recording, not the composed accelerator token.
+#[cfg(target_os = "macos")]
+const META_KEY_DISPLAY: &str = "Command";
+#[cfg(not(target_os = "macos"))]
+const META_KEY_DISPLAY: &str = "Win";
+
+/// A stored shortcut, reworded for the Reviewer rather than for `global_hotkey`.
+///
+/// `"CommandOrControl+Shift+S"` is what gets parsed and persisted, and showing that literal
+/// string was the owner's own complaint: *"apa bisa dia deteksi saja ini macos atau windows,
+/// sehingga gak usah ada tulisan CommandOrControl."* The stored spelling cannot change - it is
+/// what `HotKey::from_str` and every existing row in the database already agree on - so only the
+/// text put in front of the Reviewer changes.
+fn display_shortcut(shortcut: &str) -> String {
+    if shortcut.is_empty() {
+        return String::new();
+    }
+    shortcut
+        .replace("CommandOrControl", PRIMARY_MODIFIER_DISPLAY)
+        .replace("Super", META_KEY_DISPLAY)
+}
+
+/// A safe, human-facing label for a Slint key event's own `text`, or `None` when there is nothing
+/// worth showing.
+///
+/// Found the hard way: a bare key press with no modifier held (Enter, an arrow key, Ctrl+C's own
+/// text arriving as the ASCII control code rather than the letter) was being echoed into the Key
+/// Check panel's readout chip as-is, and a control character renders as an unreadable tofu box, not
+/// a key a Reviewer can recognise. `char::is_control` catches all of those in one place, rather than
+/// the narrow four-item list of bare-modifier codes the first cut of this checked for.
+fn displayable_key_text(text: &str) -> Option<String> {
+    if text.is_empty() {
+        return None;
+    }
+    if text.chars().count() == 1 {
+        let ch = text.chars().next().unwrap_or(' ');
+        // Control characters are Slint's bare-modifier signal, already excluded elsewhere. Anything
+        // outside letters/digits/ASCII punctuation is a codepoint this product has no name for - a
+        // private-use-area key code, say - and showing it raw is how a tofu glyph like `ℐ` ends up
+        // in a Reviewer-facing sentence instead of a word they can read.
+        return if ch.is_alphanumeric() || ch.is_ascii_punctuation() {
+            Some(text.to_uppercase())
+        } else {
+            None
+        };
+    }
+    // A named key already spelled out by Slint - `F5`, `Home`, `Left` - safe to show as-is.
+    Some(text.to_string())
+}
+
+/// A live readout of the chord being composed, for the Key Check panel's readout chip.
+///
+/// Distinct from `shortcut_from_key`: this never refuses anything, it only describes the current
+/// key state, including a mid-gesture one with no completing key yet (modifiers alone, trailing
+/// nothing). Rust builds it, not Slint, so `displayable_key_text`'s control-character guard is the
+/// only place that decision is made.
+fn format_chord_preview(ctrl: bool, alt: bool, shift: bool, win: bool, text: &str) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if ctrl {
+        parts.push(PRIMARY_MODIFIER_DISPLAY.to_string());
+    }
+    if win {
+        parts.push(META_KEY_DISPLAY.to_string());
+    }
+    if alt {
+        parts.push("Alt".to_string());
+    }
+    if shift {
+        parts.push("Shift".to_string());
+    }
+    if let Some(key) = displayable_key_text(text) {
+        parts.push(key);
+    }
+    parts.join(" + ")
 }
 
 /// Turns a Slint key event into the shortcut string `validate_and_rebind` expects.
@@ -1702,10 +1874,17 @@ fn reserved_chord(shortcut: &str) -> Option<ShortcutRefusal> {
 /// `Ok(None)` is the third state and it matters: the press is INCOMPLETE, not wrong. The Reviewer
 /// holding Ctrl on the way to Ctrl+Shift+S is mid-gesture, and telling them off for it would make
 /// the field impossible to use.
+///
+/// `win` qualifies a shortcut the same way `ctrl`/`alt` do - the owner's own question, *"kenapa Win
+/// gak bisa jadi shortcut?"* Nothing about `RegisterHotKey` refuses `MOD_WIN`; the physical key was
+/// only ever excluded here because the display layer had no way to spell it, which `META_KEY_DISPLAY`
+/// now solves. What genuinely cannot be reassigned is the specific set of Win chords the shell
+/// itself intercepts before any app sees them, and `reserved_chord` is where those live.
 fn shortcut_from_key(
     ctrl: bool,
     alt: bool,
     shift: bool,
+    win: bool,
     text: &str,
 ) -> Result<Option<String>, ShortcutRefusal> {
     // A modifier arriving as its own key. Slint sends these as control characters.
@@ -1720,18 +1899,22 @@ fn shortcut_from_key(
         return Ok(None);
     }
 
-    if !ctrl && !alt && !shift {
+    if !ctrl && !alt && !win && !shift {
         return Err(ShortcutRefusal::NoModifier);
     }
     // Shift alone is not a modifier for this purpose: Shift+A is how you type a capital A.
-    if !ctrl && !alt {
+    if !ctrl && !alt && !win {
         return Err(ShortcutRefusal::NoModifier);
     }
 
     let key = if text.chars().count() == 1 {
         let ch = text.chars().next().unwrap_or(' ');
         if !ch.is_ascii_alphanumeric() {
-            return Err(ShortcutRefusal::UnsupportedKey(format!("'{ch}'")));
+            let key_desc = match displayable_key_text(text) {
+                Some(label) => format!("the '{label}' key"),
+                None => "this key".to_string(),
+            };
+            return Err(ShortcutRefusal::UnsupportedKey(key_desc));
         }
         text.to_uppercase()
     } else {
@@ -1740,9 +1923,14 @@ fn shortcut_from_key(
         text.to_string()
     };
 
+    // Fixed order, `Win` between `Ctrl` and `Alt` - matching the Key Check panel's own chip order,
+    // so the row button's canonical text and the panel above it never disagree on how a chord reads.
     let mut parts: Vec<&str> = Vec::new();
     if ctrl {
         parts.push("CommandOrControl");
+    }
+    if win {
+        parts.push("Super");
     }
     if alt {
         parts.push("Alt");
@@ -1797,7 +1985,11 @@ fn load_settings_into_window(
     }
 
     window.set_open_editor_after_capture(open_editor_after_capture(ctx));
-    window.set_vault_path(ctx.vault_path.display().to_string().into());
+    // The CONFIGURED path, not `ctx.vault_path`: the two deliberately diverge right after a move
+    // (`on_vault_migration_confirmed`'s own comment explains why `ctx.vault_path` stays frozen until
+    // restart), and the Settings screen must show what was just saved, not what capture is still
+    // using in the meantime - the toast already says which one that is and for how long.
+    window.set_vault_path(configured_vault_path(ctx).display().to_string().into());
 
     let budget = current_budget(ctx);
     window.set_budget_name(budget.named.as_str().into());
@@ -1839,32 +2031,37 @@ fn load_settings_into_window(
     let rows: Vec<HotkeyRow> = [
         (
             HotkeyAction::Capture,
-            "capture",
-            "Capture a region",
             "Freezes the desktop and opens the selection overlay. The whole loop starts here.",
         ),
         (
             HotkeyAction::OpenEditor,
-            "open_editor",
-            "Open the Editor",
             "Brings the Editor forward without taking a capture.",
         ),
     ]
     .into_iter()
-    .map(|(action, id, label, why)| {
+    .map(|(action, why)| {
         let shortcut = bindings.get(&action).cloned().unwrap_or_default();
         let problem = failures.get(&action).cloned().unwrap_or_default();
         HotkeyRow {
-            action: id.into(),
-            label: label.into(),
+            // `action.as_str()`/`action.label()`, not a second literal here: the conflict
+            // message in `hotkey.rs` names an action with the same `label()`, and two
+            // independent copies of that string is exactly the drift that got a defect-register
+            // row wrong once already (`AGENTS.md`'s stale-claim pitfall).
+            action: action.as_str().into(),
+            label: action.label().into(),
             why: why.into(),
-            shortcut: shortcut.clone().into(),
-            active: !shortcut.is_empty() && problem.is_empty(),
+            // Displayed, never stored, in the OS's own words - `CommandOrControl` is
+            // `global-hotkey`'s cross-platform accelerator token, not something a Reviewer
+            // should have to decode.
+            shortcut: display_shortcut(&shortcut).into(),
+            enabled: hotkeys.is_enabled(action),
+            active: hotkeys.is_registered(action.as_str()),
             problem: problem.into(),
         }
     })
     .collect();
     window.set_hotkeys(ModelRc::from(Rc::new(VecModel::from(rows))));
+    window.set_hotkey_meta_key_label(META_KEY_DISPLAY.into());
 
     window.set_app_version(format!("Snapdown {}", env!("CARGO_PKG_VERSION")).into());
 
@@ -1889,6 +2086,16 @@ fn toast(window: &AppWindow, message: impl Into<SharedString>, is_error: bool) {
     // inheriting the remainder of the first one's.
     window.set_toast_text(SharedString::new());
     window.set_toast_text(message.into());
+}
+
+/// The Hotkeys tab's OWN feedback, not the global toast: a validation error, a conflict, or a
+/// bind confirmation, shown in the sticky panel at the bottom of that tab rather than over the
+/// Editor window behind it. `BUG` reported by the Reviewer: every one of these used to go through
+/// `toast`, which rendered in the wrong window entirely while Settings was open.
+fn hotkey_feedback(window: &AppWindow, message: impl Into<SharedString>, is_error: bool) {
+    window.set_hotkey_feedback_is_error(is_error);
+    window.set_hotkey_feedback(SharedString::new());
+    window.set_hotkey_feedback(message.into());
 }
 
 /// The Findings the Reviewer has ticked for a Bundle, in the strip's own order.
@@ -2436,6 +2643,19 @@ fn set_capture_exclusion(window: &slint::Weak<AppWindow>, exclude: bool) {
     let Some(main) = window.upgrade() else {
         return;
     };
+
+    // A hidden or minimized window is already invisible to every capture API, so touching its
+    // display affinity protects nothing here - and doing it anyway is exactly what produced the
+    // "white window flashes and disappears" the owner reported on the hotkey path, never on the
+    // tray path. `SetWindowDisplayAffinity` forces DWM to paint a frame for a window it has not
+    // composited yet, which is the flash - and the hotkey path is the one flow this feature
+    // exists to let run with the window never shown at all (the tray path always reveals the
+    // Editor afterwards, which happened to cover the same flash there). Nothing here needs
+    // excluding or restoring while the window is not visible, so skip the call entirely.
+    if !main.window().is_visible() {
+        return;
+    }
+
     let affinity = if exclude {
         WDA_EXCLUDEFROMCAPTURE
     } else {
@@ -2471,58 +2691,38 @@ fn set_capture_exclusion(_window: &slint::Weak<AppWindow>, _exclude: bool) {}
 /// floating surface in this product already has a lift: the overlay's panels, the Assemble preview,
 /// the Marker badges.
 ///
-/// `DwmExtendFrameIntoClientArea` is the answer rather than drawing one, and the reason is where the
-/// shadow has to be: OUTSIDE the window's own bounds. Anything Slint draws is inside them, so a
-/// drawn shadow would eat client area and clip at the edge. The recorded fix note in `BUG-71` says
-/// exactly this, and costed it so the next reader would not start with the easy version.
+/// Two things were tried and abandoned before this one, and both are worth recording so a future
+/// reader does not repeat them:
 ///
-/// A one-pixel margin is enough. DWM's shadow comes from the window having a frame at all, not from
-/// how much of it is extended, and a larger margin starts showing the frame itself through the
-/// client area.
+/// - `DwmExtendFrameIntoClientArea` + `DWMWA_NCRENDERING_POLICY` (`BUG-71`'s original fix note,
+///   correct for a window WITH a frame): a no-op here, because `no-frame: true` (`FR-26`) means
+///   this window has no `WS_CAPTION`, and DWM will not compute a shadow region without one.
+/// - `CS_DROPSHADOW`, the class-style flag Windows uses for shadowed popups: this DOES apply to
+///   caption-less windows, but it is a legacy, thin, one-sided shadow meant for small short-lived
+///   windows like menus and tooltips - not the soft four-sided shadow a normal app window gets
+///   from DWM. It produced no visible change here even after forcing Windows to re-evaluate the
+///   frame (`SWP_FRAMECHANGED`), which is consistent with what it actually is: it was never the
+///   right mechanism, not merely misapplied.
+///
+/// `winit` 0.30 carries a purpose-built answer to this exact situation -
+/// `WindowExtWindows::set_undecorated_shadow` - because this is a common enough complaint that it
+/// shipped upstream (`rust-windowing/winit` #2419) rather than staying a per-app hack: internally
+/// it keeps the window "decorated" for DWM's shadow computation while expanding the client rect
+/// to cover the whole window, the same hidden-titlebar technique a hand-rolled
+/// `WM_NCCALCSIZE` hook would implement, without this file needing to subclass a window
+/// procedure to get it. Its own documented cost is a 1px line at the top of the window - worth
+/// the Reviewer's eyes alongside the shadow itself.
 ///
 /// Failure is logged and ignored: a window with no shadow is a cosmetic loss, and there is no
 /// version of this worth refusing to start over.
 #[cfg(windows)]
 fn set_window_shadow(window: &AppWindow) {
-    use i_slint_backend_winit::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use i_slint_backend_winit::winit::platform::windows::WindowExtWindows;
     use i_slint_backend_winit::WinitWindowAccessor;
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::Graphics::Dwm::{
-        DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DWMNCRENDERINGPOLICY, DWMNCRP_ENABLED,
-        DWMWA_NCRENDERING_POLICY,
-    };
-    use windows::Win32::UI::Controls::MARGINS;
 
     let applied = window.window().with_winit_window(|winit_win| {
-        let Ok(handle) = winit_win.window_handle() else {
-            return false;
-        };
-        let RawWindowHandle::Win32(win32) = handle.as_raw() else {
-            return false;
-        };
-        let hwnd = HWND(win32.hwnd.get() as *mut std::ffi::c_void);
-
-        // Non-client rendering has to be ENABLED for a frameless window, or DWM has no frame to draw
-        // a shadow around and the extend call is a no-op.
-        let policy = DWMNCRP_ENABLED;
-        let policy_ok = unsafe {
-            DwmSetWindowAttribute(
-                hwnd,
-                DWMWA_NCRENDERING_POLICY,
-                std::ptr::from_ref::<DWMNCRENDERINGPOLICY>(&policy).cast(),
-                std::mem::size_of::<DWMNCRENDERINGPOLICY>() as u32,
-            )
-        }
-        .is_ok();
-
-        let margins = MARGINS {
-            cxLeftWidth: 1,
-            cxRightWidth: 1,
-            cyTopHeight: 1,
-            cyBottomHeight: 1,
-        };
-        let extended = unsafe { DwmExtendFrameIntoClientArea(hwnd, &margins) }.is_ok();
-        policy_ok && extended
+        winit_win.set_undecorated_shadow(true);
+        true
     });
 
     if applied != Some(true) {
@@ -2584,24 +2784,34 @@ impl Drop for LiveOverlay {
     }
 }
 
-/// Crops the capture canvas to the selected region, shrinks it to the active QualityBudget,
-/// writes it to the Vault, and records the Finding plus its note.
+/// A selected region, cropped out of the canvas and put through the Quality Budget: everything the
+/// two things you can do with a capture have in common.
 ///
-/// `source` is the canvas as raw RGBA8 bytes, `source_size` pixels, and `region` is in that
-/// canvas's own pixel space - the same space the overlay reports its selection in, so no scale
-/// conversion is involved. It is borrowed rather than owned as an `RgbaImage` because the canvas
-/// now lives in the buffer the overlay presents, and owning a second copy of it is exactly the
-/// cost `BUG-28` was about.
+/// Extracted from `persist_finding` when the copy-to-clipboard path arrived, rather than copied into
+/// it. The clamp arithmetic below is the reason: it is the only thing standing between a drag
+/// released off the edge of the desktop and an out-of-bounds crop, and two copies of it would drift.
+struct PreparedRegion {
+    /// PNG bytes, already reduced.
+    bytes: Vec<u8>,
+    /// The dimensions of `bytes`, which are the reduced ones - NOT the crop's.
+    width: u32,
+    height: u32,
+    /// The crop actually taken, clamped into the canvas. `x, y, w, h`.
+    crop: (u32, u32, u32, u32),
+    resolved: ResolvedPair,
+    budget_name: String,
+}
+
+/// Crops `region` out of `source` and applies the Quality Budget.
 ///
-/// Returns the new Finding's id, or `None` if the region could not be persisted.
-fn persist_finding(
+/// `source` is raw RGBA8, `source_size` its pixel dimensions, and `region` is in that same space -
+/// the space the overlay reports its selection in, so no scale conversion is involved.
+fn prepare_region(
     ctx: &AppContext,
     source: &[u8],
     source_size: (u32, u32),
     region: (u32, u32, u32, u32),
-    monitor_name: &str,
-    note_body: &str,
-) -> Option<String> {
+) -> Option<PreparedRegion> {
     let (src_w, src_h) = source_size;
     let (sel_x, sel_y, sel_w, sel_h) = region;
 
@@ -2654,10 +2864,182 @@ fn persist_finding(
         match ImageReducer::reduce_image(&png_bytes, orig_dims, &resolved, false) {
             Ok(red) => (red.bytes, red.dimensions.width, red.dimensions.height),
             Err(e) => {
-                eprintln!("Quality-budget reduction failed, storing the region unreduced: {e}");
+                eprintln!("Quality-budget reduction failed, using the region unreduced: {e}");
                 (png_bytes, crop_w, crop_h)
             }
         };
+
+    Some(PreparedRegion {
+        bytes: reduced_bytes,
+        width: final_w,
+        height: final_h,
+        crop: (crop_x, crop_y, crop_w, crop_h),
+        resolved,
+        budget_name: qb.named.display_name().to_string(),
+    })
+}
+
+/// What a copy chord in the capture overlay should copy.
+///
+/// This is the whole text-vs-image rule, and it lives here rather than in `appwindow.slint` on
+/// purpose. The overlay's note field takes focus the moment the note panel appears, so both chords
+/// arrive at a focused `TextInput` - which means Slint has to be involved in DELIVERING them, and the
+/// temptation is to let it decide as well. It must not. The overlay's keys ARE guarded here, by
+/// `test_capture_interaction.rs`, but those guards read the `.slint` SOURCE - they can prove a branch
+/// exists and never that it decides correctly, so an inverted condition would stay green. Slint asks
+/// this function and obeys the answer, and the answer is what the tests below can watch fail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CopyChordTarget {
+    /// Put the selected region on the clipboard and save nothing.
+    Image,
+    /// Leave the image alone; the note field copies its own selected text.
+    NoteText,
+}
+
+/// A BMP onto the Windows clipboard, emptying the clipboard FIRST.
+///
+/// `clipboard_win::set_clipboard(formats::Bitmap, ..)` does not empty it, and that is the whole of
+/// `BUG-84`: the owner reported that the first copy worked and every copy after it pasted the FIRST
+/// image again. The library says so in its own source - `raw::set_bitmap` passes
+/// `options::NoClear`, commented *"Bitmap format cannot really overlap with much so there is no risk
+/// of having non-empty clipboard. Also it is backward compatible behavior. To be changed in 6.x"*.
+/// On Windows a `SetClipboardData` with no preceding `EmptyClipboard` leaves the existing handle for
+/// that format in place, so the second write is the one that does nothing.
+///
+/// `copy_burned_image` had the identical defect, and carried a comment asserting the opposite -
+/// *"`set_clipboard` opens, empties, writes and closes"* - which is presumably why the Editor's Copy
+/// button was never suspected. Both paths now come through here.
+///
+/// The guard is taken HERE rather than letting `set_clipboard` open internally, because the empty and
+/// the write have to happen inside ONE open. That is also why the old comment's warning about taking
+/// the lock twice does not apply: nothing below opens the clipboard again.
+#[cfg(windows)]
+fn put_bitmap_on_clipboard(bmp: &[u8]) -> Result<(), String> {
+    let _clip = clipboard_win::Clipboard::new_attempts(10)
+        .map_err(|e| format!("Could not open the clipboard: {e}"))?;
+    clipboard_win::raw::set_bitmap_with(bmp, clipboard_win::options::DoClear)
+        .map_err(|e| format!("Could not write to the clipboard: {e}"))
+}
+
+/// `has_text_selection`: the note field currently holds a text selection.
+/// `force_image`: the chord is Ctrl+Enter, which never means text.
+fn copy_chord_target(has_text_selection: bool, force_image: bool) -> CopyChordTarget {
+    // Ctrl+Enter is unconditional, and that is what makes Ctrl+C safe to make conditional: there is
+    // always one chord that means "the image" no matter what the caret is doing.
+    if force_image || !has_text_selection {
+        CopyChordTarget::Image
+    } else {
+        CopyChordTarget::NoteText
+    }
+}
+
+/// The selected region on the clipboard, with nothing written anywhere. `Ctrl+C` / `Ctrl+Enter`.
+///
+/// The sibling of `copy_burned_image`, and deliberately NOT the same function. That one hands over a
+/// stored Finding with its Markers burned in; this one hands over a region that has no Finding, so
+/// there is nothing to burn and no redaction available. A shot that needs blurring has to be saved.
+///
+/// A screenshot that never touches disk cannot be recovered, backed up, or carried through a Vault
+/// migration - which is the point, not a side effect.
+///
+/// The Quality Budget applies, exactly as it does on the way into the Vault. Two reasons, and the
+/// second one is not obvious: the same capture copied and saved should not differ, and a DIB is
+/// UNCOMPRESSED, so the clipboard cost is `w * h * 3` of the final dimensions - about 25 MB for a 4K
+/// screen and 50 MB across two of them. The resolved long edge is what bounds that.
+/// Everything the copy path does EXCEPT touch the clipboard: the BMP bytes and their dimensions.
+///
+/// Split out so it can be tested. The alternative - a test that calls the real thing - would replace
+/// whatever the developer had on their clipboard every time `cargo test` ran, and the interesting
+/// assertions here are not about the Windows clipboard API anyway: they are that the bytes decode,
+/// and that nothing was written to the Vault or the Library on the way.
+///
+/// `cfg(any(windows, test))` rather than `cfg(windows)`: the clipboard write is Windows-only, but
+/// this half is portable and the test needs it on every platform CI runs on.
+#[cfg(any(windows, test))]
+fn encode_region_for_clipboard(
+    ctx: &AppContext,
+    source: &[u8],
+    source_size: (u32, u32),
+    region: (u32, u32, u32, u32),
+) -> Result<(Vec<u8>, u32, u32), String> {
+    use image::codecs::bmp::BmpEncoder;
+    use image::ExtendedColorType;
+
+    let prepared = prepare_region(ctx, source, source_size, region)
+        .ok_or_else(|| "Could not read the selected region.".to_string())?;
+
+    let decoded = image::load_from_memory(&prepared.bytes)
+        .map_err(|e| format!("Could not decode the captured region: {e}"))?;
+    // RGB, not RGBA, for the reason `copy_burned_image` records: a DIB with an alpha channel is
+    // pasted as fully transparent by several applications, Explorer's preview included.
+    let rgb = decoded.to_rgb8();
+
+    let mut bmp = Vec::new();
+    BmpEncoder::new(&mut bmp)
+        .encode(
+            rgb.as_raw(),
+            rgb.width(),
+            rgb.height(),
+            ExtendedColorType::Rgb8,
+        )
+        .map_err(|e| format!("Could not encode for the clipboard: {e}"))?;
+
+    Ok((bmp, rgb.width(), rgb.height()))
+}
+
+#[cfg(windows)]
+fn copy_region_to_clipboard(
+    ctx: &AppContext,
+    source: &[u8],
+    source_size: (u32, u32),
+    region: (u32, u32, u32, u32),
+) -> Result<String, String> {
+    let (bmp, width, height) = encode_region_for_clipboard(ctx, source, source_size, region)?;
+
+    put_bitmap_on_clipboard(&bmp)?;
+
+    Ok(format!(
+        "Copied to the clipboard, not saved ({width} x {height})."
+    ))
+}
+
+#[cfg(not(windows))]
+fn copy_region_to_clipboard(
+    _ctx: &AppContext,
+    _source: &[u8],
+    _source_size: (u32, u32),
+    _region: (u32, u32, u32, u32),
+) -> Result<String, String> {
+    Err("Copying an image to the clipboard is implemented on Windows only.".to_string())
+}
+
+/// Crops the capture canvas to the selected region, shrinks it to the active QualityBudget,
+/// writes it to the Vault, and records the Finding plus its note.
+///
+/// `source` is the canvas as raw RGBA8 bytes, `source_size` pixels, and `region` is in that
+/// canvas's own pixel space - the same space the overlay reports its selection in, so no scale
+/// conversion is involved. It is borrowed rather than owned as an `RgbaImage` because the canvas
+/// now lives in the buffer the overlay presents, and owning a second copy of it is exactly the
+/// cost `BUG-28` was about.
+///
+/// Returns the new Finding's id, or `None` if the region could not be persisted.
+fn persist_finding(
+    ctx: &AppContext,
+    source: &[u8],
+    source_size: (u32, u32),
+    region: (u32, u32, u32, u32),
+    monitor_name: &str,
+    note_body: &str,
+) -> Option<String> {
+    let prepared = prepare_region(ctx, source, source_size, region)?;
+    let PreparedRegion {
+        bytes: reduced_bytes,
+        width: final_w,
+        height: final_h,
+        crop: (crop_x, crop_y, crop_w, crop_h),
+        resolved,
+        budget_name,
+    } = prepared;
 
     let clock = SystemClock::new();
     let entropy = SystemEntropySource::new();
@@ -2684,7 +3066,7 @@ fn persist_finding(
         region: format!("{crop_x},{crop_y},{crop_w},{crop_h}"),
         resolved_long_edge: Some(resolved.max_long_edge),
         resolved_encoder_quality: Some(resolved.encoder_quality),
-        budget_name: Some(qb.named.display_name().to_string()),
+        budget_name: Some(budget_name),
     };
 
     let note_record = Note {
@@ -2786,12 +3168,26 @@ fn prewarm_capture_overlay() {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Keep the mutex handle alive for the whole process; a second launch finds it already
     // held and exits instead of opening a duplicate tray icon and window.
-    let _single_instance_lock = match acquire_single_instance_lock() {
-        Some(lock) => lock,
-        None => {
-            eprintln!("Snapdown is already running.");
-            return Ok(());
+    //
+    // RETRIED, not one-shot. A Vault move relaunches Snapdown by spawning the next instance
+    // BEFORE exiting this one (`on_vault_migration_confirmed`), so the child's first attempt
+    // almost always lands while this process still holds the mutex - a one-shot check read that
+    // race as "already running" and quit with no window and no visible error, which is the exact
+    // silent-exit shape a Windows release build produces (`AGENTS.md`'s panic pitfall is about a
+    // crash, but the symptom on the Reviewer's screen - nothing happens at all - is identical
+    // here). The old process's exit releases the mutex within milliseconds, so a sub-second retry
+    // window tells the two cases apart: a genuine second launch is still rejected almost
+    // immediately; a relaunch racing its own predecessor gets through once that predecessor is
+    // actually gone.
+    let _single_instance_lock = 'acquire: {
+        for _ in 0..20 {
+            if let Some(lock) = acquire_single_instance_lock() {
+                break 'acquire lock;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
         }
+        eprintln!("Snapdown is already running.");
+        return Ok(());
     };
 
     // A custom backend is installed for one reason: the window-attributes hook, which lets each
@@ -4055,11 +4451,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Snapdown becomes screenshot-able by other tools again the moment its
                         // own capture is over.
                         set_capture_exclusion(&main_weak, false);
-                        if let Some(main) = main_weak.upgrade() {
-                            if let Err(e) = main.show() {
-                                eprintln!("Failed to reshow the main window: {e}");
-                            }
-                        }
+                        // Deliberately no `main.show()` here. `set_capture_exclusion` only ever
+                        // sets a display-affinity flag - the main window was never actually
+                        // HIDDEN by starting a capture, only excluded from what other apps can
+                        // screenshot, so there is nothing to restore. A `main.show()` used to sit
+                        // here unconditionally, and its effect was invisible whenever the window
+                        // was already visible - which is why it went unnoticed - but it forced a
+                        // window the Reviewer had minimised to the tray back onto the screen on
+                        // EVERY capture, "Open the Editor after a hotkey capture" OFF included.
+                        // `on_capture_completed` already shows the window on purpose, gated on
+                        // that setting; this closure has no business doing it unconditionally too.
                     }
                 };
 
@@ -4180,6 +4581,68 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 overlay.on_overlay_cancelled({
                     let close_overlay = close_overlay.clone();
                     move || close_overlay()
+                });
+
+                // Copy the region and save nothing. The sibling of `on_capture_completed`, and every
+                // difference from it is deliberate:
+                //
+                // - no `persist_finding`, so no blob and no Finding row;
+                // - no `load_findings_into_window`, because nothing was added to the Library and the
+                //   Reviewer's current selection is none of this path's business;
+                // - `REVEAL_EDITOR_AFTER_CAPTURE` is reset but never acted on. There is nothing to
+                //   edit, so raising the Editor would be an interruption with no destination - and
+                //   leaving the flag set would raise it on the NEXT capture for no reason.
+                //
+                // Returns whether the press was consumed. `false` sends the note field back to
+                // `TextInput`'s own Ctrl+C, which copies the text the Reviewer had selected.
+                overlay.on_copy_chord({
+                    let ctx_inner = ctx_inner.clone();
+                    let main_weak = main_weak.clone();
+                    let close_overlay = close_overlay.clone();
+                    move |x, y, sel_w, sel_h, has_text_selection, force_image| {
+                        if copy_chord_target(has_text_selection, force_image)
+                            == CopyChordTarget::NoteText
+                        {
+                            return false;
+                        }
+
+                        let region = (
+                            x.max(0) as u32,
+                            y.max(0) as u32,
+                            sel_w.max(0) as u32,
+                            sel_h.max(0) as u32,
+                        );
+
+                        // Read the canvas from the live overlay, never clone it into this closure -
+                        // the reason is spelled out on `on_capture_completed` above, and it is worth
+                        // ~92 MB per capture.
+                        let outcome = LIVE_OVERLAYS.with_borrow(|live| {
+                            live.first()
+                                .and_then(|entry| {
+                                    let canvas = entry.canvas.as_ref()?;
+                                    Some(copy_region_to_clipboard(
+                                        &ctx_inner,
+                                        canvas.as_bytes(),
+                                        (entry.placement.2, entry.placement.3),
+                                        region,
+                                    ))
+                                })
+                                .unwrap_or_else(|| {
+                                    Err("The capture is no longer available to copy.".to_string())
+                                })
+                        });
+
+                        close_overlay();
+                        REVEAL_EDITOR_AFTER_CAPTURE.replace(false);
+
+                        if let Some(main) = main_weak.upgrade() {
+                            match outcome {
+                                Ok(message) => toast(&main, message, false),
+                                Err(message) => toast(&main, message, true),
+                            }
+                        }
+                        true
+                    }
                 });
 
                 // Publish the placement immediately before show(), because show() is when the
@@ -4317,7 +4780,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // --- Tray icon, global hotkeys, and startup registration ---
-    let tray_icon_bytes = include_bytes!("../assets/icon.png");
+    let tray_icon_bytes = include_bytes!("../assets/app-icon.png");
     let tray_icon_rgba = image::load_from_memory(tray_icon_bytes)
         .expect("embedded tray icon must decode")
         .to_rgba8();
@@ -4461,9 +4924,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let Some(win) = win.upgrade() else {
                 return;
             };
-            // The folder itself, so `/select` gets a target that exists even on an empty Vault.
-            let path = ctx_vr.vault_path.display().to_string();
-            if let Err(message) = open_file_location(&ctx_vr, &path) {
+            // The ACTIVE Vault, not the configured one: this button reveals where captures are
+            // really landing right now, which after a not-yet-restarted move is still the old
+            // folder (`configured_vault_path`'s own doc comment explains the split).
+            if let Err(message) = open_folder(&ctx_vr.vault_path) {
                 toast(&win, message, true);
             }
         });
@@ -4496,8 +4960,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let win = main_window.as_weak();
         let ctx_vm = ctx.clone();
-        let startup = startup_for_settings.clone();
-        let registrar = hotkey_registrar.clone();
         main_window.on_vault_migration_confirmed(move |folder| {
             let Some(win) = win.upgrade() else {
                 return;
@@ -4530,25 +4992,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return;
             }
 
-            // A RESTART, and the screen says so rather than pretending otherwise.
+            // AN ACTUAL RESTART, not just a screen saying one is needed.
             //
-            // `AppContext` carries the vault path and an open `VaultBlobStore`, and it is cloned into
-            // every callback in this file. Swapping it live would mean wrapping both in a lock that
-            // every one of those closures then has to take - a change far larger than the feature,
-            // for a folder that moves once. Nothing is in an inconsistent state in the meantime: the
-            // paths are relative and they already resolve against the new root.
-            toast(
-                &win,
-                format!(
-                    "{moved} file(s) moved. Restart Snapdown to start using {}.",
-                    chosen.display()
-                ),
-                false,
-            );
-            win.set_vault_path(chosen.display().to_string().into());
-            if let Ok(hotkeys) = registrar.lock() {
-                load_settings_into_window(&win, &ctx_vm, startup.as_ref(), &hotkeys);
+            // `AppContext.vault_path` is frozen for the life of the process (see
+            // `configured_vault_path`'s doc comment) - every capture, and every Finding thumbnail
+            // the filmstrip resolves, keeps reading the OLD folder until the process is gone.
+            // The files just moved OUT of that folder, so leaving the Reviewer to restart by hand
+            // meant every thumbnail broke and every new capture missed the new Vault until they
+            // remembered to - which is not what the Settings screen's own caption already promises
+            // them ("Snapdown restarts into the new folder"). Relaunching is the same `Quit` path
+            // the tray menu already uses (`std::process::exit`), just preceded by spawning the next
+            // instance first.
+            let relaunched = std::env::current_exe()
+                .and_then(|exe| std::process::Command::new(exe).spawn())
+                .is_ok();
+            if !relaunched {
+                toast(
+                    &win,
+                    format!(
+                        "{moved} file(s) moved to {}. Could not restart automatically - please restart Snapdown yourself.",
+                        chosen.display()
+                    ),
+                    true,
+                );
+                return;
             }
+            std::process::exit(0);
         });
     }
 
@@ -4565,10 +5034,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "sharp" => NamedBudget::Sharp,
                 "balanced" => NamedBudget::Balanced,
                 "small" => NamedBudget::Small,
+                "custom" => NamedBudget::Custom,
                 _ => NamedBudget::Auto,
             };
             // A named preset drops any custom pair, which is what choosing a preset MEANS. Keeping
             // the pair would leave the screen showing "Balanced" over numbers Balanced does not use.
+            // `Custom` is the one exception in spirit but not in code: dropping to `None` here just
+            // means `resolve()` falls back to its own defaults until a slider is actually moved,
+            // which is the right starting point for "pick your own combination from here".
             if let Err(e) = store_budget(&ctx_bp, &QualityBudget::new(named, None)) {
                 toast(&win, format!("Could not save the budget: {e}"), true);
                 return;
@@ -4614,17 +5087,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ctx_hk = ctx.clone();
         let startup = startup_for_settings.clone();
         let registrar = hotkey_registrar.clone();
-        main_window.on_hotkey_key_pressed(move |action, ctrl, alt, shift, text| {
+        main_window.on_hotkey_key_pressed(move |action, ctrl, alt, shift, meta, text| {
             let Some(win) = win.upgrade() else {
                 return;
             };
-            let shortcut = match shortcut_from_key(ctrl, alt, shift, text.as_str()) {
+            // Updated before the match below, and unconditionally: the Key Check panel's readout
+            // chip describes the CURRENT key state even on a mid-gesture press or a refusal, not
+            // only a successful bind.
+            win.set_hotkey_chord_preview(
+                format_chord_preview(ctrl, alt, shift, meta, text.as_str()).into(),
+            );
+            let shortcut = match shortcut_from_key(ctrl, alt, shift, meta, text.as_str()) {
                 // Mid-gesture: the Reviewer is holding Ctrl on the way to something. Say nothing.
                 Ok(None) => return,
                 Ok(Some(shortcut)) => shortcut,
                 // A refusal we could predict, named before the OS is even asked.
                 Err(refusal) => {
-                    toast(&win, refusal.message(), true);
+                    hotkey_feedback(&win, refusal.message(), true);
                     return;
                 }
             };
@@ -4642,14 +5121,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // something it does not know.
                     let warning = reserved_chord(&shortcut).map(|r| r.message());
                     match warning {
-                        Some(message) => toast(&win, format!("{shortcut} bound. {message}"), false),
-                        None => toast(&win, format!("{shortcut} bound."), false),
+                        Some(message) => {
+                            hotkey_feedback(&win, format!("{shortcut} bound. {message}"), false)
+                        }
+                        None => hotkey_feedback(&win, format!("{shortcut} bound."), false),
                     }
                     win.set_hotkey_listening(SharedString::new());
                 }
                 // `BR-27` refuses a combination another Snapdown action already holds, and the OS
                 // refuses one another application holds. Both come back here as text.
-                Err(e) => toast(&win, format!("{shortcut} was refused: {e}"), true),
+                Err(e) => hotkey_feedback(&win, format!("{shortcut} was refused: {e}"), true),
             }
             if let Ok(hotkeys) = registrar.lock() {
                 load_settings_into_window(&win, &ctx_hk, startup.as_ref(), &hotkeys);
@@ -4659,10 +5140,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     {
         let win = main_window.as_weak();
-        let ctx_hc = ctx.clone();
+        let ctx_he = ctx.clone();
         let startup = startup_for_settings.clone();
         let registrar = hotkey_registrar.clone();
-        main_window.on_hotkey_cleared(move |action| {
+        main_window.on_hotkey_enabled_toggled(move |action, on| {
             let Some(win) = win.upgrade() else {
                 return;
             };
@@ -4672,12 +5153,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let outcome = registrar
                 .lock()
                 .map_err(|e| CoreError::Validation(e.to_string()))
-                .and_then(|mut hotkeys| hotkeys.clear(target));
+                .and_then(|mut hotkeys| hotkeys.set_enabled(target, on));
             if let Err(e) = outcome {
-                toast(&win, format!("Could not clear that: {e}"), true);
+                hotkey_feedback(
+                    &win,
+                    format!(
+                        "Could not {} that: {e}",
+                        if on { "enable" } else { "disable" }
+                    ),
+                    true,
+                );
             }
             if let Ok(hotkeys) = registrar.lock() {
-                load_settings_into_window(&win, &ctx_hc, startup.as_ref(), &hotkeys);
+                load_settings_into_window(&win, &ctx_he, startup.as_ref(), &hotkeys);
             }
         });
     }
@@ -4685,9 +5173,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Per FR-18/BR-121: launching via Windows startup opens no window, tray icon only.
     if !is_autostart_launch {
         main_window.show()?;
-        // AFTER `show()`. The native window does not exist until then, so there is no handle to give
-        // a shadow to - which is why this is not in the setup above with the rest of the chrome.
-        set_window_shadow(&main_window);
+        // NOT synchronously after `show()`, on a timer instead - the same fix the capture
+        // overlay's pre-warm already needed, and the same root cause: `show()` requests the
+        // window, it does not create it, the event loop does on its next turn
+        // (`with_winit_window`'s own docs: it "will only succeed when the event loop is
+        // active"). Calling `set_window_shadow` right here, before `run_event_loop_until_quit()`
+        // below has even started, made every attempt at this silently find no winit window and
+        // do nothing - three attempts in a row were mistaken for the WRONG shadow technique
+        // rather than the right one landing too early. A `Timer` fires from inside the running
+        // loop, by which point the window exists.
+        let shadow_target = main_window.as_weak();
+        slint::Timer::single_shot(std::time::Duration::from_millis(50), move || {
+            if let Some(win) = shadow_target.upgrade() {
+                set_window_shadow(&win);
+            }
+        });
     }
 
     // Poll tray-icon and global-hotkey events on the UI thread; both crates deliver events
@@ -4743,11 +5243,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 HotKey::from_str(shortcut)
                                     .ok()
                                     .filter(|hk| hk.id() == event.id)
-                                    .map(|_| *action)
+                                    .map(|_| (*action, shortcut.clone()))
                             })
                     });
 
-                    if let Some(action) = action {
+                    if let Some((action, shortcut)) = action {
+                        let action_id: SharedString = match action {
+                            HotkeyAction::Capture => "capture",
+                            HotkeyAction::OpenEditor => "open_editor",
+                        }
+                        .into();
                         // Reported to the Settings screen before it is acted on, so a Reviewer who
                         // has just bound a chord can press it and see the row confirm. Registration
                         // alone does not prove delivery - another application's low-level hook can
@@ -4755,15 +5260,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // available without leaving the screen.
                         if let Some(win) = window_for_events.upgrade() {
                             if win.get_settings_open() {
-                                win.set_hotkey_last_fired(
-                                    match action {
-                                        HotkeyAction::Capture => "capture",
-                                        HotkeyAction::OpenEditor => "open_editor",
-                                    }
+                                win.set_hotkey_last_fired(action_id.clone());
+                                // Worded for the Key Check panel, which is where this proof of
+                                // arrival now lives instead of on the row itself.
+                                win.set_hotkey_last_fired_text(
+                                    format!(
+                                        "{} ({}) reached Snapdown just now.",
+                                        display_shortcut(&shortcut),
+                                        action.label()
+                                    )
                                     .into(),
                                 );
+                                // A row listening for a NEW chord never sees its own already-bound
+                                // one as a normal keypress: Windows delivers an active global
+                                // hotkey as WM_HOTKEY, not to the focused FocusScope, so the row's
+                                // button would otherwise sit on "Listening…" forever with no way to
+                                // tell the Reviewer why. Re-pressing the row's own current
+                                // combination changes nothing, so ending the gesture here - the
+                                // same way a completed keypress-driven bind does - is the correct
+                                // outcome, not a special case of it.
+                                if win.get_hotkey_listening() == action_id {
+                                    win.set_hotkey_listening(SharedString::new());
+                                    // The completing keypress may ALSO have reached the row's own
+                                    // FocusScope as a normal key event before this one landed, and
+                                    // read as a refusal there - the row's already-bound combination
+                                    // is not a shape `shortcut_from_key` was ever asked to parse.
+                                    // Nothing was actually refused: the OS just proved the SAME
+                                    // shortcut still arrives, which is a success, not an error, and
+                                    // must not leave a red banner behind saying otherwise.
+                                    hotkey_feedback(&win, "", false);
+                                }
                             }
                         }
+                        // Settings shows "Pressed just now" above regardless, so the Reviewer
+                        // testing a binding from the Hotkeys tab still gets that confirmation -
+                        // but the REAL action does not also fire underneath them. Without this, a
+                        // Reviewer holding down the Capture shortcut to check it, or to rebind it
+                        // to itself, got a real capture opening behind Settings every time,
+                        // because the global hotkey fires regardless of window focus.
+                        let settings_open = window_for_events
+                            .upgrade()
+                            .is_some_and(|win| win.get_settings_open());
                         match action {
                             HotkeyAction::Capture => {
                                 if let Some(win) = window_for_events.upgrade() {
@@ -4772,13 +5309,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     // already in. Default off.
                                     REVEAL_EDITOR_AFTER_CAPTURE
                                         .set(open_editor_after_capture(&ctx_hotkey));
-                                    win.invoke_capture_clicked();
+                                    if !settings_open {
+                                        win.invoke_capture_clicked();
+                                    }
                                 }
                             }
                             HotkeyAction::OpenEditor => {
                                 if let Some(win) = window_for_events.upgrade() {
-                                    win.show().unwrap();
-                                    win.window().set_minimized(false);
+                                    if !settings_open {
+                                        win.show().unwrap();
+                                        win.window().set_minimized(false);
+                                    }
                                 }
                             }
                         }
@@ -4802,6 +5343,102 @@ mod tests {
     /// The exact string shape found in the live `finding.region` column, read out of
     /// `%APPDATA%/id.wiradigital.snapdown/library.db`.
     ///
+    /// Every combination of the two inputs to the copy chords, enumerated.
+    ///
+    /// Four cases, and three of them copy the image. The one that does not is the whole reason this
+    /// is a function and not an expression inside `appwindow.slint`: a keypress cannot be reached
+    /// from any test seam in this repository (`OQ-23`), so a rule written in Slint is a rule that
+    /// can be inverted without anything going red.
+    #[test]
+    fn ctrl_c_copies_the_image_unless_the_note_field_has_text_selected() {
+        // The ordinary case: a region selected, nothing selected in the note field.
+        assert_eq!(copy_chord_target(false, false), CopyChordTarget::Image);
+        // Text is selected, so Ctrl+C means what it means in every other text field.
+        assert_eq!(copy_chord_target(true, false), CopyChordTarget::NoteText);
+    }
+
+    /// Ctrl+Enter is the unconditional escape hatch, and that is exactly what makes Ctrl+C safe to
+    /// make conditional: there is always one chord that means "the image" whatever the caret is
+    /// doing. Lose this and a Reviewer with text selected has no way to reach the image at all.
+    #[test]
+    fn ctrl_enter_copies_the_image_even_with_text_selected() {
+        assert_eq!(copy_chord_target(false, true), CopyChordTarget::Image);
+        assert_eq!(copy_chord_target(true, true), CopyChordTarget::Image);
+    }
+
+    /// A `Ctrl+C` leaves the Vault and the Library exactly as it found them, and what it hands over
+    /// is a real image.
+    ///
+    /// Both halves matter and they fail differently. The "nothing was written" half is the promise
+    /// the feature is FOR - a screenshot that never touches disk - and it is the half that would
+    /// pass trivially if the test never exercised the path, which is why the assertions are a
+    /// directory listing and a row count rather than a look at the code. The decode is this
+    /// repository's own rule, learned expensively: a 17-byte fake `PNG` header with a plausible
+    /// width and height passed every image assertion here for five waves. A signature and a
+    /// dimension is a test a fabrication passes; a decode is not.
+    #[test]
+    fn a_copy_writes_nothing_and_hands_over_a_decodable_image() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+
+        // A 4x2 canvas: the left half opaque red, the right half opaque blue. Cropping the right
+        // half is what proves the crop is applied and not merely computed - a copy of the whole
+        // canvas would come back red in its first pixel.
+        let red = [255u8, 0, 0, 255];
+        let blue = [0u8, 0, 255, 255];
+        let mut source = Vec::with_capacity(4 * 2 * 4);
+        for _ in 0..2 {
+            source.extend_from_slice(&red);
+            source.extend_from_slice(&red);
+            source.extend_from_slice(&blue);
+            source.extend_from_slice(&blue);
+        }
+
+        let (bmp, width, height) = encode_region_for_clipboard(&ctx, &source, (4, 2), (2, 0, 2, 2))
+            .expect("the region to encode");
+
+        let decoded = image::load_from_memory(&bmp).expect("the clipboard bytes to be an image");
+        assert_eq!(
+            (decoded.width(), decoded.height()),
+            (width, height),
+            "the reported dimensions have to be the decoded ones"
+        );
+        // Which half was taken, not an exact byte. The Quality Budget's encoder quantises - this
+        // pixel comes back as 254 rather than 255 - and that off-by-one is itself worth noting: it
+        // is the proof that the budget is genuinely applied on this path, because a lossless copy
+        // would have handed back the 255 that went in.
+        let pixel = decoded.to_rgba8().get_pixel(0, 0).0;
+        assert!(
+            pixel[2] > 200 && pixel[0] < 50,
+            "the crop should have taken the blue half, got {pixel:?} at {width}x{height}"
+        );
+
+        assert!(
+            std::fs::read_dir(vault_dir.path())
+                .expect("to read the vault")
+                .next()
+                .is_none(),
+            "a copy must leave no file behind in the Vault"
+        );
+        assert!(
+            ctx.finding_store
+                .list_findings()
+                .expect("to read the Library")
+                .is_empty(),
+            "a copy must record no Finding"
+        );
+    }
+
     /// This test exists because the first version of the caller used
     /// `serde_json::from_str::<Region>` on this column. That compiles, raises nothing, and returns
     /// `None` for every row - so the Editor's "reduced from" readout would never have appeared, and
@@ -4815,6 +5452,135 @@ mod tests {
         assert_eq!(
             parse_region_field("-1440,-559,2160,3840"),
             Some((2160, 3840))
+        );
+    }
+
+    #[test]
+    fn display_shortcut_never_shows_the_stored_command_or_control_token() {
+        let displayed = display_shortcut("CommandOrControl+Shift+S");
+        assert!(!displayed.contains("CommandOrControl"));
+        assert_eq!(displayed, format!("{PRIMARY_MODIFIER_DISPLAY}+Shift+S"));
+        assert_eq!(display_shortcut(""), "");
+        // A shortcut with no primary modifier in it (should not occur today, since
+        // `shortcut_from_key` always includes one, but the function must not invent one) passes
+        // through unchanged.
+        assert_eq!(display_shortcut("Alt+Shift+S"), "Alt+Shift+S");
+    }
+
+    #[test]
+    fn display_shortcut_never_shows_the_stored_super_token() {
+        let displayed = display_shortcut("Super+Alt+Q");
+        assert!(!displayed.contains("Super"));
+        assert_eq!(displayed, format!("{META_KEY_DISPLAY}+Alt+Q"));
+    }
+
+    #[test]
+    fn a_control_character_is_never_a_displayable_key() {
+        // The bug the Key Check panel actually shipped with: a bare Enter/Backspace/arrow press,
+        // or a Ctrl+letter combination whose text arrives as its ASCII control code rather than the
+        // letter, rendered as an unreadable tofu box in the readout chip.
+        for code in [
+            '\u{11}', '\u{12}', '\u{13}', '\u{14}', '\r', '\t', '\u{8}', '\u{3}',
+        ] {
+            assert_eq!(displayable_key_text(&code.to_string()), None);
+        }
+        assert_eq!(displayable_key_text(""), None);
+    }
+
+    #[test]
+    fn an_ordinary_or_named_key_is_displayable() {
+        assert_eq!(displayable_key_text("q"), Some("Q".to_string()));
+        assert_eq!(displayable_key_text("F5"), Some("F5".to_string()));
+        assert_eq!(displayable_key_text("Left"), Some("Left".to_string()));
+    }
+
+    #[test]
+    fn the_chord_preview_never_leaks_a_control_character() {
+        assert_eq!(format_chord_preview(false, false, false, false, "\r"), "");
+        assert_eq!(
+            format_chord_preview(true, false, false, true, "q"),
+            format!("{PRIMARY_MODIFIER_DISPLAY} + {META_KEY_DISPLAY} + Q")
+        );
+        // Mid-gesture - modifiers held, no completing key yet - is a legitimate, if incomplete,
+        // preview, not an error.
+        assert_eq!(
+            format_chord_preview(true, true, false, false, ""),
+            format!("{PRIMARY_MODIFIER_DISPLAY} + Alt")
+        );
+    }
+
+    #[test]
+    fn win_alone_is_a_sufficient_modifier_for_a_shortcut() {
+        // The owner's own question: "kenapa Win gak bisa jadi shortcut?" - it can, as long as the
+        // chord is not one of the specific ones `reserved_chord` documents the shell intercepting.
+        assert_eq!(
+            shortcut_from_key(false, false, false, true, "Q"),
+            Ok(Some("Super+Q".to_string()))
+        );
+    }
+
+    #[test]
+    fn win_shift_still_needs_no_extra_modifier_to_qualify() {
+        assert_eq!(
+            shortcut_from_key(false, false, true, true, "Q"),
+            Ok(Some("Super+Shift+Q".to_string()))
+        );
+    }
+
+    #[test]
+    fn win_and_ctrl_compose_in_fixed_order() {
+        assert_eq!(
+            shortcut_from_key(true, false, false, true, "Q"),
+            Ok(Some("CommandOrControl+Super+Q".to_string()))
+        );
+    }
+
+    #[test]
+    fn an_unnameable_key_is_refused_without_leaking_a_raw_glyph() {
+        // A private-use-area key code, or anything else outside letters/digits/ASCII punctuation,
+        // must never land in the Reviewer-facing sentence as-is - that is the exact bug reported: a
+        // tofu-box glyph inside "Snapdown cannot register the X key...".
+        let refusal = shortcut_from_key(true, false, false, false, "\u{f8ff}").unwrap_err();
+        assert_eq!(
+            refusal,
+            ShortcutRefusal::UnsupportedKey("this key".to_string())
+        );
+        assert_eq!(
+            refusal.message(),
+            "Snapdown cannot register this key as part of a shortcut."
+        );
+    }
+
+    #[test]
+    fn an_ascii_punctuation_key_is_named_in_its_own_refusal() {
+        let refusal = shortcut_from_key(true, false, false, false, ",").unwrap_err();
+        assert_eq!(
+            refusal.message(),
+            "Snapdown cannot register the ',' key as part of a shortcut."
+        );
+    }
+
+    #[test]
+    fn a_bare_win_press_is_still_mid_gesture_not_a_shortcut() {
+        // Slint sends a lone Meta key down as its own control character, same as Ctrl/Alt/Shift.
+        assert_eq!(
+            shortcut_from_key(false, false, false, true, "\u{14}"),
+            Ok(None)
+        );
+    }
+
+    #[test]
+    fn windows_reserved_win_chords_are_refused_by_name() {
+        for (shortcut, key) in [("Super+5", "5"), ("Super+E", "E"), ("Super+D", "D")] {
+            let win_only = shortcut_from_key(false, false, false, true, key);
+            assert_eq!(
+                win_only,
+                Err(reserved_chord(shortcut).expect("documented as reserved"))
+            );
+        }
+        assert_eq!(
+            shortcut_from_key(true, false, false, true, "Left"),
+            Err(reserved_chord("CommandOrControl+Super+Left").expect("documented as reserved"))
         );
     }
 

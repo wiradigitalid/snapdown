@@ -151,15 +151,18 @@ fn the_settings_screen_follows_the_designed_structure() {
          in one, and the first build used dividers instead"
     );
     // The primary action in a footer, which is where the design has it.
+    //
+    // Labelled "Close", not "Done": Settings auto-saves every change as it happens (the caption
+    // beside this button says so), so there was never a pending action for "Done" to finish.
     let footer = settings
-        .rfind("label: \"Done\";")
-        .expect("a Done action must exist");
+        .rfind("label: \"Close\";")
+        .expect("a Close action must exist");
     let header = settings
         .find("SdModalHeader {")
         .expect("the header must exist");
     assert!(
         footer > header,
-        "Done belongs in the FOOTER, below the panels. It was in the top-right corner, where the \
+        "Close belongs in the FOOTER, below the panels. It was in the top-right corner, where the \
          design and the other modal both put the close"
     );
 }
