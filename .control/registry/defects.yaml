@@ -5029,3 +5029,55 @@ defects:
       NOT covered by a test, deliberately - see `why_undetected`. An `#[ignore]`d manual test is the
       open option.
     status: fixed
+
+  - id: BUG-85
+    title: Filmstrip click delay is back - BUG-41's fix never accounted for the blur BUG-73 added into the same path
+    found: "2026-08-30"
+    found_by: kodesh87, manual test ("kenapa gak kali membuka gambar dari filmstrip, delaynya cukup lama")
+    component: finding
+    severity: medium
+    contradicts: []
+    root_cause: code
+    evidence: |
+      `BUG-41` fixed this exact symptom on 2026-08-27 by splitting `load_active_detail` out of the
+      full filmstrip rebuild, measuring 320.9ms -> 10.5ms per click. Its `measurement` field was never
+      re-checked after `BUG-73` (2026-08-28) added `blurred_capture()` into that same function:
+      `blurred_capture` runs `MarkerBurner::blur_rect` over the WHOLE image, synchronously, on the UI
+      thread, on every first-time click of a Finding - and `blur_rect`'s `box_pass` re-summed the
+      entire `2*radius+1` window from scratch for every output pixel, an O(width*height*radius) cost
+      that `BUG-73`'s own fix note wrongly described as O(pixels).
+
+      Measured directly (release build, `blur_rect` alone, default radius): 1920x1080 496ms,
+      2560x1440 1398ms, 3840x2160 3402ms. This is the delay the owner reported again.
+    impact: |
+      Same as `BUG-41`: browsing the Library feels slow at the moment the Reviewer is looking for
+      something, and it scales with the clicked image's own resolution - worse on a multi-monitor
+      capture.
+    why_undetected: |
+      Same root cause pattern as the `BUG-12`/`BUG-3`/`BUG-10` case AGENTS.md's pitfalls section
+      already names: a defect's `status: fixed` measurement is a claim about the code at one moment,
+      and it goes stale silently once another change lands in the same path. `BUG-41` was correct when
+      written; `BUG-73` invalidated its premise a day later and nothing re-measured it.
+    fix: |
+      DONE, 2026-08-30. `box_pass` (`crates/snapdown-store/src/image/burner.rs`) rewritten from the
+      naive full-window resummation to a sliding-window running sum, O(pixels) per pass instead of
+      O(pixels * radius). The vertical direction was further reworked to process one whole row at a
+      time (one running sum per column) instead of walking memory in a `width`-stride column order,
+      which was the dominant remaining cost after the first fix (cache-unfriendly for a
+      screenshot-sized image).
+
+      Measured after (release build, default radius): 1920x1080 78.9ms (was 496ms), 2560x1440 127.3ms
+      (was 1398ms), 3840x2160 304.6ms (was 3402ms). Output is unchanged - guarded by
+      `box_pass_matches_the_naive_full_window_resummation_it_replaced`, which compares the new
+      implementation against the original kept as a test-only reference, across seven size/radius
+      combinations including edge cases. A second guard,
+      `blur_rect_stays_well_under_the_old_full_window_resummation_cost`, asserts an 800x600
+      `blur_rect` call stays under 3000ms and was verified by mutation: temporarily rewiring
+      `blur_rect` back to the naive reference implementation made it fail at 3865ms.
+
+      NOT fully closed: 304.6ms at 4K is a large improvement (11x) but still not imperceptible on the
+      UI thread. Closing that gap needs SIMD or parallelism, which changes the execution model rather
+      than being a same-output algorithmic fix, and was left out of this fix's scope. Worth its own
+      ticket if 4K captures turn out to be common. Ticket:
+      `.scratch/filmstrip-blur-perf/issues/01-box-pass-no-longer-o-radius-per-pixel.md`.
+    status: fixed
