@@ -4966,3 +4966,66 @@ defects:
       `FR-4`'s consequences gain the ratio.
     decision: none - `FR-4` is amended rather than contradicted.
     status: fixed
+
+  - id: BUG-84
+    title: Every clipboard copy after the first one pasted the FIRST image, because the Bitmap setter never empties the clipboard
+    found: "2026-08-30"
+    found_by: kodesh87, manual test of the copy-only capture path
+    component: desktop
+    severity: high
+    contradicts: [FR-36]
+    root_cause: code
+    violates: FR-36
+    evidence: |
+      `clipboard-win-5.4.1/src/raw.rs:787`, the library's own source and its own comment:
+
+        pub fn set_bitmap(data: &[u8]) -> SysResult<()> {
+            //Bitmap format cannot really overlap with much so there is no risk of having non-empty clipboard
+            //Also it is backward compatible beahvior.
+            //To be changed in 6.x
+            set_bitmap_inner(data, options::NoClear::EMPTY_FN)
+        }
+
+      `NoClear` means `EmptyClipboard()` is never called. On Windows a `SetClipboardData` with no
+      preceding `EmptyClipboard` leaves the existing handle for that format in place, so the SECOND
+      write for `CF_BITMAP` is the one that does nothing.
+
+      `apps/desktop/src/main.rs`, before the fix, in `copy_burned_image`:
+
+        // `set_clipboard` opens, empties, writes and closes. Holding a `Clipboard` guard around it
+        // would take the lock twice and deadlock.
+        clipboard_win::set_clipboard(clipboard_win::formats::Bitmap, &bmp)
+
+      The comment's "empties" is false for this format.
+    impact: |
+      The Reviewer copies a second image and pastes the first one. Silent: there is no error, the
+      overlay closes normally, and the toast says the copy succeeded - because as far as our code can
+      see, it did. Both clipboard paths were affected: the new copy-only capture chords, and the
+      Editor's Copy button, which is `FR-36` and has shipped this way since it was written.
+    why_undetected: |
+      Two reasons, and the second is the interesting one.
+
+      A single copy works, which is what a first test does. The defect needs two copies in one
+      session to appear at all.
+
+      And the comment quoted above ASSERTED the missing behaviour. It named `empties` explicitly, so
+      a reader checking this path would have satisfied themselves it was handled and moved on. A
+      comment that states a fact it never verified is worse than no comment: it converts an unchecked
+      assumption into apparent evidence. The library's default is the trap, the comment is why nobody
+      looked at the trap.
+
+      No automated test could have caught it as written: asserting `EmptyClipboard` requires the real
+      Windows clipboard, and a test that takes the clipboard during `cargo test` would clobber
+      whatever the developer had copied.
+    fix: |
+      DONE, 2026-08-30. One `put_bitmap_on_clipboard` helper, used by both paths: takes the
+      `Clipboard::new_attempts(10)` guard itself, then `raw::set_bitmap_with(bmp, options::DoClear)`,
+      so the empty and the write happen inside ONE open. The old comment's warning about taking the
+      lock twice no longer applies, and is replaced by a note recording why it was wrong.
+
+      Verified by the owner: three consecutive copies from three different captures pasted three
+      different images, and the Editor's Copy button was checked across two Findings.
+
+      NOT covered by a test, deliberately - see `why_undetected`. An `#[ignore]`d manual test is the
+      open option.
+    status: fixed

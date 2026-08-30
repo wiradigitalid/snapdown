@@ -1320,10 +1320,12 @@ fn copy_burned_image(ctx: &AppContext, finding_id: &str) -> Result<String, Strin
         )
         .map_err(|e| format!("Could not encode for the clipboard: {e}"))?;
 
-    // `set_clipboard` opens, empties, writes and closes. Holding a `Clipboard` guard around it
-    // would take the lock twice and deadlock.
-    clipboard_win::set_clipboard(clipboard_win::formats::Bitmap, &bmp)
-        .map_err(|e| format!("Could not write to the clipboard: {e}"))?;
+    // This used to read *"`set_clipboard` opens, empties, writes and closes"* and call it directly.
+    // The first half of that sentence is true and the "empties" is NOT, for the Bitmap format - see
+    // `put_bitmap_on_clipboard`, which is `BUG-84`. The Editor's Copy button therefore had the same
+    // second-copy-pastes-the-first-image defect as the copy-only path, and this comment is why it
+    // went unexamined.
+    put_bitmap_on_clipboard(&bmp)?;
 
     Ok(format!(
         "Image copied, with its Markers and annotations ({} x {}).",
@@ -2894,6 +2896,31 @@ enum CopyChordTarget {
     NoteText,
 }
 
+/// A BMP onto the Windows clipboard, emptying the clipboard FIRST.
+///
+/// `clipboard_win::set_clipboard(formats::Bitmap, ..)` does not empty it, and that is the whole of
+/// `BUG-84`: the owner reported that the first copy worked and every copy after it pasted the FIRST
+/// image again. The library says so in its own source - `raw::set_bitmap` passes
+/// `options::NoClear`, commented *"Bitmap format cannot really overlap with much so there is no risk
+/// of having non-empty clipboard. Also it is backward compatible behavior. To be changed in 6.x"*.
+/// On Windows a `SetClipboardData` with no preceding `EmptyClipboard` leaves the existing handle for
+/// that format in place, so the second write is the one that does nothing.
+///
+/// `copy_burned_image` had the identical defect, and carried a comment asserting the opposite -
+/// *"`set_clipboard` opens, empties, writes and closes"* - which is presumably why the Editor's Copy
+/// button was never suspected. Both paths now come through here.
+///
+/// The guard is taken HERE rather than letting `set_clipboard` open internally, because the empty and
+/// the write have to happen inside ONE open. That is also why the old comment's warning about taking
+/// the lock twice does not apply: nothing below opens the clipboard again.
+#[cfg(windows)]
+fn put_bitmap_on_clipboard(bmp: &[u8]) -> Result<(), String> {
+    let _clip = clipboard_win::Clipboard::new_attempts(10)
+        .map_err(|e| format!("Could not open the clipboard: {e}"))?;
+    clipboard_win::raw::set_bitmap_with(bmp, clipboard_win::options::DoClear)
+        .map_err(|e| format!("Could not write to the clipboard: {e}"))
+}
+
 /// `has_text_selection`: the note field currently holds a text selection.
 /// `force_image`: the chord is Ctrl+Enter, which never means text.
 fn copy_chord_target(has_text_selection: bool, force_image: bool) -> CopyChordTarget {
@@ -2969,8 +2996,7 @@ fn copy_region_to_clipboard(
 ) -> Result<String, String> {
     let (bmp, width, height) = encode_region_for_clipboard(ctx, source, source_size, region)?;
 
-    clipboard_win::set_clipboard(clipboard_win::formats::Bitmap, &bmp)
-        .map_err(|e| format!("Could not write to the clipboard: {e}"))?;
+    put_bitmap_on_clipboard(&bmp)?;
 
     Ok(format!(
         "Copied to the clipboard, not saved ({width} x {height})."

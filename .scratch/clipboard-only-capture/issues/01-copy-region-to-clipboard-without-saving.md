@@ -1,6 +1,6 @@
 # 01: Copy the selected region to the clipboard without saving it
 
-**Status:** implemented, awaiting a run in the real app
+**Status:** done
 
 **What to build:** A second way out of the capture overlay that puts the selected region on the
 clipboard and writes **nothing** — no PNG in the Vault, no `Finding` row in `library.db`, no `Note`.
@@ -86,25 +86,25 @@ for the rule.
 
 ## Acceptance criteria
 
-- [ ] `Ctrl+C` with a region selected and **no text selected** in the note field puts the region on
+- [x] `Ctrl+C` with a region selected and **no text selected** in the note field puts the region on
       the clipboard and closes the overlay
-- [ ] `Ctrl+C` with text selected in the note field copies **the text**, leaves the image alone, and
+- [x] `Ctrl+C` with text selected in the note field copies **the text**, leaves the image alone, and
       leaves the overlay **open**
-- [ ] `Ctrl+Enter` copies the image regardless of any text selection, and closes the overlay
-- [ ] All of the above work **while the note field has focus** — the default state
+- [x] `Ctrl+Enter` copies the image regardless of any text selection, and closes the overlay
+- [x] All of the above work **while the note field has focus** — the default state
       (`appwindow.slint:1013`), so this is the criterion that actually matters
 - [x] The text-vs-image decision is a Rust function with its own unit tests, seen red
-- [ ] Neither chord does anything when no region is selected yet (the same guard `Enter` has)
+- [x] Neither chord does anything when no region is selected yet (the same guard `Enter` has)
 - [x] After an image copy: no new file under `findings/` in the Vault, and no new row in
       `library.db` — asserted, not eyeballed
 - [x] The Quality Budget governs the clipboard image exactly as it governs a saved Finding: the same
       capture, copied and saved, yields the same dimensions
-- [ ] The Library's selection is unchanged: no `load_findings_into_window` with a new id, no card
+- [x] The Library's selection is unchanged: no `load_findings_into_window` with a new id, no card
       becomes active, no strip rebuild
-- [ ] The Editor is **not** raised even when "Open the Editor after a hotkey capture" is ON — there
+- [x] The Editor is **not** raised even when "Open the Editor after a hotkey capture" is ON — there
       is nothing to edit. `REVEAL_EDITOR_AFTER_CAPTURE` must still be reset so a stale `true` cannot
       leak into the next capture
-- [ ] A toast on the image path says the image was copied **and not saved**, in those terms — the
+- [x] A toast on the image path says the image was copied **and not saved**, in those terms — the
       volatility is the one thing the Reviewer must not be allowed to misread. The text path needs
       its own distinguishable feedback, or the Reviewer cannot tell which of the two happened
 - [x] The overlay's hint says so before the keystroke. Implemented as two lines rather than one:
@@ -203,6 +203,30 @@ and the unticked criteria above are exactly this list:
 
 The chords, the button, and the hint are guarded at source level, which proves they are wired, not
 that they behave. Only a run in the real app closes these.
+
+## Found in testing: BUG-84
+
+The owner's first run found a real defect, and not in this path's own logic: the **second** copy in a
+session pasted the **first** image. `clipboard-win`'s `set_bitmap` passes `options::NoClear`, so
+`EmptyClipboard()` is never called, and on Windows a `SetClipboardData` without it leaves the existing
+handle for that format in place. The Editor's Copy button (`FR-36`) had the identical defect and had
+shipped with it, guarded by a comment that asserted the opposite. Both paths now go through
+`put_bitmap_on_clipboard`, which takes the clipboard guard itself and uses
+`raw::set_bitmap_with(.., options::DoClear)`. Recorded as `BUG-84`; confirmed fixed by the owner over
+three consecutive copies and across two Findings.
+
+Two process notes from the same round. The reference in those code comments was written as `BUG-31`
+first, which is an existing and unrelated defect — *"The note was never captured at all, because
+nothing gave the note field focus"* — so the comment would have pointed a reader at the wrong entry, in
+the very area this work touches. Check the register's highest id before citing one. And the temporary
+`copy_diag` instrumentation used to distinguish "the chord never reached Rust" from "the clipboard
+write failed" has been removed; the diagnosis came from reading `clipboard-win`'s source instead, which
+was faster than waiting for a log.
+
+Separately, release builds on this machine fail intermittently with `LLVM ERROR: out of memory` - not an
+opt-level problem as first thought, but an exhausted Windows commit limit with no pagefile configured;
+`CARGO_BUILD_JOBS=1` builds fine at the default opt-level 3. Not part of this ticket — see
+`.scratch/release-build-commit-exhaustion/issues/01-release-builds-fail-on-commit-limit-with-no-pagefile.md`.
 
 ## Comments
 
