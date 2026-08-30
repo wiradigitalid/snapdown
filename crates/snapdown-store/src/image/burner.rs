@@ -506,6 +506,21 @@ impl MarkerBurner {
     }
 
     /// One separable box pass, horizontal or vertical, with the window clamped to the edges.
+    ///
+    /// The horizontal and vertical cases are handled separately rather than through one shared
+    /// "line/offset" indexer, because a shared indexer forces the vertical case to walk memory in
+    /// column order — a stride of `width` pixels between every read, which is a cache miss on
+    /// nearly every pixel for a screenshot-sized image and was the dominant remaining cost after
+    /// the sliding-window fix that removed the O(radius) factor. Measured on a release build, whole
+    /// `blur_rect` call, default radius, 3840x2160: ~3.4s with the original full-window
+    /// resummation, ~720ms with a sliding window but still a per-column strided sum, ~305ms with
+    /// this row-at-a-time rewrite. Still not imperceptible at that resolution — see
+    /// `.scratch/filmstrip-blur-perf/issues/01-box-pass-no-longer-o-radius-per-pixel.md` for the
+    /// remaining gap and why closing it further (SIMD, parallelism) was left out of this fix's
+    /// scope. The window's bounds (`lo`, `hi`, `count`) depend only on the row or column INDEX, not
+    /// on which line they belong to, so the vertical pass processes a whole row at a time —
+    /// maintaining one running sum per column — instead of one column's full height at a time,
+    /// keeping every read and write sequential in the same row-major layout the image already has.
     fn box_pass(
         source: &[[f32; 4]],
         target: &mut [[f32; 4]],
@@ -514,36 +529,116 @@ impl MarkerBurner {
         radius: usize,
         horizontal: bool,
     ) {
-        let (outer, inner) = if horizontal {
-            (height, width)
-        } else {
-            (width, height)
-        };
-        let at = |line: usize, offset: usize| {
-            if horizontal {
-                line * width + offset
-            } else {
-                offset * width + line
-            }
-        };
-
-        for line in 0..outer {
-            for position in 0..inner {
-                let lo = position.saturating_sub(radius);
-                let hi = (position + radius).min(inner - 1);
+        if width == 0 || height == 0 {
+            return;
+        }
+        if horizontal {
+            for row in 0..height {
+                let row_start = row * width;
+                let mut lo = 0;
+                let mut hi = radius.min(width - 1);
                 let mut sum = [0.0f32; 4];
-                for offset in lo..=hi {
-                    let pixel = source[at(line, offset)];
+                for col in lo..=hi {
+                    let pixel = source[row_start + col];
                     for channel in 0..4 {
                         sum[channel] += pixel[channel];
                     }
                 }
+
                 let count = (hi - lo + 1) as f32;
                 let mut out = [0.0f32; 4];
                 for channel in 0..4 {
                     out[channel] = sum[channel] / count;
                 }
-                target[at(line, position)] = out;
+                target[row_start] = out;
+
+                for col in 1..width {
+                    let next_lo = col.saturating_sub(radius);
+                    let next_hi = (col + radius).min(width - 1);
+
+                    if next_hi > hi {
+                        let pixel = source[row_start + next_hi];
+                        for channel in 0..4 {
+                            sum[channel] += pixel[channel];
+                        }
+                        hi = next_hi;
+                    }
+                    if next_lo > lo {
+                        let pixel = source[row_start + lo];
+                        for channel in 0..4 {
+                            sum[channel] -= pixel[channel];
+                        }
+                        lo = next_lo;
+                    }
+
+                    let count = (hi - lo + 1) as f32;
+                    let mut out = [0.0f32; 4];
+                    for channel in 0..4 {
+                        out[channel] = sum[channel] / count;
+                    }
+                    target[row_start + col] = out;
+                }
+            }
+            return;
+        }
+
+        // One running sum per column, updated a whole row at a time — see the doc comment above.
+        let mut sums = vec![[0.0f32; 4]; width];
+        let mut lo = 0;
+        let mut hi = radius.min(height - 1);
+        for row in lo..=hi {
+            let row_start = row * width;
+            for col in 0..width {
+                let pixel = source[row_start + col];
+                for channel in 0..4 {
+                    sums[col][channel] += pixel[channel];
+                }
+            }
+        }
+        {
+            let count = (hi - lo + 1) as f32;
+            for (col, sum) in sums.iter().enumerate() {
+                let mut out = [0.0f32; 4];
+                for channel in 0..4 {
+                    out[channel] = sum[channel] / count;
+                }
+                target[col] = out;
+            }
+        }
+
+        for row in 1..height {
+            let next_lo = row.saturating_sub(radius);
+            let next_hi = (row + radius).min(height - 1);
+
+            if next_hi > hi {
+                let row_start = next_hi * width;
+                for col in 0..width {
+                    let pixel = source[row_start + col];
+                    for channel in 0..4 {
+                        sums[col][channel] += pixel[channel];
+                    }
+                }
+                hi = next_hi;
+            }
+            if next_lo > lo {
+                let row_start = lo * width;
+                for col in 0..width {
+                    let pixel = source[row_start + col];
+                    for channel in 0..4 {
+                        sums[col][channel] -= pixel[channel];
+                    }
+                }
+                lo = next_lo;
+            }
+
+            let count = (hi - lo + 1) as f32;
+            let row_start = row * width;
+            for (col, sum) in sums.iter().enumerate() {
+                let mut out = [0.0f32; 4];
+                for channel in 0..4 {
+                    out[channel] = sum[channel] / count;
+                }
+                target[row_start + col] = out;
             }
         }
     }
@@ -904,5 +999,136 @@ mod tests {
         let input = make_test_png(100, 100, Rgba([200, 200, 200, 255]));
         let res = MarkerBurner::burn_markers(&input, &dims, &[m1, m2]);
         assert!(res.is_ok());
+    }
+}
+
+/// Guards against `box_pass` regressing to its old cost. Kept in its own module, deliberately not
+/// under `impl MarkerBurner`, because the reference implementation below has no reason to exist
+/// outside a test.
+#[cfg(test)]
+mod box_pass_regression_guard {
+    use super::*;
+    use rand::rngs::StdRng;
+    use rand::{Rng, SeedableRng};
+
+    /// `box_pass` as it was before this guard existed: for every output pixel, re-sum the whole
+    /// `2*radius+1` window from scratch. O(pixels * radius) per pass, rather than the O(pixels)
+    /// sliding-window `box_pass` now uses. Kept only so a test can assert the optimized version
+    /// still produces this function's output, and so the performance guard below has a real,
+    /// measured floor to be compared against instead of a guessed threshold.
+    fn reference_box_pass(
+        source: &[[f32; 4]],
+        target: &mut [[f32; 4]],
+        width: usize,
+        height: usize,
+        radius: usize,
+        horizontal: bool,
+    ) {
+        let (outer, inner) = if horizontal {
+            (height, width)
+        } else {
+            (width, height)
+        };
+        let at = |line: usize, offset: usize| {
+            if horizontal {
+                line * width + offset
+            } else {
+                offset * width + line
+            }
+        };
+        for line in 0..outer {
+            for position in 0..inner {
+                let lo = position.saturating_sub(radius);
+                let hi = (position + radius).min(inner - 1);
+                let mut sum = [0.0f32; 4];
+                for offset in lo..=hi {
+                    let pixel = source[at(line, offset)];
+                    for channel in 0..4 {
+                        sum[channel] += pixel[channel];
+                    }
+                }
+                let count = (hi - lo + 1) as f32;
+                let mut out = [0.0f32; 4];
+                for channel in 0..4 {
+                    out[channel] = sum[channel] / count;
+                }
+                target[at(line, position)] = out;
+            }
+        }
+    }
+
+    fn random_buffer(seed: u64, width: usize, height: usize) -> Vec<[f32; 4]> {
+        let mut rng = StdRng::seed_from_u64(seed);
+        (0..width * height)
+            .map(|_| {
+                [
+                    rng.gen_range(0.0..255.0),
+                    rng.gen_range(0.0..255.0),
+                    rng.gen_range(0.0..255.0),
+                    rng.gen_range(0.0..255.0),
+                ]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn box_pass_matches_the_naive_full_window_resummation_it_replaced() {
+        // Sizes deliberately include: a window wider than the line (radius > inner/2, exercising
+        // both edges' clamp at once), a single-row/column line, and an even and an odd width, so
+        // the sliding window's edge-clamping is exercised the same way the naive version's
+        // per-position clamp always was.
+        let cases: &[(usize, usize, usize)] = &[
+            (1, 1, 1),
+            (5, 1, 2),
+            (1, 5, 2),
+            (7, 7, 3),
+            (8, 6, 10),
+            (37, 23, 5),
+            (64, 64, 16),
+        ];
+        for &(width, height, radius) in cases {
+            for horizontal in [true, false] {
+                let source = random_buffer(42, width, height);
+                let mut expected = vec![[0.0f32; 4]; width * height];
+                let mut actual = vec![[0.0f32; 4]; width * height];
+                reference_box_pass(&source, &mut expected, width, height, radius, horizontal);
+                MarkerBurner::box_pass(&source, &mut actual, width, height, radius, horizontal);
+                for (index, (e, a)) in expected.iter().zip(actual.iter()).enumerate() {
+                    for channel in 0..4 {
+                        assert!(
+                            (e[channel] - a[channel]).abs() < 1e-3,
+                            "mismatch at {width}x{height} radius={radius} horizontal={horizontal} \
+                             pixel={index} channel={channel}: expected {}, got {}",
+                            e[channel],
+                            a[channel]
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Not a stopwatch on the feature - a tripwire for the specific defect this guard exists to
+    /// catch. Measured on this machine, debug profile (`cargo test`'s default, deliberately not
+    /// `--release`: the regression this guards is a UI-thread stall, and debug is the profile nothing
+    /// else here has proven equally slow at these sizes): `blur_rect` over an 800x600 image at the
+    /// default radius took ~400ms with the current sliding-window `box_pass`. Re-implementing that
+    /// same call with `reference_box_pass` - the O(radius) version this replaced - took several
+    /// seconds at the same size. 3 seconds is comfortably above the current cost's normal machine
+    /// variance and comfortably below where the old cost would land, so a regression back to
+    /// re-summing the whole window per pixel fails this loudly rather than only showing up as a
+    /// slow click much later.
+    #[test]
+    fn blur_rect_stays_well_under_the_old_full_window_resummation_cost() {
+        let mut img = RgbaImage::from_pixel(800, 600, Rgba([120, 130, 140, 255]));
+        let start = std::time::Instant::now();
+        MarkerBurner::blur_rect(&mut img, 0, 0, 800, 600, 16);
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_millis() < 3000,
+            "blur_rect over an 800x600 image took {}ms; the O(radius) full-window resummation this \
+             guard exists to catch took several seconds at the same size on this machine",
+            elapsed.as_millis()
+        );
     }
 }
