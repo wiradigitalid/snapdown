@@ -114,6 +114,13 @@ A GitHub runner has its own memory configuration, so this machine's commit exhau
 about CI. Whether the grown crate still builds there is genuinely open, and pushing the branch is the
 cheapest way to find out.
 
+**Answered 2026-08-30.** `cargo build --release --workspace` **passes on `windows-latest`** — Desktop CI
+run `33306493845`, PR #37, all four jobs green including `Desktop Build & Verify`. The two workflows had
+been `disabled_manually` since 2026-08-24, which is the real reason nothing had run; the branch trigger
+list was a second, lesser reason. Both are active again.
+
+The original wording of this criterion is kept below because the reasoning it records still holds.
+
 **Deferred, deliberately not a criterion of this ticket.** Whether CI still builds the grown crate is
 a question about a GitHub runner, not about this machine, and it cannot be answered from this branch at
 all: `desktop-ci.yml` triggers on `push` only for `[main, master, "kodesh87/*"]` and on `pull_request`
@@ -139,9 +146,12 @@ Measured after the change, boot time unchanged at 2026-08-29 18:01:
 | Headroom | ~7 GB, and 0 at the time of the crashes | ~10 GB |
 
 A release build at opt-level 3 had already succeeded before this, in 2m16s, with `CARGO_BUILD_JOBS=1` —
-which is what proved opt-level was a red herring. **Whether the default parallel build now succeeds is
-untested**; the constraint is structurally gone, but nobody has run it. Do not read this resolution as
-permission to drop `CARGO_BUILD_JOBS=1` without trying it once.
+which is what proved opt-level was a red herring.
+
+**The default parallel build now succeeds too, measured 2026-08-30:** `cargo build --release --workspace`
+with no `CARGO_BUILD_JOBS` set, exit 0 in **1m36s**, no `LLVM ERROR: out of memory`, no `0xc0000409`. So
+`CARGO_BUILD_JOBS=1` is no longer needed on this machine. Two conditions were required for that run and
+both are easy to lose: the pagefile, and no `Snapdown.exe` holding a lock on its own binary.
 
 ## Two collateral traps, both of which cost time here
 
