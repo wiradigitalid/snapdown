@@ -14,10 +14,13 @@ can change it without telling anyone, which is the whole reason this slot exists
 | | |
 |---|---|
 | **Owner** | Microsoft. Not contactable, not negotiable, not versioned on our schedule |
-| **Reached through** | Tauri v2 plugins and Win32 APIs, never directly by our own FFI |
-| **What we depend on** | Global hotkey registration · run-at-sign-in registration · the native folder picker · opening a folder in Explorer · the tray icon · `prefers-color-scheme` |
+| **Reached through** | Win32 APIs directly — the `windows` crate, `global-hotkey`, and `tray-icon` — since `DEC-007`. Reached through Tauri v2 plugins before that |
+| **What we depend on** | Global hotkey registration · run-at-sign-in registration · the native folder picker · opening a folder in Explorer · the tray icon |
 
-## Four surfaces, and what breaks when Microsoft moves
+## Three surfaces, and what breaks when Microsoft moves
+
+A fourth — theme — is kept below for its history, but it is no longer one of them; see that
+section.
 
 ### Global hotkey registration
 
@@ -38,7 +41,9 @@ does not survive. `OQ-5` records this as an assumption and it has held so far.
 
 ### Run-at-sign-in registration
 
-Reached through the Tauri autostart plugin, which writes a registry entry under the current user.
+Reached through `WindowsRegistryAutoStartBackend` (`apps/desktop/src/startup.rs`), which writes a
+registry entry under the current user directly via the `windows` crate. Reached through the Tauri
+autostart plugin before `DEC-007`; the registry mechanism itself did not change.
 
 The truth lives in Windows and is read back rather than remembered (`BR-114`). That is why anything —
 a cleanup tool, a group policy, a profile reset — may remove it, and the product treats that as the
@@ -57,20 +62,24 @@ typed (`UC-14` step 2), so a Reviewer cannot express a path the shell would not 
 because a network drive, a synced folder, or a policy-locked path can all report themselves writable
 and refuse the write.
 
-### `prefers-color-scheme`
+### Theme
 
-The Windows theme reaches the webview as a CSS media query. Microsoft owns when it changes and whether
-a change is signalled to a running process.
+**This surface changed shape at `DEC-007`, not just implementation.** The paragraph below (`W6-S1`,
+`420ecce`) describes the pre-`DEC-007` webview, where the theme followed Windows automatically:
 
-`NFR-17` requires a theme change to be honoured without a restart, which means the product must not
-read the theme once at boot.
+> The Windows theme reached the webview as a CSS media query. Microsoft owned when it changed and
+> whether a change was signalled to a running process. `NFR-17` required a theme change to be
+> honoured without a restart, which meant the product had to not read the theme once at boot. Every
+> colour was a CSS custom property inside a `prefers-color-scheme` block, and no JavaScript read a
+> token value, so the repaint was the browser's.
 
-**Was `[MISSING]`; resolved by `W6-S1` at `420ecce`.** Every colour is now a CSS custom property inside a
-`prefers-color-scheme` block, and no JavaScript reads a token value — a grep for `getComputedStyle`
-and `getPropertyValue` across `apps/desktop/src` and `web/ui/src` returns nothing. The repaint is the
-browser's, which is why `waves.yaml` records a runtime-theme-change test under
-`tests_deliberately_not_written`: after W6-S1 there is no application code left in that path to
-break.
+**The Slint rebuild does not read Windows' theme setting at all.** `is-dark` (`apps/desktop/ui/theme.slint`)
+is driven from a persisted `Setting` (`theme_setting_key()`), flipped by the Reviewer's own
+sun/moon toggle (`on_theme_toggle_clicked` in `apps/desktop/src/main.rs`), not by Microsoft. Nothing
+here still depends on Windows for theme — this whole component's Windows dependency, so this
+integration file no longer has anything to say about it. Whether `NFR-17`'s wording ("honoured
+without a restart") still describes the right promise once the Reviewer chooses instead of the OS is
+a question for `wdi-question` or `wdi-decision`, not something this cleanup pass decides.
 
 ## What is deliberately not here
 

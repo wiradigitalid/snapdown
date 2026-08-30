@@ -7,8 +7,14 @@ updated: "2026-08-23"
 
 # Contract inventory — finding
 
-The Tauri command surface this component exposes to its webview. Derived by reading
-`apps/desktop/src-tauri/src/commands/{finding,capture}.rs` on 2026-08-23.
+The command surface this component exposes to its UI. Derived by reading
+`apps/desktop/src-tauri/src/commands/{finding,capture}.rs` on 2026-08-23 — the pre-`DEC-007` Tauri
+webview, archived at `archive/desktop-tauri`.
+
+**Not re-derived since `DEC-007`.** The desktop app moved to native Slint; the command names below
+may still name the right operations, but their exact shape has not been checked against
+`apps/desktop/src`'s current Rust functions. Treat this table as the last-known contract, not a
+current one, until it is re-derived.
 
 Numbers are stable. A new command takes the next `CF-`.
 
@@ -67,7 +73,7 @@ Numbers are stable. A new command takes the next `CF-`.
 | **Refusal** | Clean refuses a path that escapes the Vault root. `VaultBlobStore` already carries that guard |
 | **Idempotence** | Both, yes |
 | **Ordering** | `none` — scan is read-only, and clean acts on what the Reviewer confirmed from a scan they saw |
-| **Failure** | A file that will not delete is **reported**, not swallowed. This is the lane `settings`' Vault move gets wrong at `vault_migration.rs:141`, and it is worth naming the contrast |
+| **Failure** | A file that will not delete is **reported**, not swallowed. This is the lane `settings`' Vault move got wrong at the pre-`DEC-007` webview's `vault_migration.rs:141`, and it is worth naming the contrast |
 
 ### CF-2 / CF-3 / CF-4 / CF-5 / CF-6
 

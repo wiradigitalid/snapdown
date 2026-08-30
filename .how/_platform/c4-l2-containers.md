@@ -20,7 +20,7 @@ graph TB
     RA(["Remote coding agent"])
 
     subgraph MACHINE["The Reviewer's Windows machine"]
-        DA["<b>desktop-app</b><br/>Tauri v2 — Rust core,<br/>React + Vite webview<br/><i>capture, Editor, Library,<br/>Local API, publish client</i>"]
+        DA["<b>desktop-app</b><br/>Rust, native Slint UI<br/>(DEC-007)<br/><i>capture, Editor, Library,<br/>Local API, publish client</i>"]
         MB["<b>mcp-bridge</b><br/>Rust CLI, stdio MCP<br/><i>translates MCP to the Local API</i>"]
         VAULT[("Vault folder<br/>+ library.db<br/><i>files on disk</i>")]
     end
@@ -47,7 +47,7 @@ graph TB
 
 | Element | What it is | Notes |
 | --- | --- | --- |
-| `desktop-app` | Tauri v2 application: a Rust process owning the domain core, the SQLite and Vault adapters, the capture adapter, the Local API, and the publish client, with a React + Vite + TypeScript webview for the Editor and Settings | `built: true`. The only writer in the whole system. Holds five of the five Product Components, so it is the one container with an L3. **One process, two personas** — the tray (**Snapdown**) and the workspace window (**Snapdown Editor**) — and exactly one executable, `Snapdown.exe`, per AD-11 and `DEC-003` |
+| `desktop-app` | A single Rust process (`snapdown-desktop`) owning the domain core, the SQLite and Vault adapters, the capture adapter, the Local API, and the publish client, with a native Slint UI (`apps/desktop/ui`) for the Editor and Settings — `DEC-007` moved this off the original Tauri v2 + React + Vite + TypeScript webview, archived for reference at `archive/desktop-tauri` | `built: true`. The only writer in the whole system. Holds five of the five Product Components, so it is the one container with an L3. **One process, two personas** — the tray (**Snapdown**) and the workspace window (**Snapdown Editor**) — and exactly one executable, `Snapdown.exe`, per AD-11 and `DEC-003` |
 | `mcp-bridge` | Rust command-line executable speaking the Model Context Protocol over stdio to an agent, and HTTP to the Local API | `built: true`. Stateless by design — it holds no Library data and no Access Key between runs, which is what makes revocation immediate (AD-5) |
 | `web-api` | Go service, `net/http` with `chi`, embedded SQLite and a blob directory, deployed as one binary with one configuration file | `built: true`. Serves Publications and nothing else. Never reads the Library |
 | `web-ui` | React + Vite single-page application, built to static assets and served by `web-api` | `built: true`. Runs in the reader's browser, which is its own process — that is why it is a container and not "static assets". It renders one Publication and calls nothing but `web-api` |
@@ -87,8 +87,8 @@ three hold one each, and the matrix already places them.
 
 - **Deployment topology for `web-api`** — the host, the reverse proxy, the certificate, the process
   supervisor. It belongs to the devops repository and is referenced from here, never drawn here.
-- **The build pipeline.** How the Tauri bundle, the two Rust binaries, and the two front ends are
-  produced is a `structure-codebase.md` and CI concern.
+- **The build pipeline.** How the Slint-bundled desktop binary, the MCP bridge binary, and the two
+  web front ends are produced is a `structure-codebase.md` and CI concern.
 - **The Windows credential store.** It holds the Access Key and the publish credential and is named
   in the spine's Consistency Conventions; drawing it as a box would suggest it is a container.
 - **Inside any container.** Product Components inside `desktop-app` are L3.

@@ -478,7 +478,7 @@ body {
   width: 100%; height: 100%; gap: 1px; background: rgba(255,255,255,0.08);
 }
 .ds-loupe-pixel { background: #334155; }
-/* Frameless Desktop Chrome & Window Controls (Tauri v2 Desktop) */
+/* Frameless Desktop Chrome & Window Controls (Slint Desktop, was Tauri v2 before DEC-007) */
 .ds-titlebar-mock {
   height: 34px; background: var(--snagit-ribbon-bg);
   border: 1px solid var(--snagit-ribbon-border); border-bottom: 1px solid var(--color-border);
@@ -738,7 +738,7 @@ body {
   <section class="ds-section" id="frameless">
     <div class="ds-section-header">
       <h2 class="ds-section-title">5. Frameless Desktop Architecture &amp; Custom Chrome</h2>
-      <span class="ds-section-badge">TAURI V2 · FRAMELESS APIS &amp; DRAG REGIONS</span>
+      <span class="ds-section-badge">SLINT + WIN32 · FRAMELESS APIS &amp; DRAG REGIONS (WAS TAURI V2 BEFORE DEC-007)</span>
     </div>
     <p class="ds-section-lead">
       Aplikasi Snapdown berjalan dalam mode <strong>Frameless / Custom Titlebar</strong> (tanpa baris header OS default). Seluruh interaksi window dragging, minimizing, maximizing, dan closing dikontrol langsung melalui token dan komponen chrome internal:
@@ -746,9 +746,9 @@ body {
 
     <div class="ds-grid-cards">
       <div class="ds-card">
-        <div class="ds-card-title">🪟 1. Custom Drag Region (data-tauri-drag-region)</div>
+        <div class="ds-card-title">🪟 1. Custom Drag Region (<code>drag-window-requested</code>)</div>
         <div class="ds-card-desc">
-          Area titlebar mengusung atribut <code>data-tauri-drag-region</code> yang memungkinkan reviewer memindahkan posisi window secara mulus. Elemen interaktif (tombol/input) di dalamnya wajib memiliki <code>pointer-events: auto</code> agar tetap dapat diklik.
+          Area titlebar memancarkan callback Slint <code>drag-window-requested</code> saat ditekan, ditangani di Rust lewat <code>i-slint-backend-winit</code> yang memanggil <code>winit_win.drag_window()</code> langsung — bukan lagi atribut <code>data-tauri-drag-region</code> di webview. Elemen interaktif (tombol/input) di dalam area itu tetap harus menangkap klik-nya sendiri sebelum event tersebut naik ke drag handler.
         </div>
       </div>
       <div class="ds-card">
@@ -768,11 +768,11 @@ body {
     <!-- Frameless Titlebar Live Component Demo -->
     <div class="ds-demo-box" style="padding: 0; overflow: hidden;">
       <div class="ds-titlebar-mock">
-        <div class="ds-drag-region" data-tauri-drag-region>
+        <div class="ds-drag-region">
           <div style="width: 18px; height: 18px; background: linear-gradient(135deg, #0284c7, #2563eb); color: white; font-weight: 800; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 10px;">⚡</div>
           <span style="font-weight: 800;">Snapdown Studio</span>
           <span style="color: var(--color-border-strong);">|</span>
-          <span style="color: var(--color-text-muted); font-size: 0.72rem;">2026-08-24_19-45-12.snapx — (data-tauri-drag-region active)</span>
+          <span style="color: var(--color-text-muted); font-size: 0.72rem;">2026-08-24_19-45-12.snapx — (drag-window-requested active)</span>
         </div>
         <div class="ds-window-controls">
           <button class="tool-icon-btn" style="width: auto; height: 24px; padding: 0 8px; font-size: 0.68rem; font-weight: 700; margin-right: 8px;">📚 History</button>

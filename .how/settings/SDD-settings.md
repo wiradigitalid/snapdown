@@ -48,9 +48,11 @@ listens for. Reversing it would put a Setting's writer inside a component that `
 read — so the reversal is not a refactor, it is a rule change.
 
 **The delta this pass adds**, and it is not small: `LC-028 editor-shell`. `FR-27` and `FR-28` are
-promises about the *frame*, and in the shipped build the frame is inline JSX at the top of
-`App.tsx` — owned by no component, tested by nothing, named in no inventory. That is how both
-promises came to be unmet without any document being wrong.
+promises about the *frame*, and at the time this SDD was raised to `deep` the frame was inline JSX at
+the top of the (pre-`DEC-007`) webview's `App.tsx` — owned by no component, tested by nothing, named
+in no inventory. That is how both promises came to be unmet without any document being wrong.
+`LC-028` now has an owner and, since `DEC-007`, a file: the `AppWindow` component in
+`apps/desktop/ui/appwindow.slint`.
 
 ## Structure · [outline]
 
@@ -81,9 +83,10 @@ Quoted verbatim from `.how/_platform/ARCHITECTURE-SPINE.md`. A design that must 
 
 Reaches this component through the Vault move (`UC-14`, `SCN-01`), and the code satisfies it by
 **ordering** rather than by compensation: every file is copied and verified before any source is
-removed (`vault_migration.rs:138`), and the location Setting is written only after the move returns.
-No file ever exists in neither place, which is what AD-2 actually needs. Verified by reading
-`apps/desktop/src-tauri/src/vault_migration.rs`.
+removed, and the location Setting is written only after the move returns. No file ever exists in
+neither place, which is what AD-2 actually needs. Verified against the pre-`DEC-007` webview's
+`vault_migration.rs:138`; the Slint rebuild's equivalent is `migrate_vault`/`migrate_vault_dir` in
+`apps/desktop/src/main.rs`.
 
 **AD-6 — Nothing leaves the machine except a confirmed publish of a named Bundle**
 
@@ -97,23 +100,25 @@ it; nothing here initiates a network call.
 > A token that is deliberately theme-invariant — the Marker badge, the capture overlay's scrim — MUST
 > say so where it is defined and MUST still be defined in the token file.
 
-**The shipped code violated this**, and `W6-S1` fixed it at `420ecce`. `HotkeySection.tsx` carried
-`#dcfce7`, `#166534`, `#f1f5f9`, `#64748b`, `#fef3c7`, `#fde047`, `#854d0e`, `#eff6ff` — all
-light-theme values on a surface that renders under either theme. It now uses the `--color-success-*`
-and `--color-neutral-*` pairs, each proven against its own background once.
+**The shipped code violated this**, and `W6-S1` fixed it at `420ecce`, in the pre-`DEC-007` webview.
+`HotkeySection.tsx` carried `#dcfce7`, `#166534`, `#f1f5f9`, `#64748b`, `#fef3c7`, `#fde047`,
+`#854d0e`, `#eff6ff` — all light-theme values on a surface that renders under either theme. It used
+the `--color-success-*` and `--color-neutral-*` pairs, each proven against its own background once.
 
 Recorded in the past tense rather than removed: `AD-10` reads as a preference until you know it was
-written against eight literals in one file.
+written against eight literals in one file. The Slint rebuild carries the same rule under
+`design-system-guide.md`, enforced over `apps/desktop/ui/theme.slint` rather than `tokens.css`.
 
 **AD-11 — One process owns the Library, and the Editor is a persona of it**
 > Exactly one desktop process MUST own the Library. The tray, the global hotkeys, the capture
 > overlay, and the Editor window MUST all live in it. A second desktop executable MUST NOT be
 > produced by a build.
 
-The build currently satisfies the first sentence and **not** the second: `tauri.conf.json` names
-`Snapdown`, and `target/release/` held a stale `desktop.exe` beside `Snapdown.exe` until it was
-deleted by hand on 2026-08-23. Nothing prevents it recurring. `[MISSING]` — the build assertion
-`BR-121` requires does not exist.
+The build satisfies both sentences today. `target/release/` held a stale `desktop.exe` beside
+`Snapdown.exe` until it was deleted by hand on 2026-08-23, and nothing prevented it recurring at the
+time; `apps/desktop/tests/test_executable_identity.rs` now asserts exactly one binary named
+`Snapdown` at build time, resolving `BR-121`. The product name is set in `apps/desktop/Cargo.toml`'s
+`[[bin]]` table since `DEC-007` (`tauri.conf.json` before that).
 
 ## Failure Behaviour · [guarded]
 
@@ -151,8 +156,9 @@ Boundary → Control → Entity → Behaviour. Not in the SRS, and not written b
 | `SettingStore` | Every read and the only writes |
 
 `AutoStartBackend` and `HotkeyBackend` are ports with a Windows adapter each, which is what makes
-`SCN-02`'s four runs testable without a real registry — `MockAutoStartBackend` already exists in
-`apps/desktop/src-tauri/src/startup/mod.rs`.
+`SCN-02`'s four runs testable without a real registry — `MockAutoStartBackend` existed at
+`apps/desktop/src-tauri/src/startup/mod.rs` in the pre-`DEC-007` webview; the Slint rebuild's
+equivalent is `apps/desktop/src/startup.rs`.
 
 ### Control
 
@@ -182,7 +188,7 @@ Failure Behaviour was rejected rather than deferred.
 
 | Slot | Holds |
 |---|---|
-| `02-contracts/` | The Tauri command surface this component exposes to its webview |
+| `02-contracts/` | The command surface this component exposes to its Slint UI |
 | `04-components/` | One file per `LC` above `LC-025` |
 | `05-model/data-model.md` | The `setting` table and its dictionary |
 | `06-flows/` | The Vault relocation and the startup reconciliation |
@@ -191,10 +197,10 @@ Failure Behaviour was rejected rather than deferred.
 
 | Label | Claim | Disposition |
 |---|---|---|
-| ~~`[MISSING]`~~ **resolved** | No lint rule or contrast assertion enforced `AD-10`; eight literals in `HotkeySection.tsx` alone | **Done — `W6-S1` at `420ecce`.** Lint rule refuses a literal; the contrast assertion parses `tokens.css` in both themes and was verified by mutation |
-| `[MISSING]` | No build assertion prevents a second desktop executable (`BR-121`) | Planned work — `FR-27` |
+| ~~`[MISSING]`~~ **resolved** | No lint rule or contrast assertion enforced `AD-10`; eight literals in `HotkeySection.tsx` alone | **Done — `W6-S1` at `420ecce`, in the pre-`DEC-007` webview.** The Slint rebuild carries its own lint rule and contrast assertion over `apps/desktop/ui/theme.slint`, per `design-system-guide.md` |
+| ~~`[MISSING]`~~ **resolved** | No build assertion prevents a second desktop executable (`BR-121`) | **Done.** `apps/desktop/tests/test_executable_identity.rs` asserts exactly one binary named `Snapdown` |
 | `[MISSING]` | `Auto` does not exist; the budget is two constants | Planned work — `FR-5`, `DEC-004` |
-| `[MISSING]` | The startup control has no `Unknown` state; `App.tsx` initialises `useState<boolean>(true)` | Planned work — `FR-18`, `BR-108` |
+| `[MISSING]` | The startup control has no `Unknown` state | Still true in the Slint rebuild: `apps/desktop/ui/components/settings.slint` declares `run-at-startup` as a plain `bool`, the same shape `App.tsx`'s `useState<boolean>(true)` had. Planned work — `FR-18`, `BR-108` |
 | `[MISSING]` | No registration health check; a hotkey that registers and never fires is undetected | **Not planned.** Rejected: it needs a background task this product does not otherwise have |
 | `[MISSING]` | The Vault move swallows both `fs::remove_file` results (`vault_migration.rs:141`, `:180`). A source file that will not delete leaves an **unreported duplicate** of an image that may hold personal data, and the move still reports success | Planned work — the highest-value item in this table |
 

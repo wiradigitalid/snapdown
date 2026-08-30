@@ -7,14 +7,20 @@ updated: "2026-08-23"
 
 # Contract inventory — settings
 
-The Tauri command surface this component exposes to its own webview. It is **not** in
+The command surface this component exposes to its own UI. It is **not** in
 `.how/_platform/inventory-api.md`, and that is correct: that inventory holds the Local API's HTTP
-endpoints, which cross a process boundary. These cross a language boundary inside one process, which
-`AD-5` and `AD-7` do not reach.
+endpoints, which cross a process boundary. These are in-process calls, which `AD-5` and `AD-7` do not
+reach.
 
 Numbers are stable. A new command takes the next `CS-` and a removed one keeps its number.
 
-Derived by reading `apps/desktop/src-tauri/src/commands/{settings,hotkey,startup}.rs` on 2026-08-23.
+Derived by reading `apps/desktop/src-tauri/src/commands/{settings,hotkey,startup}.rs` on 2026-08-23 —
+the pre-`DEC-007` Tauri webview, archived at `archive/desktop-tauri`.
+
+**Not re-derived since `DEC-007`.** The desktop app moved to native Slint; the command names below
+may still name the right operations, but their exact shape has not been checked against
+`apps/desktop/src`'s current Rust functions. Treat this table as the last-known contract, not a
+current one, until it is re-derived.
 
 | id | Command | Reads / writes | Realizes | State |
 |---|---|---|---|---|
@@ -56,7 +62,7 @@ is the wrong shape for the promise `FR-5` now makes.
 | **Refusal** | `set_startup_status` returns the registration state **after** the attempt, not the state requested. A refused enable returns `enabled: false` |
 | **Idempotence** | Yes on both, because both end by re-reading the OS |
 | **Ordering** | None. There is no ordering between them worth stating: each is one synchronous call |
-| **Failure** | `[MISSING]` — the DTO has no way to say *unreadable*. `bool` cannot carry the `Unknown` state that `BR-108` and `state-machines.md` § 1 require, so the webview must invent one. It currently invents `true` |
+| **Failure** | `[MISSING]` — the DTO has no way to say *unreadable*. `bool` cannot carry the `Unknown` state that `BR-108` and `state-machines.md` § 1 require, so the caller must invent one. The pre-`DEC-007` webview invented `true`; the Slint rebuild's `run-at-startup` property (`apps/desktop/ui/components/settings.slint`) is still a plain `bool`, so the same gap holds today |
 
 That last row is the whole defect, and it is visible in the contract before it is visible in the UI: a
 `bool` where the domain has three states forces every caller to guess the third.

@@ -11,8 +11,9 @@ verified: ""
 
 # Inventory — screens
 
-Two front ends. Rows 1–13 are the React webview inside `desktop-app`; rows 14–15 are `web-ui` in the
-reader's browser. A desktop surface that is a window rather than a route has `—` for its route.
+Two front ends. Rows 1–13 are the desktop UI inside `desktop-app` — a React webview until `DEC-007`,
+native Slint since; rows 14–15 are `web-ui` in the reader's browser, unaffected by that decision. A
+desktop surface that is a window rather than a route has `—` for its route.
 
 `No` is stable. A new row takes the next number; a removed one keeps its number with
 `status: removed`.
@@ -78,6 +79,14 @@ and a promise with no row is a promise nobody checks.
 No row is owned by `_platform`.
 
 ## Findings
+
+**This whole section is a 2026-08-23 snapshot of the pre-`DEC-007` Tauri webview, now stale in
+substance, not just in file paths.** The desktop UI has since been rebuilt in Slint, and the
+"screen gaps" table below cites `.tsx` files that no longer exist — some because the surface was
+rebuilt (rows 0 and 2, confirmed current: `apps/desktop/ui/appwindow.slint` and its capture-note-field),
+some because nothing has replaced them yet (`BUG-59`, `BUG-61`, both filed 2026-08-27, are the current
+source of truth for what is and is not built). Treat the table as history explaining how these gaps
+were first found, not as today's state — that is `BUG-61`'s job now.
 
 **Corrected 2026-08-23.** An earlier version of this section stated that
 `.constitution/project/inventory-readers.py` "has not been written". **That was wrong** — the file

@@ -86,12 +86,14 @@ without touching either.
 
 - **The hexagonal split inside each box.** Which part of `finding` is core and which is adapter is
   the spine's Design Paradigm and the component's SDD; drawing it here would duplicate both.
-- **The React webview as a separate box.** It is the presentation surface of all five components at
-  once, not a component. Its screens are in `inventory-screen.md`.
+- **The Slint UI as a separate box.** It is the presentation surface of all five components at
+  once, not a component. Its screens are in `inventory-screen.md`. `DEC-007` moved it off the
+  original Tauri v2 + React webview, which is archived for reference at `archive/desktop-tauri`.
 - **SQLite and the Vault folder.** Storage inside this container's own process, per L2, and their
   contents are `inventory-db.md`.
-- **The Tauri command layer.** It is the adapter that carries every arrow labelled "in-process call"
-  from the webview into the core, and naming it as a box would make it look like a component.
+- **The command/callback layer.** The Rust functions that wire a Slint callback to a call into the
+  core carry every arrow labelled "in-process call" from the UI into the core, and naming them as a
+  box would make them look like a component.
 - **The two personas as two boxes.** **Snapdown** (tray, hotkeys, overlay) and **Snapdown Editor**
   (the workspace window) are personas of one process, per AD-11 and `DEC-003`. Drawing them as two
   boxes at L3 would say what L2 explicitly decided against: they are not containers, they do not
@@ -102,3 +104,7 @@ without touching either.
 the window frame. The frame was previously drawn by nothing: it is inline JSX at the top of `App.tsx`,
 owned by no component, which is how `FR-27` and `FR-28` came to be unmet without any document being
 wrong.
+
+**`DEC-007` superseded the file this refers to.** `App.tsx` no longer exists — `settings` still owns
+`LC-028` `editor-shell`, now the `AppWindow` component in `apps/desktop/ui/appwindow.slint`. The
+ownership decision this note explains is unchanged; only the file it names is.
