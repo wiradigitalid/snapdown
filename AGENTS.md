@@ -45,10 +45,22 @@ there, because that block is package-owned and replaced on every update.
 - `/to-spec` MUST read `.what/`, `.how/`, and `.control/` before writing, and MUST NOT invent a
   requirement the corpus already states. Every `FR-`, `UC-`, `AD-`, or `DEC-` it rests on MUST be
   cited by id.
+- **The corpus is an input, never a gate.** Where a document and the code disagree, the **code wins**
+  and the **document** is what gets corrected — the code is the record of which attempt actually
+  worked. A stale document MUST NOT be used to reject a change, and code MUST NOT be changed to match
+  a `DEC-`, a defect row, an `SRS`, or an `SDD`. Fix it as a stated correction that names what the
+  document used to say, not a silent rewrite.
 - `/to-spec` and `/to-tickets` MUST write only under `.scratch/<feature-slug>/`, never into the corpus.
 - What the work proves MUST be folded back afterwards: a defect into `.control/registry/defects.yaml`,
   a decision through `wdi-decision`, an outside fact through `wdi-log`. A closed ticket in `.scratch/`
   is not a corpus entry and MUST NOT be treated as one.
+
+### Documents trail the code, and that lag is accepted
+
+The corpus is written **after** the work, as the record left behind by it. A document that is behind
+the code is therefore in its expected state, not in a defective one, and a validator finding that
+merely reports that lag MUST NOT block a change. What MUST be fixed is the *load-bearing* staleness:
+a document claim that would steer the next reader toward the wrong repair.
 
 ### Three validator checks are now fossils
 
@@ -62,7 +74,17 @@ This boundary is not yet recorded as a `DEC-`. It SHOULD be, through `wdi-decisi
 nothing in `AD-*` but it is exactly the kind of choice a reader will later ask *why* about, and this
 file is a rule file, not the place that answers it.
 
-`waves.yaml` and `stories.yaml` MUST be left in place as history and MUST NOT be extended.
+`waves.yaml` and `stories.yaml` MUST be left in place as history and MUST NOT be extended. **V13's
+`no reviewed trace` finding against a wave is a fossil for the same reason** and belongs in the
+baseline; V13's *other* half, which reports a document changed after its last review, is not — that
+one is the accepted lag described above, and it is the one to read for load-bearing staleness.
+
+**`korpus.yml` cannot see that half at all.** V13's stale-review check needs per-file git history, and
+`actions/checkout@v4` clones shallow, so those findings never appear on the runner — the four standing
+at the time of writing (`ARCHITECTURE-SPINE.md`, `SDD-bundle.md`, `SDD-finding.md`, `SRS-finding.md`)
+are visible only locally. A green `korpus.yml` therefore MUST NOT be read as proof that document
+reviews are current, and the baseline MUST hold the runner's visible set, not the local one — a local
+run is the stricter of the two.
 
 <!-- BEGIN:wdi-method -->
 This repo uses **WDI Method**. It wraps BMad; it does not replace it. This marked
