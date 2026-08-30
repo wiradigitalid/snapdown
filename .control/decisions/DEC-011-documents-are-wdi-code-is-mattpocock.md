@@ -1,11 +1,21 @@
 ---
 type: decision
 id: DEC-011
-status: draft
-touches: []
+status: applied
+touches:
+  - AGENTS.md
+  - .agents/AGENTS.md
+  - .cursorrules
+  - .github/validate-baseline.txt
+  - _bmad/custom/bmad-correct-course.toml
+  - docs/agents/domain.md
+  - .claude/skills/
+  - .agents/skills/
 supersedes: null
 superseded_by: null
 created: "2026-08-30"
+accepted: "2026-08-30"
+applied: "2026-08-30"
 ---
 
 # DEC-011 — WDI Method owns the documents, mattpocock/skills owns the code, and documents follow the code

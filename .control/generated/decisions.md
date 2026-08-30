@@ -4,7 +4,7 @@
 
 Decisions are no longer looked up through the memlog — the memlog goes back to being just a pass log.
 
-**11 decisions** — applied: 5 · draft: 6.
+**11 decisions** — applied: 6 · draft: 5.
 
 | id | Title | Status | Type | Touches | File |
 | --- | --- | --- | --- | --- | --- |
@@ -18,4 +18,4 @@ Decisions are no longer looked up through the memlog — the memlog goes back to
 | `DEC-008` | The capture overlay is one GPU-rendered window over the whole virtual desktop, built at start-up and reused | `draft` | — | — | `.control/decisions/DEC-008-capture-overlay-single-window.md` |
 | `DEC-009` | The design system stays hand-authored in two theme columns, and takes one idea from Graphite rather than its… | `draft` | — | — | `.control/decisions/DEC-009-design-system-stays-hand-authored.md` |
 | `DEC-010` | `encoder_quality` means colour precision and a palette, not an encoder dial | `draft` | — | — | `.control/decisions/DEC-010-encoder-quality-is-colour-precision.md` |
-| `DEC-011` | WDI Method owns the documents, mattpocock/skills owns the code, and documents follow the code | `draft` | — | — | `.control/decisions/DEC-011-documents-are-wdi-code-is-mattpocock.md` |
+| `DEC-011` | WDI Method owns the documents, mattpocock/skills owns the code, and documents follow the code | `applied` | — | `AGENTS.md`, `.agents/AGENTS.md`, `.cursorrules`, `.github/validate-baseline.txt`, `_bmad/custom/bmad-correct-course.toml`, `docs/agents/domain.md`, `.claude/skills/`, `.agents/skills/` | `.control/decisions/DEC-011-documents-are-wdi-code-is-mattpocock.md` |

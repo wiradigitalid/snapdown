@@ -1,5 +1,20 @@
 # Agent Rules — Snapdown
 
+## Method — documents are WDI, code is mattpocock
+
+`DEC-011` (accepted 2026-08-30) splits this repo: **WDI Method owns the documents**, **mattpocock/skills
+owns the code and task management**. This section sits outside the `wdi-method` block below, which is
+package-owned and replaced in full on every update, and where the two disagree **this section wins**.
+
+- The **G5 Release** row in the block below is retired. `wdi-build` MUST NOT be run; the code flow is
+  `/to-spec` → `/to-tickets` → `/implement-spec`, with tickets under `.scratch/<feature-slug>/issues/`.
+- The epic / story / sprint / wave layer is retired. `waves.yaml` and `stories.yaml` MUST NOT be
+  extended; a reference to a "wave" in the block below is history, not an instruction.
+- 17 skills MUST NOT be run. `AGENTS.md` § `## Method` names each with what to run instead, and is the
+  full statement of this boundary — read it before reaching for any skill.
+- Documents follow the code. The corpus is an input, never a gate: where a document and the code
+  disagree, the code wins and the **document** is what gets corrected.
+
 <!-- BEGIN:wdi-method -->
 This repo uses **WDI Method**. It wraps BMad; it does not replace it. This marked
 block is owned by the WDI Method package and is **replaced on every update**.

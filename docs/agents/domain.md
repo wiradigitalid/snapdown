@@ -2,6 +2,15 @@
 
 How the engineering skills should consume this repo's domain documentation when exploring the codebase.
 
+> **This repo does not use the layout below.** `DEC-011` gives the documents to WDI Method, which states
+> outright that it has no `docs/` layer for corpus or rules. Domain knowledge lives in `.what/`, design in
+> `.how/`, the glossary at `.control/product-glossary.md`, and a decision is a `DEC-` in
+> `.control/decisions/` — not an ADR under `docs/adr/`. Neither `CONTEXT.md` nor `docs/adr/` has ever
+> existed here and **neither MUST be created**; a second home for the same facts is drift, not tidiness.
+> Read the rest of this file for its reasoning about single-context repos, and take the locations from
+> `AGENTS.md` § `## The thing in your hand → its folder`. Where this file and `AGENTS.md` disagree,
+> `AGENTS.md` wins.
+
 ## Before exploring, read these
 
 - **`CONTEXT.md`** at the repo root, or

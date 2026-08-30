@@ -123,8 +123,16 @@ decisions:
     created: "2026-08-28"
   - id: DEC-011
     title: WDI Method owns the documents, mattpocock/skills owns the code, and documents follow the code
-    status: draft
+    status: applied
     file: .control/decisions/DEC-011-documents-are-wdi-code-is-mattpocock.md
     serves: []
-    touches: []
+    touches:
+      - AGENTS.md
+      - .agents/AGENTS.md
+      - .cursorrules
+      - .github/validate-baseline.txt
+      - _bmad/custom/bmad-correct-course.toml
+      - docs/agents/domain.md
+      - .claude/skills/
+      - .agents/skills/
     created: "2026-08-30"
