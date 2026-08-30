@@ -1,6 +1,6 @@
 # 01: Release builds fail with "LLVM ERROR: out of memory" because this machine has no pagefile and its commit limit is exhausted
 
-**Status:** ready-for-human
+**Status:** done
 
 **Superseded framing:** this ticket was first written as *"rustc crashes at opt-level 3"* and that was
 wrong. Recorded here rather than deleted, because the wrong version would have sent someone splitting
@@ -114,8 +114,34 @@ A GitHub runner has its own memory configuration, so this machine's commit exhau
 about CI. Whether the grown crate still builds there is genuinely open, and pushing the branch is the
 cheapest way to find out.
 
-- [ ] It is stated, with a CI run id as evidence, whether `cargo build --release --workspace` passes on
-      `windows-latest` for the current branch
+**Deferred, deliberately not a criterion of this ticket.** Whether CI still builds the grown crate is
+a question about a GitHub runner, not about this machine, and it cannot be answered from this branch at
+all: `desktop-ci.yml` triggers on `push` only for `[main, master, "kodesh87/*"]` and on `pull_request`
+only into `[main, master]`, and `eval/mattpocock-skills` matches none of them. `gh run list --branch
+eval/mattpocock-skills` returns nothing, so the pushes made during this work fired no run and were
+never going to. It gets answered by the PR that lands this branch on `main`, and that is where it now
+belongs.
+
+## Resolution
+
+Fixed 2026-08-30 by the owner setting the pagefile to system-managed. Verified from this machine, and
+one thing this ticket previously got wrong is worth keeping: **it took effect without a reboot.** I told
+the owner a reboot was needed, on the strength of `CommitLimit` still reading exactly RAM minutes after
+the setting changed — but that was Windows not having grown the file yet, not the setting being inert.
+
+Measured after the change, boot time unchanged at 2026-08-29 18:01:
+
+| | before | after |
+| --- | --- | --- |
+| `C:\pagefile.sys` | absent | 9,071 MB allocated, 137 MB in use |
+| Commit limit | 65,402 MB (= RAM) | 74,473 MB |
+| Committed | 58,365 MB | 64,427 MB |
+| Headroom | ~7 GB, and 0 at the time of the crashes | ~10 GB |
+
+A release build at opt-level 3 had already succeeded before this, in 2m16s, with `CARGO_BUILD_JOBS=1` —
+which is what proved opt-level was a red herring. **Whether the default parallel build now succeeds is
+untested**; the constraint is structurally gone, but nobody has run it. Do not read this resolution as
+permission to drop `CARGO_BUILD_JOBS=1` without trying it once.
 
 ## Two collateral traps, both of which cost time here
 
