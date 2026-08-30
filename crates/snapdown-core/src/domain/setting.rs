@@ -35,10 +35,30 @@ impl HotkeyAction {
         }
     }
 
+    /// The name the Reviewer sees on the Hotkeys tab, so a conflict message can name the action
+    /// that already holds a combination rather than only saying "another Snapdown action".
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Capture => "Capture a region",
+            Self::OpenEditor => "Open the Editor",
+        }
+    }
+
     pub fn to_setting_key(&self) -> SettingKey {
         match self {
             Self::Capture => SettingKey::HotkeyCapture,
             Self::OpenEditor => SettingKey::HotkeyOpenEditor,
+        }
+    }
+
+    /// Where the "enabled" toggle is stored - deliberately a SEPARATE key from the shortcut
+    /// itself, so switching a hotkey off does not erase the combination the Reviewer already
+    /// chose. Disabling used to mean clearing the shortcut to an empty string, which is
+    /// indistinguishable from "never bound one" and loses the combination on the way back on.
+    pub fn enabled_setting_key(&self) -> SettingKey {
+        match self {
+            Self::Capture => SettingKey::HotkeyCaptureEnabled,
+            Self::OpenEditor => SettingKey::HotkeyOpenEditorEnabled,
         }
     }
 
@@ -326,6 +346,8 @@ pub enum SettingKey {
     VaultPath,
     HotkeyCapture,
     HotkeyOpenEditor,
+    HotkeyCaptureEnabled,
+    HotkeyOpenEditorEnabled,
     QualityBudget,
     RunAtStartup,
     StartupRegistered,
@@ -340,6 +362,8 @@ impl SettingKey {
             Self::VaultPath => "vault_path",
             Self::HotkeyCapture => "hotkey_capture",
             Self::HotkeyOpenEditor => "hotkey_open_editor",
+            Self::HotkeyCaptureEnabled => "hotkey_capture_enabled",
+            Self::HotkeyOpenEditorEnabled => "hotkey_open_editor_enabled",
             Self::QualityBudget => "quality_budget",
             Self::RunAtStartup => "run_at_startup",
             Self::StartupRegistered => "startup.registered",
@@ -354,6 +378,8 @@ impl SettingKey {
             "vault_path" => Self::VaultPath,
             "hotkey_capture" => Self::HotkeyCapture,
             "hotkey_open_editor" => Self::HotkeyOpenEditor,
+            "hotkey_capture_enabled" => Self::HotkeyCaptureEnabled,
+            "hotkey_open_editor_enabled" => Self::HotkeyOpenEditorEnabled,
             "quality_budget" => Self::QualityBudget,
             "run_at_startup" => Self::RunAtStartup,
             "startup.registered" => Self::StartupRegistered,
@@ -450,6 +476,11 @@ mod tests {
             (SettingKey::VaultPath, "vault_path"),
             (SettingKey::HotkeyCapture, "hotkey_capture"),
             (SettingKey::HotkeyOpenEditor, "hotkey_open_editor"),
+            (SettingKey::HotkeyCaptureEnabled, "hotkey_capture_enabled"),
+            (
+                SettingKey::HotkeyOpenEditorEnabled,
+                "hotkey_open_editor_enabled",
+            ),
             (SettingKey::QualityBudget, "quality_budget"),
             (SettingKey::RunAtStartup, "run_at_startup"),
             (SettingKey::StartupRegistered, "startup.registered"),
@@ -499,6 +530,14 @@ mod tests {
         assert_eq!(
             HotkeyAction::Capture.default_shortcut(),
             DEFAULT_HOTKEY_CAPTURE
+        );
+        assert_eq!(
+            HotkeyAction::Capture.enabled_setting_key(),
+            SettingKey::HotkeyCaptureEnabled
+        );
+        assert_eq!(
+            HotkeyAction::OpenEditor.enabled_setting_key(),
+            SettingKey::HotkeyOpenEditorEnabled
         );
         assert_eq!(
             HotkeyAction::OpenEditor.default_shortcut(),

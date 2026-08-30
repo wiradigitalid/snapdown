@@ -219,7 +219,10 @@ fn parse_setting_value(key: &SettingKey, raw: &str) -> Result<SettingValue, Core
             }
             Ok(SettingValue::QualityBudget(qb))
         }
-        SettingKey::RunAtStartup | SettingKey::OpenEditorAfterCapture => {
+        SettingKey::RunAtStartup
+        | SettingKey::OpenEditorAfterCapture
+        | SettingKey::HotkeyCaptureEnabled
+        | SettingKey::HotkeyOpenEditorEnabled => {
             if let Ok(b) = raw.parse::<bool>() {
                 Ok(SettingValue::Boolean(b))
             } else {

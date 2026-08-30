@@ -173,3 +173,17 @@ by an earlier UI audit was still running hours later; `tauri build` died with *f
 `Snapdown.exe`: Access is denied (os error 5)*, which reads like a permissions problem and is not.
 `Get-Process -Name Snapdown` before rebuilding, and treat a still-running instance as cleanup the
 same way a stale worktree is.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as markdown files under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout (`CONTEXT.md` + `docs/adr/` at the repo root). See `docs/agents/domain.md`.

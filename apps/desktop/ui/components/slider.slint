@@ -12,6 +12,20 @@ export component SdSlider inherits Rectangle {
     in property <float> minimum: 0;
     in property <float> maximum: 100;
     in property <float> value: 0;
+    // The track's own ends, when they differ from `minimum`/`maximum`. Left at the defaults below,
+    // the track IS the value range and this behaves exactly as it always has - every existing
+    // caller (font size, the pixel cap) gets that unchanged.
+    //
+    // Set `track-minimum` below `minimum` to draw a FULL 0-100-shaped track while the value itself
+    // still floors at `minimum` - the resize-percent slider's own case: a domain floor of 25%
+    // (`MIN_RESIZE_PERCENT`) put 50% a third of the way along a 25-100 track instead of at the
+    // middle, which is what the owner asked about (*"kenapa 50% itu di posisi ini?"*). The thumb
+    // still stops dead at the pixel position `minimum` maps to and goes no further - a hard floor,
+    // not a rubber-band bounce - because `at()` clamps the VALUE to `[minimum, maximum]` after
+    // mapping the pointer through the wider track, so a drag past that point keeps producing the
+    // same clamped value and the thumb simply does not move again until the pointer returns.
+    in property <float> track-minimum: root.minimum;
+    in property <float> track-maximum: root.maximum;
 
     callback changed(float);
     // Fires throughout the drag, for a caller that can show the value live. The Properties panel
@@ -26,12 +40,20 @@ export component SdSlider inherits Rectangle {
     // What is drawn: the drag while there is one, the committed value otherwise.
     private property <float> shown: root.dragging ? root.pending : root.value;
     private property <float> span: Math.max(0.0001, root.maximum - root.minimum);
+    private property <float> track-span: Math.max(0.0001, root.track-maximum - root.track-minimum);
+    // The thumb's position is relative to the TRACK's range, not the value's - the two only differ
+    // when `track-minimum`/`track-maximum` are set, and are the same property otherwise.
     private property <float> fraction:
-        Math.max(0.0, Math.min(1.0, (root.shown - root.minimum) / root.span));
+        Math.max(0.0, Math.min(1.0, (root.shown - root.track-minimum) / root.track-span));
+    // Where the floor sits on the track, as a fraction - only meaningful, and only drawn, when the
+    // track actually extends past it.
+    private property <float> floor-fraction:
+        Math.max(0.0, Math.min(1.0, (root.minimum - root.track-minimum) / root.track-span));
 
     function at(position: length) -> float {
-        return root.minimum
-            + root.span * Math.max(0.0, Math.min(1.0, position / Math.max(1px, root.width)));
+        let raw: float = root.track-minimum
+            + root.track-span * Math.max(0.0, Math.min(1.0, position / Math.max(1px, root.width)));
+        return Math.max(root.minimum, Math.min(root.maximum, raw));
     }
 
     // The track, and the part of it behind the thumb.
@@ -71,6 +93,20 @@ export component SdSlider inherits Rectangle {
         border-color: Theme.text-on-accent;
         drop-shadow-blur: 3px;
         drop-shadow-color: Theme.shadow-soft;
+    }
+
+    // A short tick where the floor sits on a track drawn wider than the value range - the visible
+    // reason the thumb stops there and goes no further left. Only drawn when there is a floor to
+    // mark: on every caller that leaves `track-minimum` at its default, `floor-fraction` is 0 and
+    // this would sit off the left edge of the track anyway, so it is skipped rather than drawn
+    // pointlessly at x: 0.
+    if root.track-minimum < root.minimum : Rectangle {
+        x: parent.width * root.floor-fraction - 1px;
+        y: (parent.height - self.height) / 2;
+        width: 2px;
+        height: 10px;
+        border-radius: 1px;
+        background: Theme.text-dim;
     }
 
     TouchArea {

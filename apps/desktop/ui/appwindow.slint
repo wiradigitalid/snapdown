@@ -1435,6 +1435,25 @@ export component AppWindow inherits Window {
     // chord and the row confirms it reached Snapdown, which is the only way to know a global
     // hotkey works without leaving the screen that set it.
     in-out property <string> hotkey-last-fired: "";
+    // The same event, worded for the Reviewer - "Ctrl+Alt+S (Trigger a Capture) reached Snapdown
+    // just now." Separate from `hotkey-last-fired` above: that one is an action ID, compared against
+    // a specific row; this one is a full sentence, shown once, centrally, in the Key Check panel -
+    // moved there from a per-row line at the owner's request, since "does this reach Snapdown" is one
+    // fact about the whole tab, not a per-row one. Clears on the same timer as `hotkey-last-fired`.
+    in-out property <string> hotkey-last-fired-text: "";
+    // Feedback for the Hotkeys tab's own sticky bottom panel - a validation error, a conflict, or
+    // a bind confirmation. Set by Rust instead of the global toast for anything hotkey-related,
+    // so it renders in the Settings screen the Reviewer is looking at, not the Editor behind it.
+    in-out property <string> hotkey-feedback: "";
+    in-out property <bool> hotkey-feedback-is-error: true;
+    in-out property <string> hotkey-meta-key-label: "Win";
+    // A live readout of the chord being composed, for the Key Check panel. RUST composes this too -
+    // `format_chord_preview` in `main.rs` - so a raw control character (Enter, an arrow key with no
+    // modifier) never lands here as unreadable tofu the way it could from a naive Slint-side echo of
+    // `event.text`. Two-way: Slint clears it when a new row starts listening or Escape cancels one;
+    // Rust sets it on every key event otherwise, and deliberately leaves it alone on a SUCCESSFUL
+    // bind, so the Key Check panel keeps showing what was just proven to work.
+    in-out property <string> hotkey-chord-preview: "";
 
     callback settings-closed();
     callback startup-toggled(bool);
@@ -1443,8 +1462,9 @@ export component AppWindow inherits Window {
     callback vault-reveal-clicked();
     callback budget-chosen(string);
     callback budget-advanced(int, int, int);
-    callback hotkey-key-pressed(string, bool, bool, bool, string);
+    callback hotkey-key-pressed(string, bool, bool, bool, bool, string);
     callback hotkey-cleared(string);
+    callback hotkey-enabled-toggled(string, bool);
     callback minimize-clicked();
     callback maximize-clicked();
     callback close-clicked();
@@ -2874,11 +2894,13 @@ export component AppWindow inherits Window {
                                                 text-size: 12px;
                                                 commit-on-enter: true;
                                                 mono: true;
-                                                // Bound to the model, so dragging the slider moves
-                                                // the number too - and so a value the store refused
-                                                // reverts here rather than sitting in the field
-                                                // looking accepted.
-                                                text: Math.round(root.selected-annotation-font-size);
+                                                // Live while the slider is being dragged
+                                                // (`live-font-size`), the committed model value
+                                                // otherwise - so a value the store refused reverts
+                                                // here rather than sitting in the field looking
+                                                // accepted.
+                                                text: Math.round(root.live-font-size > 0
+                                                    ? root.live-font-size : root.selected-annotation-font-size);
                                                 accepted => {
                                                     // Clamped to the slider's own range: the field
                                                     // is a second way to set one value, not a second
@@ -2993,7 +3015,10 @@ export component AppWindow inherits Window {
         Timer {
             interval: 4s;
             running: root.hotkey-last-fired != "";
-            triggered => { root.hotkey-last-fired = ""; }
+            triggered => {
+                root.hotkey-last-fired = "";
+                root.hotkey-last-fired-text = "";
+            }
         }
 
         // Clears itself. A result line that stays forever becomes furniture, and the next result is
@@ -3023,6 +3048,11 @@ export component AppWindow inherits Window {
             bridge-status: root.bridge-status;
             listening <=> root.hotkey-listening;
             last-fired: root.hotkey-last-fired;
+            last-fired-text: root.hotkey-last-fired-text;
+            hotkey-feedback <=> root.hotkey-feedback;
+            hotkey-feedback-is-error <=> root.hotkey-feedback-is-error;
+            hotkey-meta-key-label: root.hotkey-meta-key-label;
+            chord-preview <=> root.hotkey-chord-preview;
 
             closed => { root.settings-closed(); }
             startup-toggled(on) => { root.startup-toggled(on); }
@@ -3033,10 +3063,11 @@ export component AppWindow inherits Window {
             budget-advanced(edge, quality, percent) => {
                 root.budget-advanced(edge, quality, percent);
             }
-            hotkey-pressed(action, ctrl, alt, shift, text) => {
-                root.hotkey-key-pressed(action, ctrl, alt, shift, text);
+            hotkey-pressed(action, ctrl, alt, shift, win, text) => {
+                root.hotkey-key-pressed(action, ctrl, alt, shift, win, text);
             }
             hotkey-cleared(action) => { root.hotkey-cleared(action); }
+            hotkey-enabled-toggled(action, on) => { root.hotkey-enabled-toggled(action, on); }
         }
 
         // MOVING THE VAULT - confirmed, because it moves every file the product owns.
@@ -3090,7 +3121,7 @@ export component AppWindow inherits Window {
                     }
 
                     Text {
-                        text: "If the move fails part-way, nothing is lost: the old folder stays in use until every file has arrived. Snapdown needs a restart afterwards.";
+                        text: "If the move fails part-way, nothing is lost: the old folder stays in use until every file has arrived. Snapdown will restart itself once the move is done.";
                         font-size: 10px;
                         color: root.text-dim;
                         wrap: word-wrap;

@@ -66,74 +66,93 @@ export component SdSegmented inherits Rectangle {
 // every control. `radius-pill` only for a status chip, never a button."* A pill-shaped switch was
 // drawn here first and the owner rejected it on sight - it was the one control in the product with a
 // shape nothing else has.
-export component SdCheckbox inherits HorizontalLayout {
+export component SdCheckbox inherits Rectangle {
     in property <bool> checked;
     in property <string> text;
     in property <string> hint;
 
     callback toggled(bool);
 
-    spacing: 8px;
+    // A plain `Rectangle` root, not a `HorizontalLayout` one: a Layout element manages its own
+    // DIRECT children as side-by-side cells, so a `TouchArea` declared as one of those children
+    // becomes its own narrow cell rather than an overlay covering the row - the click target this
+    // component means to have shrinks to nearly nothing. Overlaying the whole row needs the
+    // content and the `TouchArea` to be SIBLINGS under a non-layout root, exactly like
+    // `SdActionButton` does it.
+    HorizontalLayout {
+        spacing: 8px;
 
-    Rectangle {
-        width: 15px;
-        // A full-height box so the tick can be centred against the FIRST line of a wrapped label -
-        // the same reason `SdIconLabel` exists, and the same trap: a fixed-size child in a layout
-        // is placed at the top of the cross axis.
-        VerticalLayout {
-            alignment: start;
-            Rectangle {
-                width: 15px;
-                height: 15px;
-                border-radius: Theme.radius-sharp;
-                background: root.checked ? Theme.accent-primary : Theme.bg-card;
-                border-width: 1px;
-                border-color: root.checked ? Theme.accent-primary : Theme.border-strong;
+        Rectangle {
+            width: 15px;
+            // Sized to the LABEL'S OWN first line, not the full row: `alignment: start` alone put
+            // the box at the row's bare top edge, which is not the same height as the text's own
+            // cap-height/line-box - for a single-line label (both checkboxes in this product
+            // today) that read as visibly too high. Matching `label-text.preferred-height`
+            // and centring within just that gives the box the label's OWN line metrics to sit
+            // against.
+            //
+            // Still not `alignment: center` against the WHOLE label column though: `SdIconLabel`
+            // exists for the same reason this comment used to warn about - a wrapped label would
+            // make this height span every line, centring the box against the middle of the block
+            // rather than its first line. No checkbox here wraps today; if one needs to, this
+            // height reference needs to become the first line's alone, not the whole label's.
+            height: label-text.preferred-height;
+            VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 15px;
+                    height: 15px;
+                    border-radius: Theme.radius-sharp;
+                    background: root.checked ? Theme.accent-primary : Theme.bg-card;
+                    border-width: 1px;
+                    border-color: root.checked ? Theme.accent-primary : Theme.border-strong;
 
-                // A drawn tick, not the `✓` glyph. The bare glyph fell back to whatever the font
-                // had and rendered wrong twice in this product - the Marker delete affordance and
-                // the modal close both had to become images for the same reason.
-                if root.checked : Path {
-                    x: 3px;
-                    y: 3px;
-                    width: 9px;
-                    height: 9px;
-                    viewbox-x: 0;
-                    viewbox-y: 0;
-                    viewbox-width: 9;
-                    viewbox-height: 9;
-                    stroke: Theme.text-on-accent;
-                    stroke-width: 1.6px;
-                    commands: "M 0.5 4.5 L 3.3 7.3 L 8.5 1.4";
+                    // A drawn tick, not the `✓` glyph. The bare glyph fell back to whatever the font
+                    // had and rendered wrong twice in this product - the Marker delete affordance and
+                    // the modal close both had to become images for the same reason.
+                    if root.checked : Path {
+                        x: 3px;
+                        y: 3px;
+                        width: 9px;
+                        height: 9px;
+                        viewbox-x: 0;
+                        viewbox-y: 0;
+                        viewbox-width: 9;
+                        viewbox-height: 9;
+                        stroke: Theme.text-on-accent;
+                        stroke-width: 1.6px;
+                        commands: "M 0.5 4.5 L 3.3 7.3 L 8.5 1.4";
+                    }
                 }
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 3px;
+            alignment: start;
+
+            label-text := Text {
+                text: root.text;
+                font-size: 13px;
+                color: Theme.text-primary;
+                wrap: word-wrap;
+                font-family: "IBM Plex Sans";
+            }
+
+            if root.hint != "" : Text {
+                text: root.hint;
+                font-size: 10px;
+                color: Theme.text-dim;
+                wrap: word-wrap;
+                font-family: "IBM Plex Sans";
             }
         }
     }
 
-    VerticalLayout {
-        horizontal-stretch: 1;
-        spacing: 3px;
-        alignment: start;
-
-        Text {
-            text: root.text;
-            font-size: 13px;
-            color: Theme.text-primary;
-            wrap: word-wrap;
-            font-family: "IBM Plex Sans";
-        }
-
-        if root.hint != "" : Text {
-            text: root.hint;
-            font-size: 10px;
-            color: Theme.text-dim;
-            wrap: word-wrap;
-            font-family: "IBM Plex Sans";
-        }
-    }
-
-    // Declared last so it is above both, and covers the label as well as the box: a 15px target is
-    // not a target, and the label is the part people aim at.
+    // A sibling of the layout above, not one of its cells - so it overlays the whole row (box and
+    // label both) instead of taking its own column. A 15px box is not a click target; the label is
+    // the part people actually aim at.
     TouchArea {
         mouse-cursor: MouseCursor.pointer;
         clicked => { root.toggled(!root.checked); }

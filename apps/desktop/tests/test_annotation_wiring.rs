@@ -656,7 +656,7 @@ fn the_settings_screen_reads_from_the_registrars_and_the_store() {
     for source in [
         "startup.is_enabled()",
         "open_editor_after_capture(ctx)",
-        "ctx.vault_path.display()",
+        "configured_vault_path(ctx).display()",
         "current_budget(ctx)",
         "hotkeys.get_bindings()",
         "hotkeys.get_startup_failures()",

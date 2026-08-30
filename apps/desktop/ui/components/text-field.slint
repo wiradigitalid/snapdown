@@ -22,6 +22,12 @@ export component SdTextField inherits Rectangle {
     // a note that scrolls off to the right hides what has just been typed. Those two are compatible:
     // `TextInput::layout_info` in i-slint-core consults `wrap()` without regard for `single_line()`.
     in property <bool> commit-on-enter: false;
+    // Fires `accepted` when the field loses focus, not only on Enter. Off by default so a note or
+    // title field is not committed just because the Reviewer clicked somewhere else mid-thought;
+    // a numeric field paired with a slider wants both, since clicking the slider itself is a
+    // perfectly normal way to leave the field without ever pressing Enter - and the field is left
+    // showing what was typed, uncommitted, until it does.
+    in property <bool> commit-on-blur: false;
     in property <length> pad: 10px;
     // FLAT: no fill, and no border until it is hovered or focused.
     //
@@ -48,6 +54,12 @@ export component SdTextField inherits Rectangle {
 
     callback edited();
     callback accepted();
+
+    changed has-focus => {
+        if (root.commit-on-blur && !root.has-focus) {
+            root.accepted();
+        }
+    }
 
     public function focus-input() {
         input.focus();
