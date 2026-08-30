@@ -5075,9 +5075,29 @@ defects:
       `blur_rect` call stays under 3000ms and was verified by mutation: temporarily rewiring
       `blur_rect` back to the naive reference implementation made it fail at 3865ms.
 
-      NOT fully closed: 304.6ms at 4K is a large improvement (11x) but still not imperceptible on the
-      UI thread. Closing that gap needs SIMD or parallelism, which changes the execution model rather
-      than being a same-output algorithmic fix, and was left out of this fix's scope. Worth its own
-      ticket if 4K captures turn out to be common. Ticket:
+      FOLLOW-UP, same day: the owner asked for further optimization. `box_pass` was split across CPU
+      cores by row band using `std::thread::scope` (no new dependency, no `unsafe`) once an image
+      reaches `PARALLEL_ROW_BAND_PIXEL_THRESHOLD` (1,000,000 pixels; below that, thread-spawn
+      overhead was measured to cost more than it saves). Row bands are safe because both directions
+      are keyed by row: a horizontal row is independent of every other row, and a vertical row band
+      only needs one extra full-window resum at its own first row instead of assuming a sum carried
+      over from a row another thread owns.
+
+      Measured after (release build, default radius, 12 logical cores): 1920x1080 57.6ms (was
+      78.9ms), 2560x1440 91.4ms (was 127.3ms), 3840x2160 212.8ms (was 304.6ms) - sub-linear in core
+      count because this is memory-bandwidth-bound, not compute-bound. Correctness across the
+      threaded path specifically is covered by a new `(1400, 901, 16)` case in the same guard test
+      (1,261,400px, above the threshold, an uneven row count to force an uneven last band). A second
+      mutation-verified performance guard,
+      `blur_rect_above_the_parallel_threshold_stays_faster_than_running_sequentially`, catches
+      threading silently failing to engage (the first guard's 800x600 case is below the threshold and
+      would not notice that regression) - a 1920x1080 call under 1200ms, which failed at 1634ms when
+      the sequential branch was forced on, consistent with the ~1668ms this took before threading
+      existed.
+
+      STILL not fully closed at 4K: ~213ms is a 16x cumulative improvement over the original 3402ms
+      but still not strictly imperceptible. Further reduction would need SIMD (explicit
+      vectorization), a different kind of change again, and was left out here for the same reason
+      parallelism was left out of the first pass: it wasn't asked for yet. Ticket:
       `.scratch/filmstrip-blur-perf/issues/01-box-pass-no-longer-o-radius-per-pixel.md`.
     status: fixed

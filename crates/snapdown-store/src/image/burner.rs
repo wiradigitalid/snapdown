@@ -505,22 +505,37 @@ impl MarkerBurner {
         }
     }
 
-    /// One separable box pass, horizontal or vertical, with the window clamped to the edges.
+    /// Below this many total pixels, splitting the work across threads costs more than it saves —
+    /// measured on this machine (debug profile, worst case to spawn from): an 800x600 image (480,000
+    /// pixels) still ran faster single-threaded than split across threads, a 1920x1080 image
+    /// (2,073,600 pixels) was clearly faster split. Chosen at 1,000,000 as a round number between
+    /// the two measured points, not a value CI variance could flip either way.
+    const PARALLEL_ROW_BAND_PIXEL_THRESHOLD: usize = 1_000_000;
+
+    /// One separable box pass, horizontal or vertical, with the window clamped to the edges, split
+    /// across threads by row band when the image is big enough to make that worth it.
     ///
-    /// The horizontal and vertical cases are handled separately rather than through one shared
-    /// "line/offset" indexer, because a shared indexer forces the vertical case to walk memory in
-    /// column order — a stride of `width` pixels between every read, which is a cache miss on
-    /// nearly every pixel for a screenshot-sized image and was the dominant remaining cost after
-    /// the sliding-window fix that removed the O(radius) factor. Measured on a release build, whole
-    /// `blur_rect` call, default radius, 3840x2160: ~3.4s with the original full-window
-    /// resummation, ~720ms with a sliding window but still a per-column strided sum, ~305ms with
-    /// this row-at-a-time rewrite. Still not imperceptible at that resolution — see
-    /// `.scratch/filmstrip-blur-perf/issues/01-box-pass-no-longer-o-radius-per-pixel.md` for the
-    /// remaining gap and why closing it further (SIMD, parallelism) was left out of this fix's
-    /// scope. The window's bounds (`lo`, `hi`, `count`) depend only on the row or column INDEX, not
-    /// on which line they belong to, so the vertical pass processes a whole row at a time —
-    /// maintaining one running sum per column — instead of one column's full height at a time,
-    /// keeping every read and write sequential in the same row-major layout the image already has.
+    /// Both directions are keyed by ROW: `box_pass_horizontal_band` treats each row as fully
+    /// independent (no state carries between rows), and `box_pass_vertical_band` treats a
+    /// contiguous run of rows as one unit of work, carrying one running sum per column between the
+    /// rows inside that run. That means a row band can be handed to a thread as a self-contained
+    /// job - `target`'s rows are split with `split_at_mut` into disjoint, non-overlapping bands
+    /// (safe, no unsafe code), `source` is read-only and shared, and each band's vertical job pays a
+    /// one-time full-window resum at its own first row (`radius` * `width` extra work, negligible
+    /// next to the rest of the band) instead of assuming a sum carried over from a row owned by
+    /// another thread.
+    ///
+    /// Splitting the OTHER way - by column, for the vertical case - was rejected: a column range
+    /// is not one contiguous slice of `target` (a row-major buffer), so writing to it from a thread
+    /// would need `unsafe` pointer arithmetic to convince the borrow checker the ranges are actually
+    /// disjoint. Row bands stay entirely in safe Rust.
+    ///
+    /// Measured on a release build, whole `blur_rect` call, default radius, 3840x2160, 12 logical
+    /// cores on this machine: ~3.4s with the original full-window resummation, ~720ms with a sliding
+    /// window but a per-column strided sum, ~305ms with a row-at-a-time single-threaded rewrite,
+    /// ~213ms with this row-band threading added on top. Less than the core count would suggest -
+    /// this is a memory-bandwidth-bound workload (each pass reads and writes the whole image), not a
+    /// compute-bound one, so more threads stop helping well before all 12 cores are saturated.
     fn box_pass(
         source: &[[f32; 4]],
         target: &mut [[f32; 4]],
@@ -532,17 +547,107 @@ impl MarkerBurner {
         if width == 0 || height == 0 {
             return;
         }
-        if horizontal {
-            for row in 0..height {
-                let row_start = row * width;
-                let mut lo = 0;
-                let mut hi = radius.min(width - 1);
-                let mut sum = [0.0f32; 4];
-                for col in lo..=hi {
-                    let pixel = source[row_start + col];
+
+        let threads = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1)
+            .min(height);
+
+        if threads <= 1 || width * height < Self::PARALLEL_ROW_BAND_PIXEL_THRESHOLD {
+            if horizontal {
+                Self::box_pass_horizontal_band(source, target, width, radius, 0, height);
+            } else {
+                Self::box_pass_vertical_band(source, target, width, height, radius, 0, height);
+            }
+            return;
+        }
+
+        let rows_per_band = height.div_ceil(threads);
+        std::thread::scope(|scope| {
+            let mut remaining_target = target;
+            let mut row_start = 0;
+            while row_start < height {
+                let band_rows = rows_per_band.min(height - row_start);
+                let (band_target, rest) = remaining_target.split_at_mut(band_rows * width);
+                remaining_target = rest;
+                let row_end = row_start + band_rows;
+                scope.spawn(move || {
+                    if horizontal {
+                        Self::box_pass_horizontal_band(
+                            source,
+                            band_target,
+                            width,
+                            radius,
+                            row_start,
+                            row_end,
+                        );
+                    } else {
+                        Self::box_pass_vertical_band(
+                            source,
+                            band_target,
+                            width,
+                            height,
+                            radius,
+                            row_start,
+                            row_end,
+                        );
+                    }
+                });
+                row_start = row_end;
+            }
+        });
+    }
+
+    /// Rows `[row_start, row_end)` of the horizontal pass. Each row is independent of every other
+    /// row, so this is the whole of what a thread needs to do its share safely: read anywhere in
+    /// `source` (shared, read-only), write only into `band_target`, which the caller has already
+    /// carved out as exactly rows `[row_start, row_end)` and nothing else.
+    fn box_pass_horizontal_band(
+        source: &[[f32; 4]],
+        band_target: &mut [[f32; 4]],
+        width: usize,
+        radius: usize,
+        row_start: usize,
+        row_end: usize,
+    ) {
+        for row in row_start..row_end {
+            let source_row = row * width;
+            let band_row = (row - row_start) * width;
+
+            let mut lo = 0;
+            let mut hi = radius.min(width - 1);
+            let mut sum = [0.0f32; 4];
+            for col in lo..=hi {
+                let pixel = source[source_row + col];
+                for channel in 0..4 {
+                    sum[channel] += pixel[channel];
+                }
+            }
+
+            let count = (hi - lo + 1) as f32;
+            let mut out = [0.0f32; 4];
+            for channel in 0..4 {
+                out[channel] = sum[channel] / count;
+            }
+            band_target[band_row] = out;
+
+            for col in 1..width {
+                let next_lo = col.saturating_sub(radius);
+                let next_hi = (col + radius).min(width - 1);
+
+                if next_hi > hi {
+                    let pixel = source[source_row + next_hi];
                     for channel in 0..4 {
                         sum[channel] += pixel[channel];
                     }
+                    hi = next_hi;
+                }
+                if next_lo > lo {
+                    let pixel = source[source_row + lo];
+                    for channel in 0..4 {
+                        sum[channel] -= pixel[channel];
+                    }
+                    lo = next_lo;
                 }
 
                 let count = (hi - lo + 1) as f32;
@@ -550,48 +655,35 @@ impl MarkerBurner {
                 for channel in 0..4 {
                     out[channel] = sum[channel] / count;
                 }
-                target[row_start] = out;
-
-                for col in 1..width {
-                    let next_lo = col.saturating_sub(radius);
-                    let next_hi = (col + radius).min(width - 1);
-
-                    if next_hi > hi {
-                        let pixel = source[row_start + next_hi];
-                        for channel in 0..4 {
-                            sum[channel] += pixel[channel];
-                        }
-                        hi = next_hi;
-                    }
-                    if next_lo > lo {
-                        let pixel = source[row_start + lo];
-                        for channel in 0..4 {
-                            sum[channel] -= pixel[channel];
-                        }
-                        lo = next_lo;
-                    }
-
-                    let count = (hi - lo + 1) as f32;
-                    let mut out = [0.0f32; 4];
-                    for channel in 0..4 {
-                        out[channel] = sum[channel] / count;
-                    }
-                    target[row_start + col] = out;
-                }
+                band_target[band_row + col] = out;
             }
-            return;
         }
+    }
 
-        // One running sum per column, updated a whole row at a time — see the doc comment above.
+    /// Rows `[row_start, row_end)` of the vertical pass, one running sum per column carried between
+    /// the rows INSIDE this band only. `lo`/`hi`/`count` at any row depend only on that row's index
+    /// and `radius` — never on which band owns it — so a band starting anywhere still computes the
+    /// exact values the single-threaded version would have: the only difference is that a band's
+    /// first row pays for a real window resum (there is no adjacent row's sum to carry forward from
+    /// a different thread), where the single-threaded version only pays that once, for row 0.
+    fn box_pass_vertical_band(
+        source: &[[f32; 4]],
+        band_target: &mut [[f32; 4]],
+        width: usize,
+        height: usize,
+        radius: usize,
+        row_start: usize,
+        row_end: usize,
+    ) {
         let mut sums = vec![[0.0f32; 4]; width];
-        let mut lo = 0;
-        let mut hi = radius.min(height - 1);
+        let mut lo = row_start.saturating_sub(radius);
+        let mut hi = (row_start + radius).min(height - 1);
         for row in lo..=hi {
-            let row_start = row * width;
-            for col in 0..width {
-                let pixel = source[row_start + col];
+            let source_row = row * width;
+            for (col, sum) in sums.iter_mut().enumerate() {
+                let pixel = source[source_row + col];
                 for channel in 0..4 {
-                    sums[col][channel] += pixel[channel];
+                    sum[channel] += pixel[channel];
                 }
             }
         }
@@ -602,43 +694,43 @@ impl MarkerBurner {
                 for channel in 0..4 {
                     out[channel] = sum[channel] / count;
                 }
-                target[col] = out;
+                band_target[col] = out;
             }
         }
 
-        for row in 1..height {
+        for row in (row_start + 1)..row_end {
             let next_lo = row.saturating_sub(radius);
             let next_hi = (row + radius).min(height - 1);
 
             if next_hi > hi {
-                let row_start = next_hi * width;
-                for col in 0..width {
-                    let pixel = source[row_start + col];
+                let source_row = next_hi * width;
+                for (col, sum) in sums.iter_mut().enumerate() {
+                    let pixel = source[source_row + col];
                     for channel in 0..4 {
-                        sums[col][channel] += pixel[channel];
+                        sum[channel] += pixel[channel];
                     }
                 }
                 hi = next_hi;
             }
             if next_lo > lo {
-                let row_start = lo * width;
-                for col in 0..width {
-                    let pixel = source[row_start + col];
+                let source_row = lo * width;
+                for (col, sum) in sums.iter_mut().enumerate() {
+                    let pixel = source[source_row + col];
                     for channel in 0..4 {
-                        sums[col][channel] -= pixel[channel];
+                        sum[channel] -= pixel[channel];
                     }
                 }
                 lo = next_lo;
             }
 
             let count = (hi - lo + 1) as f32;
-            let row_start = row * width;
+            let band_row = (row - row_start) * width;
             for (col, sum) in sums.iter().enumerate() {
                 let mut out = [0.0f32; 4];
                 for channel in 0..4 {
                     out[channel] = sum[channel] / count;
                 }
-                target[row_start + col] = out;
+                band_target[band_row + col] = out;
             }
         }
     }
@@ -1085,6 +1177,10 @@ mod box_pass_regression_guard {
             (8, 6, 10),
             (37, 23, 5),
             (64, 64, 16),
+            // Above `PARALLEL_ROW_BAND_PIXEL_THRESHOLD`, so this exercises the threaded row-band
+            // path, not just the sequential one every smaller case above takes. A height not evenly
+            // divisible by the machine's thread count forces at least one uneven, shorter last band.
+            (1400, 901, 16),
         ];
         for &(width, height, radius) in cases {
             for horizontal in [true, false] {
@@ -1128,6 +1224,28 @@ mod box_pass_regression_guard {
             elapsed.as_millis() < 3000,
             "blur_rect over an 800x600 image took {}ms; the O(radius) full-window resummation this \
              guard exists to catch took several seconds at the same size on this machine",
+            elapsed.as_millis()
+        );
+    }
+
+    /// The guard above never exercises the threaded path: 800x600 is 480,000 pixels, below
+    /// `PARALLEL_ROW_BAND_PIXEL_THRESHOLD` (1,000,000), so it only ever proves the sequential branch
+    /// stays fast. This one uses a size above that threshold, so a regression that silently stops
+    /// threading from engaging (a broken condition, a threshold raised past reason, `available_
+    /// parallelism` always falling through to its `unwrap_or(1)`) fails this rather than going
+    /// unnoticed. Measured on this machine, debug profile: threaded, 1920x1080 took ~455ms; with
+    /// threading not engaging at all (measured before it existed, same profile, same size) it took
+    /// ~1668ms. 1200ms sits between the two with margin on both sides.
+    #[test]
+    fn blur_rect_above_the_parallel_threshold_stays_faster_than_running_sequentially() {
+        let mut img = RgbaImage::from_pixel(1920, 1080, Rgba([120, 130, 140, 255]));
+        let start = std::time::Instant::now();
+        MarkerBurner::blur_rect(&mut img, 0, 0, 1920, 1080, 16);
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_millis() < 1200,
+            "blur_rect over a 1920x1080 image (above the parallel threshold) took {}ms; expected \
+             well under the ~1668ms this took without the threaded row-band split engaging at all",
             elapsed.as_millis()
         );
     }
