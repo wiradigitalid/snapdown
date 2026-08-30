@@ -1662,7 +1662,7 @@ impl ShortcutRefusal {
                     .to_string()
             }
             Self::UnsupportedKey(key) => {
-                format!("Snapdown cannot register the {key} key as part of a shortcut.")
+                format!("Snapdown cannot register {key} as part of a shortcut.")
             }
             Self::Reserved { owner, advice } if advice.is_empty() => {
                 format!("Windows uses this combination to {owner}. It cannot be reassigned.")
@@ -1816,10 +1816,14 @@ fn displayable_key_text(text: &str) -> Option<String> {
     }
     if text.chars().count() == 1 {
         let ch = text.chars().next().unwrap_or(' ');
-        return if ch.is_control() {
-            None
-        } else {
+        // Control characters are Slint's bare-modifier signal, already excluded elsewhere. Anything
+        // outside letters/digits/ASCII punctuation is a codepoint this product has no name for - a
+        // private-use-area key code, say - and showing it raw is how a tofu glyph like `ℐ` ends up
+        // in a Reviewer-facing sentence instead of a word they can read.
+        return if ch.is_alphanumeric() || ch.is_ascii_punctuation() {
             Some(text.to_uppercase())
+        } else {
+            None
         };
     }
     // A named key already spelled out by Slint - `F5`, `Home`, `Left` - safe to show as-is.
@@ -1904,7 +1908,11 @@ fn shortcut_from_key(
     let key = if text.chars().count() == 1 {
         let ch = text.chars().next().unwrap_or(' ');
         if !ch.is_ascii_alphanumeric() {
-            return Err(ShortcutRefusal::UnsupportedKey(format!("'{ch}'")));
+            let key_desc = match displayable_key_text(text) {
+                Some(label) => format!("the '{label}' key"),
+                None => "this key".to_string(),
+            };
+            return Err(ShortcutRefusal::UnsupportedKey(key_desc));
         }
         text.to_uppercase()
     } else {
@@ -2774,24 +2782,34 @@ impl Drop for LiveOverlay {
     }
 }
 
-/// Crops the capture canvas to the selected region, shrinks it to the active QualityBudget,
-/// writes it to the Vault, and records the Finding plus its note.
+/// A selected region, cropped out of the canvas and put through the Quality Budget: everything the
+/// two things you can do with a capture have in common.
 ///
-/// `source` is the canvas as raw RGBA8 bytes, `source_size` pixels, and `region` is in that
-/// canvas's own pixel space - the same space the overlay reports its selection in, so no scale
-/// conversion is involved. It is borrowed rather than owned as an `RgbaImage` because the canvas
-/// now lives in the buffer the overlay presents, and owning a second copy of it is exactly the
-/// cost `BUG-28` was about.
+/// Extracted from `persist_finding` when the copy-to-clipboard path arrived, rather than copied into
+/// it. The clamp arithmetic below is the reason: it is the only thing standing between a drag
+/// released off the edge of the desktop and an out-of-bounds crop, and two copies of it would drift.
+struct PreparedRegion {
+    /// PNG bytes, already reduced.
+    bytes: Vec<u8>,
+    /// The dimensions of `bytes`, which are the reduced ones - NOT the crop's.
+    width: u32,
+    height: u32,
+    /// The crop actually taken, clamped into the canvas. `x, y, w, h`.
+    crop: (u32, u32, u32, u32),
+    resolved: ResolvedPair,
+    budget_name: String,
+}
+
+/// Crops `region` out of `source` and applies the Quality Budget.
 ///
-/// Returns the new Finding's id, or `None` if the region could not be persisted.
-fn persist_finding(
+/// `source` is raw RGBA8, `source_size` its pixel dimensions, and `region` is in that same space -
+/// the space the overlay reports its selection in, so no scale conversion is involved.
+fn prepare_region(
     ctx: &AppContext,
     source: &[u8],
     source_size: (u32, u32),
     region: (u32, u32, u32, u32),
-    monitor_name: &str,
-    note_body: &str,
-) -> Option<String> {
+) -> Option<PreparedRegion> {
     let (src_w, src_h) = source_size;
     let (sel_x, sel_y, sel_w, sel_h) = region;
 
@@ -2844,10 +2862,158 @@ fn persist_finding(
         match ImageReducer::reduce_image(&png_bytes, orig_dims, &resolved, false) {
             Ok(red) => (red.bytes, red.dimensions.width, red.dimensions.height),
             Err(e) => {
-                eprintln!("Quality-budget reduction failed, storing the region unreduced: {e}");
+                eprintln!("Quality-budget reduction failed, using the region unreduced: {e}");
                 (png_bytes, crop_w, crop_h)
             }
         };
+
+    Some(PreparedRegion {
+        bytes: reduced_bytes,
+        width: final_w,
+        height: final_h,
+        crop: (crop_x, crop_y, crop_w, crop_h),
+        resolved,
+        budget_name: qb.named.display_name().to_string(),
+    })
+}
+
+/// What a copy chord in the capture overlay should copy.
+///
+/// This is the whole text-vs-image rule, and it lives here rather than in `appwindow.slint` on
+/// purpose. The overlay's note field takes focus the moment the note panel appears, so both chords
+/// arrive at a focused `TextInput` - which means Slint has to be involved in DELIVERING them, and the
+/// temptation is to let it decide as well. It must not. The overlay's keys ARE guarded here, by
+/// `test_capture_interaction.rs`, but those guards read the `.slint` SOURCE - they can prove a branch
+/// exists and never that it decides correctly, so an inverted condition would stay green. Slint asks
+/// this function and obeys the answer, and the answer is what the tests below can watch fail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CopyChordTarget {
+    /// Put the selected region on the clipboard and save nothing.
+    Image,
+    /// Leave the image alone; the note field copies its own selected text.
+    NoteText,
+}
+
+/// `has_text_selection`: the note field currently holds a text selection.
+/// `force_image`: the chord is Ctrl+Enter, which never means text.
+fn copy_chord_target(has_text_selection: bool, force_image: bool) -> CopyChordTarget {
+    // Ctrl+Enter is unconditional, and that is what makes Ctrl+C safe to make conditional: there is
+    // always one chord that means "the image" no matter what the caret is doing.
+    if force_image || !has_text_selection {
+        CopyChordTarget::Image
+    } else {
+        CopyChordTarget::NoteText
+    }
+}
+
+/// The selected region on the clipboard, with nothing written anywhere. `Ctrl+C` / `Ctrl+Enter`.
+///
+/// The sibling of `copy_burned_image`, and deliberately NOT the same function. That one hands over a
+/// stored Finding with its Markers burned in; this one hands over a region that has no Finding, so
+/// there is nothing to burn and no redaction available. A shot that needs blurring has to be saved.
+///
+/// A screenshot that never touches disk cannot be recovered, backed up, or carried through a Vault
+/// migration - which is the point, not a side effect.
+///
+/// The Quality Budget applies, exactly as it does on the way into the Vault. Two reasons, and the
+/// second one is not obvious: the same capture copied and saved should not differ, and a DIB is
+/// UNCOMPRESSED, so the clipboard cost is `w * h * 3` of the final dimensions - about 25 MB for a 4K
+/// screen and 50 MB across two of them. The resolved long edge is what bounds that.
+/// Everything the copy path does EXCEPT touch the clipboard: the BMP bytes and their dimensions.
+///
+/// Split out so it can be tested. The alternative - a test that calls the real thing - would replace
+/// whatever the developer had on their clipboard every time `cargo test` ran, and the interesting
+/// assertions here are not about the Windows clipboard API anyway: they are that the bytes decode,
+/// and that nothing was written to the Vault or the Library on the way.
+///
+/// `cfg(any(windows, test))` rather than `cfg(windows)`: the clipboard write is Windows-only, but
+/// this half is portable and the test needs it on every platform CI runs on.
+#[cfg(any(windows, test))]
+fn encode_region_for_clipboard(
+    ctx: &AppContext,
+    source: &[u8],
+    source_size: (u32, u32),
+    region: (u32, u32, u32, u32),
+) -> Result<(Vec<u8>, u32, u32), String> {
+    use image::codecs::bmp::BmpEncoder;
+    use image::ExtendedColorType;
+
+    let prepared = prepare_region(ctx, source, source_size, region)
+        .ok_or_else(|| "Could not read the selected region.".to_string())?;
+
+    let decoded = image::load_from_memory(&prepared.bytes)
+        .map_err(|e| format!("Could not decode the captured region: {e}"))?;
+    // RGB, not RGBA, for the reason `copy_burned_image` records: a DIB with an alpha channel is
+    // pasted as fully transparent by several applications, Explorer's preview included.
+    let rgb = decoded.to_rgb8();
+
+    let mut bmp = Vec::new();
+    BmpEncoder::new(&mut bmp)
+        .encode(
+            rgb.as_raw(),
+            rgb.width(),
+            rgb.height(),
+            ExtendedColorType::Rgb8,
+        )
+        .map_err(|e| format!("Could not encode for the clipboard: {e}"))?;
+
+    Ok((bmp, rgb.width(), rgb.height()))
+}
+
+#[cfg(windows)]
+fn copy_region_to_clipboard(
+    ctx: &AppContext,
+    source: &[u8],
+    source_size: (u32, u32),
+    region: (u32, u32, u32, u32),
+) -> Result<String, String> {
+    let (bmp, width, height) = encode_region_for_clipboard(ctx, source, source_size, region)?;
+
+    clipboard_win::set_clipboard(clipboard_win::formats::Bitmap, &bmp)
+        .map_err(|e| format!("Could not write to the clipboard: {e}"))?;
+
+    Ok(format!(
+        "Copied to the clipboard, not saved ({width} x {height})."
+    ))
+}
+
+#[cfg(not(windows))]
+fn copy_region_to_clipboard(
+    _ctx: &AppContext,
+    _source: &[u8],
+    _source_size: (u32, u32),
+    _region: (u32, u32, u32, u32),
+) -> Result<String, String> {
+    Err("Copying an image to the clipboard is implemented on Windows only.".to_string())
+}
+
+/// Crops the capture canvas to the selected region, shrinks it to the active QualityBudget,
+/// writes it to the Vault, and records the Finding plus its note.
+///
+/// `source` is the canvas as raw RGBA8 bytes, `source_size` pixels, and `region` is in that
+/// canvas's own pixel space - the same space the overlay reports its selection in, so no scale
+/// conversion is involved. It is borrowed rather than owned as an `RgbaImage` because the canvas
+/// now lives in the buffer the overlay presents, and owning a second copy of it is exactly the
+/// cost `BUG-28` was about.
+///
+/// Returns the new Finding's id, or `None` if the region could not be persisted.
+fn persist_finding(
+    ctx: &AppContext,
+    source: &[u8],
+    source_size: (u32, u32),
+    region: (u32, u32, u32, u32),
+    monitor_name: &str,
+    note_body: &str,
+) -> Option<String> {
+    let prepared = prepare_region(ctx, source, source_size, region)?;
+    let PreparedRegion {
+        bytes: reduced_bytes,
+        width: final_w,
+        height: final_h,
+        crop: (crop_x, crop_y, crop_w, crop_h),
+        resolved,
+        budget_name,
+    } = prepared;
 
     let clock = SystemClock::new();
     let entropy = SystemEntropySource::new();
@@ -2874,7 +3040,7 @@ fn persist_finding(
         region: format!("{crop_x},{crop_y},{crop_w},{crop_h}"),
         resolved_long_edge: Some(resolved.max_long_edge),
         resolved_encoder_quality: Some(resolved.encoder_quality),
-        budget_name: Some(qb.named.display_name().to_string()),
+        budget_name: Some(budget_name),
     };
 
     let note_record = Note {
@@ -4391,6 +4557,68 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     move || close_overlay()
                 });
 
+                // Copy the region and save nothing. The sibling of `on_capture_completed`, and every
+                // difference from it is deliberate:
+                //
+                // - no `persist_finding`, so no blob and no Finding row;
+                // - no `load_findings_into_window`, because nothing was added to the Library and the
+                //   Reviewer's current selection is none of this path's business;
+                // - `REVEAL_EDITOR_AFTER_CAPTURE` is reset but never acted on. There is nothing to
+                //   edit, so raising the Editor would be an interruption with no destination - and
+                //   leaving the flag set would raise it on the NEXT capture for no reason.
+                //
+                // Returns whether the press was consumed. `false` sends the note field back to
+                // `TextInput`'s own Ctrl+C, which copies the text the Reviewer had selected.
+                overlay.on_copy_chord({
+                    let ctx_inner = ctx_inner.clone();
+                    let main_weak = main_weak.clone();
+                    let close_overlay = close_overlay.clone();
+                    move |x, y, sel_w, sel_h, has_text_selection, force_image| {
+                        if copy_chord_target(has_text_selection, force_image)
+                            == CopyChordTarget::NoteText
+                        {
+                            return false;
+                        }
+
+                        let region = (
+                            x.max(0) as u32,
+                            y.max(0) as u32,
+                            sel_w.max(0) as u32,
+                            sel_h.max(0) as u32,
+                        );
+
+                        // Read the canvas from the live overlay, never clone it into this closure -
+                        // the reason is spelled out on `on_capture_completed` above, and it is worth
+                        // ~92 MB per capture.
+                        let outcome = LIVE_OVERLAYS.with_borrow(|live| {
+                            live.first()
+                                .and_then(|entry| {
+                                    let canvas = entry.canvas.as_ref()?;
+                                    Some(copy_region_to_clipboard(
+                                        &ctx_inner,
+                                        canvas.as_bytes(),
+                                        (entry.placement.2, entry.placement.3),
+                                        region,
+                                    ))
+                                })
+                                .unwrap_or_else(|| {
+                                    Err("The capture is no longer available to copy.".to_string())
+                                })
+                        });
+
+                        close_overlay();
+                        REVEAL_EDITOR_AFTER_CAPTURE.replace(false);
+
+                        if let Some(main) = main_weak.upgrade() {
+                            match outcome {
+                                Ok(message) => toast(&main, message, false),
+                                Err(message) => toast(&main, message, true),
+                            }
+                        }
+                        true
+                    }
+                });
+
                 // Publish the placement immediately before show(), because show() is when the
                 // native window is actually created and therefore when the attributes hook runs.
                 //
@@ -4886,31 +5114,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     {
         let win = main_window.as_weak();
-        let ctx_hc = ctx.clone();
-        let startup = startup_for_settings.clone();
-        let registrar = hotkey_registrar.clone();
-        main_window.on_hotkey_cleared(move |action| {
-            let Some(win) = win.upgrade() else {
-                return;
-            };
-            let Some(target) = hotkey_action_from_id(action.as_str()) else {
-                return;
-            };
-            let outcome = registrar
-                .lock()
-                .map_err(|e| CoreError::Validation(e.to_string()))
-                .and_then(|mut hotkeys| hotkeys.clear(target));
-            if let Err(e) = outcome {
-                hotkey_feedback(&win, format!("Could not clear that: {e}"), true);
-            }
-            if let Ok(hotkeys) = registrar.lock() {
-                load_settings_into_window(&win, &ctx_hc, startup.as_ref(), &hotkeys);
-            }
-        });
-    }
-
-    {
-        let win = main_window.as_weak();
         let ctx_he = ctx.clone();
         let startup = startup_for_settings.clone();
         let registrar = hotkey_registrar.clone();
@@ -5019,6 +5222,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     });
 
                     if let Some((action, shortcut)) = action {
+                        let action_id: SharedString = match action {
+                            HotkeyAction::Capture => "capture",
+                            HotkeyAction::OpenEditor => "open_editor",
+                        }
+                        .into();
                         // Reported to the Settings screen before it is acted on, so a Reviewer who
                         // has just bound a chord can press it and see the row confirm. Registration
                         // alone does not prove delivery - another application's low-level hook can
@@ -5026,13 +5234,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // available without leaving the screen.
                         if let Some(win) = window_for_events.upgrade() {
                             if win.get_settings_open() {
-                                win.set_hotkey_last_fired(
-                                    match action {
-                                        HotkeyAction::Capture => "capture",
-                                        HotkeyAction::OpenEditor => "open_editor",
-                                    }
-                                    .into(),
-                                );
+                                win.set_hotkey_last_fired(action_id.clone());
                                 // Worded for the Key Check panel, which is where this proof of
                                 // arrival now lives instead of on the row itself.
                                 win.set_hotkey_last_fired_text(
@@ -5043,6 +5245,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     )
                                     .into(),
                                 );
+                                // A row listening for a NEW chord never sees its own already-bound
+                                // one as a normal keypress: Windows delivers an active global
+                                // hotkey as WM_HOTKEY, not to the focused FocusScope, so the row's
+                                // button would otherwise sit on "Listening…" forever with no way to
+                                // tell the Reviewer why. Re-pressing the row's own current
+                                // combination changes nothing, so ending the gesture here - the
+                                // same way a completed keypress-driven bind does - is the correct
+                                // outcome, not a special case of it.
+                                if win.get_hotkey_listening() == action_id {
+                                    win.set_hotkey_listening(SharedString::new());
+                                    // The completing keypress may ALSO have reached the row's own
+                                    // FocusScope as a normal key event before this one landed, and
+                                    // read as a refusal there - the row's already-bound combination
+                                    // is not a shape `shortcut_from_key` was ever asked to parse.
+                                    // Nothing was actually refused: the OS just proved the SAME
+                                    // shortcut still arrives, which is a success, not an error, and
+                                    // must not leave a red banner behind saying otherwise.
+                                    hotkey_feedback(&win, "", false);
+                                }
                             }
                         }
                         // Settings shows "Pressed just now" above regardless, so the Reviewer
@@ -5096,6 +5317,102 @@ mod tests {
     /// The exact string shape found in the live `finding.region` column, read out of
     /// `%APPDATA%/id.wiradigital.snapdown/library.db`.
     ///
+    /// Every combination of the two inputs to the copy chords, enumerated.
+    ///
+    /// Four cases, and three of them copy the image. The one that does not is the whole reason this
+    /// is a function and not an expression inside `appwindow.slint`: a keypress cannot be reached
+    /// from any test seam in this repository (`OQ-23`), so a rule written in Slint is a rule that
+    /// can be inverted without anything going red.
+    #[test]
+    fn ctrl_c_copies_the_image_unless_the_note_field_has_text_selected() {
+        // The ordinary case: a region selected, nothing selected in the note field.
+        assert_eq!(copy_chord_target(false, false), CopyChordTarget::Image);
+        // Text is selected, so Ctrl+C means what it means in every other text field.
+        assert_eq!(copy_chord_target(true, false), CopyChordTarget::NoteText);
+    }
+
+    /// Ctrl+Enter is the unconditional escape hatch, and that is exactly what makes Ctrl+C safe to
+    /// make conditional: there is always one chord that means "the image" whatever the caret is
+    /// doing. Lose this and a Reviewer with text selected has no way to reach the image at all.
+    #[test]
+    fn ctrl_enter_copies_the_image_even_with_text_selected() {
+        assert_eq!(copy_chord_target(false, true), CopyChordTarget::Image);
+        assert_eq!(copy_chord_target(true, true), CopyChordTarget::Image);
+    }
+
+    /// A `Ctrl+C` leaves the Vault and the Library exactly as it found them, and what it hands over
+    /// is a real image.
+    ///
+    /// Both halves matter and they fail differently. The "nothing was written" half is the promise
+    /// the feature is FOR - a screenshot that never touches disk - and it is the half that would
+    /// pass trivially if the test never exercised the path, which is why the assertions are a
+    /// directory listing and a row count rather than a look at the code. The decode is this
+    /// repository's own rule, learned expensively: a 17-byte fake `PNG` header with a plausible
+    /// width and height passed every image assertion here for five waves. A signature and a
+    /// dimension is a test a fabrication passes; a decode is not.
+    #[test]
+    fn a_copy_writes_nothing_and_hands_over_a_decodable_image() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+
+        // A 4x2 canvas: the left half opaque red, the right half opaque blue. Cropping the right
+        // half is what proves the crop is applied and not merely computed - a copy of the whole
+        // canvas would come back red in its first pixel.
+        let red = [255u8, 0, 0, 255];
+        let blue = [0u8, 0, 255, 255];
+        let mut source = Vec::with_capacity(4 * 2 * 4);
+        for _ in 0..2 {
+            source.extend_from_slice(&red);
+            source.extend_from_slice(&red);
+            source.extend_from_slice(&blue);
+            source.extend_from_slice(&blue);
+        }
+
+        let (bmp, width, height) = encode_region_for_clipboard(&ctx, &source, (4, 2), (2, 0, 2, 2))
+            .expect("the region to encode");
+
+        let decoded = image::load_from_memory(&bmp).expect("the clipboard bytes to be an image");
+        assert_eq!(
+            (decoded.width(), decoded.height()),
+            (width, height),
+            "the reported dimensions have to be the decoded ones"
+        );
+        // Which half was taken, not an exact byte. The Quality Budget's encoder quantises - this
+        // pixel comes back as 254 rather than 255 - and that off-by-one is itself worth noting: it
+        // is the proof that the budget is genuinely applied on this path, because a lossless copy
+        // would have handed back the 255 that went in.
+        let pixel = decoded.to_rgba8().get_pixel(0, 0).0;
+        assert!(
+            pixel[2] > 200 && pixel[0] < 50,
+            "the crop should have taken the blue half, got {pixel:?} at {width}x{height}"
+        );
+
+        assert!(
+            std::fs::read_dir(vault_dir.path())
+                .expect("to read the vault")
+                .next()
+                .is_none(),
+            "a copy must leave no file behind in the Vault"
+        );
+        assert!(
+            ctx.finding_store
+                .list_findings()
+                .expect("to read the Library")
+                .is_empty(),
+            "a copy must record no Finding"
+        );
+    }
+
     /// This test exists because the first version of the caller used
     /// `serde_json::from_str::<Region>` on this column. That compiles, raises nothing, and returns
     /// `None` for every row - so the Editor's "reduced from" readout would never have appeared, and
@@ -5189,6 +5506,31 @@ mod tests {
         assert_eq!(
             shortcut_from_key(true, false, false, true, "Q"),
             Ok(Some("CommandOrControl+Super+Q".to_string()))
+        );
+    }
+
+    #[test]
+    fn an_unnameable_key_is_refused_without_leaking_a_raw_glyph() {
+        // A private-use-area key code, or anything else outside letters/digits/ASCII punctuation,
+        // must never land in the Reviewer-facing sentence as-is - that is the exact bug reported: a
+        // tofu-box glyph inside "Snapdown cannot register the X key...".
+        let refusal = shortcut_from_key(true, false, false, false, "\u{f8ff}").unwrap_err();
+        assert_eq!(
+            refusal,
+            ShortcutRefusal::UnsupportedKey("this key".to_string())
+        );
+        assert_eq!(
+            refusal.message(),
+            "Snapdown cannot register this key as part of a shortcut."
+        );
+    }
+
+    #[test]
+    fn an_ascii_punctuation_key_is_named_in_its_own_refusal() {
+        let refusal = shortcut_from_key(true, false, false, false, ",").unwrap_err();
+        assert_eq!(
+            refusal.message(),
+            "Snapdown cannot register the ',' key as part of a shortcut."
         );
     }
 

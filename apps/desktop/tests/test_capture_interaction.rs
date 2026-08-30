@@ -70,10 +70,106 @@ fn enter_saves_from_the_window_not_only_from_the_note_field() {
         "Escape must stay handled at the window level (BUG-25)"
     );
     // Saving on Enter with no region would emit a zero-sized crop.
-    let ret = tail.find("Key.Return").expect("checked above");
+    //
+    // Located as the branch that does NOT hold a modifier, rather than as the first `Key.Return` in
+    // the handler. The first-occurrence version of this assertion silently stopped guarding Enter
+    // the moment the copy chords were added: those match `Key.Return` too, they are guarded by
+    // `root.has-selection` themselves, and so the check passed while testing the wrong branch. A
+    // guard that can be satisfied by a different branch than the one it names is not a guard.
+    // Bounded to the handler itself, ending at the `init =>` that follows it. Without that bound the
+    // last branch runs on to the end of the overlay and absorbs every other mention of
+    // `root.has-selection` in the file - which is how the first version of this assertion survived a
+    // mutation that deleted the guard it names. A source-text guard is only as good as its window.
+    let handler = &tail[..tail
+        .find("init =>")
+        .expect("the FocusScope's init must follow its key handler")];
+    let enter_branch = handler
+        .split("else if")
+        .find(|branch| branch.contains("Key.Return") && !branch.contains("modifiers.control"))
+        .expect("the plain, unmodified Enter branch must exist in the window's key handler");
     assert!(
-        tail[ret..ret + 200].contains("root.has-selection"),
+        enter_branch.contains("root.has-selection"),
         "Enter must only save when there is a selection to save"
+    );
+    assert!(
+        enter_branch.contains("root.capture-completed"),
+        "the unmodified Enter is the one that SAVES; if it stopped calling capture-completed the \
+         hint text's promise would be broken"
+    );
+}
+
+/// The copy chords have to be reachable, and reachable specifically while the note field has focus.
+///
+/// That last clause is the whole difficulty. The note field takes focus the moment the note panel
+/// appears, and a focused `TextInput` receives keys before any ancestor `FocusScope` - so a chord
+/// wired only into the window's key handler works in the one state the Reviewer is almost never in.
+/// This is the same defect shape as `enter_saves_from_the_window_not_only_from_the_note_field` above,
+/// approached from the other side.
+#[test]
+fn the_copy_chords_are_reachable_from_the_note_field_and_from_the_window() {
+    let overlay = overlay_block();
+    let field = code("ui/components/text-field.slint");
+
+    assert!(
+        overlay.contains("callback copy-chord("),
+        "the overlay must expose a copy-only exit to Rust"
+    );
+    assert!(
+        overlay.contains("forward-copy-chords: true"),
+        "the note field must hand the copy chords out, or they die inside the focused TextInput"
+    );
+    assert!(
+        overlay.contains("copy-chord-pressed("),
+        "the note field must wire what it forwards to the overlay's own callback"
+    );
+
+    // The window-level half, for when focus is elsewhere - the Save button, say.
+    let scope = overlay
+        .find("key-pressed(event)")
+        .expect("the overlay must have a window-level key handler");
+    assert!(
+        overlay[scope..].contains("root.copy-chord("),
+        "the window's key handler must reach the copy path too"
+    );
+
+    // Intercepted BEFORE the widget consumes the key. `TextInput::key-pressed` is the documented
+    // hook for exactly that; without it the field's own Ctrl+C wins and no image is ever copied.
+    let input = field
+        .find("TextInput {")
+        .expect("the one text field must wrap a TextInput");
+    assert!(
+        field[input..].contains("key-pressed(event)"),
+        "the text field must intercept keys before TextInput handles them"
+    );
+    // Ctrl+C does not arrive as the letter, it arrives as ETX. Matching only "c" is a chord that
+    // never fires - see `displayable_key_text` in `main.rs`, which exists because of that discovery.
+    assert!(
+        field[input..].contains(r"\u{3}"),
+        "the ASCII control code is what Ctrl+C actually sends; matching only the letter never fires"
+    );
+}
+
+/// A keystroke nobody can find is not a feature, and a path that saves nothing has to say so BEFORE
+/// it is taken - the toast lands on the main window, which on the tray-only loop may not be visible.
+#[test]
+fn the_copy_only_path_is_offered_in_the_overlay_and_says_it_saves_nothing() {
+    let overlay = overlay_block();
+
+    assert!(
+        overlay.contains("Ctrl+C"),
+        "the overlay's hint text must name the copy chord; a hidden keystroke is undiscoverable"
+    );
+    assert!(
+        overlay.contains("nothing is saved"),
+        "the hint must say the copy path saves nothing, in the overlay, before the keystroke"
+    );
+    assert!(
+        overlay.contains("Copy Only"),
+        "there must be a visible button for the copy path beside Save Finding"
+    );
+    assert!(
+        overlay.contains("Save Finding"),
+        "and Save Finding must still be there"
     );
 }
 

@@ -82,49 +82,16 @@ export component SdCheckbox inherits Rectangle {
     HorizontalLayout {
         spacing: 8px;
 
+        // An empty spacer, not the box itself: reserving the column's width is all a layout cell
+        // does here. The box is drawn separately below, positioned from `label-text`'s own
+        // RESOLVED geometry (`y`/`height`, not `preferred-height`) - referencing that from inside
+        // this same layout, as a layout-managed size or padding, fed back into the layout's own
+        // width measurement and produced a binding loop (`padding-top -> layoutinfo-h ->
+        // label-text.width -> label-text.preferred-height -> padding-top`). A plain sibling
+        // Rectangle outside the layout only reads the already-settled output, so there's nothing
+        // left to feed back into.
         Rectangle {
             width: 15px;
-            // Sized to the LABEL'S OWN first line, not the full row: `alignment: start` alone put
-            // the box at the row's bare top edge, which is not the same height as the text's own
-            // cap-height/line-box - for a single-line label (both checkboxes in this product
-            // today) that read as visibly too high. Matching `label-text.preferred-height`
-            // and centring within just that gives the box the label's OWN line metrics to sit
-            // against.
-            //
-            // Still not `alignment: center` against the WHOLE label column though: `SdIconLabel`
-            // exists for the same reason this comment used to warn about - a wrapped label would
-            // make this height span every line, centring the box against the middle of the block
-            // rather than its first line. No checkbox here wraps today; if one needs to, this
-            // height reference needs to become the first line's alone, not the whole label's.
-            height: label-text.preferred-height;
-            VerticalLayout {
-                alignment: center;
-                Rectangle {
-                    width: 15px;
-                    height: 15px;
-                    border-radius: Theme.radius-sharp;
-                    background: root.checked ? Theme.accent-primary : Theme.bg-card;
-                    border-width: 1px;
-                    border-color: root.checked ? Theme.accent-primary : Theme.border-strong;
-
-                    // A drawn tick, not the `✓` glyph. The bare glyph fell back to whatever the font
-                    // had and rendered wrong twice in this product - the Marker delete affordance and
-                    // the modal close both had to become images for the same reason.
-                    if root.checked : Path {
-                        x: 3px;
-                        y: 3px;
-                        width: 9px;
-                        height: 9px;
-                        viewbox-x: 0;
-                        viewbox-y: 0;
-                        viewbox-width: 9;
-                        viewbox-height: 9;
-                        stroke: Theme.text-on-accent;
-                        stroke-width: 1.6px;
-                        commands: "M 0.5 4.5 L 3.3 7.3 L 8.5 1.4";
-                    }
-                }
-            }
         }
 
         VerticalLayout {
@@ -147,6 +114,49 @@ export component SdCheckbox inherits Rectangle {
                 wrap: word-wrap;
                 font-family: "IBM Plex Sans";
             }
+        }
+    }
+
+    // A sibling of the layout above, not one of its cells - positioned from `label-text`'s own
+    // resolved `y`/`height` so it sits against the LABEL'S OWN first line, not the full row: a
+    // wrapped label's `preferred-height` would span every line and centre the box against the
+    // block's middle rather than its first line, but `label-text.height` is its own first-line
+    // metrics regardless of what the rest of the row does. No checkbox here wraps today; this
+    // still holds if one needs to.
+    //
+    // The `+ 0.5px` is a measured correction, not a rounding fudge: `label-text.height` is the
+    // FULL line box - ascent, cap-height and descender together - and IBM Plex Sans at 13px puts
+    // more of that box below the baseline (descender + line gap) than above the cap-height, so
+    // centring on the line box alone lands the square a shade above where the capital letters
+    // actually sit. Measured against a live screenshot (checkbox centre vs. the label's own
+    // cap-height bounds): no correction read ~1px high, `+ 1px` overshot to ~1px low - `0.5px`
+    // is the point in between. Slint does not expose ascent/cap-height metrics to derive this
+    // without a magic number.
+    checkbox-box := Rectangle {
+        x: 0px;
+        y: label-text.y + (label-text.height - self.height) / 2 + 0.5px;
+        width: 15px;
+        height: 15px;
+        border-radius: Theme.radius-sharp;
+        background: root.checked ? Theme.accent-primary : Theme.bg-card;
+        border-width: 1px;
+        border-color: root.checked ? Theme.accent-primary : Theme.border-strong;
+
+        // A drawn tick, not the `✓` glyph. The bare glyph fell back to whatever the font
+        // had and rendered wrong twice in this product - the Marker delete affordance and
+        // the modal close both had to become images for the same reason.
+        if root.checked : Path {
+            x: 3px;
+            y: 3px;
+            width: 9px;
+            height: 9px;
+            viewbox-x: 0;
+            viewbox-y: 0;
+            viewbox-width: 9;
+            viewbox-height: 9;
+            stroke: Theme.text-on-accent;
+            stroke-width: 1.6px;
+            commands: "M 0.5 4.5 L 3.3 7.3 L 8.5 1.4";
         }
     }
 

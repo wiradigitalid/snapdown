@@ -5587,6 +5587,7 @@ dependencies = [
  "snapdown-capture",
  "snapdown-core",
  "snapdown-store",
+ "tempfile",
  "tray-icon",
  "windows",
  "winreg 0.52.0",

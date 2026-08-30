@@ -267,6 +267,20 @@ export component CaptureOverlayWindow inherits Window {
     callback capture-completed(int, int, int, int, string);
     callback overlay-cancelled();
 
+    // A copy chord: put the selected region on the clipboard and save NOTHING. No PNG in the Vault,
+    // no Finding, no Note - the typed note is discarded on purpose, which is the whole difference
+    // between this and `capture-completed`.
+    //
+    // Coordinates are SNAPSHOT pixels, exactly like `capture-completed`. The two trailing flags
+    // describe the chord, not the outcome: whether the note field holds a text selection, and whether
+    // the chord is the unconditional image one (Ctrl+Enter).
+    //
+    // It RETURNS whether Rust consumed it. `false` means the press was a text copy, and the note
+    // field then rejects the event so `TextInput` copies its own selection natively. No `if` over
+    // those two flags exists anywhere in this file: the rule is `copy_chord_target` in `main.rs` and
+    // it exists once, where it can be tested.
+    callback copy-chord(int, int, int, int, bool, bool) -> bool;
+
     // Which container the pointer is over, so a single click can take it (`FR-1`: "1-click
     // container selection").
     //
@@ -355,6 +369,21 @@ export component CaptureOverlayWindow inherits Window {
         key-pressed(event) => {
             if (event.text == Key.Escape) {
                 root.overlay-cancelled();
+                accept
+            } else if ((event.text == Key.Return || event.text == "\u{3}"
+                        || event.text == "c" || event.text == "C")
+                    && event.modifiers.control && root.has-selection) {
+                // The copy chords, for when focus is NOT in the note field - the Save button has it,
+                // say, or the panel is not up yet. `force-image` is true because there is no text
+                // field in play here, so there is nothing a text copy could even mean.
+                root.copy-chord(
+                    round(sel-x / 1px * root.source-scale),
+                    round(sel-y / 1px * root.source-scale),
+                    round(sel-w / 1px * root.source-scale),
+                    round(sel-h / 1px * root.source-scale),
+                    false,
+                    true
+                );
                 accept
             } else if (event.text == Key.Return && root.has-selection) {
                 root.capture-completed(
@@ -1003,6 +1032,20 @@ export component CaptureOverlayWindow inherits Window {
                     text <=> root.note-text;
                     // Enter saves, which is what the hint below promises.
                     commit-on-enter: true;
+                    // Ctrl+C and Ctrl+Enter must keep working even though this field owns the
+                    // keyboard from the moment the panel appears - see `init` below, and the comment
+                    // on `forward-copy-chords` itself.
+                    forward-copy-chords: true;
+                    copy-chord-pressed(text-selected, force-image) => {
+                        root.copy-chord(
+                            round(sel-x / 1px * root.source-scale),
+                            round(sel-y / 1px * root.source-scale),
+                            round(sel-w / 1px * root.source-scale),
+                            round(sel-h / 1px * root.source-scale),
+                            text-selected,
+                            force-image
+                        )
+                    }
                     // Takes focus the moment the popup exists.
                     //
                     // Nothing ever focused this field, so typing only worked if the Reviewer
@@ -1029,10 +1072,43 @@ export component CaptureOverlayWindow inherits Window {
                 // the inspector's own rhythm rather than a number picked here.
                 Rectangle { height: 4px; }
 
-                HorizontalLayout {
-                    alignment: space-between;
+                // Two lines, not one, and the second one is a promise made BEFORE the keystroke.
+                //
+                // The copy path leaves nothing behind on purpose, so the Reviewer has to know that
+                // while deciding, not after acting. A toast fires afterwards too, but it lands on the
+                // main window - which on the tray-only loop this product is built around may not
+                // even be on screen. This line is the guaranteed half of that message.
+                VerticalLayout {
+                    spacing: 2px;
                     SdCaption {
                         text: "Enter to save · Esc to cancel";
+                    }
+                    SdCaption {
+                        text: "Ctrl+C copies only — nothing is saved";
+                    }
+                }
+
+                Rectangle { height: 6px; }
+
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: 8px;
+                    // Subordinate to Save Finding: saving is what this panel is for, copying is the
+                    // shortcut out of it.
+                    SdActionButton {
+                        label: "Copy Only";
+                        icon: @image-url("../assets/icons/copy.svg");
+                        primary: false;
+                        clicked => {
+                            root.copy-chord(
+                                round(sel-x / 1px * root.source-scale),
+                                round(sel-y / 1px * root.source-scale),
+                                round(sel-w / 1px * root.source-scale),
+                                round(sel-h / 1px * root.source-scale),
+                                false,
+                                true
+                            );
+                        }
                     }
                     SdActionButton {
                         label: "Save Finding";
@@ -1463,7 +1539,6 @@ export component AppWindow inherits Window {
     callback budget-chosen(string);
     callback budget-advanced(int, int, int);
     callback hotkey-key-pressed(string, bool, bool, bool, bool, string);
-    callback hotkey-cleared(string);
     callback hotkey-enabled-toggled(string, bool);
     callback minimize-clicked();
     callback maximize-clicked();
@@ -3066,7 +3141,6 @@ export component AppWindow inherits Window {
             hotkey-pressed(action, ctrl, alt, shift, win, text) => {
                 root.hotkey-key-pressed(action, ctrl, alt, shift, win, text);
             }
-            hotkey-cleared(action) => { root.hotkey-cleared(action); }
             hotkey-enabled-toggled(action, on) => { root.hotkey-enabled-toggled(action, on); }
         }
 

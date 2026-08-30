@@ -72,7 +72,6 @@ export component SdSettings inherits Rectangle {
     // action, ctrl, alt, shift, win, and the key's own text. RUST composes the shortcut string,
     // because Rust is where `validate_and_rebind` decides whether it is one.
     callback hotkey-pressed(string, bool, bool, bool, bool, string);
-    callback hotkey-cleared(string);
     callback hotkey-enabled-toggled(string, bool);
     // "Win" on Windows, "Command" on macOS - the physical key the sticky panel's chips label,
     // decided once in Rust rather than guessed here.

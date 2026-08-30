@@ -676,7 +676,6 @@ fn the_settings_screen_reads_from_the_registrars_and_the_store() {
         ),
         ("on_budget_chosen", "store_budget("),
         ("on_hotkey_key_pressed", "validate_and_rebind("),
-        ("on_hotkey_cleared", "hotkeys.clear(target)"),
     ] {
         assert!(
             main.contains(callback) && main.contains(target),
