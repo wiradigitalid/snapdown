@@ -7,7 +7,7 @@ promise_progress: 54%
 rtm_rows:
   green: 19
   counted: 35
-  excluded_no_uc: 1
+  excluded_no_uc: 6
 work_progress:
 - wave: W1
   status: closed
@@ -55,13 +55,11 @@ validators_red:
 - V3
 validators_skipped:
   V19: 'advisory — wave S/M closed without an RTR-: W7'
-  V27: the `.constitution/project/` room is empty, and that is a valid state — a generic rule MUST NOT
-    be moved here just to give the room content
 open_questions:
   blocking: 0
-  assumptions: 24
+  assumptions: 25
   external: 3
-  answered: 0
+  answered: 1
   blocking_budget: 15
   blocking_over_budget: false
   assumptions_budget_per_gate: 15

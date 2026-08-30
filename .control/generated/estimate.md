@@ -38,6 +38,11 @@
 | Draw blur redaction boxes over sensitive image regions | `FR-31` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r3 |
 | Place floating text and callout bubbles with font and tail controls | `FR-32` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r3 |
 | Transform and manipulate canvas annotation elements with interactive handles | `FR-33` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r3 |
+| Zoom the canvas to inspect a capture at more or less than natural size | `FR-34` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
+| Paste an image from the clipboard as a new Finding | `FR-35` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
+| Copy a Finding's burned image to the clipboard | `FR-36` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
+| Reach a canvas or filmstrip action from a right-click context menu | `FR-37` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r3 |
+| Change the front-to-back order of canvas annotations | `FR-38` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r3 |
 | Reduce every captured image automatically | `FR-4` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
 | Choose a Quality Budget by naming the intent | `FR-5` | `settings` | `deep` | `medium` — No money, no personal data, no irreversible action. The wor… | — | — | — | r1 |
 | See every Finding with its Note | `FR-6` | `finding` | `deep` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |

@@ -121,3 +121,10 @@ decisions:
     serves: [CAP-2]
     touches: []
     created: "2026-08-28"
+  - id: DEC-011
+    title: WDI Method owns the documents, mattpocock/skills owns the code, and documents follow the code
+    status: draft
+    file: .control/decisions/DEC-011-documents-are-wdi-code-is-mattpocock.md
+    serves: []
+    touches: []
+    created: "2026-08-30"
