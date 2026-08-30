@@ -4,9 +4,18 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Pressing the currently-bound Capture shortcut while Settings is open does not open the capture overlay
-- [ ] Pressing the currently-bound Open Editor shortcut while Settings is open does not force the Editor to the front beyond what Settings already shows
-- [ ] While a row is listening, pressing the combination it already holds cancels listening, same as Escape
-- [ ] Hotkey tab copy (instructions, messages) matches wira-desk's wording conventions where applicable
+- [x] Pressing the currently-bound Capture shortcut while Settings is open does not open the capture overlay
+- [x] Pressing the currently-bound Open Editor shortcut while Settings is open does not force the Editor to the front beyond what Settings already shows
+- [x] While a row is listening, pressing the combination it already holds cancels listening, same as Escape
+- [x] Hotkey tab copy (instructions, messages) matches wira-desk's wording conventions where applicable
+
+## Comments
+
+Implemented in `f66ca36` alongside ticket 04, but this file's status was left at
+`ready-for-agent` — found stale during a later check. `main.rs:5291-5323` gates both real actions
+on `win.get_settings_open()` (`if !settings_open { win.invoke_capture_clicked(); }` and the
+matching `OpenEditor` arm), while `hotkey_last_fired`/`hotkey_last_fired_text` still update so the
+"Pressed just now" confirmation fires regardless. The same block ends `listening` when the row's
+own already-bound combination arrives as the global `WM_HOTKEY` event, matching Escape's behaviour.
