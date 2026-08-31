@@ -16,6 +16,7 @@ Canvas: https://claude.ai/code/artifact/6f798d70-77a0-491e-973b-92e7a2641a2f
 | `ReclaimSpace.dc.html` | The bulk screen, reached from the Library header and from Settings |
 | `ReclaimEmpty.dc.html` | Reclaim space with nothing to reclaim |
 | `canvas.json` | Artboard layout and the sticky notes carrying the reasoning |
+| `ReviewUpdate.prototype.html` | **Not an artboard.** Ticket 05's prototype: three variants of the Review & Update window, standalone and interactive |
 
 **Every value in these files was lifted from the running app, not invented on the canvas**:
 `apps/desktop/ui/theme.slint` for colour, `SdModalHeader` (52px, 15px accent icon, 26px close),
@@ -34,3 +35,10 @@ Two conventions worth not re-deriving:
 
 These are `.dc.html` Design Component files. They render as artboards on the canvas; opening one
 directly in a browser will not show much, since the canvas supplies the runtime.
+
+`ReviewUpdate.prototype.html` is the exception and is **self-contained** — double-click it, or read it
+at https://claude.ai/code/artifact/37e75769-c23c-47f6-9bf7-3c9781278525. It is a throwaway prototype,
+not a source of truth, and it is marked as one in its own first line. It differs from the artboards in
+one way worth copying: its tokens are CSS custom properties, so the light theme is **derived** from the
+same block rather than kept as a second hand-written copy — which is the drift `LibraryLight.dc.html`
+warns about, solved instead of documented.

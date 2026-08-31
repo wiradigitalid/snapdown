@@ -1,7 +1,7 @@
 # 05: Prototype the Review & Update window
 
 **Type:** prototype
-**Status:** open
+**Status:** claimed
 **Blocked by:** 01
 
 ## Question
@@ -63,3 +63,53 @@ One constraint the prototype must actively preserve: `BR-65`
 (`.what/bundle/02-rules/rules-bundle.md:29`) — *"Opening a Bundle shows what was composed, not a live
 view of the Findings as they are now."* It stays true under this design and must keep staying true.
 Anything in the window that re-reads a Finding to show its current state breaks it.
+
+## Prototype, 2026-08-31 — three variants, and one of them disputes the question
+
+**Asset:** `.scratch/bundle-library/design/ReviewUpdate.prototype.html` — self-contained, interactive,
+listed in that folder's `README.md`. Readable at
+https://claude.ai/code/artifact/37e75769-c23c-47f6-9bf7-3c9781278525 · `?variant=A|B|C`, or the
+floating bar, or the arrow keys.
+
+The fields are real: each variant tracks its own dirty set and prints it in the bar, Cancel opens that
+variant's own discard treatment, and Save does what that variant claims. The bar also flips the app's
+theme, because a rule made legible by colour has to survive both.
+
+| | Variant | Its answer to "how do the narrower rules read?" |
+|---|---|---|
+| `A` | **Nothing added** | They do not need to. Nothing is added and two things are removed |
+| `B` | **Provenance rail** | Said once in prose, in a second column that also names every unsaved change |
+| `C` | **Read first, unlock to edit** | The window opens read-only; the primary button is `Edit`, not `Save` |
+
+### Two facts established while building it, both verified in the code
+
+**1. There is no affordance on an image in the compose window either.** `appwindow.slint:3470-3630` —
+the whole document body of the existing modal — contains **zero** `TouchArea` and **zero**
+`IconButton`. The Finding set is chosen in the filmstrip (`:2403`), never in this modal. So the
+ticket's first question contains an assumption worth naming: there is nothing here to disable, and a
+lock chip would have to **invent** a control in order to grey it out. Variant `A` is built on that;
+`B` states the rule in words instead; `C` shows a chip only once the window is unlocked, when
+everything around the image genuinely is editable.
+
+**2. The modal is 521px wide, and that kills the obvious two-column answer.**
+`appwindow.slint:3388-3391` sizes it `height = window - 64`, `width = height / 1.414` — so in an
+800px-tall window it is `521 × 736`, A4 portrait. Variant `B`'s rail is drawn at `760px` and
+**breaks that shared rule**. Either the two modals stop sharing a geometry, or the compose window gets
+wider for a reason that has nothing to do with composing. That is a cost of `B`, not a bug in it, and
+it is invisible on any canvas that does not draw the real width.
+
+### A copy discrepancy the map should know about
+
+The map's *Window copy* says create mode is titled **Review & Assemble**. The code says
+**`"Assemble & Review"`** (`appwindow.slint:3416`). So the map's settled copy renames the *existing*
+window too, not only the new one — small, but it belongs in whatever spec picks this up rather than
+being discovered by a builder.
+
+### What the prototype deliberately does not decide
+
+`BR-11`'s narrowing landed on 2026-08-31 (`DEC-012`, `FR-40`), so the note above about this window
+being forbidden entirely is **discharged** — every editable field here is now backed by a promise, and
+the provisionality that note imposed is lifted. What is still open is the owner's, and an agent must
+not answer it: which variant, and the four behaviours the three variants deliberately disagree about —
+the header's contents, Save's enablement, where the Reviewer lands after saving, and whether the
+window is read-only until unlocked.

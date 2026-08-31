@@ -1,0 +1,800 @@
+<title>Review &amp; Update Variants</title>
+<!--
+  PROTOTYPE - throwaway. Ticket 05 of the Bundle Library wayfinder map.
+  Three variants of the Review & Update window, switchable via ?variant= and the floating bar.
+
+  Every value is lifted from the running app, not chosen here:
+    apps/desktop/ui/theme.slint            - the whole palette, both themes
+    appwindow.slint:3388-3395              - the modal's geometry (height = window - 64, width = height / 1.414)
+    appwindow.slint:3413-3448              - SdModalHeader: 52px, 15px accent icon, 13px/800 title, 26px close
+    appwindow.slint:3473-3620              - the document body: paddings 22/30/16/22, spacing 10, title 19px,
+                                             notes 12px, image capped at HALF the measure, marker label 12px/700
+    appwindow.slint:3632-3676              - footer 60px, Cancel 86x32, SdActionButton 32px
+    .scratch/bundle-library/design/Dialogs.dc.html - the 20px/14px/30px confirmation anatomy
+    .constitution/project/design-system-guide.md   - the scale table
+
+  Tokens are CSS custom properties so LIGHT IS DERIVED, not hand-written. Same reason
+  LibraryLight.dc.html is generated from Main.dc.html rather than edited: two hand-kept copies
+  drift, and they did once already.
+-->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+  /* ---- The studio: single-theme on purpose ---------------------------------------
+     This page is a light table. Its job is to hold the app's own chrome up for
+     judgement, so the surround commits to one dark ground in both host themes - a
+     light studio would make a dark app frame float and change how the design reads.
+     The neutrals are biased cool, toward the app's own #4c8dff, rather than a
+     borrowed grey. Everything is painted explicitly; nothing is inherited.
+
+     The surround is also set in IBM Plex SERIF, where the app is Plex Sans and Mono.
+     Same superfamily, unmistakably a different voice: annotation can never be read
+     as chrome. That is the same reasoning as the high-contrast switcher bar. */
+  :root {
+    --studio-ground:#121319; --studio-panel:#1a1c23; --studio-line:#2b2e39;
+    --studio-ink:#e6e7ec; --studio-quiet:#9ea3b2; --studio-faint:#6f7484;
+    --studio-key:#a9bcff;
+  }
+
+  /* ---- theme.slint, verbatim ------------------------------------------------ */
+  :root, [data-app-theme="dark"] {
+    --bg-app:#1c1c1f; --bg-card:#232326; --bg-subtle:#17171a; --bg-hover:#2c2c30;
+    --border-subtle:#2a2a2e; --border-strong:#3a3a3f; --border-focus:#5b9dff;
+    --text-primary:#f2f2f3; --text-secondary:#c9cacd; --text-muted:#9a9ba0; --text-dim:#6b6c70;
+    --accent-primary:#4c8dff; --accent-hover:#6ba0ff; --accent-surface:rgba(76,141,255,.16);
+    --accent-active:#7db2ff;
+    --semantic-success:#4ade80;
+    --overlay-scrim:rgba(0,0,0,.65); --overlay-shadow:rgba(0,0,0,.45);
+  }
+  [data-app-theme="light"] {
+    --bg-app:#f1f5f9; --bg-card:#ffffff; --bg-subtle:#f8fafc; --bg-hover:#e2e8f0;
+    --border-subtle:#e2e8f0; --border-strong:#cbd5e1; --border-focus:#0284c7;
+    --text-primary:#0f172a; --text-secondary:#334155; --text-muted:#64748b; --text-dim:#94a3b8;
+    --accent-primary:#2563eb; --accent-hover:#1d4ed8; --accent-surface:rgba(56,189,248,.18);
+    --accent-active:#0369a1;
+    --semantic-success:#166534;
+    --overlay-scrim:rgba(0,0,0,.45); --overlay-shadow:rgba(0,0,0,.28);
+  }
+  /* canvas-ground is theme-invariant: a screenshot has no theme. Same rule as the overlay. */
+  :root { --canvas-ground:#0f172a; --thumb-bar-a:#3a3a3f; --thumb-bar-b:#2a2a2e; }
+
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--studio-ground); color:var(--studio-ink);
+         font-family:"IBM Plex Serif",Georgia,serif; padding:30px 20px 108px; }
+  :focus-visible { outline:2px solid var(--studio-key); outline-offset:2px; }
+
+  .rail { max-width:1240px; margin:0 auto; display:flex; flex-direction:column; gap:34px; }
+  .brief { border:1px solid var(--studio-line); background:var(--studio-panel); border-radius:3px;
+           padding:20px 22px; display:flex; flex-direction:column; gap:10px; }
+  .brief h1 { font-family:"IBM Plex Serif",Georgia,serif; font-size:19px; font-weight:600;
+              line-height:1.3; margin:0; color:#fff; text-wrap:balance; }
+  .brief p  { font-size:14px; line-height:1.7; margin:0; color:var(--studio-quiet);
+              max-width:74ch; text-wrap:pretty; }
+  .brief code, .vcost code { font-family:"IBM Plex Mono",monospace; font-size:12px;
+                             color:var(--studio-key); }
+  .brief b, .vcost b { color:var(--studio-ink); font-weight:600; }
+
+  .vhead { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
+  .vkey  { font-family:"IBM Plex Mono",monospace; font-size:11px; font-weight:500;
+           background:#23262f; border:1px solid var(--studio-line); border-radius:3px;
+           padding:3px 8px; color:var(--studio-key); }
+  .vname { font-size:22px; font-weight:600; color:#fff; text-wrap:balance; }
+  .vone  { font-size:14px; font-style:italic; color:var(--studio-faint); }
+  .vcost { border-left:2px solid var(--studio-line); padding:2px 0 2px 16px; margin:0 0 20px;
+           font-size:13.5px; line-height:1.75; color:var(--studio-quiet); max-width:80ch;
+           text-wrap:pretty; }
+  .vcost em { color:var(--studio-ink); font-style:italic; }
+
+  /* ---- the app window, so a variant is judged in context, not in a vacuum ---- */
+  .frame { width:1180px; max-width:100%; height:800px; position:relative; overflow:hidden;
+           border-radius:4px; border:1px solid var(--studio-line); background:var(--bg-app);
+           font-family:"IBM Plex Sans",system-ui,sans-serif;
+           box-shadow:0 26px 64px rgba(0,0,0,.55); }
+  .ed-toolbar { height:44px; background:var(--bg-card); border-bottom:1px solid var(--border-subtle);
+                display:flex; align-items:center; gap:8px; padding:0 12px; }
+  .ed-pill { height:24px; border-radius:3px; background:var(--bg-subtle);
+             border:1px solid var(--border-subtle); }
+  .ed-canvas { position:absolute; left:0; right:0; top:44px; bottom:96px; background:var(--bg-app);
+               display:flex; align-items:center; justify-content:center; }
+  .ed-shot { width:520px; height:330px; background:var(--canvas-ground);
+             border:1px solid var(--border-strong); border-radius:3px; }
+  .ed-strip { position:absolute; left:0; right:0; bottom:0; height:96px; background:var(--bg-card);
+              border-top:1px solid var(--border-subtle); display:flex; align-items:center;
+              gap:8px; padding:0 12px; }
+  .ed-card { width:104px; height:68px; border-radius:3px; background:var(--canvas-ground);
+             border:1px solid var(--border-strong); flex:none; }
+  .scrim { position:absolute; inset:0; background:var(--overlay-scrim);
+           display:flex; align-items:center; justify-content:center; }
+
+  /* modal geometry, from appwindow.slint:3388 - 800-64 tall, that over 1.414 wide */
+  .modal { height:736px; width:521px; background:var(--bg-app); border-radius:3px;
+           border:1px solid var(--border-strong); box-shadow:0 0 32px var(--overlay-shadow);
+           display:flex; flex-direction:column; overflow:hidden; }
+  .modal.wide { width:760px; }
+
+  .mhead { height:52px; flex:none; background:var(--bg-card);
+           border-bottom:1px solid var(--border-subtle);
+           display:flex; align-items:center; gap:10px; padding:0 12px 0 16px; }
+  .mtitle { font-size:13px; font-weight:800; color:var(--text-primary); white-space:nowrap; }
+  .grow { flex:1 1 auto; min-width:0; }
+  .close { width:26px; height:26px; border-radius:3px; display:flex; align-items:center;
+           justify-content:center; flex:none; }
+
+  .body { flex:1 1 auto; min-height:0; overflow:auto; background:var(--bg-app);
+          padding:16px 30px 22px 22px; display:flex; flex-direction:column; gap:10px; }
+  .body::-webkit-scrollbar { width:8px; }
+  .body::-webkit-scrollbar-thumb { background:var(--border-strong); border-radius:4px; }
+
+  .foot { height:60px; flex:none; background:var(--bg-card);
+          border-top:1px solid var(--border-subtle);
+          display:flex; align-items:center; justify-content:flex-end; gap:10px; padding:0 16px; }
+
+  /* controls, from SdActionButton / the Cancel rect at appwindow.slint:3644 */
+  .btn { height:32px; border-radius:3px; padding:0 12px; font:700 11px "IBM Plex Sans",sans-serif;
+         display:inline-flex; align-items:center; gap:7px; border:0; cursor:pointer; }
+  .btn-primary { background:var(--accent-primary); color:#fff;
+                 box-shadow:0 0 2px rgba(76,141,255,.35); }
+  .btn-primary:hover { background:var(--accent-hover); }
+  .btn-primary:disabled { background:var(--bg-hover); color:var(--text-dim); box-shadow:none;
+                          cursor:default; }
+  .btn-ghost { background:transparent; border:1px solid var(--border-strong);
+               color:var(--text-secondary); min-width:86px; justify-content:center; }
+  .btn-ghost:hover { background:var(--bg-hover); }
+  .seg { display:flex; height:24px; border-radius:3px; background:var(--bg-subtle);
+         border:1px solid var(--border-subtle); overflow:hidden; flex:none; }
+  .seg button { border:0; background:transparent; color:var(--text-muted); cursor:pointer;
+                font:700 10px "IBM Plex Sans",sans-serif; padding:0 11px; }
+  .seg button[aria-pressed="true"] { background:var(--accent-surface); color:var(--accent-active); }
+
+  /* the document blocks, from appwindow.slint:3512-3618 */
+  .f { border:0; background:transparent; color:var(--text-primary); font-family:inherit;
+       width:100%; padding:2px; resize:none; outline:0; }
+  .f:focus { box-shadow:inset 0 0 0 1px var(--border-focus); border-radius:3px; }
+  .f::placeholder { color:var(--text-dim); }
+  .f-title { font-size:19px; font-weight:600; }
+  .f-body  { font-size:12px; line-height:1.6; }
+  .f[readonly] { color:var(--text-secondary); cursor:default; }
+  .f[readonly]:focus { box-shadow:none; }
+  .h2 { font-size:15px; font-weight:700; color:var(--text-primary); padding-top:6px; }
+  .h2 .hash { color:var(--text-dim); font-weight:400; }
+  .shot { background:var(--canvas-ground); border:1px solid var(--border-strong); border-radius:3px;
+          position:relative; overflow:hidden; flex:none; }
+  .shot i { position:absolute; display:block; background:var(--thumb-bar-b); }
+  .shot i.k { background:var(--thumb-bar-a); }
+  .mrow { display:flex; gap:8px; align-items:flex-start; }
+  .mlab { font-size:12px; font-weight:700; color:var(--text-muted); flex:none; padding-top:2px; }
+  .slab { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
+          color:var(--text-secondary); }
+  .meta { font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--text-muted);
+          white-space:nowrap; }
+
+  /* the confirmation, from Dialogs.dc.html */
+  .dscrim { position:absolute; inset:0; background:var(--overlay-scrim); display:flex;
+            align-items:center; justify-content:center; z-index:5; }
+  .dlg { width:392px; background:var(--bg-card); border:1px solid var(--border-strong);
+         border-radius:3px; box-shadow:0 16px 32px rgba(0,0,0,.45); padding:20px;
+         display:flex; flex-direction:column; gap:14px; }
+  .dlg .t { font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase;
+            color:var(--text-secondary); }
+  .dlg .b { font-size:12px; line-height:1.6; color:var(--text-secondary); text-wrap:pretty; }
+  .dlg .b em { color:var(--text-primary); font-style:normal; font-weight:600; }
+  .dlg .r { display:flex; justify-content:flex-end; gap:8px; }
+  .dlg .r .btn { height:30px; }
+
+  .toast { position:absolute; left:50%; bottom:118px; transform:translateX(-50%);
+           background:var(--bg-card); border:1px solid var(--border-strong); border-radius:3px;
+           box-shadow:0 8px 20px rgba(0,0,0,.4); padding:9px 14px; font-size:11px; font-weight:600;
+           color:var(--text-secondary); z-index:6; display:flex; gap:8px; align-items:center; }
+  .toast .dot { width:6px; height:6px; border-radius:9999px; background:var(--semantic-success);
+                flex:none; }
+
+  /* ---- the switcher: deliberately not part of the design being judged -------- */
+  .bar { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); z-index:50;
+         display:flex; align-items:center; gap:4px; background:#fafafa; color:#18181b;
+         border-radius:9999px; padding:6px 8px; box-shadow:0 8px 28px rgba(0,0,0,.55);
+         font-size:12px; }
+  .bar button { border:0; background:#e4e4e7; color:#18181b; border-radius:9999px; cursor:pointer;
+                font:700 12px "IBM Plex Sans",sans-serif; height:28px; padding:0 11px; }
+  .bar button:hover { background:#d4d4d8; }
+  .bar .lbl { padding:0 10px; font-weight:700; white-space:nowrap; }
+  .bar .st { font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:#52525b;
+             border-left:1px solid #d4d4d8; padding-left:10px; margin-left:4px; white-space:nowrap;
+             max-width:36ch; overflow:hidden; text-overflow:ellipsis; }
+  .bar .tag { background:#fde68a; border-radius:9999px; padding:2px 8px; font-size:10px;
+              font-weight:800; letter-spacing:.4px; text-transform:uppercase; }
+</style>
+
+<div class="rail">
+  <div class="brief">
+    <h1>Ticket 05 &mdash; how does Review &amp; Update make its narrower rules legible?</h1>
+    <p>Three variants on the window the Library opens when a Reviewer edits a composed Bundle. The
+    Editor behind the scrim is rough on purpose; the modal is at the real geometry
+    (<code>521 &times; 736</code> &mdash; window height minus 64, that over 1.414), so a design that
+    needs more width has to say so out loud.</p>
+    <p><b>Settled, and not up for grabs here:</b> editable are the Bundle title, Bundle notes, Finding
+    notes and Marker notes &mdash; nothing else. Images cannot be added, removed, reordered or
+    replaced. Every edit sits in a buffer until Save, and this window <b>never</b> reads or writes a
+    Finding (<code>BR-65</code>: it shows what was composed, not the Findings as they are now).</p>
+    <p><b>Type in the fields.</b> They are real, each variant tracks its own dirty set, and the bar at
+    the bottom prints it. Cancel and Save do what that variant says they do. The bar also flips the
+    app's theme, because a rule made legible by colour has to survive both.</p>
+  </div>
+
+  <!-- ================================================== A -->
+  <section data-variant="A">
+    <div class="vhead">
+      <span class="vkey">?variant=A</span>
+      <span class="vname">Nothing added</span>
+      <span class="vone">the compose window with two things taken away, and no lock treatment at all</span>
+    </div>
+    <p class="vcost">Disputes the ticket's premise. In compose mode the image blocks carry
+      <b>no affordance either</b> &mdash; the Finding set is chosen in the filmstrip, never in this
+      modal (<code>appwindow.slint:2403</code>) &mdash; so there is nothing here to take away and
+      nothing to grey out. A lock chip would <b>invent</b> a control in order to disable it. What does
+      change: the live <code>N Findings &middot; ~N tk</code> readout becomes a static provenance
+      line, because a count that cannot move is not a readout; and Edit/Preview stays, because a
+      Reviewer about to hand this over still wants to see the file. <b>Cost:</b> a Reviewer who
+      expected to swap an image learns they cannot only by failing to find how.</p>
+    <div class="frame" data-app-theme="dark"></div>
+  </section>
+
+  <!-- ================================================== B -->
+  <section data-variant="B" hidden>
+    <div class="vhead">
+      <span class="vkey">?variant=B</span>
+      <span class="vname">Provenance rail</span>
+      <span class="vone">a second column that states the rules in words and names every unsaved change</span>
+    </div>
+    <p class="vcost">Says it once, in prose, instead of decorating each image. The rail also carries
+      what the header used to, and adds the thing no other variant has: a live list of <b>what is
+      unsaved</b>, so the discard dialog can name exactly what is about to be lost.
+      <b>Cost, and it is the real one:</b> the rail does not fit. At <code>521px</code> the document
+      column would be about 300px wide, so this variant is drawn at <code>760px</code> &mdash; which
+      breaks the <code>height / 1.414</code> width the compose modal is built on
+      (<code>appwindow.slint:3391</code>). Either the two modals stop sharing a geometry, or both get
+      wider and the compose window changes for a reason that has nothing to do with composing.</p>
+    <div class="frame" data-app-theme="dark"></div>
+  </section>
+
+  <!-- ================================================== C -->
+  <section data-variant="C" hidden>
+    <div class="vhead">
+      <span class="vkey">?variant=C</span>
+      <span class="vname">Read first, unlock to edit</span>
+      <span class="vone">opens read-only; the primary button is Edit, and Save only exists once unlocked</span>
+    </div>
+    <p class="vcost">Changes the primary affordance. The window opens as the Bundle
+      <em>was composed</em> &mdash; which is <code>BR-65</code> made visible rather than merely obeyed
+      &mdash; and the Edit/Preview toggle disappears because <b>locked already is the preview</b>: two
+      controls collapse into one. Unlocking flips the header badge to an accent state, and only then do
+      the images get an explicit lock chip, because only then is everything around them editable and
+      the exception needs saying. <b>Cost:</b> every edit costs one extra click, and a Reviewer who
+      came from the Library specifically to fix one typo pays it every time.</p>
+    <div class="frame" data-app-theme="dark"></div>
+  </section>
+</div>
+
+<div class="bar">
+  <span class="tag">proto</span>
+  <button data-nav="-1" title="Previous variant (left arrow)">&larr;</button>
+  <span class="lbl" id="lbl">A &mdash; Nothing added</span>
+  <button data-nav="1" title="Next variant (right arrow)">&rarr;</button>
+  <button id="theme" title="Toggle the app's theme">Light</button>
+  <span class="st" id="st">clean</span>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var NAMES = { A: "Nothing added", B: "Provenance rail", C: "Read first, unlock to edit" };
+  var KEYS = ["A", "B", "C"];
+
+  var BUNDLE = {
+    title: "Mobile nav — drawer overlaps the header",
+    notes: "Three regressions in the mobile drawer, all reproducible on a 390px viewport. The header "
+         + "z-index is the common cause; Finding 3 is the one to start from.",
+    composed: "yesterday, 16:42",
+    findings: [
+      { note: "Drawer opens under the sticky header, so the first two items are unreachable.",
+        markers: [{ n: 1, t: "header sits above the drawer" }, { n: 2, t: "first item clipped" }],
+        bars: [[6, 8, 58, 6, 1], [6, 22, 92, 5, 0], [6, 34, 44, 5, 0], [6, 52, 78, 5, 0]] },
+      { note: "Closing the drawer leaves the scroll lock on the body.",
+        markers: [],
+        bars: [[6, 8, 40, 6, 1], [6, 24, 96, 5, 0], [6, 40, 66, 5, 0]] },
+      { note: "The overlay swallows the first tap after a rotate.",
+        markers: [{ n: 1, t: "tap lands on the scrim" }],
+        bars: [[6, 8, 70, 6, 1], [6, 26, 54, 5, 0], [6, 38, 88, 5, 0], [6, 54, 30, 5, 0]] }
+    ]
+  };
+
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt !== undefined) n.textContent = txt;
+    return n;
+  }
+  function svg(d, stroke, size) {
+    var w = el("span");
+    w.style.display = "flex";
+    w.innerHTML = '<svg width="' + size + '" height="' + size + '" viewBox="0 0 16 16" fill="none" '
+      + 'stroke="' + stroke + '" stroke-width="1.5" stroke-linecap="round" '
+      + 'stroke-linejoin="round">' + d + '</svg>';
+    return w;
+  }
+  var ICON_PKG = '<path d="M2.2 4.6L8 1.9l5.8 2.7v6.8L8 14.1l-5.8-2.7z"/>'
+               + '<path d="M2.2 4.6L8 7.3l5.8-2.7M8 7.3v6.8"/>';
+  var ICON_X = '<path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/>';
+  var ICON_LOCK = '<rect x="3.2" y="7" width="9.6" height="6.4" rx="1"/>'
+                + '<path d="M5.6 7V5.2a2.4 2.4 0 014.8 0V7"/>';
+  var ICON_PEN = '<path d="M11.2 2.4l2.4 2.4-8 8H3.2v-2.4z"/>';
+
+  /* ---- the Editor behind the scrim. Rough on purpose: it is context, not design. ---- */
+  function editorBackdrop() {
+    var frag = document.createDocumentFragment();
+    var tb = el("div", "ed-toolbar");
+    [30, 30, 30, 74, 30, 30].forEach(function (w, i) {
+      var p = el("div", "ed-pill");
+      p.style.width = w + "px";
+      if (i === 3) { p.style.background = "var(--accent-surface)"; p.style.borderColor = "transparent"; }
+      tb.appendChild(p);
+    });
+    tb.appendChild(el("div", "grow"));
+    var asm = el("div", "ed-pill");
+    asm.style.width = "84px";
+    asm.style.background = "var(--accent-primary)";
+    asm.style.borderColor = "transparent";
+    tb.appendChild(asm);
+    frag.appendChild(tb);
+
+    var cv = el("div", "ed-canvas");
+    cv.appendChild(el("div", "ed-shot"));
+    frag.appendChild(cv);
+
+    var st = el("div", "ed-strip");
+    for (var i = 0; i < 9; i++) st.appendChild(el("div", "ed-card"));
+    frag.appendChild(st);
+    return frag;
+  }
+
+  /* ---- the document. One renderer, because all three variants show the same document;
+         what differs is the frame each one builds around it. ---- */
+  function shot(bars, width) {
+    var s = el("div", "shot");
+    s.style.width = width + "px";
+    s.style.height = Math.round(width * 0.62) + "px";
+    bars.forEach(function (b) {
+      var i = el("i", b[4] ? "k" : "");
+      i.style.left = b[0] + "%"; i.style.top = b[1] + "%";
+      i.style.width = b[2] + "%"; i.style.height = b[3] + "%";
+      s.appendChild(i);
+    });
+    return s;
+  }
+
+  function docBody(opts) {
+    var frag = document.createDocumentFragment();
+    var ro = !!opts.readonly;
+
+    var t = el("input", "f f-title");
+    t.value = BUNDLE.title;
+    t.placeholder = "Name this handoff";
+    if (ro) { t.readOnly = true; } else { t.dataset.field = "title"; }
+    frag.appendChild(t);
+
+    var h = el("div", "h2");
+    h.innerHTML = '<span class="hash">## </span>Bundle Notes';
+    frag.appendChild(h);
+    var bn = el("textarea", "f f-body");
+    bn.rows = 3;
+    bn.value = BUNDLE.notes;
+    bn.placeholder = "What is this handoff about? The agent reads this first.";
+    if (ro) { bn.readOnly = true; } else { bn.dataset.field = "bundle notes"; }
+    frag.appendChild(bn);
+
+    BUNDLE.findings.forEach(function (f, idx) {
+      var fh = el("div", "h2");
+      fh.innerHTML = '<span class="hash">## </span>Finding ' + (idx + 1);
+      frag.appendChild(fh);
+
+      /* the image, capped at HALF the measure - appwindow.slint:3585 */
+      var row = el("div");
+      row.style.cssText = "display:flex;gap:8px;align-items:flex-start;";
+      row.appendChild(shot(f.bars, Math.round((opts.measure - 52) * 0.5)));
+      if (opts.lockChip) {
+        var chip = el("div");
+        chip.style.cssText = "display:flex;align-items:center;gap:5px;padding:3px 8px;"
+          + "border-radius:3px;background:var(--bg-subtle);border:1px solid var(--border-subtle);"
+          + "font:700 10px 'IBM Plex Sans';color:var(--text-dim);white-space:nowrap;";
+        chip.appendChild(svg(ICON_LOCK, "var(--text-dim)", 11));
+        chip.appendChild(el("span", "", "Fixed at compose"));
+        row.appendChild(chip);
+      }
+      frag.appendChild(row);
+
+      var fn = el("textarea", "f f-body");
+      fn.rows = 2;
+      fn.value = f.note;
+      fn.placeholder = "(no note)";
+      if (ro) { fn.readOnly = true; } else { fn.dataset.field = "Finding " + (idx + 1) + " note"; }
+      frag.appendChild(fn);
+
+      f.markers.forEach(function (m) {
+        var mr = el("div", "mrow");
+        mr.appendChild(el("div", "mlab", m.n + "."));
+        var mi = el("input", "f f-body");
+        mi.value = m.t;
+        mi.placeholder = "(no note)";
+        if (ro) { mi.readOnly = true; }
+        else { mi.dataset.field = "F" + (idx + 1) + " marker " + m.n; }
+        mr.appendChild(mi);
+        frag.appendChild(mr);
+      });
+    });
+    return frag;
+  }
+
+  /* ---- shared chrome. A header is fine to share; a layout is not. ---- */
+  function modalHeader(title, extras) {
+    var h = el("div", "mhead");
+    h.appendChild(svg(ICON_PKG, "var(--accent-primary)", 15));
+    h.appendChild(el("div", "mtitle", title));
+    h.appendChild(el("div", "grow"));
+    (extras || []).forEach(function (n) { h.appendChild(n); });
+    var x = el("div", "close");
+    x.appendChild(svg(ICON_X, "var(--text-muted)", 13));
+    h.appendChild(x);
+    return h;
+  }
+
+  function segmented() {
+    var s = el("div", "seg");
+    ["Edit", "Preview"].forEach(function (l, i) {
+      var b = el("button", "", l);
+      b.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+      b.onclick = function () {
+        Array.prototype.forEach.call(s.children, function (c) {
+          c.setAttribute("aria-pressed", String(c === b));
+        });
+      };
+      s.appendChild(b);
+    });
+    return s;
+  }
+
+  function dialog(frame, title, bodyHtml, keepLabel, goLabel, onGo) {
+    var sc = el("div", "dscrim");
+    var d = el("div", "dlg");
+    d.appendChild(el("div", "t", title));
+    var b = el("div", "b");
+    b.innerHTML = bodyHtml;
+    d.appendChild(b);
+    var r = el("div", "r");
+    var keep = el("button", "btn btn-ghost", keepLabel);
+    keep.onclick = function () { sc.remove(); };
+    var go = el("button", "btn btn-primary", goLabel);
+    go.onclick = function () { sc.remove(); if (onGo) onGo(); };
+    r.appendChild(keep);
+    r.appendChild(go);
+    d.appendChild(r);
+    sc.appendChild(d);
+    frame.appendChild(sc);
+  }
+
+  function toast(frame, msg) {
+    var old = frame.querySelector(".toast");
+    if (old) old.remove();
+    var t = el("div", "toast");
+    t.appendChild(el("span", "dot"));
+    t.appendChild(el("span", "", msg));
+    frame.appendChild(t);
+    setTimeout(function () { t.remove(); }, 2800);
+  }
+
+  /* ---- dirty tracking. Rule 5 of the prototype skill: surface the state. ---- */
+  var dirty = { A: [], B: [], C: [] };
+  var mode = { C: "locked" };
+
+  function watch(root, key, onChange) {
+    root.addEventListener("input", function (e) {
+      var f = e.target.dataset && e.target.dataset.field;
+      if (!f) return;
+      if (dirty[key].indexOf(f) < 0) dirty[key].push(f);
+      if (onChange) onChange();
+      paintState();
+    });
+  }
+  function paintState() {
+    var k = current();
+    var d = dirty[k].length ? "unsaved: " + dirty[k].join(", ") : "clean";
+    document.getElementById("st").textContent = d + (k === "C" ? "  ·  " + mode.C : "");
+  }
+
+  /* ================================================== VARIANT A */
+  function buildA(frame) {
+    frame.textContent = "";
+    frame.appendChild(editorBackdrop());
+    var scrim = el("div", "scrim");
+    var m = el("div", "modal");
+
+    /* The count cannot change here, so the live readout becomes provenance. */
+    m.appendChild(modalHeader("Review & Update", [
+      el("div", "meta", "3 Findings · composed " + BUNDLE.composed),
+      segmented()
+    ]));
+
+    var body = el("div", "body");
+    body.appendChild(docBody({ measure: 521, lockChip: false }));
+    m.appendChild(body);
+
+    var foot = el("div", "foot");
+    var cancel = el("button", "btn btn-ghost", "Cancel");
+    var save = el("button", "btn btn-primary");
+    save.appendChild(svg(ICON_PKG, "#fff", 12));
+    save.appendChild(el("span", "", "Save"));
+
+    /* Always enabled: saving an unchanged Bundle rewrites identical bytes and costs nothing,
+       and a disabled primary makes a Reviewer hunt for what they failed to change. */
+    cancel.onclick = function () {
+      if (!dirty.A.length) { toast(frame, "Closed. Nothing was changed."); return; }
+      dialog(frame, "Discard your changes?",
+        "The edits you made to this Bundle have not been saved, and closing now loses them. "
+        + "The Bundle itself, and the captures behind it, are untouched either way.",
+        "Keep editing", "Discard", function () {
+          dirty.A = [];
+          buildA(frame);
+          toast(frame, "Changes discarded.");
+          paintState();
+        });
+    };
+    save.onclick = function () {
+      dirty.A = [];
+      toast(frame, "Saved. Back to the Library.");
+      paintState();
+    };
+    foot.appendChild(cancel);
+    foot.appendChild(save);
+    m.appendChild(foot);
+
+    scrim.appendChild(m);
+    frame.appendChild(scrim);
+    watch(m, "A");
+  }
+
+  /* ================================================== VARIANT B */
+  function buildB(frame) {
+    frame.textContent = "";
+    frame.appendChild(editorBackdrop());
+    var scrim = el("div", "scrim");
+    var m = el("div", "modal wide");
+    m.appendChild(modalHeader("Review & Update", []));
+
+    var split = el("div");
+    split.style.cssText = "flex:1 1 auto;min-height:0;display:flex;";
+
+    var body = el("div", "body");
+    body.style.flex = "1 1 auto";
+    body.appendChild(docBody({ measure: 470, lockChip: false }));
+    split.appendChild(body);
+
+    var rail = el("div");
+    rail.style.cssText = "width:238px;flex:none;background:var(--bg-card);"
+      + "border-left:1px solid var(--border-subtle);padding:16px;overflow:auto;"
+      + "display:flex;flex-direction:column;gap:16px;";
+
+    var about = el("div");
+    about.style.cssText = "display:flex;flex-direction:column;gap:6px;";
+    about.appendChild(el("div", "slab", "This Bundle"));
+    ["3 Findings", "composed " + BUNDLE.composed, "4.1 MB on disk",
+     "originals: 3 still on disk"].forEach(function (r) {
+      var line = el("div", "meta", r);
+      line.style.lineHeight = "1.7";
+      about.appendChild(line);
+    });
+    rail.appendChild(about);
+
+    var rules = el("div");
+    rules.style.cssText = "display:flex;flex-direction:column;gap:6px;";
+    rules.appendChild(el("div", "slab", "What you can change"));
+    var p = el("div");
+    p.style.cssText = "font-size:11.5px;line-height:1.65;color:var(--text-secondary);"
+      + "text-wrap:pretty;";
+    p.innerHTML = "The title, the Bundle notes, and the notes on each Finding and Marker. "
+      + "<b>The images are fixed</b> — the set was settled when this Bundle was composed and "
+      + "cannot be added to, reordered or replaced here. Editing this Bundle never changes the "
+      + "captures it came from.";
+    rules.appendChild(p);
+    rail.appendChild(rules);
+
+    rail.appendChild(el("div", "grow"));
+
+    var vsel = el("div");
+    vsel.style.cssText = "display:flex;flex-direction:column;gap:6px;";
+    vsel.appendChild(el("div", "slab", "View"));
+    vsel.appendChild(segmented());
+    rail.appendChild(vsel);
+
+    var dwrap = el("div");
+    dwrap.style.cssText = "display:flex;flex-direction:column;gap:6px;"
+      + "border-top:1px solid var(--border-subtle);padding-top:14px;";
+    dwrap.appendChild(el("div", "slab", "Unsaved"));
+    var dlist = el("div");
+    dlist.style.cssText = "font-family:'IBM Plex Mono',monospace;font-size:10px;line-height:1.8;"
+      + "color:var(--text-muted);";
+    dwrap.appendChild(dlist);
+    rail.appendChild(dwrap);
+
+    split.appendChild(rail);
+    m.appendChild(split);
+
+    var foot = el("div", "foot");
+    var cancel = el("button", "btn btn-ghost", "Cancel");
+    var save = el("button", "btn btn-primary");
+    save.appendChild(svg(ICON_PKG, "#fff", 12));
+    save.appendChild(el("span", "", "Save"));
+
+    function repaint() {
+      /* Dirty-only, and the rail is what makes that legible rather than mysterious. */
+      save.disabled = dirty.B.length === 0;
+      dlist.textContent = "";
+      if (!dirty.B.length) {
+        var n = el("div", "", "nothing yet");
+        n.style.color = "var(--text-dim)";
+        dlist.appendChild(n);
+      } else {
+        dirty.B.forEach(function (f) { dlist.appendChild(el("div", "", "• " + f)); });
+      }
+    }
+    cancel.onclick = function () {
+      if (!dirty.B.length) { toast(frame, "Closed. Nothing was changed."); return; }
+      dialog(frame, "Discard your changes?",
+        "You changed <em>" + dirty.B.join("</em>, <em>") + "</em>. Closing now loses those changes "
+        + "and nothing else — the captures behind this Bundle are untouched either way.",
+        "Keep editing", "Discard", function () {
+          dirty.B = [];
+          buildB(frame);
+          toast(frame, "Changes discarded.");
+          paintState();
+        });
+    };
+    save.onclick = function () {
+      var n = dirty.B.length;
+      dirty.B = [];
+      repaint();
+      /* Stays in the window: the rail is the receipt, so leaving throws away the evidence. */
+      var stamp = el("div", "meta", "saved just now · " + n + " change" + (n === 1 ? "" : "s"));
+      stamp.style.color = "var(--semantic-success)";
+      dlist.appendChild(stamp);
+      paintState();
+    };
+    foot.appendChild(cancel);
+    foot.appendChild(save);
+    m.appendChild(foot);
+
+    scrim.appendChild(m);
+    frame.appendChild(scrim);
+    watch(m, "B", repaint);
+    repaint();
+  }
+
+  /* ================================================== VARIANT C */
+  function buildC(frame) {
+    frame.textContent = "";
+    frame.appendChild(editorBackdrop());
+    var scrim = el("div", "scrim");
+    var m = el("div", "modal");
+    var locked = mode.C === "locked";
+
+    /* Locked IS the preview, so there is no Edit/Preview pair to carry. */
+    var badge = el("div");
+    badge.style.cssText = "display:flex;align-items:center;gap:6px;height:22px;padding:0 9px;"
+      + "border-radius:3px;font:700 10px 'IBM Plex Sans';white-space:nowrap;flex:none;"
+      + (locked
+        ? "background:var(--bg-subtle);border:1px solid var(--border-subtle);color:var(--text-muted);"
+        : "background:var(--accent-surface);color:var(--accent-active);");
+    badge.appendChild(svg(locked ? ICON_LOCK : ICON_PEN,
+      locked ? "var(--text-muted)" : "var(--accent-active)", 11));
+    badge.appendChild(el("span", "", locked ? "As composed" : "Editing"));
+
+    m.appendChild(modalHeader("Review & Update", [
+      el("div", "meta", "3 Findings · " + BUNDLE.composed),
+      badge
+    ]));
+
+    var body = el("div", "body");
+    if (locked) body.style.background = "var(--bg-subtle)";
+    body.appendChild(docBody({ measure: 521, readonly: locked, lockChip: !locked }));
+    m.appendChild(body);
+
+    var foot = el("div", "foot");
+    if (locked) {
+      var close = el("button", "btn btn-ghost", "Close");
+      close.onclick = function () { toast(frame, "Closed. Nothing was changed."); };
+      var edit = el("button", "btn btn-primary");
+      edit.appendChild(svg(ICON_PEN, "#fff", 12));
+      edit.appendChild(el("span", "", "Edit"));
+      edit.onclick = function () { mode.C = "editing"; buildC(frame); paintState(); };
+      foot.appendChild(close);
+      foot.appendChild(edit);
+    } else {
+      var back = el("button", "btn btn-ghost", "Cancel");
+      back.onclick = function () {
+        if (!dirty.C.length) { mode.C = "locked"; buildC(frame); paintState(); return; }
+        dialog(frame, "Discard your changes?",
+          "The edits you made have not been saved, and going back to the composed version loses "
+          + "them. The captures behind this Bundle are untouched either way.",
+          "Keep editing", "Discard", function () {
+            dirty.C = [];
+            mode.C = "locked";
+            buildC(frame);
+            toast(frame, "Changes discarded.");
+            paintState();
+          });
+      };
+      var save = el("button", "btn btn-primary");
+      save.appendChild(svg(ICON_PKG, "#fff", 12));
+      save.appendChild(el("span", "", "Save"));
+      save.onclick = function () {
+        dirty.C = [];
+        mode.C = "locked";
+        buildC(frame);
+        toast(frame, "Saved. Showing the Bundle as it now stands.");
+        paintState();
+      };
+      foot.appendChild(back);
+      foot.appendChild(save);
+    }
+    m.appendChild(foot);
+
+    scrim.appendChild(m);
+    frame.appendChild(scrim);
+    watch(m, "C");
+  }
+
+  var BUILD = { A: buildA, B: buildB, C: buildC };
+
+  /* ---- the switcher ---- */
+  function current() {
+    var v = new URLSearchParams(location.search).get("variant");
+    return KEYS.indexOf(v) >= 0 ? v : "A";
+  }
+  var appTheme = "dark";
+  function render() {
+    var k = current();
+    KEYS.forEach(function (key) {
+      document.querySelector('[data-variant="' + key + '"]').hidden = key !== k;
+    });
+    var frame = document.querySelector('[data-variant="' + k + '"] .frame');
+    frame.dataset.appTheme = appTheme;
+    BUILD[k](frame);
+    document.getElementById("lbl").innerHTML = k + " &mdash; " + NAMES[k];
+    paintState();
+  }
+  function go(step) {
+    var i = (KEYS.indexOf(current()) + step + KEYS.length) % KEYS.length;
+    var u = new URL(location.href);
+    u.searchParams.set("variant", KEYS[i]);
+    history.replaceState(null, "", u);
+    render();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-nav]"), function (b) {
+    b.onclick = function () { go(Number(b.dataset.nav)); };
+  });
+  document.addEventListener("keydown", function (e) {
+    var t = e.target.tagName;
+    if (t === "INPUT" || t === "TEXTAREA" || e.target.isContentEditable) return;
+    if (e.key === "ArrowLeft") go(-1);
+    if (e.key === "ArrowRight") go(1);
+  });
+
+  var themeBtn = document.getElementById("theme");
+  themeBtn.onclick = function () {
+    appTheme = appTheme === "dark" ? "light" : "dark";
+    themeBtn.textContent = appTheme === "dark" ? "Light" : "Dark";
+    Array.prototype.forEach.call(document.querySelectorAll(".frame"), function (f) {
+      f.dataset.appTheme = appTheme;
+    });
+  };
+
+  render();
+})();
+</script>
