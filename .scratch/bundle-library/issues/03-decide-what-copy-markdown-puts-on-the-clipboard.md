@@ -1,7 +1,7 @@
 # 03: Decide what Copy Markdown puts on the clipboard
 
 **Type:** grilling
-**Status:** open
+**Status:** resolved
 **Blocked by:** None (can start immediately)
 
 ## Question
@@ -173,3 +173,79 @@ all.** There is no text clipboard call anywhere in the tree — every `clipboard
 `raw::set_bitmap_with` for images, serving `FR-36` — and `apps/desktop/ui/appwindow.slint` has no
 copy-markdown callback, only a `bundle-preview-markdown` display property at `:1342`. So neither
 question is being asked about behaviour anyone has lived with. `OQ-1` stays open for the same reason.
+
+## Answer
+
+**Everything on this ticket is settled.** Three items closed in one grilling round with the owner on
+2026-08-31, on top of the two already answered.
+
+**The text.** The whole stored document, with image links rewritten to absolute paths. Owner's answer.
+
+**The encoding — settled by test, not argument.** Forward slashes wrapped in `<>`. This ticket required
+the chosen form be *"proven against a Vault path containing a space"*, so six candidate forms were run
+through a CommonMark reference implementation over three realistic Vault paths: one with a space, one
+with a space and parentheses (`Snapdown Vault (2024)`), one with a space and an apostrophe
+(`Wira's Vault`). Same result for all three:
+
+| Form | Result |
+|---|---|
+| raw Windows backslashes | **fails** — no image at all |
+| bare forward slashes | **fails** — the space ends the destination |
+| **forward slashes in `<>`** | **works** |
+| percent-encoded | works, but the consumer must decode |
+| `file:///` percent-encoded | **fails** |
+| `file:///` in `<>` | **fails** |
+
+**`file:///` was one of the three options this ticket offered, and it does not work.** Its failure is
+not syntactic — verified by re-running with the renderer's link validator disabled, at which point both
+forms parse. What rejects it is the **default security blocklist on the `file:` scheme** that real
+Markdown readers apply and a consumer cannot switch off. So it fails *silently* in readers nobody
+controls, which is worse than a syntax error. Struck from the options.
+
+`<>` beat percent-encoding on one measured property: a conforming parser strips the brackets and hands
+the consumer the path **with its space intact**, so nothing has to decode on the other side. The only
+consumer is a local agent.
+
+**`AD-9`.** No conflict. `DEC-012` (`applied`) narrowed `AD-9` to guarantee one authored **document**
+rather than one set of bytes, on the strength of `AD-9`'s own **Prevents** — the harm it names is two
+readers disagreeing about the same review, and a link that resolves for its own reader does not cause
+it. `NFR-8` untouched: the stored file keeps its folder-relative links.
+
+**What the Reviewer is told: the paths, not the images.** Images can never travel on a text clipboard —
+no chat client loads a local file — so warning about them warns about an impossibility. What is worth
+saying is that the copied text carries **absolute disk locations**, because those contain the
+operator's user name and travel wherever the text is pasted, and the toast is the only place a Reviewer
+would ever learn it. This follows the house pattern rather than inventing one: both existing clipboard
+toasts already state what did and did not travel — *"Image copied, with its Markers and annotations"*
+(`main.rs:1331`) and *"Copied to the clipboard, not saved"* (`main.rs:3011`). A bare `Copied` would have
+made this the only clipboard path in the product that says less than its siblings. `FR-12`'s consequence
+now carries it.
+
+**`Open file location` is not redundant, and the question turned out to be a fossil.** Ticket 01 had
+already placed it as one of the two hover actions when it resolved, so retiring it would have reopened
+a closed ticket. The owner's reasoning: in this product **export means PDF only** — there is no Markdown
+export, there is `Copy Markdown` — and `Open file location` is simply about seeing where the folder is.
+*Why* a Reviewer reaches for it is deliberately **not traced**: it is a power user's way out to the
+filesystem. Recorded as *answered by ticket 01*, not as decided here.
+
+Two consequences the owner's answer produced, both landed:
+
+- **`FR-43`** — opening a Bundle's folder had **no promise anywhere**. Zero hits in `requirements.yaml`
+  or the PRD; only `reveal` for a *Finding* in `defects.yaml`. The Library row had carried an unbacked
+  button, which the map's own rule forbids, and `/to-spec` cannot cite what has no id. `FR-43` is
+  deliberately the thinnest promise in the registry: `CAP-4`, `component: bundle`, `writes: []`, and a
+  `no_uc:` that says in the owner's own terms why no use case is written.
+- **"Export" is now a glossary entry** meaning PDF only. The drift was narrower than feared and the
+  **brief was already on the owner's side** — `brief.md:86` says *"the output format is the point rather
+  than an export option"*. One PRD line in § 2.3 called the Markdown an "export" and is corrected.
+  `INV-EXPORT-001`, the code invariant naming the Markdown golden test, is left alone by decision:
+  renaming it is code churn for a string nobody reads outside one assertion.
+
+**One correction found on the way, unrelated to this ticket's question.** `NFR-19`, written that same
+morning, forbade *"no image split across a page break"* — which forbids exactly what ticket 07's
+measured tall-image solution does above aspect 3. Corrected to forbid the *accidental* split.
+
+**Still open elsewhere, and deliberately:** `OQ-1` stays open and untested, because **`FR-12` has no
+implementation at all** — there is no text clipboard call anywhere in the tree, and the Slint UI has no
+copy-markdown callback. Every decision on this ticket was made on paper about behaviour nobody has yet
+lived with, and that is worth remembering when the first build of it lands.

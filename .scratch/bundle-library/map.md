@@ -154,6 +154,16 @@ the scope boundary does.
   Once sealed, only `Delete` remains. The whole `bundles/<id>/` folder goes,
   **files before the database row**, so a failure stays visible and retryable. Bulk lives in a
   `Reclaim space` screen reached from the Library header and from Settings.
+- [Decide what Copy Markdown puts on the clipboard](issues/03-decide-what-copy-markdown-puts-on-the-clipboard.md):
+  the whole stored document, image links rewritten to absolute paths, encoded as **forward slashes
+  wrapped in `<>`** — settled by running six candidate forms through a CommonMark reference
+  implementation over three real Vault paths, which killed `file:///` (blocked by readers' `file:`
+  security blocklist, not by syntax) and showed `<>` hands the consumer a path needing no decode. The
+  toast names the **paths**, not the images: images can never travel on a text clipboard, while an
+  absolute path carries the operator's user name and the toast is the only place they learn it.
+  `Open file location` is **not** redundant and the question was a fossil — ticket 01 had already placed
+  it. Two consequences landed: `FR-43`, because that action had no promise at all, and a glossary entry
+  fixing **export = PDF only**. `AD-9` cleared by `DEC-012`.
 - [Grow the promises this map needs](issues/08-grow-pdf-export-and-bundle-rename-into-scope.md):
   all four promises exist — `CAP-12`/`FR-39` Export PDF, `FR-40` edit a composed Bundle's title and
   notes, `FR-41` discard the source Findings, `FR-42` reclaim space — plus `NFR-19`, `UC-28`–`UC-31`

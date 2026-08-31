@@ -12,6 +12,7 @@ updated: "2026-08-31"
 | Date | What changed | Why | Releases affected |
 |---|---|---|---|
 | 2026-08-22 | Initial version | The desktop review loop is the product's core; nothing else can be handed off until findings exist | r1 |
+| 2026-08-31 | Closed the last of ticket 03's open items. `FR-43` promises opening a Bundle's folder — an action the Library row already carried with nothing behind it. `FR-12` now states that the Reviewer is told the copied Markdown carries absolute image paths, and its encoding is settled by test rather than argument. `NFR-19` corrected: written the same morning, it forbade the very page-slicing that the tall-image research it rests on prescribes. One wording fix in § 2.3, where a journey called the Markdown an "export" — in this product **export means PDF**, and the Markdown path is **Copy**. | A row action with no requirement cannot be specced at all, and the clipboard promise was silent about the one thing a Reviewer cannot discover for themselves: the pasted text contains absolute disk paths, which carry the operator's user name. `NFR-19` was a self-contradiction introduced hours earlier and would have been carried into the first spec that cited it. | r3 |
 | 2026-08-31 | Grew four promises the Bundle Library needs and corrected two that contradicted them. **New:** § 4.10 Export PDF (`CAP-12`, `FR-39`, `NFR-19`), `FR-40` editing a composed Bundle's title and notes, `FR-41` discarding a Bundle's source Findings, `FR-42` the reclaim-space surface. **Removed from § 6.2:** the non-goals "Renaming a Bundle" and "Exporting a Bundle to anything but Markdown". **Corrected:** `FR-12` no longer fixes the clipboard to relative image links, and `FR-14` no longer offers to destroy a Bundle's source Findings in the same confirmation. | A Reviewer can assemble Bundles but has almost no way to live with them afterwards — no way to fix a typo without recomposing, no way to hand one to a person rather than an agent, and no way to reclaim the disk an archived review is holding. The two corrections are older promises that pointed the opposite way from these four, and leaving them would have made this document promise two designs at once. `FR-41` and `FR-42` sit under `CAP-5` rather than `CAP-4` because they destroy Findings, which the `bundle` component has no authority to write. | r3 |
 | 2026-08-23 | Added § 4.7 (`CAP-9`, `FR-27`–`FR-29`) and `NFR-16`–`NFR-18`; rewrote `FR-5`; amended `FR-18` | r1 and r2 shipped every promised capability, and the first sustained use produced a list of experience defects rather than missing features. `BG-7` now carries that, and this initiative gains the requirements that make it checkable | r3 |
 
@@ -125,7 +126,7 @@ images cheap enough that a machine can afford to read them.
   - **Persona + context:** the Reviewer in Editor, holding a screenshot with confidential API keys and a complex UI layout.
   - **Entry state:** Editor open, Finding selected on canvas.
   - **Path:** selects Blur tool and drags a box over the API key line → selects Shape tool and drags a red outline box around a misaligned card → selects Arrow tool and drags an arrow from the callout text to the broken button → selects Callout tool and types a clarification note, adjusting its tail pointer.
-  - **Climax:** the screenshot now has crystal-clear visual cues and masked credentials, but the Finding's Note lines and Markdown export contain strictly the numbered findings.
+  - **Climax:** the screenshot now has crystal-clear visual cues and masked credentials, but the Finding's Note lines and the composed Markdown contain strictly the numbered findings.
   - **Resolution:** burning and composing the Bundle includes the blurred and annotated image cleanly without note clutter.
 
 ## 3. Glossary
@@ -394,18 +395,58 @@ document, with every image link naming a location the reader of the pasted text 
 - The copied text is the Bundle's document, with no added wrapper.
 - The image links in the copied text are absolute, so they resolve regardless of which folder the
   reader of the pasted text is working in.
-- The Reviewer is told the copy succeeded.
+- The Reviewer is told the copy succeeded **and** that what was copied carries absolute image paths.
+  A person reading the pasted text cannot discover that for themselves, and it is the only place they
+  learn that the text contains disk locations.
 
 **Corrected 2026-08-31.** The second consequence used to read *"The image references in the copied
 text are the same relative paths as in the file"*, and the proof of done used to end *"yields the
 Bundle's complete Markdown, unchanged"*. Together they fixed the clipboard to folder-relative links,
 which resolve for nobody reading the pasted text anywhere but inside the Bundle's own folder — so the
 primary handoff path was promising something that does not arrive. This requirement now **permits**
-an absolute rendering of those links. It deliberately does **not** settle which encoding is emitted,
-whether the Reviewer is told that images do not travel on a text clipboard, or whether `Open file
-location` is thereby redundant; those are open and belong together. Note that `NFR-8` is untouched:
-it governs the **stored** file, which keeps its relative links — the two conventions serve two
-different readers, and neither replaces the other.
+an absolute rendering of those links. All three of those are now settled, and this is what each turned out to be. Note that `NFR-8` is
+untouched throughout: it governs the **stored** file, which keeps its relative links — the two
+conventions serve two different readers, and neither replaces the other.
+
+**Settled 2026-08-31, and by test rather than by argument.** The links are rendered as forward slashes
+wrapped in angle brackets. Six candidate forms were run through a CommonMark reference implementation
+over three realistic Vault paths — one containing a space, one a space and parentheses, one a space and
+an apostrophe. Raw Windows backslashes and bare forward slashes produce **no image at all**: the space
+ends the destination. Percent-encoding works but hands the reader `Snapdown%20Vault` to decode. Both
+`file:///` forms fail — and not on syntax, which is valid, but on the link-security blocklist that
+real Markdown readers apply to the `file:` scheme and that a reader cannot switch off. Angle brackets
+win because a conforming parser strips them and yields the path with its space intact.
+
+**What the Reviewer is told, and what they are deliberately not told.** The toast names the paths, not
+the images. Images could never travel on a text clipboard — no chat client loads a local file — so
+warning about them would warn about an impossibility. What is worth saying is that the text carries
+absolute disk locations, because those contain the operator's user name and go wherever the text is
+pasted. The toast does **not** point the Reviewer at `Open file location`: that action sits one place
+away on the same row, already visible.
+
+#### FR-43: Open a Bundle's folder in the file manager
+
+The Reviewer can open the folder holding a Bundle's Markdown and its images, in the operating system's
+own file manager.
+
+**Proof of done:** Choosing it on a Bundle's row opens that Bundle's own folder in the file manager,
+with the Bundle's Markdown and its images visible in it.
+
+**Consequences (testable):**
+- It opens the Bundle's own folder, not the Vault root.
+- It changes nothing: no file is written, moved, or renamed.
+- A Bundle whose folder is missing reports that rather than opening the wrong folder.
+
+**This is the thinnest promise in this document, and that is deliberate.** The Library row has carried
+this action since the screen was designed, with nothing promising it — which the product's own rule
+forbids, because an unbacked button is how the toolbar ended up showing shortcut badges that did
+nothing. It gets no use case: the Reviewer does not open Snapdown in order to look at a folder, and
+the decision of 2026-08-31 was that *why* someone reaches for this is deliberately not traced — it is
+a power user's way out to the filesystem. The promise exists so the next reader knows the affordance
+is intentional **and** intentionally unexplained.
+
+It is also not an export. In this product **export means PDF** (`FR-39`); the Markdown path is
+**Copy** (`FR-12`), and this is neither — it hands over a location, not a document.
 
 #### FR-14: Delete a Bundle with its images
 
@@ -968,8 +1009,14 @@ quietly dropped:
   silently rewrite the past. Enforced by an assertion that every stored Finding carries its resolved
   budget. This exists because `FR-5` forbids re-encoding an existing Finding: without the record,
   two Findings taken a month apart on "the same" setting differ with nothing to explain why.
-- **NFR-19** — serves BG-2. An exported PDF carries a real text layer, and no image in it is split
-  across a page break. Enforced by a test that extracts the text back out of the produced PDF and
+- **NFR-19** — serves BG-2. An exported PDF carries a real text layer, and no image in it is broken
+  across a page boundary except by the deliberate slicing a very tall image requires. **Corrected
+  2026-08-31**, hours after it was written: it first said "no image in it is split across a page
+  break", which forbade exactly what the tall-image research behind `FR-39` prescribes — above a
+  certain aspect ratio a screenshot is drawn at full text width and cut per page, embedded once. What
+  the requirement protects is the *accidental* split, an image landing half on one page because it
+  fell near the boundary. That is still forbidden. Enforced by a test that extracts the text back out
+  of the produced PDF and
   asserts the notes it should contain, plus a placement check read from the PDF's own image
   matrices. Asserting a `%PDF-` signature and a page count does **not** satisfy this: a fabricated
   header passes that, and this product has already spent five waves reporting a requirement met on

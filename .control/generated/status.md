@@ -7,7 +7,7 @@ promise_progress: 49%
 rtm_rows:
   green: 19
   counted: 39
-  excluded_no_uc: 6
+  excluded_no_uc: 7
 work_progress:
 - wave: W1
   status: closed

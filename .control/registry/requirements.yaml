@@ -217,8 +217,18 @@ functional:
     # This amendment RESTS ON the reading that a composer taking a base-path parameter satisfies
     # AD-9 rather than contradicting it. If that reading fails, AD-9 is contradicted and a DEC- is
     # mandatory. Owed to wdi-decision; not assumed silently.
+    # Encoding settled 2026-08-31 by TEST, not argument: forward slashes wrapped in `<>`. Six forms
+    # were run through a CommonMark reference implementation over three real Vault paths - one with a
+    # space, one with a space and parentheses, one with a space and an apostrophe. Raw backslashes and
+    # bare forward slashes produce no image at all. Percent-encoding also works but obliges the
+    # consumer to decode. BOTH `file:///` forms fail, and not on syntax - their syntax is valid,
+    # verified by re-running with the renderer's link validator disabled - but on markdown-it's default
+    # security blocklist for the `file:` scheme, which a consumer cannot turn off. `<>` wins because a
+    # conforming parser strips the brackets and hands the consumer the path with its space intact,
+    # needing no step on the other side.
     proof: Copying a Bundle and pasting into a plain text editor yields the Bundle's complete
-      document, with every image link naming a location the reader of the pasted text can open.
+      document, with every image link naming a location the reader of the pasted text can open, and
+      the Reviewer is told that what was copied carries absolute image paths.
   - id: FR-14
     title: Delete a Bundle with its images
     capability: CAP-4
@@ -233,6 +243,23 @@ functional:
     # owns only [Bundle, BundleItem] - so the prose had been promising past its own boundary.
     proof: Deleting a Bundle removes it from the Bundle list and leaves neither its Markdown nor its
       images in the Vault folder.
+  - id: FR-43
+    title: Open a Bundle's folder in the file manager
+    capability: CAP-4
+    component: bundle
+    writes: []
+    # Born 2026-08-31, and deliberately the thinnest promise in this registry. Ticket 01 of the Bundle
+    # Library map had already put this action on the Library row while nothing promised it, which the
+    # map's own rule forbids: an unbacked button repeats the mistake of the toolbar's fake 1-6 shortcut
+    # badges. `/to-spec` must cite every requirement by id, so a row action with no `FR-` cannot be
+    # specced at all.
+    no_uc: The Reviewer does not open Snapdown to look at a folder. This is a power user's way out to
+      the filesystem, and the owner's decision of 2026-08-31 was that WHY someone reaches for it is
+      deliberately not traced - so writing a use case here would be inventing a goal nobody stated.
+      The thin promise exists to record that the affordance is intentional AND intentionally
+      unexplained; without it the next reader takes it for a button somebody forgot to delete.
+    proof: Choosing it on a Bundle's row opens that Bundle's own folder in the operating system's file
+      manager, with the Bundle's Markdown and its images visible in it.
   - id: FR-40
     title: Edit a composed Bundle's title and notes
     capability: CAP-4
@@ -608,7 +635,14 @@ nonfunctional:
     component: finding
     enforced_by: An assertion that every stored Finding carries its resolved budget
   - id: NFR-19
-    title: An exported PDF carries a real text layer, and no image in it is split across a page break
+    title: An exported PDF carries a real text layer, and no image in it is broken across a page
+      boundary except by the deliberate slicing a very tall image requires
+    # Corrected 2026-08-31, the same day it was written. It first read "and no image in it is split
+    # across a page break", which forbade the one thing ticket 07's measured solution does: above
+    # aspect 3 a screenshot is drawn at full text width and cut per page, embedded once. The
+    # requirement contradicted the research it was written from. What it was protecting is the
+    # ACCIDENTAL split - an image landing half on one page because it happened to fall near the
+    # boundary - and that is still forbidden.
     goal: BG-2
     component: bundle
     # Asserting a `%PDF-` signature and a page count does NOT satisfy this. A fabricated header

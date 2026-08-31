@@ -51,6 +51,11 @@ here. The split test: does this term still hold if used in another product? Yes 
 - **Editor** — the Snapdown Editor: the desktop window that lists the Library, shows each Finding
   with its Note and Markers, and is where Bundles are composed. There is exactly one Editor window,
   and it is one of Snapdown's two **personas** rather than a second application. Source: `DEC-003`.
+- **Export** — rendering a Bundle as a **PDF**, and nothing else. Snapdown has no Markdown export:
+  the Markdown is the product's output format rather than one of several, so the path that hands it
+  over is **Copy** (`FR-12`) and the path that opens its folder is **Open file location** (`FR-43`).
+  Source: `FR-39`, `CAP-12`, and the Product Brief, which already put it this way at G1 — *"the output
+  format is the point rather than an export option"*. Settled as vocabulary on 2026-08-31.
 - **Finding** — one observation: a captured image, the Note that describes it, and the Markers drawn
   on it. The atomic unit of the product; nothing smaller is handed to an agent. A Finding has exactly
   one image file in the Vault.
