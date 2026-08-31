@@ -4,7 +4,7 @@
 
 Decisions are no longer looked up through the memlog — the memlog goes back to being just a pass log.
 
-**13 decisions** — applied: 7 · draft: 6.
+**13 decisions** — applied: 8 · draft: 5.
 
 | id | Title | Status | Type | Touches | File |
 | --- | --- | --- | --- | --- | --- |
@@ -20,4 +20,4 @@ Decisions are no longer looked up through the memlog — the memlog goes back to
 | `DEC-010` | `encoder_quality` means colour precision and a palette, not an encoder dial | `draft` | — | — | `.control/decisions/DEC-010-encoder-quality-is-colour-precision.md` |
 | `DEC-011` | WDI Method owns the documents, mattpocock/skills owns the code, and documents follow the code | `applied` | — | `AGENTS.md`, `.agents/AGENTS.md`, `.cursorrules`, `.github/validate-baseline.txt`, `_bmad/custom/bmad-correct-course.toml`, `docs/agents/domain.md`, `.claude/skills/`, `.agents/skills/` | `.control/decisions/DEC-011-documents-are-wdi-code-is-mattpocock.md` |
 | `DEC-012` | `AD-9` guarantees one authored document, not one set of bytes | `applied` | — | `.what/business-rules.md`, `.what/_prd/capture-to-markdown/prd.md`, `.what/bundle/SRS-bundle.md`, `.how/_platform/ARCHITECTURE-SPINE.md`, `.how/_platform/cross-cutting.md`, `.how/_platform/inventory-api.md`, `.how/_platform/inventory-db.md`, `.how/bundle/SDD-bundle.md`, `.how/agent-access/SDD-agent-access.md`, `.control/questions/assumptions.md`, `.control/questions/answered.md` | `.control/decisions/DEC-012-ad-9-guarantees-one-document-not-one-set-of-bytes.md` |
-| `DEC-013` | Review intensity is lowered to `high` on `settings`, `agent-access` and `sharing` | `draft` | — | — | `.control/decisions/DEC-013-review-intensity-lowered-on-three-sensitive-components.md` |
+| `DEC-013` | Review intensity is lowered to `high` on `settings`, `agent-access` and `sharing` | `applied` | — | `.control/registry/components.yaml` | `.control/decisions/DEC-013-review-intensity-lowered-on-three-sensitive-components.md` |

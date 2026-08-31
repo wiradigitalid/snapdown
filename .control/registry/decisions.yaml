@@ -156,8 +156,13 @@ decisions:
     created: "2026-08-31"
   - id: DEC-013
     title: Review intensity is lowered to `high` on `settings`, `agent-access` and `sharing`
-    status: draft
+    status: applied
     file: .control/decisions/DEC-013-review-intensity-lowered-on-three-sensitive-components.md
     serves: [CAP-6, CAP-7, CAP-8]
-    touches: []
+    # Accepted by the owner on 2026-08-31 after being shown what `high` costs per component, including
+    # the offer to hold `sharing` at `medium`. They accepted all three. Applied in the same act: a
+    # risk-acceptance's whole material effect is the three rows below plus their `risk_accepted_by:`
+    # pointer, and those were already live - the DEC- is the ratification the instruction owed.
+    touches:
+      - .control/registry/components.yaml
     created: "2026-08-31"

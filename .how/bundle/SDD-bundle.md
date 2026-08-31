@@ -173,6 +173,14 @@ over the Local API and owns those rows.
 | **`LC-014` → the clipboard** | Not applicable; the write is synchronous | The failure is **reported**. A silent clipboard failure loses the primary handoff and the Reviewer would not know (`FR-12`) | A clipboard that accepts the write and holds something else is undetectable, and the product does not claim to detect it |
 | **`LC-010` → `finding`** | Not applicable; in-process | A Finding deleted mid-composition fails the composition, all-or-nothing | **`BUG-1`.** A Finding deleted *after* composition cascades away the `bundle_item` row. The Bundle reports nothing and its item list is silently short |
 | **`LC-022` → `sharing`** | The publish dialog shows its own progress | Frozen by `DEC-005`; the surface shows current state and gains no behaviour | Out of scope this release |
+| **Saving an edited Bundle → `library.db` + `bundle.md`** | The window stays open and Save cannot be pressed twice | Either write failing means **neither lands** (`BR-5`, widened 2026-08-31). The Reviewer is told which file refused and the edit stays in the buffer, so Save can be pressed again | A write reporting success over a file that did not change is not detected. The same limit as `LC-014`'s clipboard row, and stated for the same reason |
+| **Export PDF → a folder the Reviewer chooses** | The export shows progress and the window cannot be dismissed under it | Reported with the path. **The only boundary in this component that writes outside the Vault**, so the ordinary Vault guarantees do not reach it: the folder may be read-only, gone, or on a disk that filled between the dialog and the write | A partial PDF is a corrupt PDF. Nothing is left at the destination unless the whole document was written |
+
+**Two rows added 2026-08-31**, both raised as gaps by `wdi-review`. The Export PDF row deliberately
+names **no `LC`**: ticket 07 established `typst` as the engine but defers the exporter's *packaging*
+— in-process or its own crate — to the Export PDF effort, and inventing an `LC` here would decide by
+accident what that effort exists to decide. The row states the boundary's behaviour, which is what
+this section is for, and leaves the build unit to whoever draws it.
 
 ## ABCE · [deep]
 

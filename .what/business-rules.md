@@ -23,14 +23,14 @@ behaviour a reviewer checks.
 | BR-2 | Marker numbers run from 1 upward with no gaps. Removing one renumbers every Marker after it, and its line with it. | `finding`, `bundle` | FR-8 · UC-5 | active |
 | BR-3 | A Marker's comment may be empty. Its numbered line still exists. | `finding`, `bundle` | FR-8 | active |
 | BR-4 | A Note may be empty. A Finding with no words is still a Finding. | `finding`, `bundle` | FR-2 · FR-7 | active |
-| BR-5 | Deleting a Finding, a Bundle, or a BundleItem deletes its files. If a file cannot be removed, nothing is removed and the Reviewer is told which file refused. | `finding`, `bundle` | AD-2 · FR-13 · FR-14 | active |
+| BR-5 | A change to what is on disk lands completely or not at all. Deleting a Finding, a Bundle, or a BundleItem deletes its files; saving a change to a Bundle writes both its stored document and its file. Either way, if any part fails then nothing changes, the Reviewer is told which file refused, and an unsaved edit survives so it can be tried again. | `finding`, `bundle` | AD-2 · FR-13 · FR-14 · FR-40 | active |
 | BR-6 | Every destructive action is confirmed exactly once, and the confirmation states what will go and how many of them. | `finding`, `bundle`, `sharing` | FR-13 · FR-14 · FR-23 · FR-41 · FR-42 · UC-7 · UC-12 · UC-30 · UC-31 | active |
 | BR-7 | Nothing is soft-deleted. There is no bin, no archive, and no state in which a deleted thing is still readable. | `finding`, `bundle`, `sharing` | BG-5 · AD-2 | active |
 | BR-8 | An image is reduced once, when it is captured. No later step re-encodes or re-scales it. | `finding`, `bundle`, `sharing` | AD-4 · FR-4 | active |
 | BR-9 | A change to the Quality Budget applies only to Captures taken after it. No stored image is ever re-encoded. | `finding`, `settings` | FR-5 · UC-13 | active |
 | BR-10 | A Bundle is a snapshot. Editing a Finding, its Note, or its Markers after composition changes nothing in a Bundle that already holds it. | `bundle`, `finding`, `agent-access`, `sharing` | AD-9 · FR-10 | active |
 | BR-11 | A Bundle's stored document is changed only by the composer writing it again over the Bundle's own copy. No surface edits a Bundle's document directly, and no change to a Bundle ever reads or writes a Finding. | `bundle`, `agent-access`, `sharing` | AD-9 · FR-40 | active |
-| BR-12 | One Finding may belong to several Bundles. Each Bundle keeps its own image copy. | `bundle`, `finding` | FR-10 · FR-13 | active |
+| BR-12 | The store permits one Finding to belong to several Bundles, and each such Bundle keeps its own image copy. No surface offers it: a Finding that a Bundle already holds leaves the filmstrip, and the filmstrip is the only place assembly selects from. | `bundle`, `finding` | FR-10 · FR-13 | active |
 | BR-13 | Composition refuses, naming the Finding, if any selected Finding's image file is missing. It never writes a Bundle with a broken image reference. | `bundle`, `finding` | AD-2 · FR-10 · UC-9 | active |
 | BR-14 | Only a Bundle is ever readable by an agent. An unbundled Finding is invisible on every agent-facing surface. | `agent-access`, `sharing`, `bundle` | FR-20 · FR-24 | active |
 | BR-15 | Every agent-facing surface is read-only. None of them creates, changes, or deletes anything. | `agent-access`, `sharing` | AD-5 | active |
@@ -63,6 +63,43 @@ behaviour a reviewer checks.
 A narrowed rule keeps its id and its old wording is recorded here, for the same reason a retired one
 is never deleted: documents cite it, and a reader who finds a citation that no longer matches the rule
 cannot tell whether the rule moved or the citation was wrong.
+
+**BR-5, widened 2026-08-31.** It used to read: *"Deleting a Finding, a Bundle, or a BundleItem
+deletes its files. If a file cannot be removed, nothing is removed and the Reviewer is told which file
+refused."*
+
+It covered destruction and said nothing about writing, because until `FR-40` nothing wrote over a
+Bundle. Saving an edited Bundle now writes in two places — the `markdown` column in `library.db` and
+the `bundle.md` file in the Vault — and `wdi-review` raised the gap: neither this rule nor any other
+said what happens when the second write fails while the first has already landed.
+
+Put to the owner on 2026-08-31 with two options, and they chose **one rule rather than two**: a partly
+saved Bundle is not a state the product may leave behind. The rule is therefore widened rather than
+joined by a sibling, which is also why its id does not change — the invariant was always
+*all-or-nothing on disk*, and deletion was simply the only direction that existed when it was written.
+
+The clause about the unsaved edit surviving is not decoration. Without it, all-or-nothing means the
+Reviewer loses their typing to a full disk, which is the one outcome neither option was arguing for.
+
+**BR-12, narrowed 2026-08-31, and the code is what narrowed it.** It used to read: *"One Finding may
+belong to several Bundles. Each Bundle keeps its own image copy."*
+
+Read as a promise about the product, that is false, and it had been false for as long as the filmstrip
+has existed. `apps/desktop/src/main.rs:269-283` collects every Finding id that any Bundle holds and
+filters those Findings out of the strip, with the intent stated in its own comment — *"The strip is the
+queue of Findings not yet handed over, so anything a Bundle already holds leaves it."* The filmstrip is
+the only place assembly selects from, so a second Bundle can never be offered a Finding the first one
+took.
+
+What survives is the half that is true, and it is true of the **store**: `bundle_item` is unique on
+`(bundle_id, finding_id)`, not on `finding_id`, so two Bundles holding one Finding is legal data. The
+new wording says exactly that and no more — the shape is permitted, no surface reaches it.
+
+This was found while chasing a `wdi-review` finding which claimed that discarding one Bundle's
+originals would silently seal another Bundle sharing a Finding. **That finding is void:** the situation
+it describes cannot be reached. `BR-122` cites `BR-12` and was checked — it stays true either way,
+because it reads the sealed state from whether the Findings exist, never from how many Bundles held
+them.
 
 **BR-11, narrowed 2026-08-31.** It used to read: *"A Bundle is never edited in place. A change means
 composing a new Bundle."*

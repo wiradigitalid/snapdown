@@ -1,7 +1,8 @@
 ---
 topic: Snapdown — agent-access component depth
 artifact: .how/agent-access/SDD-agent-access.md
-updated: 2026-08-31T16:54
+updated: 2026-08-31T21:11
 ---
 
 - (change) G4 design 2026-08-31, scoped correction pass on SDD-agent-access.md for DEC-012. The AD-9 row in Inherited Constraints quoted the retired Rule verbatim, so it moved with the spine. Its 'How it lands here' cell also claimed 'The golden-file test in bundle covers this path' - marked [MISSING] and corrected: LC-017 has no implementation (BUG-59, 'The Local API does not exist, so the MCP Bridge cannot reach the product at all'), so there is no path for a test to cover, and crates/snapdown-store/tests/test_golden_markdown.rs pins the composer against a stored reference rather than any surface. Whoever fixes BUG-59 inherits that guard as unwritten, not as inherited. Added DEC-012's guidance that this reader gets the stored folder-relative links with NO rebasing, because an agent on the same machine can be told the Vault path once instead of inside every link. DEC-005 freezes this component and explicitly permits this: 'This decision does not forbid a fix. It forbids new work.'
+- (decision) DEC-013 ACCEPTED by the owner 2026-08-31 and applied. They were shown what risk_accepted: high costs - the loss of edge-case-hunter, the lens that walks branches rather than reading prose, and V13 no longer demanding a review trace - and were explicitly offered the option of holding sharing back at medium on the grounds that its own risk note says a mistake there cannot be undone. They accepted all three. The application preceded the acceptance and touches: records that rather than hiding it: the three rows in components.yaml were already live on the owner's instruction, and the DEC- is the ratification that instruction owed. Nothing else changed - a risk-acceptance's whole material effect is those rows plus the risk_accepted_by: pointer beside them.

@@ -65,10 +65,17 @@ a document claim that would steer the next reader toward the wrong repair.
 ### Three validator checks are now fossils
 
 `validate.py`'s **V3**, **V12**, and **V19** measure the corpus against `waves.yaml` / `stories.yaml`,
-and the wave layer is retired — so they answer a question this project no longer asks. That is why all
-13 lines of `.github/validate-baseline.txt` are V3 findings. A new V3 line MAY be added to that
+and the wave layer is retired — so they answer a question this project no longer asks. That is why
+`.github/validate-baseline.txt` is almost entirely V3 findings. A new V3 line MAY be added to that
 baseline, citing this section as its reason. `validate.py` MUST NOT be patched for it:
 `.constitution/method/` is replaced in full on every update.
+
+**Do not read a line count into that file.** This paragraph used to say *"all 13 lines of
+`.github/validate-baseline.txt` are V3 findings"*, and by 2026-08-31 both halves were false: the file
+holds **17** lines, and **one of them is a V13** — `waves.yaml:W8`, which the paragraph below then
+tells you belongs there. A reader who trusted the sentence would have deleted the one line that is not
+V3 and broken CI. The number moves every time a use case is born, so the rule is the shape of the file,
+never its length.
 
 This boundary is not yet recorded as a `DEC-`. It SHOULD be, through `wdi-decision` — it contradicts
 nothing in `AD-*` but it is exactly the kind of choice a reader will later ask *why* about, and this
@@ -80,11 +87,17 @@ baseline; V13's *other* half, which reports a document changed after its last re
 one is the accepted lag described above, and it is the one to read for load-bearing staleness.
 
 **`korpus.yml` cannot see that half at all.** V13's stale-review check needs per-file git history, and
-`actions/checkout@v4` clones shallow, so those findings never appear on the runner — the four standing
-at the time of writing (`ARCHITECTURE-SPINE.md`, `SDD-bundle.md`, `SDD-finding.md`, `SRS-finding.md`)
-are visible only locally. A green `korpus.yml` therefore MUST NOT be read as proof that document
-reviews are current, and the baseline MUST hold the runner's visible set, not the local one — a local
-run is the stricter of the two.
+`actions/checkout@v4` clones shallow, so those findings never appear on the runner — as of 2026-08-31
+there are **five** (`ARCHITECTURE-SPINE.md`, `SRS-bundle.md`, `SDD-bundle.md`, `SRS-finding.md`,
+`SDD-finding.md`), and they are visible only locally. A green `korpus.yml` therefore MUST NOT be read
+as proof that document reviews are current, and the baseline MUST hold the runner's visible set, not
+the local one — a local run is the stricter of the two.
+
+That set shrinks for a second reason now, and it is worth knowing which: **V13 only stamps a component
+at `risk_accepted` `low` or `medium`.** `DEC-013` put `settings`, `agent-access` and `sharing` at
+`high` on 2026-08-31, so their SRS and SDD stopped being counted at all. A component vanishing from
+this list therefore means one of two very different things — its review was refreshed, or its owner
+accepted the risk of not tracking it — and only `components.yaml` says which.
 
 <!-- BEGIN:wdi-method -->
 This repo uses **WDI Method**. It wraps BMad; it does not replace it. This marked

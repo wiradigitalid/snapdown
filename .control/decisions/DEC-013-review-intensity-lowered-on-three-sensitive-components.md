@@ -1,9 +1,10 @@
 ---
 type: risk-acceptance
 id: DEC-013
-status: draft
+status: applied
 serves: [CAP-6, CAP-7, CAP-8]
-touches: []
+touches:
+  - .control/registry/components.yaml
 supersedes: null
 superseded_by: null
 created: "2026-08-31"
@@ -11,12 +12,20 @@ created: "2026-08-31"
 
 # DEC-013 — Review intensity is lowered to `high` on `settings`, `agent-access` and `sharing`
 
-> **This decision is `draft` and an agent MUST NOT accept it.** It exists because `risk_accepted: high`
-> on a component that touches money, personal data, an irreversible action, a contractual promise, or
-> an unrollbackable third-party integration requires the owner to accept that risk in writing, with
-> `risk_accepted_by:` pointing here. V23 checks that the reference resolves; it cannot check that
-> anyone read this file. The three components below are already set to `high` in `components.yaml` on
-> the owner's instruction of 2026-08-31, so the setting is live and this ratification is outstanding.
+> **Accepted by the owner on 2026-08-31, and applied.** They were shown what `high` costs each of the
+> three — the loss of `edge-case-hunter`, the lens that walks branches rather than reading prose, and
+> V13 no longer demanding a review trace — together with the option of holding `sharing` back at
+> `medium` on the grounds that its own risk note says a mistake there cannot be undone. They accepted
+> all three. This decision exists because `risk_accepted: high` on a component touching money,
+> personal data, an irreversible action, a contractual promise, or an unrollbackable third-party
+> integration requires the owner to accept that risk in writing, with `risk_accepted_by:` pointing
+> here. V23 checks that the reference resolves; it cannot check that anyone read this file.
+>
+> **The application preceded the acceptance**, and `touches:` records that rather than hiding it: the
+> three rows in `components.yaml` were set to `high` on the owner's instruction of 2026-08-31, and this
+> file was written afterwards to be the ratification that instruction owed. Nothing else was changed by
+> applying it — a risk-acceptance's whole material effect is those rows and the `risk_accepted_by:`
+> pointer beside them.
 
 ## Decision
 
