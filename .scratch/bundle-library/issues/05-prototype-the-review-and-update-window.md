@@ -35,3 +35,13 @@ Make a rough version and decide:
   independent of the Findings that produced it.
 - The compose flow's existing live write-through to Findings and Markers
   (`main.rs:3966-4012`) is deliberately left alone. Do not "fix" it here.
+
+## Design source to match
+
+The Library's artboards are in `.scratch/bundle-library/design/` and set the vocabulary this window
+must not diverge from — 52px header with a 15px accent icon, 3px radii, 13px body, 11px/800
+uppercase section labels, 10px IBM Plex Mono meta, 32px buttons at 11px/700, and the confirmation
+dialogs' 20px/14px/30px anatomy. Read its `README.md` before drawing anything new; every value there
+was lifted from the running app rather than chosen on the canvas.
+
+Canvas: https://claude.ai/code/artifact/6f798d70-77a0-491e-973b-92e7a2641a2f

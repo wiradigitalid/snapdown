@@ -116,3 +116,10 @@ Empty · Loading · Cannot-be-read. Every value is lifted from `theme.slint`, `S
 same shape as the fake 1-6 shortcut badges just removed from the toolbar — an affordance promising
 something the app cannot do. The owner asked for the marker and it is drawn, but before this ships,
 consider not rendering Publish at all until it works. Recorded as a canvas annotation too.
+
+## Design source
+
+The artboards this ticket produced live in `.scratch/bundle-library/design/`, beside the tickets,
+and are what to build from — they carry exact hex, px and weights, and their `README.md` records
+which running-app component each value came from. The canvas is the view of them:
+https://claude.ai/code/artifact/6f798d70-77a0-491e-973b-92e7a2641a2f
