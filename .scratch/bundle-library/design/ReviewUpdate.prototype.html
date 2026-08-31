@@ -72,6 +72,15 @@
   .brief code, .vcost code { font-family:"IBM Plex Mono",monospace; font-size:12px;
                              color:var(--studio-key); }
   .brief b, .vcost b { color:var(--studio-ink); font-weight:600; }
+  .verdict { border-left:2px solid var(--studio-key); padding-left:14px; }
+  .verdict b { color:#fff; }
+  .stamp { font-family:"IBM Plex Mono",monospace; font-size:10px; font-weight:500;
+           letter-spacing:.4px; text-transform:uppercase; border-radius:3px; padding:3px 8px; }
+  .stamp.won { background:rgba(169,188,255,.16); color:var(--studio-key);
+               border:1px solid rgba(169,188,255,.32); }
+  .stamp.lost { background:#23262f; color:var(--studio-faint);
+                border:1px solid var(--studio-line); }
+  .dim .frame { opacity:.55; filter:saturate(.7); }
 
   .vhead { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
   .vkey  { font-family:"IBM Plex Mono",monospace; font-size:11px; font-weight:500;
@@ -217,13 +226,21 @@
     <p><b>Type in the fields.</b> They are real, each variant tracks its own dirty set, and the bar at
     the bottom prints it. Cancel and Save do what that variant says they do. The bar also flips the
     app's theme, because a rule made legible by colour has to survive both.</p>
+    <p class="verdict"><b>Settled 2026-08-31 by the owner: variant C</b>, with one amendment &mdash;
+    <b>Save stays clickable at all times</b>, even with nothing changed. A and B are kept below because
+    they are the record of why C was chosen, not live options. Verified in the store before applying:
+    the amendment is <b>free</b>. <code>update_bundle_markdown</code> writes the <code>markdown</code>
+    column and nothing else, a Bundle has no <code>updated_at</code>, and the Library sorts
+    <code>ORDER BY composed_at DESC</code> &mdash; so a Save with no changes cannot reorder the Library
+    or alter a single thing a Reviewer can see.</p>
   </div>
 
   <!-- ================================================== A -->
-  <section data-variant="A">
+  <section data-variant="A" class="dim">
     <div class="vhead">
       <span class="vkey">?variant=A</span>
       <span class="vname">Nothing added</span>
+      <span class="stamp lost">not taken</span>
       <span class="vone">the compose window with two things taken away, and no lock treatment at all</span>
     </div>
     <p class="vcost">Disputes the ticket's premise. In compose mode the image blocks carry
@@ -234,14 +251,17 @@
       line, because a count that cannot move is not a readout; and Edit/Preview stays, because a
       Reviewer about to hand this over still wants to see the file. <b>Cost:</b> a Reviewer who
       expected to swap an image learns they cannot only by failing to find how.</p>
+    <p class="vcost"><b>Not taken.</b> Its Save behaviour was, though: the owner kept
+    <em>always clickable</em> from here and put it on C.</p>
     <div class="frame" data-app-theme="dark"></div>
   </section>
 
   <!-- ================================================== B -->
-  <section data-variant="B" hidden>
+  <section data-variant="B" class="dim" hidden>
     <div class="vhead">
       <span class="vkey">?variant=B</span>
       <span class="vname">Provenance rail</span>
+      <span class="stamp lost">not taken</span>
       <span class="vone">a second column that states the rules in words and names every unsaved change</span>
     </div>
     <p class="vcost">Says it once, in prose, instead of decorating each image. The rail also carries
@@ -252,6 +272,8 @@
       breaks the <code>height / 1.414</code> width the compose modal is built on
       (<code>appwindow.slint:3391</code>). Either the two modals stop sharing a geometry, or both get
       wider and the compose window changes for a reason that has nothing to do with composing.</p>
+    <p class="vcost"><b>Not taken</b> &mdash; the owner ruled out anything of this shape outright, so
+    the width question it raised never had to be settled. Its dirty-only Save went with it.</p>
     <div class="frame" data-app-theme="dark"></div>
   </section>
 
@@ -260,7 +282,8 @@
     <div class="vhead">
       <span class="vkey">?variant=C</span>
       <span class="vname">Read first, unlock to edit</span>
-      <span class="vone">opens read-only; the primary button is Edit, and Save only exists once unlocked</span>
+      <span class="stamp won">chosen</span>
+      <span class="vone">opens read-only; the primary button is Edit, and Save is always clickable once unlocked</span>
     </div>
     <p class="vcost">Changes the primary affordance. The window opens as the Bundle
       <em>was composed</em> &mdash; which is <code>BR-65</code> made visible rather than merely obeyed
@@ -269,6 +292,12 @@
       the images get an explicit lock chip, because only then is everything around them editable and
       the exception needs saying. <b>Cost:</b> every edit costs one extra click, and a Reviewer who
       came from the Library specifically to fix one typo pays it every time.</p>
+    <p class="vcost"><b>Chosen, with Save always clickable.</b> A Save that changed nothing writes the
+    same string into the same column, and since a Bundle carries no <code>updated_at</code> and the
+    Library orders by <code>composed_at</code>, there is nothing for it to disturb. What it buys is a
+    Reviewer who never has to work out why the button is dead. Cancel still confirms only when
+    something has actually been typed &mdash; a dialog over an untouched window is a dialog that
+    teaches people to dismiss dialogs.</p>
     <div class="frame" data-app-theme="dark"></div>
   </section>
 </div>
@@ -276,7 +305,7 @@
 <div class="bar">
   <span class="tag">proto</span>
   <button data-nav="-1" title="Previous variant (left arrow)">&larr;</button>
-  <span class="lbl" id="lbl">A &mdash; Nothing added</span>
+  <span class="lbl" id="lbl">C &mdash; Read first, unlock to edit</span>
   <button data-nav="1" title="Next variant (right arrow)">&rarr;</button>
   <button id="theme" title="Toggle the app's theme">Light</button>
   <span class="st" id="st">clean</span>
@@ -730,14 +759,19 @@
             paintState();
           });
       };
+      /* Always clickable, even with nothing changed - the owner's amendment of 2026-08-31.
+         It rewrites the same markdown into the same column; a Bundle has no updated_at and the
+         Library orders by composed_at, so a no-op Save disturbs nothing a Reviewer can see. */
       var save = el("button", "btn btn-primary");
       save.appendChild(svg(ICON_PKG, "#fff", 12));
       save.appendChild(el("span", "", "Save"));
       save.onclick = function () {
+        var noop = dirty.C.length === 0;
         dirty.C = [];
         mode.C = "locked";
         buildC(frame);
-        toast(frame, "Saved. Showing the Bundle as it now stands.");
+        toast(frame, noop ? "Saved. Nothing had changed."
+                          : "Saved. Showing the Bundle as it now stands.");
         paintState();
       };
       foot.appendChild(back);
@@ -755,7 +789,8 @@
   /* ---- the switcher ---- */
   function current() {
     var v = new URLSearchParams(location.search).get("variant");
-    return KEYS.indexOf(v) >= 0 ? v : "A";
+    /* C is the default because C won. A and B stay reachable as the record. */
+    return KEYS.indexOf(v) >= 0 ? v : "C";
   }
   var appTheme = "dark";
   function render() {

@@ -101,9 +101,14 @@ the scope boundary does.
 **Settled while charting.** These are constraints for every session on this map, not open questions:
 
 - **Update never touches a Finding.** In the Library's update mode, edits to title, bundle notes,
-  finding notes and marker notes stay in a buffer and are persisted on Save via
-  `update_bundle_markdown` (which exists and is currently dead code). It must never call
-  `FindingStore`. The existing *compose* flow writes note/marker edits through to the live Finding
+  finding notes and marker notes stay in a buffer and are persisted on Save. It must never call
+  `FindingStore`. **Corrected 2026-08-31 (ticket 05):** this line used to say the save happens
+  *"via `update_bundle_markdown` (which exists and is currently dead code)"*, and that covers only
+  three of the four fields. That function runs `UPDATE bundle SET markdown = ?1` and nothing else
+  (`bundle_store.rs:257`); `bundle.name` is written by nothing anywhere in the tree, and there is no
+  `update_bundle_name` or `rename_bundle`. So the **title needs a store path that does not exist**,
+  while the three note fields need only the dead function. The old wording would have had a builder
+  discover that mid-story. The existing *compose* flow writes note/marker edits through to the live Finding
   immediately (`main.rs:3966-4012`); that behaviour is deliberately **left alone** — out of scope.
 - **Images are frozen in update mode.** No add, no remove, no reorder, no replace. Editable:
   Bundle title, Bundle notes, Finding notes, Marker notes. Nothing else.
@@ -174,6 +179,18 @@ the scope boundary does.
   intact — `DEC-012`, whose reasoning came from `AD-9`'s own Prevents. Two existing promises pointed
   the other way and were corrected: `FR-12`'s relative-link clause and `FR-14`'s combined destroy.
   Committed as `57cbf96`.
+- [Prototype the Review & Update window](issues/05-prototype-the-review-and-update-window.md):
+  the window **opens locked**, showing the Bundle as composed; the footer's primary is `Edit`, and
+  only once unlocked are the four fields editable. `Save` is then **always clickable**, even with
+  nothing changed. Two controls became one - the Edit/Preview pair is gone, because locked already
+  *is* the preview - and the images carry a `Fixed at compose` chip only in edit mode, where the
+  exception needs saying. The prototype killed a premise and a shape: there is **no affordance on an
+  image in the compose window either** (`appwindow.slint:3470-3630` holds zero `TouchArea` and zero
+  `IconButton`), so a lock chip in locked mode would have had to invent a control in order to disable
+  it; and a provenance rail was ruled out outright, which also retired the question of whether the
+  modal could stop sharing its `height / 1.414` width. Always-clickable `Save` was verified free
+  before it was accepted: a Bundle has no `updated_at` and the Library orders by `composed_at`, so a
+  no-op save disturbs nothing visible. That verification is what opened ticket 09.
 - [Research the PDF render engine](issues/07-research-the-pdf-render-engine.md): `typst` via
   `typst-as-lib`, **in-process** — a sidecar was proposed for panic isolation then withdrawn, since
   the repo sets no `panic = "abort"` (verified) so `catch_unwind` gives the same protection, and

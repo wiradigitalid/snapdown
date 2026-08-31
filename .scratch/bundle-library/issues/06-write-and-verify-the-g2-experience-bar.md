@@ -2,7 +2,7 @@
 
 **Type:** task
 **Status:** open
-**Blocked by:** 01, 05
+**Blocked by:** 01, 05 - both resolved 2026-08-31, so this is UNBLOCKED
 
 ## Question
 

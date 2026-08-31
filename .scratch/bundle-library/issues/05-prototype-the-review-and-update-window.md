@@ -1,7 +1,7 @@
 # 05: Prototype the Review & Update window
 
 **Type:** prototype
-**Status:** claimed
+**Status:** resolved
 **Blocked by:** 01
 
 ## Question
@@ -113,3 +113,61 @@ the provisionality that note imposed is lifted. What is still open is the owner'
 not answer it: which variant, and the four behaviours the three variants deliberately disagree about —
 the header's contents, Save's enablement, where the Reviewer lands after saving, and whether the
 window is read-only until unlocked.
+
+## Answer, 2026-08-31 - variant C, with Save always clickable
+
+**The owner's words:** *"gak usah ada seperti B. Ya di kunci dengan tombol Edit, lalu bisa diedit,
+save bisa di klik sewaktu2 meskipun tidak ada perubahan."*
+
+So the window **opens locked**, showing the Bundle as it was composed. The footer's primary is
+`Edit`, not `Save`. Once unlocked, the four fields are editable and `Save` is **always** clickable,
+whether anything changed or not. Nothing of variant B's shape survives - no rail, no second column.
+
+### What that settles, item by item against this ticket's own list
+
+| This ticket asked | Settled |
+|---|---|
+| How frozen images read as frozen | Only in edit mode, as a `Fixed at compose` lock chip. Locked mode needs nothing: nothing around the image is editable either |
+| What the header carries | A static provenance line (`3 Findings * <when composed>`) plus a state badge, `As composed` / `Editing`. **The Edit/Preview pair is gone** - locked already *is* the preview, so two controls became one |
+| Which affordances disappear | All of them, until `Edit` is pressed. That is the whole point of the shape chosen |
+| Save state | **Always clickable.** The owner's explicit amendment, carried over from variant A |
+| Discard | `Cancel` returns to locked. It confirms **only** when something was actually typed |
+
+### The amendment is free, and this was verified in the store before applying it
+
+The worry with an always-live `Save` is a no-op write that churns something visible. It does not:
+
+- `update_bundle_markdown` (`crates/snapdown-store/src/sqlite/bundle_store.rs:257`) runs exactly
+  `UPDATE bundle SET markdown = ?1 WHERE id = ?2` - the `markdown` column, and nothing else.
+- The `bundle` table is `id / name / markdown / markdown_path / composed_at`
+  (`crates/snapdown-store/src/sqlite/migrations.rs:66`). **There is no `updated_at`.** A `Finding`
+  has one; a Bundle does not.
+- The Library reads `ORDER BY composed_at DESC` (`bundle_store.rs:201`).
+
+So pressing `Save` with nothing changed writes an identical string into the same column and cannot
+reorder the Library, cannot move the row, cannot alter its meta line. The toast still differs
+(*"Saved. Nothing had changed."*) so the Reviewer is not left guessing whether it did anything.
+
+### Two things this answer surfaced that are NOT settled here
+
+**1. The editable title has no store path, and the map said otherwise.** A correction, not a
+decision. The map's *Settled while charting* said edits *"are persisted on Save via
+`update_bundle_markdown`"*. That function writes only the `markdown` column - `bundle.name` is
+written by nothing anywhere in the tree, and there is no `update_bundle_name` or `rename_bundle` in
+`crates/` or `apps/desktop/src/`. `FR-40` promises an editable title, so **the store work is larger
+than the map claimed**: the three note fields need only the existing dead function, the title needs a
+new one. The map line is now corrected. It is a fact for `/to-spec` and it blocks nothing here.
+
+**2. A Bundle has no `updated_at`, and once it can be edited that starts to matter.** The Library row
+and this window's header both show *composed* time. A Reviewer who fixed a typo an hour ago still
+reads "composed yesterday" - true, but no longer the whole truth. Whether a Bundle gains an
+`updated_at` (a migration, plus a change to the meta line ticket 01 settled) or whether edits stay
+deliberately silent is the owner's call, and it is its own question rather than part of this one.
+Opened as [Decide whether an edited Bundle says so](09-decide-whether-an-edited-bundle-says-so.md).
+
+### Assets
+
+`.scratch/bundle-library/design/ReviewUpdate.prototype.html` -
+https://claude.ai/code/artifact/37e75769-c23c-47f6-9bf7-3c9781278525 - defaults to `?variant=C`,
+with A and B kept and stamped `not taken` because they are the record of why C was chosen. The chosen
+variant carries the amendment: `Save` never disables, and its toast distinguishes a no-op.
