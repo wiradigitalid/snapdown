@@ -35,8 +35,8 @@ Tested and it holds, with one correction and one caveat:
   spaces terminate a link, and the Vault may well sit in a path containing spaces:
 
   ```
-  ![Finding 1](C:\Users\me\Snapdown Vault\bundles\b1\finding_1_burned.png)   broken twice over
-  ![Finding 1](<C:/Users/me/Snapdown Vault/bundles/b1/finding_1_burned.png>) works
+  ![Finding 1](C:\Users\<user>\Snapdown Vault\bundles\b1\finding_1_burned.png)   broken twice over
+  ![Finding 1](<C:/Users/<user>/Snapdown Vault/bundles/b1/finding_1_burned.png>) works
   ```
 
   Forward slashes plus `<>` wrapping, or percent-encoding, or a `file:///` URI. Whichever is chosen
