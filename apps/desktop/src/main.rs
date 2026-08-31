@@ -2344,9 +2344,14 @@ where
 
     let md_items: Vec<(&BundleItem, &FindingDetail)> = items.iter().zip(details.iter()).collect();
 
+    // One binding feeds both the serializer and the record, so the document's location and the base
+    // its links are written against cannot drift apart. They did once, and every image link in every
+    // Bundle resolved to nothing for five waves (`BUG-86`).
+    let markdown_path = format!("bundles/{bundle_id}/bundle.md");
+
     Ok(PlannedBundle {
-        markdown: MarkdownSerializer::serialize_bundle(name, notes, &md_items),
-        markdown_path: format!("bundles/{bundle_id}/bundle.md"),
+        markdown: MarkdownSerializer::serialize_bundle(name, notes, &md_items, &markdown_path),
+        markdown_path,
         items,
         blobs,
     })
@@ -2409,8 +2414,12 @@ fn recompose_markdown(pending: &mut PendingBundle) {
         .iter()
         .zip(pending.details.iter())
         .collect();
-    pending.planned.markdown =
-        MarkdownSerializer::serialize_bundle(&pending.name, &pending.notes, &pairs);
+    pending.planned.markdown = MarkdownSerializer::serialize_bundle(
+        &pending.name,
+        &pending.notes,
+        &pairs,
+        &pending.planned.markdown_path,
+    );
 }
 
 /// The widest a preview image is ever drawn, so the modal does not hold five full-resolution decodes
@@ -5722,8 +5731,13 @@ mod tests {
 
         // BUG-21: the composed Markdown referenced `finding.image_path`, so a reader following it
         // landed on the clean image and FR-8 stayed unmet even once the burn was written.
+        //
+        // The link is written relative to `bundle.md`'s own folder rather than to the Vault
+        // root - what NFR-8 requires and what `BUG-86` broke - so the burned copy is named
+        // without its `bundles/b7/` prefix. The invariant guarded here is unchanged: the
+        // burned copy, never the clean Finding image.
         assert!(
-            planned.markdown.contains("bundles/b7/finding_1_burned.png"),
+            planned.markdown.contains("](./finding_1_burned.png)"),
             "the Markdown must reference the Bundle's own burned copy:\n{}",
             planned.markdown
         );

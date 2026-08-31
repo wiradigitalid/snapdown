@@ -78,13 +78,14 @@ fn the_markdown_serializer_renders_two_findings_byte_exactly() {
         "Sprint 42 Bug Batch",
         "",
         &[(&item1, &f1), (&item2, &f2)],
+        "bundles/b1/bundle.md",
     );
 
     let expected = "# Sprint 42 Bug Batch\n\
 \n\
 ## Finding 1\n\
 \n\
-![Finding 1](./bundles/b1/finding_1_burned.png)\n\
+![Finding 1](./finding_1_burned.png)\n\
 \n\
 ### Notes\n\
 \n\
@@ -96,7 +97,7 @@ First defect observed\n\
 \n\
 ## Finding 2\n\
 \n\
-![Finding 2](./bundles/b1/finding_2_burned.png)\n\
+![Finding 2](./finding_2_burned.png)\n\
 \n\
 ### Notes\n\
 \n\
@@ -152,6 +153,7 @@ fn a_bundle_note_is_rendered_above_the_findings_and_omitted_when_empty() {
         "Checkout regressions",
         "  Three layout defects found while testing the checkout at 1280.  ",
         &[(&item, &detail)],
+        "bundles/b/bundle.md",
     );
     assert!(
         with_intro.contains(
@@ -169,8 +171,12 @@ fn a_bundle_note_is_rendered_above_the_findings_and_omitted_when_empty() {
          it up"
     );
 
-    let without =
-        MarkdownSerializer::serialize_bundle("Checkout regressions", "   ", &[(&item, &detail)]);
+    let without = MarkdownSerializer::serialize_bundle(
+        "Checkout regressions",
+        "   ",
+        &[(&item, &detail)],
+        "bundles/b/bundle.md",
+    );
     assert!(
         !without.contains("## Bundle Notes"),
         "a Bundle note that is empty or whitespace must be absent, not an empty heading:\n{without}"

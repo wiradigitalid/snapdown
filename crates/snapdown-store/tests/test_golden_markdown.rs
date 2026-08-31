@@ -113,13 +113,14 @@ fn the_golden_bundle_markdown_is_regenerated_from_real_image_output() {
         "Release Quality Gate Assessment",
         "",
         &[(&item1, &f1)],
+        "bundles/b-golden/bundle.md",
     );
 
     let expected_golden = "# Release Quality Gate Assessment\n\
 \n\
 ## Finding 1\n\
 \n\
-![Finding 1](./bundles/b-golden/finding_1_burned.png)\n\
+![Finding 1](./finding_1_burned.png)\n\
 \n\
 ### Notes\n\
 \n\

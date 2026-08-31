@@ -10,7 +10,10 @@ impl MarkdownSerializer {
     /// - AD-1: Marker ordinal matches line number.
     /// - AD-4: Composed markdown references the bundle's burned copy (BundleItem.image_path).
     /// - AD-9: Byte-identical composition across all platforms.
-    /// - Relative image references without absolute paths.
+    /// - NFR-8: every image reference resolves relative to the Markdown file's OWN folder, which is
+    ///   why `markdown_path` is a parameter rather than something this function assumes. It was
+    ///   assumed once, the document moved into a per-Bundle folder without the serializer's base
+    ///   moving with it, and every link in every Bundle silently resolved to nothing (`BUG-86`).
     ///
     /// `intro` is the Bundle's own note - what this handoff is about, as against what any one Finding
     /// is about. Optional, and omitted entirely when empty, which is the rule a Finding's note
@@ -23,6 +26,7 @@ impl MarkdownSerializer {
         bundle_name: &str,
         intro: &str,
         items: &[(&BundleItem, &FindingDetail)],
+        markdown_path: &str,
     ) -> String {
         let mut out = String::new();
 
@@ -46,8 +50,9 @@ impl MarkdownSerializer {
             let position = item.position;
             out.push_str(&format!("## Finding {}\n\n", position));
 
-            // Image markdown reference pointing to bundle's burned copy
-            let img_rel = format!("./{}", item.image_path.trim_start_matches('/'));
+            // Image markdown reference pointing to bundle's burned copy, expressed the way the
+            // reader of this document will resolve it.
+            let img_rel = Self::image_reference(markdown_path, &item.image_path);
             out.push_str(&format!("![Finding {}]({})\n\n", position, img_rel));
 
             // NO capture metadata.
@@ -93,6 +98,30 @@ impl MarkdownSerializer {
 
         out
     }
+
+    /// The link a CommonMark reader must follow: `image_path` expressed relative to the folder the
+    /// document itself sits in.
+    ///
+    /// Both arguments are Vault-relative. The Vault lays a Bundle out as one folder holding
+    /// `bundle.md` beside its burned copies, so the document's folder is a prefix of every image
+    /// path and this is a prefix strip. If it ever is not - a layout this function was not told
+    /// about - the Vault-relative path is returned unchanged rather than guessed at, and
+    /// `test_nfr8_image_resolution` is what fails.
+    fn image_reference(markdown_path: &str, image_path: &str) -> String {
+        let image = image_path.trim_start_matches('/');
+        let Some((folder, _file)) = markdown_path.trim_start_matches('/').rsplit_once('/') else {
+            // The document sits at the Vault root, so a Vault-relative path already is relative
+            // to its folder.
+            return format!("./{image}");
+        };
+        match image
+            .strip_prefix(folder)
+            .and_then(|rest| rest.strip_prefix('/'))
+        {
+            Some(rel) => format!("./{rel}"),
+            None => format!("./{image}"),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -102,7 +131,8 @@ mod tests {
 
     #[test]
     fn serializes_empty_bundle() {
-        let md = MarkdownSerializer::serialize_bundle("Empty Review", "", &[]);
+        let md =
+            MarkdownSerializer::serialize_bundle("Empty Review", "", &[], "bundles/b-1/bundle.md");
         assert!(md.contains("# Empty Review"));
         assert!(md.contains("No findings included"));
     }
@@ -154,11 +184,16 @@ mod tests {
             image_path: "bundles/b-1/finding_1_burned.png".into(),
         };
 
-        let md = MarkdownSerializer::serialize_bundle("Login Review", "", &[(&item, &detail)]);
+        let md = MarkdownSerializer::serialize_bundle(
+            "Login Review",
+            "",
+            &[(&item, &detail)],
+            "bundles/b-1/bundle.md",
+        );
 
         assert!(md.contains("# Login Review"));
         assert!(md.contains("## Finding 1"));
-        assert!(md.contains("![Finding 1](./bundles/b-1/finding_1_burned.png)"));
+        assert!(md.contains("![Finding 1](./finding_1_burned.png)"));
         assert!(md.contains("Found layout misalignment on login card."));
         assert!(md.contains("### Marker Notes"));
         assert!(md.contains("1. Button overlapping text field"));

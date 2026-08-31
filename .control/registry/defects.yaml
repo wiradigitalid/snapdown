@@ -5111,3 +5111,75 @@ defects:
       threading) are now exhausted along with SIMD. Ticket:
       `.scratch/filmstrip-blur-perf/issues/01-box-pass-no-longer-o-radius-per-pixel.md`.
     status: fixed
+  - id: BUG-86
+    title: Every image link in every Bundle's Markdown resolved to nothing - the serializer wrote paths relative to the Vault root while the document lived in a per-Bundle folder
+    found: "2026-08-31"
+    found_by: kodesh87, while charting the Bundle Library map ("export lokal tidak relevan kalau cuma export markdown dan gambar, karena markdown dan gambar sebenarnya sudah di lokal")
+    component: bundle
+    severity: high
+    contradicts: []
+    root_cause: code
+    evidence: |
+      `MarkdownSerializer::serialize_bundle` emitted `format!("./{}", item.image_path)`, and
+      `BundleItem.image_path` is Vault-ROOT-relative (`bundles/<id>/finding_N_burned.png`). But the
+      document itself is written to `bundles/<id>/bundle.md`, so a CommonMark reader resolving that
+      link against the Markdown's own folder landed on
+      `<vault>/bundles/<id>/bundles/<id>/finding_N_burned.png` - one duplicated `bundles/<id>/`
+      segment past the file, which sits right beside `bundle.md`.
+
+      So NOT ONE image loaded, in any reader: Obsidian, VS Code preview, GitHub preview, or a local
+      coding agent handed the path. `NFR-8` states the requirement outright - "every image reference
+      resolving relative to the Markdown file's own folder" - and names its enforcement as "a
+      rendering test over a composed Bundle". That test did not exist.
+
+      What existed instead were FIVE string-containment assertions that baked the broken form in as
+      expected output, so the defect was green everywhere: `markdown.rs:161`,
+      `test_markdown_serializer.rs:87` and `:99`, `test_golden_markdown.rs:122`, and
+      `main.rs:5734`. Two of those are byte-for-byte golden comparisons, which is exactly the shape
+      that looks like the strongest possible guard and here asserted a copy of the bug.
+
+      The layout was presumably once flat - `bundles/<id>.md` beside a `bundles/<id>/` image folder -
+      under which `./bundles/<id>/...` read from the Vault root would have worked. `markdown_path`
+      later moved into the per-Bundle folder; the serializer's base did not move with it. The
+      serializer had no way to notice, because it was never told where the document goes.
+
+      Found by inference, not by a test or a bug report: the owner argued that a local Markdown export
+      feature was pointless because the Vault copy is already portable. Checking whether that premise
+      held is what surfaced the defect - the premise was right in principle and false in fact.
+    fix: |
+      `serialize_bundle` now takes `markdown_path` and computes each link through
+      `image_reference(markdown_path, image_path)`, which expresses the image relative to the folder
+      the document sits in. Emitted links became `./finding_N_burned.png`.
+
+      `markdown_path` is a PARAMETER rather than an assumption specifically so this class of drift
+      cannot repeat: in `plan_bundle` one binding now feeds both the serializer and
+      `PlannedBundle.markdown_path`, so the document's location and the base its links are written
+      against cannot diverge. `recompose_markdown` passes the planned Bundle's own path. When the
+      image is not under the document's folder - a layout the function was not told about - it
+      returns the Vault-relative path unchanged rather than guessing, and the test below is what
+      fails.
+
+      `NFR-8`'s missing enforcement is now
+      `crates/snapdown-store/tests/test_nfr8_image_resolution.rs`:
+      `every_image_link_in_a_composed_bundle_resolves_from_the_markdown_files_own_folder`. It lays a
+      composed three-Finding Bundle out on disk exactly as `write_bundle` does, parses every
+      `![...](...)` target out of the document, and resolves each one THE WAY A READER DOES - joined
+      to the Markdown file's own folder - asserting the file is there. It is deliberately insensitive
+      to how the serializer computes the path, so it catches the next drift whatever shape that takes.
+
+      The five assertions that enshrined the broken form were updated rather than deleted; the one in
+      `main.rs` guards `BUG-21` (burned copy, never the clean Finding image) and that invariant is
+      preserved, now asserted as `](./finding_1_burned.png)`.
+    verified_by: |
+      Seen red before the fix, with the defect's own signature in the failure message: `"./bundles/
+      b-nfr8/finding_1_burned.png" does not resolve to a file from the Markdown's own folder`,
+      naming the doubled segment and the real location of the file.
+
+      Then mutation-verified after the fix rather than trusted: forcing `image_reference`'s successful
+      strip to fall back to the Vault-relative form put the test back to FAILED with that identical
+      message; restoring it returned it to ok. So the test is sensitive to this specific defect and
+      not passing for an unrelated reason.
+
+      `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings` and
+      `cargo test --workspace` all clean.
+    status: fixed
