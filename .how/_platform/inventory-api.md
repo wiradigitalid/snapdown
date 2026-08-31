@@ -29,7 +29,7 @@ Three surfaces, one list. Not one of them accepts a write from outside the deskt
 | --- | --- | --- | --- | --- | --- |
 | 1 | GET | `/v1/health` | `agent-access` | Local API liveness. The only route that does not require the Access Key, and it returns nothing about the Library | draft |
 | 2 | GET | `/v1/bundles` | `agent-access` | List Bundles: id, name, Finding count, composed-at. Refuses with `key_required` when no valid key is presented, which is distinguishable from an empty list (AD-7) | draft |
-| 3 | GET | `/v1/bundles/{id}` | `agent-access` | One Bundle's stored Markdown, byte-identical to what *Copy Markdown* produces (AD-9), plus the list of image filenames it references | draft |
+| 3 | GET | `/v1/bundles/{id}` | `agent-access` | One Bundle's stored Markdown — the same authored document *Copy Markdown* serves, with the stored folder-relative image links rather than a rebased set (AD-9, DEC-012) — plus the list of image filenames it references | draft |
 | 4 | GET | `/v1/bundles/{id}/images/{filename}` | `agent-access` | One image belonging to that Bundle. Refuses any filename that escapes the Bundle's own folder | draft |
 | 5 | TOOL | `mcp:list_bundles` | `agent-access` | MCP tool over row 2 | draft |
 | 6 | TOOL | `mcp:read_bundle` | `agent-access` | MCP tool over row 3. Returns the Markdown as text | draft |

@@ -21,6 +21,13 @@ policy:
 #   deep     + ABCE, a contract spec per endpoint, data dictionary, flow, state machine, scenarios
 # Defaults to `catalog` when this line is absent. A component's own row in components.yaml WINS over this.
 # There is no third scope: `mode` MUST NOT be overridden per wave or per SPEC.md.
+#
+# 2026-08-31, twice on the owner's instruction. First `outline` -> `guarded` with every per-component
+# override removed; then `guarded` -> `outline` with per-component values set again, three of five
+# differing. `settings` and `agent-access` inherit this line; `finding`, `bundle` and `sharing` override
+# it to `guarded`, and only those three carry a `mode` row, per this registry's rule that `mode` is
+# written ONLY where it must differ from global.
+# Lowering `mode` deletes no file - what was written at `deep` stays and simply stops being required.
 mode: outline
 
 # GATES ALREADY PASSED. Written only by the repo owner's own decision at their own gate, and MUST NOT

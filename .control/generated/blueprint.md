@@ -8,7 +8,7 @@ This is what the owner reads at **G3 Blueprint**, instead of seven files. Its co
 
 ## Use case catalogue
 
-**27 use cases**, 4 marked `critical`.
+**31 use cases**, 6 marked `critical`.
 
 | id | Use case | Component | Satisfies | critical |
 | --- | --- | --- | --- | --- |
@@ -32,7 +32,11 @@ This is what the owner reads at **G3 Blueprint**, instead of seven files. Its co
 | `UC-25` | I can get to any part of Snapdown from wherever I happen to be | `settings` | `FR-28` | no |
 | `UC-26` | I can see everything a screen offers me without hunting for it | `settings` | `FR-29` | no |
 | `UC-27` | I annotate a screenshot with visual shapes, arrows, callouts, text, or blur redaction | `finding` | `FR-30`, `FR-31`, `FR-32`, `FR-33` | no |
+| `UC-28` | I turn a review into something I can send to a person who does not have Snapdown | `bundle` | `FR-39` | no |
+| `UC-29` | I fix a typo in a review I have already put together | `bundle` | `FR-40` | no |
 | `UC-3` | I look at everything I have captured so far | `finding` | `FR-6` | no |
+| `UC-30` | I get rid of the screenshots behind a review I am finished with, but keep the review | `finding` | `FR-41` | yes |
+| `UC-31` | I find out which reviews are still holding my screenshots, and get that disk back | `finding` | `FR-42` | yes |
 | `UC-4` | I reword a note now that I have read it back | `finding` | `FR-7` | no |
 | `UC-5` | I point at three separate spots inside one screenshot | `finding` | `FR-8` | no |
 | `UC-6` | I pick out several findings at once | `finding` | `FR-9` | no |
@@ -57,16 +61,22 @@ use case. It is not a variant of the Reviewer: what it may do is a strictly smal
 
 | Actor | Who they are | What they may do |
 | --- | --- | --- |
-| Reviewer | The person operating Snapdown. The only human actor and the only writer | Compose a Bundle from a selection, name it, list Bundles, open one, copy its Markdown, delete it with its files, and choose in the same act whether its source Findings go too |
+| Reviewer | The person operating Snapdown. The only human actor and the only writer | Compose a Bundle from a selection, name it, list Bundles, open one, copy its Markdown, correct its title and its notes, export it as a PDF, and delete it with its files |
 
 An agent reads Bundles, but never through this component: `agent-access` and `sharing` are the surfaces
 that expose them, and both are read-only per AD-5.
+
+**Amended 2026-08-31.** The Reviewer's rights used to end *"delete it with its files, and choose in the
+same act whether its source Findings go too"*. That last clause is gone: `FR-14` no longer offers a
+combined destroy, and destroying a Bundle's source Findings is now `FR-41`, whose use case belongs to
+`finding` rather than here — the Reviewer reaches it from a Bundle, but what it destroys is a capture.
+Correcting a title and exporting a PDF are the two rights added.
 
 ### finding
 
 | Actor | Who they are | What they may do |
 | --- | --- | --- |
-| Reviewer | The person operating Snapdown. The only human actor and the only writer in the product | Press the Capture hotkey, drag a region, cancel a Capture, type and reword a Note, place, move and remove Markers, select Findings, delete Findings, act on an orphan report |
+| Reviewer | The person operating Snapdown. The only human actor and the only writer in the product | Press the Capture hotkey, drag a region, cancel a Capture, type and reword a Note, place, move and remove Markers, select Findings, delete Findings, discard the Findings behind a finished Bundle, act on an orphan report |
 
 No second actor. An agent never reaches this component: `agent-access` and `sharing` read Bundles, and
 BR-14 keeps an unbundled Finding invisible to both.
@@ -179,9 +189,21 @@ Conceptual. No column types, no storage shape.
 
 #### State Lifecycle
 
-A Bundle has no status of its own. It is composed, and after that it is either present or gone —
-there is no draft, no editing state, and no revision, because BR-11 forbids editing and BR-10 makes it
-a snapshot.
+A Bundle has no **stored** status of its own. It is composed, and after that it is either present or
+gone. There is no draft and no revision: a correction to its title or its notes rewrites the one
+document in place (FR-40), and no earlier version is kept.
+
+**Amended 2026-08-31.** This paragraph used to end *"there is no draft, no editing state, and no
+revision, because BR-11 forbids editing and BR-10 makes it a snapshot"*. `BR-11` no longer forbids
+editing; it was narrowed to say that only the composer changes a Bundle's document, never a surface.
+`BR-10` is unchanged and still makes a Bundle a snapshot — of the Findings, which is the drift that
+mattered. Editing a Bundle's own text does not reintroduce it.
+
+One state **is** observable, and it is derived rather than stored: whether a Bundle can still give its
+source Findings back. It can while those Findings exist, and cannot once they are gone (FR-41). The
+answer is read from whether the Findings exist, never from a flag on the Bundle — which is why
+migration v6 dropping `bundle_item`'s foreign key to `finding` is what makes the second condition
+legal rather than a broken row. → BR-122
 
 The one thing that looks like a state and is not: whether a Bundle is published. That belongs to its
 Publication, owned by `sharing`, and asking the Bundle would be asking the wrong entity.
@@ -192,8 +214,8 @@ Publication, owned by `sharing`, and asking the Bundle would be asking the wrong
 2. A Finding appears at most once in one Bundle. → BR-12
 3. BundleItem positions within one Bundle are a contiguous reading order with no gaps and no ties.
    → FR-10
-4. A Bundle's composed document is written once and never changed. A change means a new Bundle.
-   → BR-10, BR-11, AD-9
+4. A Bundle's composed document is written only by the composer, over the Bundle's own copy. No
+   surface writes it directly, and writing it never reads or writes a Finding. → BR-10, BR-11, AD-9
 5. Every image a Bundle's document references exists as that Bundle's own copy, at the same dimensions
    as the Finding's image it was copied from. → BR-13, AD-3, AD-4
 6. Composition refuses, naming the Finding, if any selected Finding's image is missing. A Bundle with
@@ -204,6 +226,8 @@ Publication, owned by `sharing`, and asking the Bundle would be asking the wrong
    → BR-10
 9. Deleting a Bundle that has a live Publication ends that Publication in the same act. If it cannot,
    the deletion does not happen. → BR-23, BR-20
+10. A Bundle can give its source Findings back for exactly as long as those Findings exist. Once they
+   are gone the Bundle stays readable on its own copies and that offer is withdrawn. → BR-122, FR-41
 
 ### finding
 
@@ -430,7 +454,7 @@ neither is a container, and a row's owning component is what decides which store
 | 2 | `note` | `finding` | The prose body of one Finding's Note. The numbered lines are not here — they belong to `marker` (AD-1) | `id` pk · `finding_id` fk unique · `body` · `updated_at` | draft |
 | 3 | `marker` | `finding` | One numbered Marker and the Note line that is the same thing as it. `ordinal` is the badge number and the line number at once | `id` pk · `finding_id` fk · `ordinal` unique per finding, from 1, no gaps · `x` · `y` normalised 0–1 (AD-3) · `comment` | draft |
 | 13 | `visual_annotation` | `finding` | Visual markup elements (Shape, Callout, Blur, Arrow, Text) on canvas overlay. Does not bind to Markdown note lines. | `id` pk · `finding_id` fk · `kind` (shape, callout, blur, arrow, text) · `properties_json` (coords, dimensions, style, font, text, tail) · `created_at` | draft |
-| 4 | `bundle` | `bundle` | One composed Bundle, including the composed Markdown itself so that every handoff path serves identical bytes (AD-9) | `id` pk · `name` · `markdown` · `markdown_path` relative to the Vault · `composed_at` | draft |
+| 4 | `bundle` | `bundle` | One composed Bundle, including the composed Markdown itself so that every handoff path serves the same authored document rather than each surface composing its own (AD-9, DEC-012) | `id` pk · `name` · `markdown` · `markdown_path` relative to the Vault · `composed_at` | draft |
 | 5 | `bundle_item` | `bundle` | The membership of one Finding in one Bundle, and the path of the Marker-burned image copy written for it | `id` pk · `bundle_id` fk · `finding_id` fk · `position` · `image_path` · unique on (`bundle_id`, `finding_id`) | draft |
 | 6 | `publication` | `sharing` | Where a Bundle is published and whether it is still live. `slug` is generated independently of every id here (AD-8) | `id` pk · `bundle_id` fk unique · `slug` unique · `base_url` · `published_at` · `unpublished_at` nullable · `last_error` nullable | draft |
 | 7 | `access_key` | `agent-access` | The one Access Key that may be valid, stored as a hash. The key itself lives in the Windows credential store, never here | `id` pk · `key_hash` · `issued_at` · `revoked_at` nullable | draft |
@@ -476,7 +500,7 @@ Three surfaces, one list. Not one of them accepts a write from outside the deskt
 | --- | --- | --- | --- | --- | --- |
 | 1 | GET | `/v1/health` | `agent-access` | Local API liveness. The only route that does not require the Access Key, and it returns nothing about the Library | draft |
 | 2 | GET | `/v1/bundles` | `agent-access` | List Bundles: id, name, Finding count, composed-at. Refuses with `key_required` when no valid key is presented, which is distinguishable from an empty list (AD-7) | draft |
-| 3 | GET | `/v1/bundles/{id}` | `agent-access` | One Bundle's stored Markdown, byte-identical to what *Copy Markdown* produces (AD-9), plus the list of image filenames it references | draft |
+| 3 | GET | `/v1/bundles/{id}` | `agent-access` | One Bundle's stored Markdown — the same authored document *Copy Markdown* serves, with the stored folder-relative image links rather than a rebased set (AD-9, DEC-012) — plus the list of image filenames it references | draft |
 | 4 | GET | `/v1/bundles/{id}/images/{filename}` | `agent-access` | One image belonging to that Bundle. Refuses any filename that escapes the Bundle's own folder | draft |
 | 5 | TOOL | `mcp:list_bundles` | `agent-access` | MCP tool over row 2 | draft |
 | 6 | TOOL | `mcp:read_bundle` | `agent-access` | MCP tool over row 3. Returns the Markdown as text | draft |
@@ -505,11 +529,45 @@ None — `derived_from: plan`, and there is no code to derive from yet.
 
 ### Inventory — screens
 
-Two front ends. Rows 1–13 are the React webview inside `desktop-app`; rows 14–15 are `web-ui` in the
-reader's browser. A desktop surface that is a window rather than a route has `—` for its route.
+Two front ends. Rows 1–13 are the desktop UI inside `desktop-app` — a React webview until `DEC-007`,
+native Slint since; rows 14–15 are `web-ui` in the reader's browser, unaffected by that decision. A
+desktop surface that is a window rather than a route has `—` for its route.
 
 `No` is stable. A new row takes the next number; a removed one keeps its number with
 `status: removed`.
+
+#### Derivation finding, 2026-08-31 — the Route column is a fossil, and this is not hand work
+
+`inventory.py` was run against `.constitution/project/inventory-readers.py` and reports **15
+plan-versus-code gaps** on this inventory. They are one finding wearing two shapes, and neither is
+patched over here, because the script's own rule is that a plan-versus-code gap is routed to the skill
+that owns its side and MUST NOT be fixed by editing the other side.
+
+**Every desktop route in the table below describes a router this product does not have.** `/findings`,
+`/bundles`, `/bundles/:id`, `/settings`, `/settings/agent-access` and the rest are React Router paths.
+`DEC-007` moved the desktop app off React onto Slint, and Slint has no routes. The derivation reports
+each of them as *"planned but not read in code"*, which is accurate: there is nothing to read.
+
+**Every per-screen component file the plan expects is absent.** The reader looks for
+`apps/desktop/ui/screens/findings-view.slint`, `screens/bundle-view.slint`,
+`screens/settings-view.slint`, `screens/orphan-report-view.slint`, `screens/agent-access-view.slint`,
+`components/confirm-dialog.slint` and `components/publish-dialog.slint`. None exists. The shipped
+desktop UI is one file — `apps/desktop/ui/appwindow.slint` — so the row-per-file structure this
+inventory assumes was never built. Two `web-ui` rows are absent for the same reason
+(`PublishedBundleReader.tsx`, `PublicationNotFound.tsx`).
+
+**What this does NOT mean.** It is not evidence that the screens are unreachable. The Capture Overlay,
+the Findings list, the Bundle list, the compose modal and Settings all exist and run; they live inside
+one Slint file rather than behind a route. This is a stale **plan**, not a missing product — the
+opposite of the `BUG-4`/`BUG-5` class, where a component existed and nothing mounted it.
+
+**Re-planning this table against Slint is owed and is deliberately NOT done in this pass.** It is
+entangled with work already in flight: the Bundle Library screen is being designed on the wayfinder map
+at `.scratch/bundle-library/`, where ticket 01 settled the Library's shape and tickets 03 and 05 are
+still open. Re-cutting rows 8 and 10 now would be guessing at the answer those tickets exist to
+produce. The honest state is a table that says what it planned, beside a finding that says what runs.
+
+`verified:` therefore stays empty. It MUST NOT be filled until the rows describe Slint.
 
 #### Rows & UI Design Assets Mapping
 
@@ -523,13 +581,14 @@ reader's browser. A desktop surface that is a window rather than a route has `�
 | 5 | Finding detail with Marker canvas | `/findings/:id` | `finding` | Reviewer | UC-4, UC-5 | [`.how/finding/01-ux/assets/01-studio-workspace.html`](../finding/01-ux/assets/01-studio-workspace.html) |
 | 6 | Delete Findings confirmation | `/findings/delete` (modal) | `finding` | Reviewer | UC-7 | [`.how/bundle/01-ux/assets/05-saved-bundles-drawer.html`](../bundle/01-ux/assets/05-saved-bundles-drawer.html) |
 | 7 | Orphan report | `/findings/orphans` | `finding` | Reviewer | UC-8 | [`.how/finding/01-ux/assets/01-studio-workspace.html`](../finding/01-ux/assets/01-studio-workspace.html) |
-| 8 | Editor — Bundles | `/bundles` | `bundle` | Reviewer | UC-10, UC-11, UC-23 | [`.how/bundle/01-ux/assets/05-saved-bundles-drawer.html`](../bundle/01-ux/assets/05-saved-bundles-drawer.html) |
+| 8 | Editor — Bundles | `/bundles` | `bundle` | Reviewer | UC-10, UC-11, UC-23, UC-28, UC-30 | [`.how/bundle/01-ux/assets/05-saved-bundles-drawer.html`](../bundle/01-ux/assets/05-saved-bundles-drawer.html) |
 | 9 | Compose Bundle | `/bundles/compose` (modal) | `bundle` | Reviewer | UC-9 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
-| 10 | Bundle detail | `/bundles/:id` | `bundle` | Reviewer | UC-11, UC-12, UC-23 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
+| 10 | Bundle detail | `/bundles/:id` | `bundle` | Reviewer | UC-11, UC-12, UC-23, UC-28, UC-29 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 | 11 | Publish and unpublish a Bundle | `/bundles/:id/publish` (modal) | `sharing` | Reviewer | UC-20, UC-22 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 | 12 | Settings — General & Quality | `/settings` | `settings` | Reviewer | UC-13, UC-14, UC-15, UC-16 | [`.how/settings/01-ux/assets/06a-settings-general.html`](../settings/01-ux/assets/06a-settings-general.html)<br>[`.how/settings/01-ux/assets/06b-settings-hotkeys.html`](../settings/01-ux/assets/06b-settings-hotkeys.html)<br>[`.how/settings/01-ux/assets/06d-settings-about.html`](../settings/01-ux/assets/06d-settings-about.html) |
 | 13 | Settings — Agent access | `/settings/agent-access` | `agent-access` | Reviewer | UC-17, UC-19 | [`.how/settings/01-ux/assets/06c-settings-agent-bridge.html`](../settings/01-ux/assets/06c-settings-agent-bridge.html) |
 | 14 | Published Bundle reader | `/b/:slug` | `sharing` | Remote coding agent, Reviewer | UC-21 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
+| 16 | Reclaim space | — (a desktop surface; PLAN ONLY, no code and no route) | `finding` | Reviewer | UC-31 | _none yet_ |
 | 15 | Publication not available | `/b/:slug` (the refused state) | `sharing` | Remote coding agent, Reviewer | UC-22 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 
 Row 0 is numbered 0 rather than 16 deliberately. Numbers here are stable and a new row normally takes
@@ -572,6 +631,14 @@ and a promise with no row is a promise nobody checks.
 No row is owned by `_platform`.
 
 #### Findings
+
+**This whole section is a 2026-08-23 snapshot of the pre-`DEC-007` Tauri webview, now stale in
+substance, not just in file paths.** The desktop UI has since been rebuilt in Slint, and the
+"screen gaps" table below cites `.tsx` files that no longer exist — some because the surface was
+rebuilt (rows 0 and 2, confirmed current: `apps/desktop/ui/appwindow.slint` and its capture-note-field),
+some because nothing has replaced them yet (`BUG-59`, `BUG-61`, both filed 2026-08-27, are the current
+source of truth for what is and is not built). Treat the table as history explaining how these gaps
+were first found, not as today's state — that is `BUG-61`'s job now.
 
 **Corrected 2026-08-23.** An earlier version of this section stated that
 `.constitution/project/inventory-readers.py` "has not been written". **That was wrong** — the file

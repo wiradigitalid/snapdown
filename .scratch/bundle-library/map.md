@@ -66,9 +66,30 @@ trailing *existing* code. There is no code here at all — these are deliberate 
 in force, so they must be grown through the front door rather than stepped over.
 
 **The owner decided on 2026-08-31 to grow both into MVP scope.** That growth is
-[Grow Export PDF and Bundle rename into promises](issues/08-grow-pdf-export-and-bundle-rename-into-scope.md),
+[Grow the promises this map needs](issues/08-grow-pdf-export-and-bundle-rename-into-scope.md),
 via `wdi-product` intent `update`. Until it lands, neither Export PDF nor an editable Bundle title
 has a promise behind it.
+
+**A fifth boundary, found 2026-08-31, and it is the load-bearing one.** `BR-11`
+(`.what/business-rules.md:32`, status **active**, sourced to `AD-9 · OQ-12`) — *"A Bundle is never
+edited in place. A change means composing a new Bundle"* — forbids the **whole** Review & Update
+window, not just its title. `.what/bundle/SRS-bundle.md:76` restates it as a Non-Goal. It is a
+different kind of boundary from the four MVP scope lines: an active business rule derived from an
+`AD-`. `AD-9`'s letter governs only the **way out** (*"every handoff path MUST serve those exact
+bytes"*) and its last clause points at the remedy this map already uses — *change the composer* — so
+the window looks compatible with `AD-9` while `BR-11`'s absolute form over-derives from it.
+`BR-10` and `BR-65` both stay true and must be preserved rather than amended. `OQ-12`, `BR-11`'s
+other source, is an assumption that this map's design falsifies, and it should be closed in place.
+All of this is now scoped into
+[Grow the promises this map needs](issues/08-grow-pdf-export-and-bundle-rename-into-scope.md), whose
+route grows from one skill to three: `wdi-product` for the promises and the `BR-11` amendment, then
+`wdi-decision`, then `wdi-question`.
+
+**`AD-9` also bites `Copy Markdown`, in the opposite direction.** The clipboard is a handoff path and
+absolute-link rewriting is different bytes on the way out; `crates/snapdown-store/tests/test_golden_markdown.rs:137`
+pins the serializer byte-for-byte citing `AD-9`. See
+[Decide what Copy Markdown puts on the clipboard](issues/03-decide-what-copy-markdown-puts-on-the-clipboard.md).
+Both questions are the same `AD-9` reading and are best answered in one sitting so they cannot drift.
 
 Both were written as **MVP/r1** boundaries, not permanent bans — a sibling entry, *"Searching or
 filtering the Library"*, even carries `[NOTE FOR PM] … revisit for r2`. Growing them is ordinary.

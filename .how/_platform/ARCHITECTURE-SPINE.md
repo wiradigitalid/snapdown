@@ -146,14 +146,20 @@ depend on nothing in the Rust tree except the Markdown and image bytes a publish
   other Library id, from a cryptographically secure source. No Library id may appear in a published
   URL, in a published document, or in anything `web-api` serves.
 
-### AD-9 — One Bundle, one Markdown, byte-identical on every path
+### AD-9 — One Bundle, one authored document, on every path
 
 - **Binds:** `bundle`, `agent-access`, `sharing`.
 - **Prevents:** the clipboard, MCP, and web paths drifting into three renderings of one Bundle, so
   that two agents reading the same review disagree about it and nobody can say which is right.
 - **Rule:** A Bundle's Markdown MUST be composed once, by the core, and stored. Every handoff path
-  MUST serve those exact bytes. No surface may re-render, re-order, decorate, or summarise a Bundle
-  on the way out; a surface that needs a different shape is asking for a change to the composer.
+  MUST serve that same authored document. A path MAY substitute the base of the document's image
+  links so that they resolve for its own reader, and MUST change nothing else — no re-ordering, no
+  decoration, no summarising, and not one character of what the composer wrote. That substitution is
+  made BY THE COMPOSER, which takes the base path as a parameter; no surface may re-render, re-order,
+  decorate, or summarise a Bundle on the way out, and no surface may rewrite a document the composer
+  has already produced. A surface that needs a different shape is asking for a change to the composer.
+- **Narrowed** 2026-08-31 by `DEC-012`. Binds and Prevents are unchanged; the title and the Rule are
+  not. The reasoning, the cost and the alternatives live in that decision.
 
 ### AD-10 — Colour has exactly one authority, and every colour exists in both themes
 

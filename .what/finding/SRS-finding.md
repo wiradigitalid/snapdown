@@ -3,8 +3,8 @@ type: srs
 component: finding
 status: draft
 created: "2026-08-22"
-updated: "2026-08-22"
-satisfies: [FR-1, FR-2, FR-3, FR-4, FR-6, FR-7, FR-8, FR-9, FR-13, FR-15, NFR-1, NFR-2, NFR-3, NFR-4, NFR-5]
+updated: "2026-08-31"
+satisfies: [FR-1, FR-2, FR-3, FR-4, FR-6, FR-7, FR-8, FR-9, FR-13, FR-15, FR-30, FR-31, FR-32, FR-33, FR-41, FR-42, NFR-1, NFR-2, NFR-3, NFR-4, NFR-5]
 reviewed:
   date: '2026-08-23'
   sha: '783a561'
@@ -42,7 +42,7 @@ span a seam.
 
 | Actor | Who they are | What they may do |
 | --- | --- | --- |
-| Reviewer | The person operating Snapdown. The only human actor and the only writer in the product | Press the Capture hotkey, drag a region, cancel a Capture, type and reword a Note, place, move and remove Markers, select Findings, delete Findings, act on an orphan report |
+| Reviewer | The person operating Snapdown. The only human actor and the only writer in the product | Press the Capture hotkey, drag a region, cancel a Capture, type and reword a Note, place, move and remove Markers, select Findings, delete Findings, discard the Findings behind a finished Bundle, act on an orphan report |
 
 No second actor. An agent never reaches this component: `agent-access` and `sharing` read Bundles, and
 BR-14 keeps an unbundled Finding invisible to both.
@@ -60,10 +60,22 @@ BR-14 keeps an unbundled Finding invisible to both.
 | UC-7 | I throw away the findings I am done with | Reviewer | FR-13 | yes |
 | UC-8 | I find out what has gone missing or been left behind | Reviewer | FR-15 | no |
 | UC-27 | I annotate a screenshot with visual shapes, arrows, callouts, text, or blur redaction | Reviewer | FR-30, FR-31, FR-32, FR-33 | no |
+| UC-30 | I get rid of the screenshots behind a review I am finished with, but keep the review | Reviewer | FR-41 | yes |
+| UC-31 | I find out which reviews are still holding my screenshots, and get that disk back | Reviewer | FR-42 | yes |
 
-One of eight is `critical`, and it is UC-7: deleting a Finding removes a file from disk and cannot be
-undone. FR-4 has no use case of its own and says so in the registry — image reduction has no actor and
-no initiating step; it is a property of UC-1 and UC-2, asserted by NFR-3.
+Three of eleven are `critical` — UC-7, UC-30 and UC-31 — and all three for one reason: each removes a
+capture and its file from disk, and none can be undone. FR-4 has no use case of its own and says so in
+the registry — image reduction has no actor and no initiating step; it is a property of UC-1 and UC-2,
+asserted by NFR-3.
+
+**UC-30 and UC-31 are reached from a Bundle and still belong here.** The Reviewer opens them from the
+Library, and filing them under `bundle` is the obvious mistake; the object destroyed is a Finding, and
+`components.yaml` gives `bundle` no authority to write one. The Bundle is where the Reviewer stands,
+not what the use case acts on.
+
+The count sentence above said *"one of eight"* until 2026-08-31 while the table already listed nine
+rows: UC-27 was added without it being updated. Corrected in the same pass rather than left, because a
+stated count is the one thing in this section a reader cannot check without recounting.
 
 ## Constraints · [G3]
 

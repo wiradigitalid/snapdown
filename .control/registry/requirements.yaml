@@ -103,6 +103,23 @@ capabilities:
     target_release: r3
     prd: capture-to-markdown
 
+  # CAP-12 born 2026-08-31. Export is deliberately NOT folded into CAP-4. That capability reads
+  # "into a named Markdown Bundle" and names Markdown on purpose, because AD-9's one-set-of-bytes
+  # invariant is built on it; widening CAP-4 would blur exactly the distinction the clipboard path
+  # is currently disputing.
+  - id: CAP-12
+    title: Render a composed Bundle as a document a person reads away from Snapdown
+    # BG-2 is the nearest goal and the fit is KNOWN TO BE IMPERFECT. Its measure is "median handoff
+    # time for a five-Finding review under 120 seconds", which does not measure a human-readable
+    # artifact, and an export creates a file to manage where BG-2 promises none. Assigned rather
+    # than invented: birthing a BG- is a G1 act, not G2's. `wdi-problem` may owe BG-2 a measure
+    # amendment, and OQ-31 holds that.
+    goal: BG-2
+    component: bundle
+    target_release: r3
+    prd: capture-to-markdown
+    depends_on: [CAP-4]
+
 functional:
   # --- CAP-1 & CAP-10 Capture --------------------------------------------------------
   - id: FR-1
@@ -189,16 +206,46 @@ functional:
     title: Copy a Bundle's Markdown
     capability: CAP-4
     component: bundle
+    # Amended 2026-08-31. This row's proof used to end "yields the Bundle's complete Markdown,
+    # unchanged", and prd.md carried the consequence "the image references in the copied text are
+    # the same relative paths as in the file". Together those fixed the clipboard to relative links,
+    # which resolve for no reader outside the Bundle's own folder. The clipboard MAY now render
+    # image links as absolute paths.
+    # Deliberately NOT settled here, and still open on the Bundle Library map's ticket 03: which
+    # encoding is emitted, whether the Reviewer is told images do not travel on a text clipboard,
+    # and whether `Open file location` is thereby redundant.
+    # This amendment RESTS ON the reading that a composer taking a base-path parameter satisfies
+    # AD-9 rather than contradicting it. If that reading fails, AD-9 is contradicted and a DEC- is
+    # mandatory. Owed to wdi-decision; not assumed silently.
     proof: Copying a Bundle and pasting into a plain text editor yields the Bundle's complete
-      Markdown, unchanged.
+      document, with every image link naming a location the reader of the pasted text can open.
   - id: FR-14
     title: Delete a Bundle with its images
     capability: CAP-4
     component: bundle
     writes: [Bundle, BundleItem, Publication]
     defers_to: [FR-25]
+    # Amended 2026-08-31. prd.md carried the consequence "The Reviewer can choose, in the same
+    # confirmation, to delete the Bundle's source Findings too". That is removed: destroying a
+    # Bundle and destroying its originals are now two deliberate acts, because one click is the
+    # wrong price for the most destructive operation in this product. FR-41 carries the other half.
+    # The removed consequence also claimed a `Finding` write this row never authorised - `bundle`
+    # owns only [Bundle, BundleItem] - so the prose had been promising past its own boundary.
     proof: Deleting a Bundle removes it from the Bundle list and leaves neither its Markdown nor its
       images in the Vault folder.
+  - id: FR-40
+    title: Edit a composed Bundle's title and notes
+    capability: CAP-4
+    component: bundle
+    writes: [Bundle]
+    # BR-11 ("A Bundle is never edited in place. A change means composing a new Bundle", status
+    # active) still forbids this requirement as written. BR-11 is a CROSS-COMPONENT rule, so
+    # narrowing it to the handoff path is wdi-blueprint's act, not wdi-product's. G2 MUST NOT open
+    # on this requirement until that amendment lands. BR-10 and BR-65 both stay true under it and
+    # MUST NOT be amended: this path edits the Bundle's own stored copy and never reads a Finding.
+    proof: Reopening a composed Bundle, changing its title and one of its notes, and saving produces
+      a document whose heading and that note both read the new text, while its images and the
+      Findings it was composed from are untouched.
   # --- CAP-5 Removal -----------------------------------------------------------------
   - id: FR-13
     title: Delete Findings, and their image files with them
@@ -215,6 +262,30 @@ functional:
     component: finding
     proof: After a file is deleted from the Vault outside Snapdown, the Reviewer is shown that the
       Finding is now broken and offered to delete the Finding.
+  # FR-41 and FR-42 born 2026-08-31. Both are reached from a Bundle, and both sit under CAP-5 with
+  # `component: finding` rather than under CAP-4 with `component: bundle`, because the act destroys
+  # Findings and `bundle` owns only [Bundle, BundleItem]. Filing them under `bundle` would be the
+  # exact collision V21 exists to catch. FR-14's `defers_to: [FR-25]` is the same problem solved the
+  # other way round; either shape is legitimate, and this one is simpler.
+  - id: FR-41
+    title: Discard the source Findings behind a Bundle, keeping the Bundle
+    capability: CAP-5
+    component: finding
+    writes: [Finding, Note, Marker, VisualAnnotation]
+    # BR-59 ("Composing does not remove the Findings it used from the Library") stays TRUE and MUST
+    # NOT be amended for this. It governs COMPOSING; this is a separate, later, explicit act.
+    proof: Discarding the originals behind a Bundle leaves the Bundle readable with its own images
+      while its source Findings and their image files are gone from the Library and the Vault, and
+      the Bundle can no longer be disassembled.
+  - id: FR-42
+    title: See which Bundles still hold original captures, and reclaim their disk in bulk
+    capability: CAP-5
+    component: finding
+    writes: [Finding, Note, Marker, VisualAnnotation]
+    # The surface has no screen-registry entry yet. That is wdi-ux's slot, not this one.
+    proof: The reclaim surface lists every Bundle still holding source Findings with the disk each
+      one holds and a running total, and discarding a chosen set reduces the reported total by the
+      sum of what was discarded.
   # --- CAP-6 Settings ----------------------------------------------------------------
   - id: FR-16
     title: Choose the Vault folder
@@ -410,6 +481,20 @@ functional:
     proof: The Bundle list distinguishes published from unpublished Bundles at a glance, and copying
       the URL of a published one puts a working URL on the clipboard.
 
+  # --- CAP-12 Export -----------------------------------------------------------------
+  - id: FR-39
+    title: Export a Bundle as a PDF
+    capability: CAP-12
+    component: bundle
+    writes: []
+    # Implementation is deliberately absent from this row and from prd.md. Engine, licences, measured
+    # disk and memory costs, escaping and tall-image handling are all established on the Bundle
+    # Library map's ticket 07, and the packaging question is deferred to the Export PDF effort by
+    # that ticket's own conclusion.
+    proof: Exporting a Bundle produces one A4 PDF a person can read without Snapdown, in which each
+      Finding appears as its own section with its image whole on a single page, the pages are
+      numbered, and the text can be selected and searched rather than being a picture of text.
+
 nonfunctional:
   - id: NFR-1
     title: The Capture Overlay is visible within 200 ms of the hotkey press, with three monitors
@@ -522,6 +607,15 @@ nonfunctional:
     goal: BG-3
     component: finding
     enforced_by: An assertion that every stored Finding carries its resolved budget
+  - id: NFR-19
+    title: An exported PDF carries a real text layer, and no image in it is split across a page break
+    goal: BG-2
+    component: bundle
+    # Asserting a `%PDF-` signature and a page count does NOT satisfy this. A fabricated header
+    # passes that, which is the mistake a 17-byte fake PNG made for five waves in this repository
+    # before test_nfr8_image_resolution.rs was written. The output has to be read back.
+    enforced_by: A test that extracts the text out of the produced PDF and asserts the Notes it
+      contains, plus a placement check read from the PDF's own image matrices
 
 journeys:
   - id: UJ-1

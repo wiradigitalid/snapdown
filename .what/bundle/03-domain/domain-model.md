@@ -33,9 +33,21 @@ Conceptual. No column types, no storage shape.
 
 ## State Lifecycle
 
-A Bundle has no status of its own. It is composed, and after that it is either present or gone —
-there is no draft, no editing state, and no revision, because BR-11 forbids editing and BR-10 makes it
-a snapshot.
+A Bundle has no **stored** status of its own. It is composed, and after that it is either present or
+gone. There is no draft and no revision: a correction to its title or its notes rewrites the one
+document in place (FR-40), and no earlier version is kept.
+
+**Amended 2026-08-31.** This paragraph used to end *"there is no draft, no editing state, and no
+revision, because BR-11 forbids editing and BR-10 makes it a snapshot"*. `BR-11` no longer forbids
+editing; it was narrowed to say that only the composer changes a Bundle's document, never a surface.
+`BR-10` is unchanged and still makes a Bundle a snapshot — of the Findings, which is the drift that
+mattered. Editing a Bundle's own text does not reintroduce it.
+
+One state **is** observable, and it is derived rather than stored: whether a Bundle can still give its
+source Findings back. It can while those Findings exist, and cannot once they are gone (FR-41). The
+answer is read from whether the Findings exist, never from a flag on the Bundle — which is why
+migration v6 dropping `bundle_item`'s foreign key to `finding` is what makes the second condition
+legal rather than a broken row. → BR-122
 
 The one thing that looks like a state and is not: whether a Bundle is published. That belongs to its
 Publication, owned by `sharing`, and asking the Bundle would be asking the wrong entity.
@@ -46,8 +58,8 @@ Publication, owned by `sharing`, and asking the Bundle would be asking the wrong
 2. A Finding appears at most once in one Bundle. → BR-12
 3. BundleItem positions within one Bundle are a contiguous reading order with no gaps and no ties.
    → FR-10
-4. A Bundle's composed document is written once and never changed. A change means a new Bundle.
-   → BR-10, BR-11, AD-9
+4. A Bundle's composed document is written only by the composer, over the Bundle's own copy. No
+   surface writes it directly, and writing it never reads or writes a Finding. → BR-10, BR-11, AD-9
 5. Every image a Bundle's document references exists as that Bundle's own copy, at the same dimensions
    as the Finding's image it was copied from. → BR-13, AD-3, AD-4
 6. Composition refuses, naming the Finding, if any selected Finding's image is missing. A Bundle with
@@ -58,3 +70,5 @@ Publication, owned by `sharing`, and asking the Bundle would be asking the wrong
    → BR-10
 9. Deleting a Bundle that has a live Publication ends that Publication in the same act. If it cannot,
    the deletion does not happen. → BR-23, BR-20
+10. A Bundle can give its source Findings back for exactly as long as those Findings exist. Once they
+   are gone the Bundle stays readable on its own copies and that offer is withdrawn. → BR-122, FR-41

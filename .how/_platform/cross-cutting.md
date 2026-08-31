@@ -133,10 +133,19 @@ generated separately, per AD-8.
 ### Bundle Markdown shape
 
 **Applies to:** `bundle`, `agent-access`, `sharing`.
-**Enforced by:** the single composer in `snapdown-core`, plus a golden-file test asserting the
-clipboard, Local API, and published bytes are identical.
+**Enforced by:** the single composer in `snapdown-core`, plus a golden-file test asserting its output
+against a stored reference — `crates/snapdown-store/tests/test_golden_markdown.rs`.
 
 One Bundle produces one Markdown document, composed once and stored (AD-9). Its shape:
+
+**Corrected 2026-08-31.** The Enforced-by line used to read *"plus a golden-file test asserting the
+clipboard, Local API, and published bytes are identical."* It was wrong on two counts. There is one
+golden-file test and it pins the composer's output against a reference, not three surfaces against
+each other — and two of the three surfaces have no code: the clipboard-Markdown path is unimplemented,
+and the Local API does not exist (`BUG-59`). `DEC-012` also retired the identity claim itself: a path
+MAY render the image links against its own base. **The shape below is the STORED document's shape**,
+which keeps folder-relative links — that is `NFR-8`, and `DEC-012` does not touch it. A handoff path
+rendering those links against a different base is serving this same document, not a second one.
 
 ```markdown
 # {Bundle name}

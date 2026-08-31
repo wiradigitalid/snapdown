@@ -45,3 +45,21 @@ dialogs' 20px/14px/30px anatomy. Read its `README.md` before drawing anything ne
 was lifted from the running app rather than chosen on the canvas.
 
 Canvas: https://claude.ai/code/artifact/6f798d70-77a0-491e-973b-92e7a2641a2f
+
+## Added 2026-08-31, from ticket 08's session — the whole window, not just the title, waits on 08
+
+The constraint above says *"The title depends on ticket 08"* and treats everything else as
+prototype-able now. That understated it. `BR-11` (`.what/business-rules.md:32`, status **active**) —
+*"A Bundle is never edited in place. A change means composing a new Bundle"* — forbids this window
+**entirely**, not just its title field, and `.what/bundle/SRS-bundle.md:76` restates it as a Non-Goal.
+Bundle notes, Finding notes and Marker notes are all editing a composed Bundle in place.
+
+This does **not** block prototyping: a prototype exists to raise the fidelity of the discussion, and
+`AD-9`'s letter appears to permit the window (see ticket 08). It does mean the prototype cannot be
+handed to `/to-spec` until 08's `BR-11` amendment lands, so treat **every** editable field as
+provisional, not only the title.
+
+One constraint the prototype must actively preserve: `BR-65`
+(`.what/bundle/02-rules/rules-bundle.md:29`) — *"Opening a Bundle shows what was composed, not a live
+view of the Findings as they are now."* It stays true under this design and must keep staying true.
+Anything in the window that re-reads a Finding to show its current state breaks it.

@@ -23,13 +23,21 @@ product_components:
     # is what this field exists to make visible.
     owns: [Finding, Note, Marker, VisualAnnotation]
     containers: [desktop-app]
-    # Raised catalog-of-record depth on 2026-08-23: guarded -> deep. The code already runs, so what
-    # G4 produces here is an AS-BUILT RECORD under sdd-guide.md's evidence labels, not a design.
-    mode: deep
+    # `mode` history, kept because it explains what is on disk. Raised 2026-08-23 guarded -> deep, on the
+    # grounds that the code already runs so G4 produces an AS-BUILT RECORD rather than a design. Returned
+    # to the global `guarded` on 2026-08-31 by the owner's instruction; the override is gone rather than
+    # restated, because components.yaml's own header says `mode` is written ONLY where it must differ from
+    # global. Nothing written at `deep` was deleted - it stops being required, which is all.
+    # Then set back to an explicit `guarded` on 2026-08-31 when the global moved to `outline`, so this row
+    # is an override again - the depth is unchanged, only what it is relative to.
+    mode: guarded
     risk_accepted: low
     risk_note: A Capture may contain personal data, and deleting a Finding is an irreversible action
       that removes a file from disk. Nothing here touches money and there is no contractual promise
       to an outside party.
+    # `risk_accepted` went low -> medium -> low on 2026-08-31, both moves on the owner's instruction.
+    # Back at `low` this is the ONLY component whose code must face the two-reviewer panel. Document
+    # lenses were never affected: `low` and `medium` both give structure + prose + edge-case-hunter.
     # Reset on 2026-08-23 when the depth moved under it, then re-passed at `deep` the same day:
     # behaviour and design both written, reviewed under structure + prose + edge-case-hunter, findings
     # resolved before stamping.
@@ -39,14 +47,21 @@ product_components:
     title: Bundle
     why: The act of turning several Findings into one document that can be handed over, and the
       lifetime of that document afterwards.
-    caps: [CAP-4]
+    caps: [CAP-4, CAP-12]
     owns: [Bundle, BundleItem]
     containers: [desktop-app]
-    # Raised on 2026-08-23: inherited `outline` -> explicit `deep`. As-built record, code already runs.
-    mode: deep
-    risk_accepted: low
+    # `mode` history: raised 2026-08-23 from inherited `outline` to explicit `deep` as an as-built record.
+    # Returned to the global `guarded` on 2026-08-31 by the owner's instruction, override removed - then
+    # written back as an explicit `guarded` the same day when the global moved to `outline`. Depth
+    # unchanged throughout; only what it is relative to.
+    mode: guarded
+    risk_accepted: medium
     risk_note: Deleting a Bundle is an irreversible action that removes files from disk, and a
-      Bundle carries copies of images that may hold personal data. No money, no third party.
+      Bundle carries copies of images that may hold personal data. No money, no third party. Since
+      2026-08-31 it also carries FR-41's companion act - discarding a Bundle's source Findings is
+      owned by `finding`, but the Bundle is where the Reviewer stands when they do it.
+    # `risk_accepted` low -> medium on 2026-08-31, owner's instruction. Drops the two-reviewer code panel;
+    # document lenses unchanged.
     # Reset on 2026-08-23 for the same reason as `finding`, then re-passed at `deep` the same day.
     # BUG-1 was found during this pass; a defect found is not a gate failed, and it is registered
     # in defects.yaml rather than blocking the gate.
@@ -56,17 +71,31 @@ product_components:
     title: Settings
     why: The four choices that stop the tool becoming the thing being managed — where files go,
       which keys do what, whether it starts with Windows, and how much image quality is bought.
-    caps: [CAP-6]
+    # CAP-9 added 2026-08-31. It was born at the G2 re-run of 2026-08-23 with
+    # `component: settings` in requirements.yaml and never registered here, so the two files
+    # disagreed for nine days and no validator reads this field against that one.
+    caps: [CAP-6, CAP-9]
     owns: [Setting]
     containers: [desktop-app]
-    # Raised on 2026-08-23: catalog -> deep. This is the largest change in the pass. At `catalog`
-    # this component SKIPPED G4 entirely, which is why the four choices it holds have no flow, no
-    # state, and no screen specification behind them — and why the owner's Settings complaints have
-    # nowhere in the corpus to be answered. At `deep`, G4 now runs for it.
-    mode: deep
-    risk_accepted: medium
+    # `mode` history: raised 2026-08-23 catalog -> deep, the largest change in that pass. At `catalog`
+    # this component SKIPPED G4 entirely, which is why the four choices it holds had no flow, no state and
+    # no screen specification behind them. Returned to the global `guarded` on 2026-08-31 by the owner's
+    # instruction, then to `outline` the same day when the global moved there - no row, so it inherits.
+    # `outline` still runs G4; only `catalog` skips it, so what that raise bought is kept. What `outline`
+    # drops is design past section Structure: Inherited Constraints and Failure Behaviour stop being
+    # required here, and the files already written for them stay on disk.
+    risk_accepted: high
+    risk_accepted_by: DEC-013
     risk_note: No money, no personal data, no irreversible action. The worst outcome is a hotkey
       that does not register, which is visible immediately.
+    # `risk_accepted` medium -> high on 2026-08-31, owner's instruction. NOT free, and DEC-013 is the
+    # ratification - still `draft`, because only the Product Owner may accept it. Two reasons it is owed
+    # even though the note above denies all five categories: V23 matches keywords against `risk_note` as
+    # prose, so a note that DENIES personal data trips the same marker as one that admits it, and that is
+    # deliberate - the check discloses rather than judges. And the note may understate this component:
+    # FR-16 plus BR-29 ("either moves every existing file or moves none") means choosing a Vault folder
+    # touches every stored file on disk. Whether that is an irreversible action is the owner's call and is
+    # unresolved. Rewording the note to slip past V23 would be gaming the check.
     # Was false-and-meaningless while this sat at `catalog`, because catalog skips G4. At `deep` it
     # means something again, and G4 ran for this component for the FIRST time on 2026-08-23.
     g4_passed: true
@@ -78,11 +107,20 @@ product_components:
     caps: [CAP-7]
     owns: [AccessKey]
     containers: [desktop-app, mcp-bridge]
-    mode: guarded
-    risk_accepted: low
+    # `mode` history: an explicit `guarded` until 2026-08-31, then removed when the global became
+    # `guarded`, then left absent when the global moved to `outline` the same day - so depth genuinely
+    # DROPPED here, guarded -> outline. Design now stops at section Structure, which means the Inherited
+    # Constraints table corrected for DEC-012 hours earlier stops being required. The file stays.
+    risk_accepted: high
+    risk_accepted_by: DEC-013
     risk_note: The key gates access to images that may contain personal data, across a process
       boundary the product does not control. Revocation is the safety, so getting it wrong is an
       irreversible disclosure. No money, no third party.
+    # `risk_accepted` low -> medium -> high on 2026-08-31, owner's instruction. `high` is NOT free here -
+    # the note above names personal data and an irreversible disclosure - so DEC-013 is the ratification,
+    # still `draft`. `high` also drops `edge-case-hunter`, not just the code panel. Note for whoever fixes
+    # BUG-59: LC-017 has no implementation at all today, so there is no code for a panel to review yet -
+    # which is what makes this cheap now and worth re-reading when it is fixed.
     g4_passed: true
 
   - id: sharing
@@ -92,12 +130,22 @@ product_components:
     caps: [CAP-8]
     owns: [Publication]
     containers: [desktop-app, web-api, web-ui]
+    # `mode` was an explicit `guarded`, removed when the global became `guarded`, written back as an
+    # explicit `guarded` when the global moved to `outline`. Depth unchanged throughout.
     mode: guarded
-    risk_accepted: low
+    risk_accepted: high
+    risk_accepted_by: DEC-013
     risk_note: Publishing puts images that may contain personal data on the public internet, and it
       is irreversible in the sense that matters — an unpublish cannot recall what was already
       fetched. No money moves and there is no contractual promise, but this is the component where a
       mistake cannot be undone.
+    # `risk_accepted` low -> medium -> high on 2026-08-31, owner's instruction, and of the five this is the
+    # one to re-read first. `high` drops BOTH the two-reviewer code panel AND `edge-case-hunter` - the lens
+    # that walks branches rather than reading prose - on the component whose own note says a mistake cannot
+    # be undone, and whose unhandled branches concern content already on the public internet. It also stops
+    # V13 demanding a review trace here. Disclosed before the change and chosen anyway, which is the
+    # owner's call; DEC-013 is the ratification and is still `draft`. `sharing` is frozen by DEC-005, so no
+    # new work reaches it meanwhile - that is what makes the trade cheap today rather than right.
     g4_passed: true
 
 # An entity no Product Component's promise explains. Empty, and that is the correct state: every

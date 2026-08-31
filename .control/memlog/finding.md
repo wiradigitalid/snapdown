@@ -1,7 +1,7 @@
 ---
 topic: Snapdown — finding component depth
 artifact: .how/finding/SDD-finding.md
-updated: 2026-08-23T22:00
+updated: 2026-08-31T16:37
 ---
 
 - (event) 2026-08-23 G4 re-run at `deep`, raised from `guarded`. g4_passed was reset to false: it passed at the old depth, and leaving it true would claim a gate that never ran at this one
@@ -18,3 +18,4 @@ updated: 2026-08-23T22:00
 - (note) [NEEDS CONFIRMATION] filed: whether a Marker with no Note line is currently surfaced anywhere, or silently tolerated
 - (note) [NEEDS CONFIRMATION] filed: marker.comment suggests per-Marker text the domain model does not describe. Whether it is used, and whether it duplicates the Note line, was not established
 - (note) NOT done: wdi-review has not run
+- (change) G3 delta 2026-08-31, wdi-blueprint intent catalog. UC-30 (FR-41 discard originals) and UC-31 (FR-42 reclaim space in bulk) added, both critical: true - each removes a capture and its file irreversibly, same class as UC-7. Both are REACHED FROM A BUNDLE and still belong to finding, because the object destroyed is a Finding and bundle owns only [Bundle, BundleItem]; stated in the catalogue so the next reader does not refile them. Actor Register gains 'discard the Findings behind a finished Bundle'. Two pre-existing inaccuracies corrected in the same pass: the count sentence said 'one of eight' against a nine-row table (UC-27 was added without updating it), and the SRS frontmatter's satisfies: omitted FR-30..FR-33 which its own catalogue claims.

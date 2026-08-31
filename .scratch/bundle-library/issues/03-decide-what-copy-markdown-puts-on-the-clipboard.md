@@ -71,3 +71,40 @@ portable and links read `./finding_N_burned.png`. Decide this ticket against tha
 use is `raw::set_bitmap_with` for images (`main.rs:2917-2922`). Copying text would be the first text
 clipboard call in the codebase — small, and Windows-only like the rest, with a `#[cfg(not(windows))]`
 stub alongside.
+
+## Added 2026-08-31, from ticket 08's session — `AD-9` was never checked here, and it bites
+
+The owner's answer above checks the rewrite against `NFR-8` and clears it. It does not check it
+against `AD-9`, which is the requirement that actually governs a clipboard:
+
+> *"A Bundle's Markdown MUST be composed once, by the core, and stored. **Every handoff path MUST
+> serve those exact bytes.** No surface may re-render, re-order, decorate, or summarise a Bundle on
+> the way out; a surface that needs a different shape is asking for a change to the composer."*
+> — `AD-9`, quoted at `.how/agent-access/SDD-agent-access.md:81`
+
+`Copy Markdown` **is** a handoff path, and rewriting every image link to an absolute path is a
+surface producing different bytes on the way out. `NFR-8` is about the shape of the links; `AD-9` is
+about the bytes being identical on every path. Clearing one does not clear the other.
+
+Two things soften it but neither dissolves it:
+
+- The answer already prescribes *"one composer with a base-path parameter, not a second copy of the
+  serializer"* — which is `AD-9`'s own stated remedy, *"a surface that needs a different shape is
+  asking for a change to the composer."* The rewrite goes through the composer, not around it.
+- `SDD-agent-access.md:81` records that the MCP path returns `bundle.markdown` **verbatim** and that
+  *"the golden-file test in `bundle` covers this path"*. That test exists —
+  `crates/snapdown-store/tests/test_golden_markdown.rs:137` asserts the serializer's output matches a
+  golden reference **byte-for-byte**, citing `AD-9` and `INV-EXPORT-001`. A base-path parameter means
+  a second golden, and the invariant stops being "one set of bytes" and becomes "one composer, two
+  renderings".
+
+So the open list at the end of this ticket gains a fourth item, and it is the one that needs settling
+first because it decides whether the other three are even reachable: **does emitting different bytes
+to the clipboard than to disk contradict `AD-9`, or does going through the composer satisfy it?** If
+it contradicts, a `DEC-` is mandatory — `AGENTS.md` makes contradicting an `AD-N` the one case where
+recording is not optional. Settle it against `AD-9`'s own text, not against a summary of it.
+
+Note this is the **same** question `BR-11` raises for the Review & Update window, in the opposite
+direction: there the composer re-runs and re-stores, here it renders a second form on the way out.
+See ticket 08's second-session section — worth answering both in one sitting so the two answers cannot
+drift.

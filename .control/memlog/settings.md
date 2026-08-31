@@ -1,7 +1,7 @@
 ---
 topic: Snapdown — settings component depth
 artifact: .how/settings/SDD-settings.md
-updated: 2026-08-23T22:00
+updated: 2026-08-31T19:20
 ---
 
 - (event) 2026-08-23 G4 run for the FIRST time. This component sat at `mode: catalog` until today, and catalog skips G4 by design — so it had no local rules, no full flows, no state machines, no failure behaviour, no contracts, no data model. Every one of the owner's Settings complaints was a question the corpus had no slot to answer
@@ -17,3 +17,6 @@ updated: 2026-08-23T22:00
 - (event) SCN-01 was REWRITTEN after reading the code. The first draft assumed a move-file-by-file implementation and spent a paragraph on a rollback-of-the-rollback. The real implementation copies everything, verifies everything, and only then deletes the sources (vault_migration.rs:138) — so no file ever exists in neither place, and AD-2 is satisfied by ORDERING rather than by compensation. Considerably stronger than the document had assumed
 - (event) but reading it found a REAL gap: both fs::remove_file calls swallow their result (:141 on the success path, :180 in the rollback). A source file that will not delete leaves an UNREPORTED DUPLICATE of an image that may hold personal data, and the move still reports success. Recorded as [MISSING] and as the highest-value item in the evidence table
 - (note) NOT done: wdi-review has not run. The rule is that G4 MUST NOT open on depth that has not been through it
+- (event) SEE .control/memlog/spine.md and bundle.md - agent-access has no memlog of its own in this project. G4 design 2026-08-31, scoped correction pass on SDD-agent-access.md for DEC-012: the AD-9 row in Inherited Constraints quoted the retired Rule verbatim, so it had to move with the spine. Its 'How it lands here' cell also claimed 'The golden-file test in bundle covers this path' - marked [MISSING] and corrected, because LC-017 has no implementation (BUG-59) so there is no path to cover, and the golden test pins the composer against a reference rather than any surface. Added DEC-012's guidance that this reader gets the stored folder-relative links with no rebasing. DEC-005 freezes this component; this is a stale-citation fix, which DEC-005 explicitly permits - 'This decision does not forbid a fix. It forbids new work.'
+- (event) CORRECTION: the entry immediately above this one was misfiled here. It records a change to SDD-agent-access.md and belongs in .control/memlog/agent-access.md, which did not exist and has now been created with the entry in it. Nothing about settings changed on 2026-08-31.
+- (change) 2026-08-31: CAP-9 registered on the settings row in components.yaml. It was born at the G2 re-run of 2026-08-23 carrying component: settings in requirements.yaml and was never added to this component's caps: list, so the two registries disagreed for nine days. Found by a full cross-check of every CAP and FR against every registered PC during wdi-init intent component. No validator reads components.yaml's caps: against requirements.yaml's component:, which is why nothing reported it - worth a V- rule in the method package, not a patch here.

@@ -1,7 +1,7 @@
-promise_progress: 54%
+promise_progress: 49%
 rtm_rows:
   green: 19
-  counted: 35
+  counted: 39
   excluded_no_uc: 6
 work_progress:
 - wave: W1
@@ -54,7 +54,7 @@ open_questions:
   blocking: 0
   assumptions: 25
   external: 3
-  answered: 1
+  answered: 2
   blocking_budget: 15
   blocking_over_budget: false
   assumptions_budget_per_gate: 15

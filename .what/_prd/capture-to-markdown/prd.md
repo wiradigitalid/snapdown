@@ -2,7 +2,7 @@
 title: Capture to Markdown
 initiative: capture-to-markdown
 created: "2026-08-22"
-updated: "2026-08-22"
+updated: "2026-08-31"
 ---
 
 # PRD: Capture to Markdown
@@ -12,6 +12,7 @@ updated: "2026-08-22"
 | Date | What changed | Why | Releases affected |
 |---|---|---|---|
 | 2026-08-22 | Initial version | The desktop review loop is the product's core; nothing else can be handed off until findings exist | r1 |
+| 2026-08-31 | Grew four promises the Bundle Library needs and corrected two that contradicted them. **New:** § 4.10 Export PDF (`CAP-12`, `FR-39`, `NFR-19`), `FR-40` editing a composed Bundle's title and notes, `FR-41` discarding a Bundle's source Findings, `FR-42` the reclaim-space surface. **Removed from § 6.2:** the non-goals "Renaming a Bundle" and "Exporting a Bundle to anything but Markdown". **Corrected:** `FR-12` no longer fixes the clipboard to relative image links, and `FR-14` no longer offers to destroy a Bundle's source Findings in the same confirmation. | A Reviewer can assemble Bundles but has almost no way to live with them afterwards — no way to fix a typo without recomposing, no way to hand one to a person rather than an agent, and no way to reclaim the disk an archived review is holding. The two corrections are older promises that pointed the opposite way from these four, and leaving them would have made this document promise two designs at once. `FR-41` and `FR-42` sit under `CAP-5` rather than `CAP-4` because they destroy Findings, which the `bundle` component has no authority to write. | r3 |
 | 2026-08-23 | Added § 4.7 (`CAP-9`, `FR-27`–`FR-29`) and `NFR-16`–`NFR-18`; rewrote `FR-5`; amended `FR-18` | r1 and r2 shipped every promised capability, and the first sustained use produced a list of experience defects rather than missing features. `BG-7` now carries that, and this initiative gains the requirements that make it checkable | r3 |
 
 ## 0. Document Purpose
@@ -338,10 +339,17 @@ those four.
 
 **Description:** A Bundle is a named group of Findings composed once into one Markdown document, with
 its own copy of the images. Composition is the point at which the review becomes an artifact. A
-Bundle is not edited afterwards — it is recomposed — because a Bundle that drifts from the Findings
-that produced it is worse than no Bundle. A Bundle is deleted the same way a Finding is — hard, with
-its files. Realizes UJ-3.
-`[ASSUMPTION: recomposing is acceptable in place of editing a Bundle's written Markdown.]`
+Bundle is deleted the same way a Finding is — hard, with its files. Realizes UJ-3.
+
+**Corrected 2026-08-31.** This section used to read *"A Bundle is not edited afterwards — it is
+recomposed — because a Bundle that drifts from the Findings that produced it is worse than no
+Bundle"*, and it carried `[ASSUMPTION: recomposing is acceptable in place of editing a Bundle's
+written Markdown.]` (filed as `OQ-12`). Both are withdrawn by `FR-40`. The reasoning behind them was
+sound and survives: a Bundle must not drift from the Findings that produced it. What was wrong was
+the conclusion that forbidding all editing is the only way to prevent that drift. `FR-40` edits the
+Bundle's **own stored copy** and never reads or writes a Finding, so the snapshot promise is kept by
+construction rather than by prohibition — which is why `BR-10` and `BR-65` both stay true under it
+and are not amended.
 
 **Functional Requirements:**
 
@@ -380,12 +388,24 @@ The Reviewer can put a Bundle's Markdown on the clipboard in one action, ready t
 conversation. Realizes UJ-3.
 
 **Proof of done:** Copying a Bundle and pasting into a plain text editor yields the Bundle's complete
-Markdown, unchanged.
+document, with every image link naming a location the reader of the pasted text can open.
 
 **Consequences (testable):**
-- The copied text is the Bundle's Markdown exactly, with no added wrapper.
-- The image references in the copied text are the same relative paths as in the file.
+- The copied text is the Bundle's document, with no added wrapper.
+- The image links in the copied text are absolute, so they resolve regardless of which folder the
+  reader of the pasted text is working in.
 - The Reviewer is told the copy succeeded.
+
+**Corrected 2026-08-31.** The second consequence used to read *"The image references in the copied
+text are the same relative paths as in the file"*, and the proof of done used to end *"yields the
+Bundle's complete Markdown, unchanged"*. Together they fixed the clipboard to folder-relative links,
+which resolve for nobody reading the pasted text anywhere but inside the Bundle's own folder — so the
+primary handoff path was promising something that does not arrive. This requirement now **permits**
+an absolute rendering of those links. It deliberately does **not** settle which encoding is emitted,
+whether the Reviewer is told that images do not travel on a text clipboard, or whether `Open file
+location` is thereby redundant; those are open and belong together. Note that `NFR-8` is untouched:
+it governs the **stored** file, which keeps its relative links — the two conventions serve two
+different readers, and neither replaces the other.
 
 #### FR-14: Delete a Bundle with its images
 
@@ -396,9 +416,43 @@ nor its images in the Vault folder.
 
 **Consequences (testable):**
 - Deletion asks for confirmation once and names the Bundle.
-- The Findings the Bundle was composed from are not deleted.
+- The Findings the Bundle was composed from are not deleted, and become assemblable again.
 - Deleting a published Bundle also ends its Publication.
-- The Reviewer can choose, in the same confirmation, to delete the Bundle's source Findings too.
+
+**Corrected 2026-08-31.** A fourth consequence used to read *"The Reviewer can choose, in the same
+confirmation, to delete the Bundle's source Findings too."* It is withdrawn. Destroying a Bundle and
+destroying the captures behind it are now two deliberate acts — `FR-14` and `FR-41` — because one
+click is the wrong price for the most destructive operation in this product, and both outcomes are
+still reachable in two steps. The withdrawn line also claimed authority this requirement never had:
+deleting a Finding is a write the `bundle` component cannot make, and `FR-14`'s own registry row
+never listed it.
+
+#### FR-40: Edit a composed Bundle's title and notes
+
+The Reviewer can reopen a Bundle they have already composed and correct its title, its Bundle-level
+notes, and the note text on the Findings inside it, saving the result as one act.
+
+**Proof of done:** Reopening a composed Bundle, changing its title and one of its notes, and saving
+produces a document whose heading and that note both read the new text, while its images and the
+Findings it was composed from are untouched.
+
+**Consequences (testable):**
+- Editable: the Bundle's title, its Bundle notes, its Finding notes, and its Marker notes. Nothing
+  else, and the set of images is frozen — none can be added, removed, reordered, or replaced.
+- Saving rewrites the document's heading to the new title, so the title and the heading cannot
+  disagree.
+- Nothing is written until the Reviewer saves, and abandoning the edit leaves the Bundle as it was.
+- No edit made here changes any Finding, its Note, or its Markers.
+- A Bundle whose source Findings are already gone can still be edited this way.
+
+**Not yet legal, and stated rather than assumed.** `BR-11` — *"A Bundle is never edited in place. A
+change means composing a new Bundle"*, status active — still forbids this requirement at the time of
+writing. `BR-11` is a cross-component rule, so narrowing it to the handoff path is not this
+document's act. **This gate MUST NOT open on `FR-40` until that amendment lands.** The reasoning is
+recorded with the amendment request: `AD-9`, which `BR-11` cites as its source, governs only the way
+**out** of a Bundle, and its own closing clause directs a surface needing a different shape to change
+the composer — which is what saving here does. `AD-9` is therefore not contradicted and is not
+amended.
 
 ### 4.5 Removal
 
@@ -407,7 +461,11 @@ nor its images in the Vault folder.
 **Description:** A review is meant to be thrown away. Deleting a Finding deletes its image file, and
 there is no soft delete, no bin, and no state in which the Library holds a record pointing at a file
 that is gone or a file nothing points at. Deletion is confirmed once, because it is irreversible.
-Deleting a Bundle is the same promise on the other object and belongs with Bundles, in §4.4.
+
+Deleting a Bundle is the same promise on the other object, and it belongs with Bundles, in §4.4.
+`FR-41` and `FR-42` are here rather than there for the same reason read the other way: both are
+reached from a Bundle, but what they destroy is a Finding, and this is the section that promises a
+Finding can be destroyed.
 
 **Functional Requirements:**
 
@@ -439,6 +497,41 @@ the Finding is now broken and offered to delete the Finding.
 - An unreferenced file in the Vault is listed, and deleting it is one action.
 - The check never deletes anything on its own.
 - A clean Vault reports itself as clean rather than saying nothing.
+
+#### FR-41: Discard the source Findings behind a Bundle, keeping the Bundle
+
+The Reviewer can destroy the captures behind a Bundle they consider final, reclaiming the disk those
+originals hold, while the Bundle itself stays readable on its own copies.
+
+**Proof of done:** Discarding the originals behind a Bundle leaves that Bundle readable with its own
+images, while its source Findings and their image files are gone from the Library and from the Vault,
+and the Bundle can no longer be taken apart.
+
+**Consequences (testable):**
+- Confirmation is asked once, naming the Bundle and how many captures will go.
+- The Bundle's own images and document are untouched by the act.
+- After it, the Bundle offers deletion only — it can no longer return its Findings to the Library.
+- A capture that another Bundle also holds is still destroyed; that other Bundle keeps its own copy.
+- A file that cannot be deleted is reported rather than silently skipped.
+
+This is deliberately **not** part of composing, and `BR-59` — *"Composing does not remove the
+Findings it used from the Library"* — stays true and is not amended. Composing still leaves every
+capture in place; this is a separate, later, explicit act, and that separation is the whole point.
+
+#### FR-42: See which Bundles still hold original captures, and reclaim their disk in bulk
+
+The Reviewer can see, in one place, every Bundle still holding its source captures and how much disk
+each one is holding, and discard the originals behind several of them in one pass.
+
+**Proof of done:** The reclaim surface lists every Bundle still holding source Findings with the disk
+each one holds and a running total, and discarding a chosen set reduces the reported total by the sum
+of what was discarded.
+
+**Consequences (testable):**
+- The surface is reachable from the Library and from the Vault section of Settings.
+- A Bundle whose originals are already gone is not listed.
+- Confirmation is asked once for the whole selected set, naming the total that will be reclaimed.
+- Nothing is destroyed for a Bundle the Reviewer did not select.
 
 ### 4.6 Staying out of the way
 
@@ -682,6 +775,43 @@ The Reviewer can move any placed annotation forward or backward through the othe
   - Order is stored, so it survives closing the Editor.
   - A movement that changes nothing writes nothing.
 
+### 4.10 Handing a review to a person
+
+**Capability:** CAP-12 — serves BG-2.
+
+**Description:** Every handoff path this product had was built for a machine to read. A Bundle can be
+copied as Markdown or, in the `agent-handoff` initiative, served to an agent — but a Reviewer who
+needs to send the same review to a colleague, attach it to a ticket, or keep it where Snapdown is not
+installed has nothing. This is the one path whose reader is a person.
+
+The agent path is unaffected and stays the primary one: `FR-12` is what an agent gets, and nothing
+here re-renders what `FR-12` serves.
+
+**Functional Requirements:**
+
+#### FR-39: Export a Bundle as a PDF
+
+The Reviewer can turn a Bundle into a single PDF file that reads as a document — one section per
+Finding, its image above the note about it — which anyone can open without Snapdown.
+
+**Proof of done:** Exporting a Bundle produces one A4 PDF a person can read without Snapdown, in
+which each Finding appears as its own section with its image whole on a single page, the pages are
+numbered, and the text can be selected and searched rather than being a picture of text.
+
+**Consequences (testable):**
+- One column, A4 only. The Bundle's title and its composition date open the document as a title
+  block, not as a cover page of its own.
+- Every page is numbered.
+- No image is ever split across a page break.
+- The text is a real text layer: selecting, searching and copying all work, and a machine reading the
+  file is not obstructed by it.
+- Exporting changes nothing about the Bundle, and the same Bundle exported twice produces the same
+  document.
+
+**Deliberately not stated here.** How the PDF is produced — the engine, its licence, its cost on disk
+and in memory, how a very tall screenshot is fitted to a page, and how text is escaped on the way in
+— is settled work but it is solution shape, and this document does not carry solution shape.
+
 ## 5. Non-Goals (Explicit)
 
 - Visual annotation elements (Shapes, Arrows, Callouts, Text, Blur) MUST NOT generate or alter structured lines in Markdown notes. Numbered Markers remain the sole structured finding bindings.
@@ -707,22 +837,35 @@ The Reviewer can move any placed annotation forward or backward through the othe
 - Region capture from an editable global hotkey, with the Note written at capture time.
 - Automatic image reduction under a Quality Budget the Reviewer controls.
 - The Editor: the Finding list, Note editing, numbered Markers, multi-select.
-- Bundles: compose, list, open, copy Markdown.
-- Hard deletion of Findings and of Bundles, with their files, plus orphan reporting.
+- Bundles: compose, list, open, copy Markdown, correct a composed Bundle's title and notes, and
+  export one as a PDF for a person to read.
+- Hard deletion of Findings and of Bundles, with their files, plus orphan reporting, plus discarding
+  the captures behind a finished Bundle and a surface that does it in bulk.
 - Vault folder, hotkeys, run-at-startup, and open-Editor-after-capture as settings.
 
 ### 6.2 Out of Scope for MVP
 
 - Reordering Findings inside a Bundle after composition. Recompose instead — the ordering is the
   selection order, and a second ordering mechanism is a second source of truth.
-- Renaming a Bundle. Same reason; and a rename that does not rewrite the document's heading is a lie.
 - Searching or filtering the Library. `[NOTE FOR PM]` This is the first thing that will hurt once
   the Library passes a few hundred Findings; revisit for r2.
 - Tags or folders over Findings. Bundles are the only grouping in r1.
 - A second Vault, or switching between Vaults. One at a time.
-- Exporting a Bundle to anything but Markdown.
-- Any Handoff path beyond copying the Markdown. MCP and web publishing are the `agent-handoff`
-  initiative.
+- Any Handoff path beyond copying the Markdown and exporting a PDF. MCP and web publishing are the
+  `agent-handoff` initiative.
+
+**Two entries left this list on 2026-08-31**, and what they used to say is recorded rather than
+quietly dropped:
+
+- *"Renaming a Bundle. Same reason; and a rename that does not rewrite the document's heading is a
+  lie."* Grown into `FR-40`. The scope boundary applied and has been lifted; **the objection never
+  applied at all**, and that is worth stating because it reads as a reason. `FR-40` rewrites the
+  document's heading when the title changes, so the rename it promises is not the lie this line was
+  guarding against. The "same reason" it borrowed — a second source of truth — does not survive
+  either: the title and the heading are one field written once, not two that can disagree.
+- *"Exporting a Bundle to anything but Markdown."* Grown into `CAP-12` and `FR-39`. It was an MVP
+  boundary rather than a judgement about value, and it held for as long as every reader of a Bundle
+  was a machine.
 
 ## 7. Success Metrics
 
@@ -764,15 +907,26 @@ The Reviewer can move any placed annotation forward or backward through the othe
    as OQ-20.
 3. Does the Reviewer want the Editor to open after the first Capture of a session, as a middle
    position between always and never? Deferred until the default has been lived with. Filed as OQ-9.
-4. Should composing a Bundle offer to delete the Findings it consumed, the way deleting a Bundle
-   offers to delete its Findings? Left out of r1 deliberately.
+4. ~~Should composing a Bundle offer to delete the Findings it consumed, the way deleting a Bundle
+   offers to delete its Findings?~~ **Answered 2026-08-31, and its premise is gone.** Deleting a
+   Bundle no longer offers to delete its Findings — `FR-14` was corrected — so there is no longer a
+   behaviour for composing to be consistent with. The want underneath the question is met by `FR-41`
+   as a separate act, and coupling it to composing is refused for the same reason: destroying
+   captures is not a side effect of anything.
+7. Is `BG-2` a close enough goal for `CAP-12` that a sixth business goal is not needed? `BG-2`
+   measures handoff *time* and promises no file management; a PDF is a file to manage, read by a
+   person rather than an agent. Filed as OQ-31, and it may cost `BG-2` a measure amendment at G1.
 
 ## 9. Assumptions Index
 
 - §4.1 — not auto-opening the Editor after a Capture is what the Reviewer wants. Filed as OQ-9.
 - §4.2 — agent reading cost tracks image pixel area, making the long-edge cap the dominant lever.
   Filed as OQ-2.
-- §4.4 — recomposing a Bundle is acceptable in place of editing its written Markdown. Filed as OQ-12.
+- §4.4 — ~~recomposing a Bundle is acceptable in place of editing its written Markdown (OQ-12)~~.
+  **Withdrawn 2026-08-31 by `FR-40`**, which is this assumption turning out false. `OQ-12` is closed
+  in place rather than deleted; the row and its reasoning stay where they were filed.
+- §4.10 — `BG-2` is a close enough goal for `CAP-12` that a sixth business goal is not needed. Filed
+  as OQ-31.
 - Carried from the brief and still load-bearing here: a coding agent can open relative image paths
   (OQ-1); a 1600 px long edge stays legible (OQ-3); numbered Markers are sufficient annotation
   (OQ-4); Windows hotkeys need no administrator rights (OQ-5); one Vault at a time is enough (OQ-11).
@@ -814,13 +968,22 @@ The Reviewer can move any placed annotation forward or backward through the othe
   silently rewrite the past. Enforced by an assertion that every stored Finding carries its resolved
   budget. This exists because `FR-5` forbids re-encoding an existing Finding: without the record,
   two Findings taken a month apart on "the same" setting differ with nothing to explain why.
+- **NFR-19** — serves BG-2. An exported PDF carries a real text layer, and no image in it is split
+  across a page break. Enforced by a test that extracts the text back out of the produced PDF and
+  asserts the notes it should contain, plus a placement check read from the PDF's own image
+  matrices. Asserting a `%PDF-` signature and a page count does **not** satisfy this: a fabricated
+  header passes that, and this product has already spent five waves reporting a requirement met on
+  the strength of a correct number inside a fabrication.
 
 ## Constraints and Guardrails
 
 ### Safety
 
 Nothing beyond the brief. There is no destructive action here other than deletion, which is
-confirmed once and named in FR-13 and FR-14.
+confirmed once and named in FR-13, FR-14, FR-41 and FR-42. `FR-41` and `FR-42` are the most
+destructive acts the product offers, because what they remove is the original capture rather than a
+copy of it — which is why no single action destroys both a Bundle and its originals, and why both are
+reachable only in two deliberate steps.
 
 ### Privacy
 

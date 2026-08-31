@@ -136,3 +136,28 @@ decisions:
       - .claude/skills/
       - .agents/skills/
     created: "2026-08-30"
+  - id: DEC-012
+    title: "`AD-9` guarantees one authored document, not one set of bytes"
+    status: applied
+    file: .control/decisions/DEC-012-ad-9-guarantees-one-document-not-one-set-of-bytes.md
+    serves: [CAP-4]
+    touches:
+      - .what/business-rules.md
+      - .what/_prd/capture-to-markdown/prd.md
+      - .what/bundle/SRS-bundle.md
+      - .how/_platform/ARCHITECTURE-SPINE.md
+      - .how/_platform/cross-cutting.md
+      - .how/_platform/inventory-api.md
+      - .how/_platform/inventory-db.md
+      - .how/bundle/SDD-bundle.md
+      - .how/agent-access/SDD-agent-access.md
+      - .control/questions/assumptions.md
+      - .control/questions/answered.md
+    created: "2026-08-31"
+  - id: DEC-013
+    title: Review intensity is lowered to `high` on `settings`, `agent-access` and `sharing`
+    status: draft
+    file: .control/decisions/DEC-013-review-intensity-lowered-on-three-sensitive-components.md
+    serves: [CAP-6, CAP-7, CAP-8]
+    touches: []
+    created: "2026-08-31"

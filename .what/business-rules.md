@@ -3,7 +3,7 @@ type: rules
 scope: global
 status: draft
 created: "2026-08-22"
-updated: "2026-08-22"
+updated: "2026-08-31"
 ---
 
 # Business Rules — Snapdown
@@ -24,12 +24,12 @@ behaviour a reviewer checks.
 | BR-3 | A Marker's comment may be empty. Its numbered line still exists. | `finding`, `bundle` | FR-8 | active |
 | BR-4 | A Note may be empty. A Finding with no words is still a Finding. | `finding`, `bundle` | FR-2 · FR-7 | active |
 | BR-5 | Deleting a Finding, a Bundle, or a BundleItem deletes its files. If a file cannot be removed, nothing is removed and the Reviewer is told which file refused. | `finding`, `bundle` | AD-2 · FR-13 · FR-14 | active |
-| BR-6 | Every destructive action is confirmed exactly once, and the confirmation states what will go and how many of them. | `finding`, `bundle`, `sharing` | FR-13 · FR-14 · FR-23 · UC-7 · UC-12 | active |
+| BR-6 | Every destructive action is confirmed exactly once, and the confirmation states what will go and how many of them. | `finding`, `bundle`, `sharing` | FR-13 · FR-14 · FR-23 · FR-41 · FR-42 · UC-7 · UC-12 · UC-30 · UC-31 | active |
 | BR-7 | Nothing is soft-deleted. There is no bin, no archive, and no state in which a deleted thing is still readable. | `finding`, `bundle`, `sharing` | BG-5 · AD-2 | active |
 | BR-8 | An image is reduced once, when it is captured. No later step re-encodes or re-scales it. | `finding`, `bundle`, `sharing` | AD-4 · FR-4 | active |
 | BR-9 | A change to the Quality Budget applies only to Captures taken after it. No stored image is ever re-encoded. | `finding`, `settings` | FR-5 · UC-13 | active |
 | BR-10 | A Bundle is a snapshot. Editing a Finding, its Note, or its Markers after composition changes nothing in a Bundle that already holds it. | `bundle`, `finding`, `agent-access`, `sharing` | AD-9 · FR-10 | active |
-| BR-11 | A Bundle is never edited in place. A change means composing a new Bundle. | `bundle`, `agent-access`, `sharing` | AD-9 · OQ-12 | active |
+| BR-11 | A Bundle's stored document is changed only by the composer writing it again over the Bundle's own copy. No surface edits a Bundle's document directly, and no change to a Bundle ever reads or writes a Finding. | `bundle`, `agent-access`, `sharing` | AD-9 · FR-40 | active |
 | BR-12 | One Finding may belong to several Bundles. Each Bundle keeps its own image copy. | `bundle`, `finding` | FR-10 · FR-13 | active |
 | BR-13 | Composition refuses, naming the Finding, if any selected Finding's image file is missing. It never writes a Bundle with a broken image reference. | `bundle`, `finding` | AD-2 · FR-10 · UC-9 | active |
 | BR-14 | Only a Bundle is ever readable by an agent. An unbundled Finding is invisible on every agent-facing surface. | `agent-access`, `sharing`, `bundle` | FR-20 · FR-24 | active |
@@ -56,6 +56,50 @@ behaviour a reviewer checks.
 | BR-107 | No colour is defined for only one Windows theme, and no literal colour exists outside the token stylesheet. Every text element meets WCAG AA contrast against its own background in both themes. | all | NFR-16 · NFR-17 | active |
 | BR-108 | A control that reports state owned by the operating system shows that it does not yet know, rather than showing an assumed value, until that state has been read. | `settings` | FR-18 · NFR-16 | active |
 | BR-109 | Every primary surface of the Editor is reachable from every other primary surface, including a surface whose component is frozen and gaining no new behaviour. | `settings`, `finding`, `bundle`, `sharing`, `agent-access` | FR-28 · DEC-005 | active |
+| BR-122 | A Bundle whose source Findings still exist can give them back; one whose source Findings are gone cannot. Which of the two holds is read from whether those Findings exist, never from a stored flag on the Bundle. | `bundle`, `finding` | FR-14 · FR-41 · BR-12 | active |
+
+## Amended
+
+A narrowed rule keeps its id and its old wording is recorded here, for the same reason a retired one
+is never deleted: documents cite it, and a reader who finds a citation that no longer matches the rule
+cannot tell whether the rule moved or the citation was wrong.
+
+**BR-11, narrowed 2026-08-31.** It used to read: *"A Bundle is never edited in place. A change means
+composing a new Bundle."*
+
+`FR-40` promises the Reviewer can correct a composed Bundle's title, its Bundle notes, and the note
+text on the Findings inside it. The old wording forbade that outright, and it cited `AD-9` as its
+source while saying more than `AD-9` says. `AD-9`'s clauses all govern the way **out** of a Bundle —
+*"every handoff path MUST serve those exact bytes… no surface may re-render… on the way out"* — and
+its closing clause directs a surface that needs a different shape to **change the composer**. Running
+the composer again over the Bundle's own stored copy is that remedy, not a breach of it. `AD-9` is
+therefore untouched and is **not** amended.
+
+What the old wording was protecting is kept, and kept by construction rather than by prohibition: a
+Bundle must not drift from what was handed over. `FR-40` writes only the Bundle's own copy and never
+reads a Finding, which is why the three rules below stay true and **MUST NOT** be tidied into line
+with this change:
+
+- **BR-10** — a Bundle is a snapshot; editing a Finding afterwards changes nothing in a Bundle holding
+  it. Still true, and it now carries more weight, not less: it is the rule that makes `FR-40` safe.
+- **BR-65** (`bundle`-local) — opening a Bundle shows what was composed, not a live view of the
+  Findings. Still true, for the same reason.
+- **BR-59** (`bundle`-local) — composing does not remove the Findings it used. Still true; `FR-41` is a
+  separate, later, explicit act and not part of composing.
+
+**`sharing` and `agent-access` gain nothing and lose nothing.** `DEC-005` (applied) forbids new work on
+both, and BR-11 binds them. Their obligation is unchanged in substance and in wording: neither may
+edit a Bundle's document, and both still serve what the composer wrote. The narrowing removes a
+prohibition that only ever bit `bundle`, because `bundle` is the only component that runs the
+composer. Nothing here is new work on a frozen component.
+
+**One clause was deliberately left out of the new wording.** The old rule was doing two jobs: saying
+who may change a Bundle, and restating `AD-9`'s byte-identity promise on the way out. Only the first
+is written above. The second is `AD-9`'s own and is currently in question from the other direction —
+`FR-12` was amended on 2026-08-31 to permit the clipboard to render a Bundle's image links as absolute
+paths, which is a different set of bytes on a handoff path. Restating byte-identity here would have
+frozen that question by accident. It is owed a `DEC-` and is named in the report that accompanied this
+amendment.
 
 ## Retired
 

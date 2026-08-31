@@ -90,6 +90,46 @@ One figure recorded because it drives the FR-4 and NFR-3 defaults: a full-screen
 1.4 megapixels, roughly a sixth. Source: the primary user's own monitor resolution, not a benchmark,
 and it is the reason OQ-3 is open rather than answered.
 
+### Two path conventions for one Bundle — `FR-12` and `NFR-8`
+
+`NFR-8` governs the **stored** `bundle.md` and keeps its image links relative to that file's own
+folder. `FR-12` governs the **clipboard**, and as of 2026-08-31 it permits those same links to be
+rendered as absolute paths. The two are not in conflict: they serve two different readers, and the
+stored file is not what the clipboard hands over.
+
+The mechanism belongs here rather than in the PRD. One composer takes a base path and serves both
+renderings; a second serializer alongside the first is what must **not** be built, because two
+serializers drift and the golden-file test only pins one of them.
+
+Still unsettled, and tracked on the Bundle Library map's ticket 03: which encoding the absolute form
+uses, whether the Reviewer is told that images do not travel on a text clipboard, and whether
+`Open file location` survives the answer. A Windows absolute path is not valid in Markdown as it
+stands — backslashes escape and spaces terminate a link — so whatever is chosen has to be proven
+against a Vault path containing a space.
+
+### Rendering a Bundle as a PDF — `FR-39`
+
+`FR-39` states what the Reviewer gets and deliberately names no engine, because `prd.md` carries no
+solution shape. The mechanism is nonetheless settled work rather than an open question, and this is
+the pointer to where it is recorded so nobody redoes it:
+
+**`.scratch/bundle-library/issues/07-research-the-pdf-render-engine.md`** holds the whole
+investigation — the engine chosen and why, its licence, the disk and idle-memory cost measured rather
+than estimated, how a screenshot too tall for a page is fitted, and why the escape set for inserted
+text is closed by definition. It also records the rejected candidate and the specific way it failed:
+it was a third of the size and silently dropped every image across three input forms, which is the
+kind of failure only decoding the output reveals.
+
+Two things there are deliberately **not** settled, and both belong to the Export PDF effort rather
+than to this PRD:
+
+- **Packaging** — whether the exporter runs in-process or as a separate crate. The research reversed
+  itself twice on it, which marks it as an architectural judgement rather than a measurable fact, so
+  it is owed a `DEC-` at the point the work is planned.
+- **The two tall-image thresholds** — the clamp and the slice points are solved and measured from a
+  PDF's own placement matrices, but they still need calibrating against real screenshots rather than
+  synthetic ones.
+
 ## Personas and research detail
 
 Two facts about the primary user shaped this initiative more than any persona detail, and both come

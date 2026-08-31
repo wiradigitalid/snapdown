@@ -18,6 +18,39 @@ desktop surface that is a window rather than a route has `—` for its route.
 `No` is stable. A new row takes the next number; a removed one keeps its number with
 `status: removed`.
 
+## Derivation finding, 2026-08-31 — the Route column is a fossil, and this is not hand work
+
+`inventory.py` was run against `.constitution/project/inventory-readers.py` and reports **15
+plan-versus-code gaps** on this inventory. They are one finding wearing two shapes, and neither is
+patched over here, because the script's own rule is that a plan-versus-code gap is routed to the skill
+that owns its side and MUST NOT be fixed by editing the other side.
+
+**Every desktop route in the table below describes a router this product does not have.** `/findings`,
+`/bundles`, `/bundles/:id`, `/settings`, `/settings/agent-access` and the rest are React Router paths.
+`DEC-007` moved the desktop app off React onto Slint, and Slint has no routes. The derivation reports
+each of them as *"planned but not read in code"*, which is accurate: there is nothing to read.
+
+**Every per-screen component file the plan expects is absent.** The reader looks for
+`apps/desktop/ui/screens/findings-view.slint`, `screens/bundle-view.slint`,
+`screens/settings-view.slint`, `screens/orphan-report-view.slint`, `screens/agent-access-view.slint`,
+`components/confirm-dialog.slint` and `components/publish-dialog.slint`. None exists. The shipped
+desktop UI is one file — `apps/desktop/ui/appwindow.slint` — so the row-per-file structure this
+inventory assumes was never built. Two `web-ui` rows are absent for the same reason
+(`PublishedBundleReader.tsx`, `PublicationNotFound.tsx`).
+
+**What this does NOT mean.** It is not evidence that the screens are unreachable. The Capture Overlay,
+the Findings list, the Bundle list, the compose modal and Settings all exist and run; they live inside
+one Slint file rather than behind a route. This is a stale **plan**, not a missing product — the
+opposite of the `BUG-4`/`BUG-5` class, where a component existed and nothing mounted it.
+
+**Re-planning this table against Slint is owed and is deliberately NOT done in this pass.** It is
+entangled with work already in flight: the Bundle Library screen is being designed on the wayfinder map
+at `.scratch/bundle-library/`, where ticket 01 settled the Library's shape and tickets 03 and 05 are
+still open. Re-cutting rows 8 and 10 now would be guessing at the answer those tickets exist to
+produce. The honest state is a table that says what it planned, beside a finding that says what runs.
+
+`verified:` therefore stays empty. It MUST NOT be filled until the rows describe Slint.
+
 ## Rows & UI Design Assets Mapping
 
 | No | Screen | Route | Owning component | Actor | UC served | Permanent HTML Asset (.how Layer) |
@@ -30,13 +63,14 @@ desktop surface that is a window rather than a route has `—` for its route.
 | 5 | Finding detail with Marker canvas | `/findings/:id` | `finding` | Reviewer | UC-4, UC-5 | [`.how/finding/01-ux/assets/01-studio-workspace.html`](../finding/01-ux/assets/01-studio-workspace.html) |
 | 6 | Delete Findings confirmation | `/findings/delete` (modal) | `finding` | Reviewer | UC-7 | [`.how/bundle/01-ux/assets/05-saved-bundles-drawer.html`](../bundle/01-ux/assets/05-saved-bundles-drawer.html) |
 | 7 | Orphan report | `/findings/orphans` | `finding` | Reviewer | UC-8 | [`.how/finding/01-ux/assets/01-studio-workspace.html`](../finding/01-ux/assets/01-studio-workspace.html) |
-| 8 | Editor — Bundles | `/bundles` | `bundle` | Reviewer | UC-10, UC-11, UC-23 | [`.how/bundle/01-ux/assets/05-saved-bundles-drawer.html`](../bundle/01-ux/assets/05-saved-bundles-drawer.html) |
+| 8 | Editor — Bundles | `/bundles` | `bundle` | Reviewer | UC-10, UC-11, UC-23, UC-28, UC-30 | [`.how/bundle/01-ux/assets/05-saved-bundles-drawer.html`](../bundle/01-ux/assets/05-saved-bundles-drawer.html) |
 | 9 | Compose Bundle | `/bundles/compose` (modal) | `bundle` | Reviewer | UC-9 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
-| 10 | Bundle detail | `/bundles/:id` | `bundle` | Reviewer | UC-11, UC-12, UC-23 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
+| 10 | Bundle detail | `/bundles/:id` | `bundle` | Reviewer | UC-11, UC-12, UC-23, UC-28, UC-29 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 | 11 | Publish and unpublish a Bundle | `/bundles/:id/publish` (modal) | `sharing` | Reviewer | UC-20, UC-22 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 | 12 | Settings — General & Quality | `/settings` | `settings` | Reviewer | UC-13, UC-14, UC-15, UC-16 | [`.how/settings/01-ux/assets/06a-settings-general.html`](../settings/01-ux/assets/06a-settings-general.html)<br>[`.how/settings/01-ux/assets/06b-settings-hotkeys.html`](../settings/01-ux/assets/06b-settings-hotkeys.html)<br>[`.how/settings/01-ux/assets/06d-settings-about.html`](../settings/01-ux/assets/06d-settings-about.html) |
 | 13 | Settings — Agent access | `/settings/agent-access` | `agent-access` | Reviewer | UC-17, UC-19 | [`.how/settings/01-ux/assets/06c-settings-agent-bridge.html`](../settings/01-ux/assets/06c-settings-agent-bridge.html) |
 | 14 | Published Bundle reader | `/b/:slug` | `sharing` | Remote coding agent, Reviewer | UC-21 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
+| 16 | Reclaim space | — (a desktop surface; PLAN ONLY, no code and no route) | `finding` | Reviewer | UC-31 | _none yet_ |
 | 15 | Publication not available | `/b/:slug` (the refused state) | `sharing` | Remote coding agent, Reviewer | UC-22 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 
 Row 0 is numbered 0 rather than 16 deliberately. Numbers here are stable and a new row normally takes

@@ -34,7 +34,9 @@ here. The split test: does this term still hold if used in another product? Yes 
   alongside **Sharp** and **Small**. Source: `DEC-004`.
 - **Bundle** — a named group of Findings, composed once into one Markdown document with its own copy
   of the images it references. A Bundle has zero or one Publication. A Finding may belong to zero,
-  one, or several Bundles. A Bundle is recomposed rather than edited.
+  one, or several Bundles. Its title and its notes can be corrected afterwards; the set of Findings
+  in it cannot change, so a different selection means a new Bundle. Source: `FR-40`, `BR-11`.
+  Until 2026-08-31 this entry ended *"A Bundle is recomposed rather than edited"*.
 - **BundleItem** — the membership of one Finding in one Bundle, holding the Finding's position in
   that Bundle and the copy of the image that was written for it. Exactly one BundleItem per Finding
   per Bundle; deleting the Bundle deletes all of them.
@@ -89,6 +91,11 @@ here. The split test: does this term still hold if used in another product? Yes 
 - **Setting** — one persisted preference of the installation: the Vault location, a hotkey binding,
   the Quality Budget pair, whether Snapdown starts with Windows, whether the Editor opens after a
   Capture, and where the web service lives. One value per key, one set per Library.
+- **Sealed** — the condition of a Bundle whose source Findings have been discarded. A sealed Bundle
+  stays readable on its own copies of the images and can still be corrected, exported and deleted; it
+  can no longer give its Findings back to the Library. It is read from whether those Findings exist,
+  never from a stored flag. Source: `FR-41`, `BR-122`; the word is ticket 02's on the Bundle
+  Library map — *"Findings go, Bundle stays and seals"* — not a coinage of this pass.
 - **Sharp** — the fixed Quality Budget that keeps small text crisp, at a larger file size. Source:
   `DEC-004`.
 - **Small** — the fixed Quality Budget producing the smallest file that stays readable. Source:

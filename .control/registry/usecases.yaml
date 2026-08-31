@@ -59,6 +59,20 @@ usecases:
     component: finding
     satisfies: [FR-30, FR-31, FR-32, FR-33]
     critical: false
+  # UC-30 and UC-31 born 2026-08-31. Both are reached from a Bundle and both belong to `finding`,
+  # because what they destroy is a Finding and `bundle` owns only [Bundle, BundleItem].
+  - id: UC-30
+    title: I get rid of the screenshots behind a review I am finished with, but keep the review
+    actor: Reviewer
+    component: finding
+    satisfies: [FR-41]
+    critical: true
+  - id: UC-31
+    title: I find out which reviews are still holding my screenshots, and get that disk back
+    actor: Reviewer
+    component: finding
+    satisfies: [FR-42]
+    critical: true
   # --- bundle -----------------------------------------------------------------------
   - id: UC-9
     title: I turn the findings I picked into one review document
@@ -84,6 +98,24 @@ usecases:
     component: bundle
     satisfies: [FR-14]
     critical: true
+  # UC-28 and UC-29 born 2026-08-31. Neither is `critical`, and the derivation is stated because both
+  # look like candidates. UC-28 writes a file but destroys nothing and sends nothing anywhere; its
+  # closest sibling is UC-11, the clipboard handoff, which is also `false`. UC-29 overwrites stored
+  # text with no revision history, which is irreversible in the same weak sense as UC-4, rewording a
+  # Note - and UC-4 is `false`. Marking either one true would put three of six of this component's use
+  # cases over the label, which delivery-flow-guide.md says to re-derive rather than accept.
+  - id: UC-28
+    title: I turn a review into something I can send to a person who does not have Snapdown
+    actor: Reviewer
+    component: bundle
+    satisfies: [FR-39]
+    critical: false
+  - id: UC-29
+    title: I fix a typo in a review I have already put together
+    actor: Reviewer
+    component: bundle
+    satisfies: [FR-40]
+    critical: false
   # --- settings ---------------------------------------------------------------------
   - id: UC-13
     title: I decide how much picture quality a screenshot is worth

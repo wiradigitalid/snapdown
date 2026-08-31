@@ -33,6 +33,13 @@ on demand from the Findings, is cheaper to write and makes AD-9 unenforceable: t
 edited, the same Bundle produces different bytes on different days, and two agents reading "the same
 review" disagree. Storing it is what makes a Bundle citable.
 
+**This argument survives `DEC-012` unchanged, and `FR-40` strengthens it.** Checked rather than assumed,
+because the neighbouring `AD-9` claims did not survive. Now that a Bundle's own notes can be corrected
+(`FR-40`), "the same Bundle produces different bytes on different days" is exactly what regeneration
+from the Findings would cause — so the reason to store the document is stronger than when it was
+written. Rebasing an image link is not regeneration: the composer runs once per change, and what it
+wrote is what every path serves.
+
 **Markers are burned at compose time, into a copy.** The Finding's own image stays clean, and each
 `bundle_item` gets its own file with the badges drawn in at that image's stored dimensions. This is
 what makes FR-8's repositioning possible at all — a badge already burned into the Finding's image
@@ -69,9 +76,30 @@ graph TD
     LC013 -.->|"ends a Publication<br/>on delete, BR-23"| LC020(["LC-020 publish-client<br/>sharing"])
 ```
 
-`LC-011` is pure: no I/O, no clock, no filesystem. That is what makes AD-9's golden-file test possible
-across all three handoff paths, and it is the one structural property in this component worth
-defending.
+`LC-011` is pure: no I/O, no clock, no filesystem — verified, `serialize_bundle` is a function of its
+arguments only (`crates/snapdown-core/src/domain/markdown.rs:25`). It is the one structural property in
+this component worth defending, and under `DEC-012` it buys more than it did: a second rendering of one
+document is testable precisely because producing it needs no environment, only a different argument.
+
+**Corrected 2026-08-31.** This paragraph used to say purity *"is what makes AD-9's golden-file test
+possible across all three handoff paths"*. Three things in that were wrong, and the third is the one
+that matters:
+
+- There is **one** golden-file test — `crates/snapdown-store/tests/test_golden_markdown.rs:137` — not a
+  set of three.
+- It pins the composer's output against a stored reference, not three surfaces against each other.
+- **Two of the three handoff paths have no code.** The clipboard-Markdown path is unimplemented: every
+  clipboard call in the tree is a bitmap write serving `FR-36`, and `apps/desktop/ui/appwindow.slint`
+  has no copy-markdown callback, only a `bundle-preview-markdown` display property at `:1342`. The
+  Local API does not exist at all — that is `BUG-59`'s own title, and
+  `crates/snapdown-bridge/src/client.rs:27` builds `http://127.0.0.1:{port}` against a server never
+  rebuilt after `DEC-007`. Only the published page runs.
+
+So the sentence described a guard that was never in place. `[MISSING]` — a rendering-parity test across
+paths has never existed, and it cannot be written until a second path does. It is owed with `FR-12`'s
+implementation, and it MUST decode or compare whole documents rather than asserting that a link starts
+with a drive letter; this repository has already spent five waves passing a fabricated image on exactly
+that kind of assertion.
 
 Crossings out of this component: reads of `LC-004 finding-store` and `LC-005 vault-blobs`, both
 read-only, and one call into `LC-020 publish-client` when a published Bundle is deleted. Nothing in
@@ -91,11 +119,33 @@ section had never been written. Quoted verbatim from `.how/_platform/ARCHITECTUR
 Reaches this component twice: composition writes image copies and the Markdown before the Bundle row
 (`FR-10`, all-or-nothing), and deletion removes them with it (`FR-14`).
 
-**AD-9 — One Bundle, one Markdown, byte-identical on every path**
+**AD-9 — One Bundle, one authored document, on every path**
 
-The Markdown is composed once and **stored**, not regenerated. `bundle.markdown` is a column. That is
-what makes clipboard, Local API, and published bytes identical without three code paths agreeing, and
-it is why `BUG-1` damages the item list without damaging the document.
+> A Bundle's Markdown MUST be composed once, by the core, and stored. Every handoff path MUST serve
+> that same authored document. A path MAY substitute the base of the document's image links so that
+> they resolve for its own reader, and MUST change nothing else — no re-ordering, no decoration, no
+> summarising, and not one character of what the composer wrote. That substitution is made BY THE
+> COMPOSER, which takes the base path as a parameter; no surface may re-render, re-order, decorate, or
+> summarise a Bundle on the way out, and no surface may rewrite a document the composer has already
+> produced. A surface that needs a different shape is asking for a change to the composer.
+
+The Markdown is composed once and **stored**, not regenerated. `bundle.markdown` is a column, which is
+what lets every handoff path serve one authored document without three code paths agreeing, and it is
+why `BUG-1` damages the item list without damaging the document.
+
+**This component owns the substitution, and that is a new obligation on it.** `bundle` is the component
+that runs the composer, so `AD-9`'s permission to rebase an image link is exercised here or nowhere. If
+a rebased rendering is ever produced anywhere but inside `snapdown-core`'s composer — in the clipboard
+path, in the Local API, in a publish client — this component has broken `AD-9`, whichever component
+wrote the offending line. The composer already takes the parameter this needs: `serialize_bundle` has a
+`markdown_path: &str` argument (verified — `crates/snapdown-core/src/domain/markdown.rs:25`), added by
+`BUG-86` on 2026-08-31.
+
+**Narrowed 2026-08-31 by `DEC-012`.** This entry used to carry the title
+*"AD-9 — One Bundle, one Markdown, byte-identical on every path"* and the claim
+*"That is what makes clipboard, Local API, and published bytes identical without three code paths
+agreeing"*. Both are retired: identity across paths is no longer what `AD-9` promises, and two of the
+three paths it named have no code (see § Structure). `AD-9`'s Binds and Prevents did not change.
 
 **AD-1 — Markers and Note lines are one sequence, not two**
 

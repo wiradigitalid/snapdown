@@ -8,6 +8,10 @@
   V3   UC-22: component `sharing` has already been touched by a wave, but this UC is not scheduled to any story
   V3   UC-23: component `sharing` has already been touched by a wave, but this UC is not scheduled to any story
   V3   UC-27: component `finding` has already been touched by a wave, but this UC is not scheduled to any story
+  V3   UC-28: component `bundle` has already been touched by a wave, but this UC is not scheduled to any story
+  V3   UC-29: component `bundle` has already been touched by a wave, but this UC is not scheduled to any story
+  V3   UC-30: component `finding` has already been touched by a wave, but this UC is not scheduled to any story
+  V3   UC-31: component `finding` has already been touched by a wave, but this UC is not scheduled to any story
   V3   UC-7: component `finding` has already been touched by a wave, but this UC is not scheduled to any story
   V3   UC-8: component `finding` has already been touched by a wave, but this UC is not scheduled to any story
   V3   UC-9: component `bundle` has already been touched by a wave, but this UC is not scheduled to any story
