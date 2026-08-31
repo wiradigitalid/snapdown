@@ -5183,3 +5183,45 @@ defects:
       `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings` and
       `cargo test --workspace` all clean.
     status: fixed
+  - id: BUG-87
+    title: The parallel-blur regression guard compared against a fixed millisecond figure and was flaky on shared CI runners
+    found: "2026-08-31"
+    found_by: kodesh87, "kenapa tidak main saja? langsung push" - CI failure comparison against the pre-existing red on main
+    component: finding
+    severity: low
+    contradicts: []
+    root_cause: code
+    evidence: |
+      `blur_rect_above_the_parallel_threshold_stays_faster_than_running_sequentially`
+      (`crates/snapdown-store/src/image/burner.rs`) asserted `elapsed.as_millis() < 1200`, a number
+      measured once on the author's own machine (~455ms threaded, ~1668ms unthreaded, 1200ms chosen
+      between the two). On the `windows-latest` GitHub Actions runner it measured 1427ms and failed -
+      not because threading stopped engaging, but because the runner is roughly three times slower
+      than the machine the threshold was calibrated against, and `cargo test`'s own parallel test
+      execution contends further for the same cores this guard is trying to measure.
+
+      Confirmed pre-existing rather than caused by any code change under review: the identical test,
+      with the identical failure message shape, was already red in the immediately prior CI run on
+      `main` (`bd694d5`, 2026-08-30), one push before this one.
+    fix: |
+      Replaced the fixed-millisecond comparison with a self-calibrating one. The test now measures,
+      in the same run, on whatever machine it executes on: does splitting this exact 1920x1080 blur
+      across `available_parallelism()` bands actually run faster than doing the identical arithmetic
+      as one band? Both sides call the same private band functions `box_pass` itself calls - the
+      "sequential" side is `box_pass`'s own fallback path, run explicitly rather than reached via its
+      size threshold - so there is no second implementation to drift from the real one, and no
+      cross-machine assumption left in the assertion. A 90% margin absorbs thread spawn/scheduling
+      noise without losing sensitivity to the actual regression: threading silently failing to engage
+      leaves the "threaded" side running the identical work the "sequential" side does, plus overhead,
+      which is never faster. Skips outright on a single-core runner, where `box_pass` itself never
+      takes the parallel branch and there is nothing to compare.
+    verified_by: |
+      Mutation-verified, not merely re-observed passing: forcing `box_pass`'s threading condition to
+      always take the sequential branch (`if threads <= 1 || ...` -> `if true`) turned the test FAILED
+      with a message naming the exact comparison ("took 1.309s, not meaningfully faster than ...
+      1.329s"); restoring the condition returned it to passing. So the guard is sensitive to the
+      specific regression it exists to catch, not passing for an unrelated reason.
+
+      `cargo test -p snapdown-store --lib image::burner::box_pass_regression_guard`: 3 passed.
+      `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` clean.
+    status: fixed

@@ -1233,20 +1233,86 @@ mod box_pass_regression_guard {
     /// stays fast. This one uses a size above that threshold, so a regression that silently stops
     /// threading from engaging (a broken condition, a threshold raised past reason, `available_
     /// parallelism` always falling through to its `unwrap_or(1)`) fails this rather than going
-    /// unnoticed. Measured on this machine, debug profile: threaded, 1920x1080 took ~455ms; with
-    /// threading not engaging at all (measured before it existed, same profile, same size) it took
-    /// ~1668ms. 1200ms sits between the two with margin on both sides.
+    /// unnoticed.
+    ///
+    /// It does NOT compare against a fixed millisecond figure - that shape shipped once and was
+    /// flaky on a shared CI runner: 1427ms against a 1200ms threshold measured on the author's own
+    /// machine, where a runner three times slower makes any hardcoded number meaningless (`BUG-87`).
+    /// Instead it measures the one thing the guard actually cares about, on whatever machine it
+    /// runs on, in the same test run: does splitting this exact image across
+    /// `available_parallelism()` bands actually run faster than doing the identical arithmetic in
+    /// one band? That question has the same answer on a laptop and on a contended CI runner, because
+    /// both sides of the comparison pay that runner's own overhead.
+    ///
+    /// The "sequential" side below is not a second implementation to drift from the real one - it
+    /// calls the exact private band functions `box_pass` calls, run across the whole image as one
+    /// band instead of split across threads, which is what `box_pass` itself does whenever
+    /// `available_parallelism() <= 1`.
     #[test]
     fn blur_rect_above_the_parallel_threshold_stays_faster_than_running_sequentially() {
-        let mut img = RgbaImage::from_pixel(1920, 1080, Rgba([120, 130, 140, 255]));
-        let start = std::time::Instant::now();
-        MarkerBurner::blur_rect(&mut img, 0, 0, 1920, 1080, 16);
-        let elapsed = start.elapsed();
+        let threads = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1);
+        if threads <= 1 {
+            // `box_pass` takes the sequential branch itself whenever `available_parallelism() <= 1`
+            // - on a single-core runner there is no parallel path to regress, so there is nothing
+            // this guard can meaningfully compare.
+            return;
+        }
+
+        let width = 1920;
+        let height = 1080;
+        let radius = 16;
+        let source = random_buffer(7, width, height);
+
+        let threaded_elapsed = {
+            let mut buffer = source.clone();
+            let mut scratch = vec![[0.0f32; 4]; width * height];
+            let start = std::time::Instant::now();
+            for _ in 0..3 {
+                MarkerBurner::box_pass(&buffer, &mut scratch, width, height, radius, true);
+                MarkerBurner::box_pass(&scratch, &mut buffer, width, height, radius, false);
+            }
+            start.elapsed()
+        };
+
+        let sequential_elapsed = {
+            let mut buffer = source;
+            let mut scratch = vec![[0.0f32; 4]; width * height];
+            let start = std::time::Instant::now();
+            for _ in 0..3 {
+                MarkerBurner::box_pass_horizontal_band(
+                    &buffer,
+                    &mut scratch,
+                    width,
+                    radius,
+                    0,
+                    height,
+                );
+                MarkerBurner::box_pass_vertical_band(
+                    &scratch,
+                    &mut buffer,
+                    width,
+                    height,
+                    radius,
+                    0,
+                    height,
+                );
+            }
+            start.elapsed()
+        };
+
+        // A 90% margin, not "any amount faster": thread spawn/join and scheduling noise can eat a
+        // few percent even when the split works exactly as intended, and this must not be the kind
+        // of guard that fails once in a hundred runs for no reason. It stays sensitive to the actual
+        // regression - threading silently not engaging leaves the threaded path running the
+        // identical arithmetic the sequential path does, plus thread overhead, never faster.
         assert!(
-            elapsed.as_millis() < 1200,
-            "blur_rect over a 1920x1080 image (above the parallel threshold) took {}ms; expected \
-             well under the ~1668ms this took without the threaded row-band split engaging at all",
-            elapsed.as_millis()
+            threaded_elapsed.as_secs_f64() < sequential_elapsed.as_secs_f64() * 0.9,
+            "splitting a 1920x1080 blur across {threads} threads (band functions run directly, \
+             bypassing box_pass's own threshold check) took {threaded_elapsed:?}, not meaningfully \
+             faster than running the identical work as one band, which took {sequential_elapsed:?} \
+             - on this same machine, in this same test run",
         );
     }
 }
