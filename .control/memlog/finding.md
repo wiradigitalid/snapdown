@@ -1,7 +1,7 @@
 ---
 topic: Snapdown — finding component depth
 artifact: .how/finding/SDD-finding.md
-updated: 2026-08-31T16:37
+updated: 2026-08-31T21:43
 ---
 
 - (event) 2026-08-23 G4 re-run at `deep`, raised from `guarded`. g4_passed was reset to false: it passed at the old depth, and leaving it true would claim a gate that never ran at this one
@@ -19,3 +19,4 @@ updated: 2026-08-31T16:37
 - (note) [NEEDS CONFIRMATION] filed: marker.comment suggests per-Marker text the domain model does not describe. Whether it is used, and whether it duplicates the Note line, was not established
 - (note) NOT done: wdi-review has not run
 - (change) G3 delta 2026-08-31, wdi-blueprint intent catalog. UC-30 (FR-41 discard originals) and UC-31 (FR-42 reclaim space in bulk) added, both critical: true - each removes a capture and its file irreversibly, same class as UC-7. Both are REACHED FROM A BUNDLE and still belong to finding, because the object destroyed is a Finding and bundle owns only [Bundle, BundleItem]; stated in the catalogue so the next reader does not refile them. Actor Register gains 'discard the Findings behind a finished Bundle'. Two pre-existing inaccuracies corrected in the same pass: the count sentence said 'one of eight' against a nine-row table (UC-27 was added without updating it), and the SRS frontmatter's satisfies: omitted FR-30..FR-33 which its own catalogue claims.
+- (change) wdi-review 2026-08-31, lenses structure+prose+edge-case-hunter (risk_accepted low - the only component whose code also faces the two-reviewer panel). SRS and SDD stamped at abc5a6f. Findings were lighter here and all metadata: SRS said 'No applied DEC- binds this component yet' while the SDD it names as its pair cites DEC-007 in its first sentence, and DEC-013 set this component's risk_accepted; SRS's Slots claimed 05-scenarios/ was 'not written below mode: deep' with SCN-03 and SCN-04 on disk; SDD's Slots had FOUR of five lines false, including 01-ux/ - its largest slot at 223 lines - declared not written; updated: had read 2026-08-23. UC-30 and UC-31 stay off realizes: with the omission stated in Open Items: they were born here on 2026-08-31 from FR-41/FR-42 and nothing designs either, so listing them would claim a design pass that never ran.

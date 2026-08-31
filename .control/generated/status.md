@@ -57,7 +57,7 @@ validators_skipped:
   V19: 'advisory — wave S/M closed without an RTR-: W7'
 open_questions:
   blocking: 0
-  assumptions: 27
+  assumptions: 28
   external: 3
   answered: 2
   blocking_budget: 15
