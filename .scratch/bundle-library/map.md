@@ -1,0 +1,158 @@
+# Map: Bundle Library
+
+**Label:** wayfinder:map
+
+## Destination
+
+A handed-off spec for the **Bundle Library** — the screen behind the Editor's Library icon where a
+Reviewer browses every Bundle they have assembled, updates one, copies its Markdown, opens its file
+location, and deletes it — together with the Editor action-vocabulary rework the Library forces, the
+**Export PDF** stage, and the cloud **Publish** stage that follows once `DEC-005` lifts by its own
+terms.
+
+The map ends when `/to-spec` can be run without a further decision being needed. It does not build
+anything.
+
+## Notes
+
+**Domain.** Snapdown desktop app: Slint UI in `apps/desktop`, Rust workspace behind it. A **Bundle**
+is a set of assembled Findings composed into one Markdown document plus burned image copies, stored
+in the Vault. The **Library** is the Reviewer's whole local collection.
+
+**Method boundary.** This repo splits systems: WDI Method owns documents, mattpocock owns code. This
+map is a planning artifact, so its output routes to `/to-spec` → `/to-tickets` → `/implement-spec`.
+The corpus (`.what/`, `.how/`, `.control/`) is an **input, never a gate** — where a document and the
+code disagree, the code wins and the document is what gets corrected.
+
+**Skills every session on this map should consult.**
+- `.constitution/project/design-system-guide.md` — mandatory for any UI change, in either window.
+- `grilling` + `domain-modeling` for decision tickets.
+- `prototype` for the two prototype tickets.
+- `wdi-ux` for the G2 experience-bar ticket specifically.
+
+**Prerequisites sitting outside this map.** Two defects were found while charting. Neither is a map
+ticket; both are ordinary defect work, and the Library's hand-off actions are close to pointless
+until the first one is fixed:
+
+1. ~~**Bundle Markdown image links are broken.**~~ **FIXED 2026-08-31, `BUG-86`.** The serializer
+   wrote links relative to the vault root while `bundle.md` lives inside the per-Bundle folder, so
+   every link doubled a `bundles/<id>/` segment and resolved to nothing — in every reader, for every
+   Bundle. `serialize_bundle` now takes `markdown_path` and derives each link from it, so the
+   document's location and its links' base cannot drift apart again. `NFR-8`'s missing enforcement
+   now exists as `test_nfr8_image_resolution.rs`, seen red before the fix and mutation-verified
+   after. Five assertions that had enshrined the broken form were corrected.
+2. **Filmstrip "Copy image" targets the wrong Finding.** `appwindow.slint:1440` reads
+   `active-finding-id` instead of `menu-target`, so right-clicking card B while card A is open
+   copies A. Its sibling "Open file location" (`:1441`) does it correctly.
+
+**Two things on this map are explicit MVP non-goals in the corpus, and need scope growth first.**
+Verified 2026-08-31 — both appear verbatim, and "PDF" appears **zero** times anywhere in `.what/`,
+`.how/` or `.control/`:
+
+- `.what/_prd/capture-to-markdown/prd.md:723` and `.what/bundle/SRS-bundle.md:84` —
+  *"Exporting a Bundle to anything but Markdown"* / *"Exporting to anything but Markdown."*
+  → **Export PDF**.
+- `.what/_prd/capture-to-markdown/prd.md:717` — *"Renaming a Bundle. Same reason; and a rename that
+  does not rewrite the document's heading is a lie."* → the **editable Bundle title** in the Review
+  & Update window.
+
+**The "code wins over documents" rule does not apply to either.** That rule governs a document
+trailing *existing* code. There is no code here at all — these are deliberate scope boundaries still
+in force, so they must be grown through the front door rather than stepped over.
+
+**The owner decided on 2026-08-31 to grow both into MVP scope.** That growth is
+[Grow Export PDF and Bundle rename into promises](issues/08-grow-pdf-export-and-bundle-rename-into-scope.md),
+via `wdi-product` intent `update`. Until it lands, neither Export PDF nor an editable Bundle title
+has a promise behind it.
+
+Both were written as **MVP/r1** boundaries, not permanent bans — a sibling entry, *"Searching or
+filtering the Library"*, even carries `[NOTE FOR PM] … revisit for r2`. Growing them is ordinary.
+
+Note the rename reason is *satisfied* by this map's design: editing the title block in Review &
+Update does rewrite the document's heading, so the objection the PRD records does not apply — only
+the scope boundary does.
+
+**Settled while charting.** These are constraints for every session on this map, not open questions:
+
+- **Update never touches a Finding.** In the Library's update mode, edits to title, bundle notes,
+  finding notes and marker notes stay in a buffer and are persisted on Save via
+  `update_bundle_markdown` (which exists and is currently dead code). It must never call
+  `FindingStore`. The existing *compose* flow writes note/marker edits through to the live Finding
+  immediately (`main.rs:3966-4012`); that behaviour is deliberately **left alone** — out of scope.
+- **Images are frozen in update mode.** No add, no remove, no reorder, no replace. Editable:
+  Bundle title, Bundle notes, Finding notes, Marker notes. Nothing else.
+- **No action named "Share".** Vocabulary is `Edit` · `Copy Markdown` · `Open file location` ·
+  `Delete`, with `Export PDF` and `Publish` arriving later from their own efforts/stages. A payload
+  verb (Copy/Export/Publish) always beats the umbrella word, and an unbacked button repeats the
+  mistake of the toolbar's fake 1-6 shortcut badges.
+- **A button lives next to the object it acts on.** Ribbon → the active Finding on canvas. Filmstrip
+  footer → the ticked selection. Library row → that Bundle.
+- **No local Markdown export.** The Markdown and its images already sit together on disk in the
+  Vault; once prerequisite 1 is fixed, that copy is portable as-is. Copying it to a second local
+  folder produces nothing new. Hand-off is `Copy Markdown` (clipboard) and `Open file location`.
+- **MCP / `agent-access` is not part of this.** The bridge exists but its Local API server was never
+  rebuilt after the move to Slint (`BUG-59`, critical), and by design it is loopback-only
+  (`DEC-002`, `NFR-9`). Real work, different effort.
+- **Window copy.** Create mode: title **Review & Assemble**, primary **Assemble**. Update mode:
+  title **Review & Update**, primary **Save**. Secondary is Cancel in both.
+- **Ribbon rework.** "Share" is deleted (zero Rust behind it today). "Copy" becomes **Copy Image**.
+  Ribbon "Assemble" is deleted because it acts on the filmstrip selection, and the filmstrip footer
+  already carries an Assemble button in the right place (`appwindow.slint:2447`).
+
+## Decisions so far
+
+- [Reconcile the open ribbon-sizing ticket](issues/04-reconcile-the-open-ribbon-sizing-ticket.md):
+  the ribbon-sizing ticket was rewritten to cover only the button that survives the vocabulary
+  rework, so the two efforts no longer collide.
+- [Prototype the Library screen](issues/01-prototype-the-library-screen.md): a full-window overlay
+  like Review & Assemble; rows carry a thumbnail (always `BundleItem` at `position 1`), name and a
+  mono meta line, and **two actions on hover** (Copy Markdown, Open file location) with the rest in a
+  menu the overflow button and right-click both open — matching the filmstrip's existing gesture, and
+  leaving room for Export PDF and Publish to join without touching the row. Menu order: Edit ·
+  Copy Markdown · Open file location · Export PDF — Publish — Delete. No search or filter.
+- [Research the PDF render engine](issues/07-research-the-pdf-render-engine.md): `typst` via
+  `typst-as-lib`, **in-process** — a sidecar was proposed for panic isolation then withdrawn, since
+  the repo sets no `panic = "abort"` (verified) so `catch_unwind` gives the same protection, and
+  typst returns clean errors at 100,000 nesting levels rather than overflowing the stack. Staying
+  in-process contradicts no `AD-`, so no `DEC-` is owed. Permissive licences; text layer and
+  12-image embedding verified by decoding the output. Costs +35.5 MiB on disk but only **+0.2 MiB
+  RAM at idle** — only download size remains at issue. `printpdf` was a third the size and silently
+  dropped every image across three input forms. Markdown leaf text is inserted via typst's
+  `#"..."` string literals, whose escape set is closed by definition. **Packaging (in-process vs a
+  separate exporter crate) is deferred to the Export PDF effort** — the research reversed itself
+  twice on it, which marks it as an architectural judgement rather than a measurable fact; the
+  ticket records everything established so it is not redone. Tall-image handling is solved and
+  measured from the PDF's own placement matrices: clamp to 85% text height above aspect 1.25, slice
+  across pages above aspect 3 with the image embedded once — both thresholds still need calibrating
+  against real screenshots.
+
+## Not yet specified
+
+- **Publish / cloud.** In scope for this map's destination, but its questions are not sharp yet and
+  `DEC-005` forbids new FR/UC/UX for the `sharing` component in the meantime. The gate is
+  [Write and verify the G2 experience bar](issues/06-write-and-verify-the-g2-experience-bar.md):
+  `DEC-005` lifts *by its own terms* once that bar is met and verified, with no supersession needed.
+  Once it lifts, this patch graduates into its own tickets — publish/unpublish lifecycle, slug
+  handling, credential storage, the `apps/web-service` (Go) side, and what a Reviewer sees when a
+  published Bundle is edited afterwards.
+- **Export PDF.** In scope. The engine question is sharp and now sits in
+  [Research the PDF render engine](issues/07-research-the-pdf-render-engine.md). Settled already:
+  PDF is a **human** artifact (the agent path is Copy Markdown), **A4 only**, single column, title
+  block rather than a cover page, one section per Finding, page numbers, no image ever split across
+  a page break, and a **real text layer** so a machine is not obstructed. Still fog: where the
+  action lives in the Library row — that graduates once the Library screen's shape is known.
+- **What the Library does at scale.** Sort order beyond newest-first, search, filtering, and whether
+  a Reviewer with hundreds of Bundles needs pagination or virtualisation. Likely absorbed by the
+  Library prototype ticket; if it survives that, it graduates here.
+
+## Out of scope
+
+- **The Bundles Drawer.** `bundles-drawer-clicked` (`appwindow.slint:1483`) is a second, separate
+  stubbed callback for a toggleable drawer. Nothing asked for it; conflating it with the Library
+  screen would import an undescribed second UI pattern.
+- **Rebuilding the Local API server / MCP bridge** (`BUG-59`). Tracked, critical, and specced under
+  `agent-access` with its own SRS. Not this effort. **A `SNAPDOWN_VAULT_PATH` environment variable
+  belongs to this patch, not to the Library**: as a way for an agent to *find* the Vault without
+  being told it is a reasonable idea worth taking up there; as the contents of a Markdown image link
+  it does not work, because no CommonMark renderer expands variables (see ticket 03).
+- **Changing the compose-time flow's write-through behaviour.** See "Settled while charting".
