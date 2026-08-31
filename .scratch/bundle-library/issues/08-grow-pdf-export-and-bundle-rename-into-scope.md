@@ -1,7 +1,7 @@
 # 08: Grow the promises this map needs, from non-goals and gaps
 
 **Type:** task
-**Status:** claimed
+**Status:** resolved
 **Blocked by:** None (can start immediately)
 
 ## Question
@@ -308,3 +308,52 @@ composer satisfies `AD-9`. If that reading fails, `FR-12` needs re-amending, not
 4. **`wdi-component`** intent `behaviour` on `bundle` — `SRS-bundle.md`'s Non-Goals at lines 76, 77
    and 84, plus its wrong `BR-10` citation on the rename entry.
 5. **`wdi-ux`** — the screen-registry entry for `FR-42`'s reclaim surface.
+
+## Answer
+
+**All four promises exist, and the whole route ran.** Five skills, in one chain on 2026-08-31:
+`wdi-product` intent `update` → `wdi-blueprint` intent `catalog` → `wdi-decision` → `wdi-component`
+intents `behaviour` and `design` → `wdi-blueprint` intent `platform` → `wdi-question` → `wdi-review`.
+
+`CAP-12` · `FR-39` Export PDF · `FR-40` edit a composed Bundle's title and notes · `FR-41` discard the
+source Findings · `FR-42` reclaim space in bulk · `NFR-19` · `UC-28`–`UC-31` · `BR-122` · `OQ-31`.
+`BR-11` narrowed, `OQ-12` closed, `DEC-012` applied. Committed as `57cbf96`, both CI workflows green.
+
+**Three of this ticket's own guesses were wrong, and the corrections are the part worth keeping.**
+
+1. `FR-41` and `FR-42` belong to **`CAP-5` / `component: finding`**, not `CAP-4` / `bundle` as this
+   ticket leaned. The act destroys a `Finding` and `bundle` owns only `[Bundle, BundleItem]` — filing
+   them under `bundle` would have been the exact collision `V21` exists to catch. No `wdi-blueprint`
+   escalation was needed for the capability question after all.
+2. **Export PDF did need a new `CAP-`**, and `wdi-product` may birth one — `CAP-9`–`CAP-11` set the
+   precedent at the G2 re-run of 2026-08-23. `CAP-12` was not folded into `CAP-4`, whose title names
+   Markdown deliberately.
+3. **A fifth boundary existed that this ticket never listed, and it was the load-bearing one.**
+   `BR-11` — *"A Bundle is never edited in place"*, status active, sourced to `AD-9` — forbade the
+   **whole** Review & Update window, not just its title. Growing the rename while leaving `BR-11`
+   standing would have produced a promise nobody could legally build.
+
+**Two promises already in the PRD pointed the opposite way, and neither this ticket nor the map knew.**
+`FR-12` fixed the clipboard to folder-relative image links, contradicting ticket 03's answer more
+directly than the `AD-9` objection did; and `FR-14` offered to destroy a Bundle's source Findings in
+the same confirmation, which ticket 02 had ruled out. Both corrected on the owner's decision, with
+their old wording quoted in place.
+
+**What the code said, and it reshaped the `AD-9` question.** Of the three handoff paths `AD-9` governs,
+exactly one exists: `FR-12` has no implementation at all, the Local API does not exist (`BUG-59`), and
+only the published page runs. `DEC-012` records that, and records plainly that the code **prices** the
+decision rather than answering it — `AD-9`'s own Prevents is what answered it.
+
+**Still owed, and none of it blocks `/to-spec` on the Library itself:**
+
+- `NFR-19` forbids splitting an image across a page break while ticket 07 solves tall screenshots by
+  slicing across pages. **A contradiction introduced by this chain.** → `wdi-product`.
+- Editing a **published** Bundle is undefined anywhere in the corpus. → `wdi-question`.
+- Discarding one Bundle's originals silently seals another that shares a Finding (`BR-12` + `BR-122`),
+  and `FR-41`'s confirmation does not say so. → `wdi-product`.
+- `FR-40` writes both the `bundle.markdown` column and the `bundle.md` file with no atomicity stated;
+  `BR-5` covers create and remove, not update. → `wdi-blueprint` intent `catalog`.
+- `FR-39` needs a real design pass at `guarded`: it adds a boundary — a file written outside the Vault
+  — that § Failure Behaviour does not cover. → `wdi-component` intent `design`.
+- `DEC-013` is `draft` and awaits the owner. Nothing is stamped: `wdi-review` reported open findings
+  and its own rule forbids a trace over them.

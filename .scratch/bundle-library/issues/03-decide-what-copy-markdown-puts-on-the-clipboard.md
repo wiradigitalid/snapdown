@@ -108,3 +108,68 @@ Note this is the **same** question `BR-11` raises for the Review & Update window
 direction: there the composer re-runs and re-stores, here it renders a second form on the way out.
 See ticket 08's second-session section — worth answering both in one sitting so the two answers cannot
 drift.
+
+## Added 2026-08-31, later — the `AD-9` item above is ANSWERED, and one of the three is now settled too
+
+### The `AD-9` question is closed. `DEC-012` settled it, and `FR-12` stands.
+
+The section above added a fourth open item asking whether emitting different bytes to the clipboard
+contradicts `AD-9`. It does not. `DEC-012` (`status: applied`) narrowed `AD-9` to guarantee **one
+authored document rather than one set of bytes**: a path MAY substitute the base of the document's
+image links so they resolve for its own reader, and MUST change nothing else — and the substitution is
+made by the **composer**, which already takes the base path as a parameter
+(`crates/snapdown-core/src/domain/markdown.rs:25`, put there by `BUG-86`).
+
+What settled it was `AD-9`'s own **Prevents**, not a new argument: the harm it names is *"two agents
+reading the same review disagree about it"*, and a link that resolves for its own reader does not cause
+that. `AD-9`'s title and Rule were narrowed to match; Binds and Prevents are untouched. Read `DEC-012`
+before reopening this — its Cost section records the strongest objection, which is that an image is
+arguably part of the review, so a reader who cannot open it *does* see something different.
+
+**Do not treat the fourth item as open.** It is answered, and this note is here because the section
+above still reads as though it were.
+
+### Which encoding to emit — TESTED, not reasoned. Two forms survive, and `file:///` is not one.
+
+The ticket required the chosen form be *"proven against a Vault path containing a space."* Done, against
+a CommonMark reference implementation (`markdown-it-py`), over three realistic Vault paths: one with a
+space, one with a space and parentheses (`Snapdown Vault (2024)`), one with a space and an apostrophe
+(`Wira's Vault`). The result is the same for all three:
+
+| Form | Result |
+|---|---|
+| `![f](C:\Users\...\Snapdown Vault\...)` raw backslashes | **fails** — no image at all, renders as literal text |
+| `![f](C:/Users/.../Snapdown Vault/...)` bare forward slashes | **fails** — the space terminates the destination |
+| `![f](<C:/Users/.../Snapdown Vault/...>)` forward slashes in `<>` | **works** |
+| `![f](C:/Users/.../Snapdown%20Vault/...)` percent-encoded | **works** |
+| `![f](file:///C:/Users/.../Snapdown%20Vault/...)` | **fails** |
+| `![f](<file:///C:/Users/.../Snapdown Vault/...>)` | **fails** |
+
+**`file:///` fails for a different reason than the other two, and the difference matters.** Its syntax
+is perfectly valid CommonMark — verified by re-running with the renderer's link validator disabled, at
+which point both `file:///` forms parse. What rejects them is markdown-it's **default security
+blocklist**, which refuses the `file:` scheme. markdown-it powers a large share of real Markdown
+readers, and a consumer cannot usually turn that off. So `file:///` is worse than this ticket assumed:
+not a syntax problem that could be escaped around, a **policy** problem that fails silently in readers
+you do not control. It should be struck from the three options the owner's answer listed.
+
+**Recommendation, and the reason is technical rather than aesthetic: forward slashes wrapped in `<>`.**
+Both surviving forms are correct, so this is a small judgement and the owner may overrule it. What
+decides it: a conforming parser **strips the angle brackets and hands the consumer the path with its
+space intact** — verified, the extracted destination equals the input path exactly. Percent-encoding
+hands the consumer `Snapdown%20Vault` and obliges it to decode before opening. Since the only consumer
+of these links is a local agent, `<>` is the form that needs no step on the other side. It also keeps
+the path readable to a person who glances at the pasted text.
+
+### Still open, and both are genuinely the owner's — an agent must not answer them
+
+1. **Whether a plain "Copied" toast suffices, or the Reviewer is told images do not travel on a text
+   clipboard.** A preference about what the Reviewer is owed, not a fact.
+2. **Whether this makes `Open file location` redundant**, or leaves it serving a genuinely different
+   moment.
+
+One piece of evidence for both, found while settling `DEC-012`: **`FR-12` has no implementation at
+all.** There is no text clipboard call anywhere in the tree — every `clipboard-win` use is
+`raw::set_bitmap_with` for images, serving `FR-36` — and `apps/desktop/ui/appwindow.slint` has no
+copy-markdown callback, only a `bundle-preview-markdown` display property at `:1342`. So neither
+question is being asked about behaviour anyone has lived with. `OQ-1` stays open for the same reason.

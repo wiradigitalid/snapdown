@@ -154,6 +154,16 @@ the scope boundary does.
   Once sealed, only `Delete` remains. The whole `bundles/<id>/` folder goes,
   **files before the database row**, so a failure stays visible and retryable. Bulk lives in a
   `Reclaim space` screen reached from the Library header and from Settings.
+- [Grow the promises this map needs](issues/08-grow-pdf-export-and-bundle-rename-into-scope.md):
+  all four promises exist — `CAP-12`/`FR-39` Export PDF, `FR-40` edit a composed Bundle's title and
+  notes, `FR-41` discard the source Findings, `FR-42` reclaim space — plus `NFR-19`, `UC-28`–`UC-31`
+  and `BR-122`. Three of the ticket's own guesses were wrong: `FR-41`/`FR-42` belong to `CAP-5` and
+  component **`finding`**, not `bundle`, because they destroy a `Finding`; Export PDF did need a new
+  `CAP-`; and a **fifth** boundary nobody had listed, `BR-11`, forbade the whole Review & Update
+  window rather than just its title. `BR-11` is now narrowed to the handoff path with `AD-9` left
+  intact — `DEC-012`, whose reasoning came from `AD-9`'s own Prevents. Two existing promises pointed
+  the other way and were corrected: `FR-12`'s relative-link clause and `FR-14`'s combined destroy.
+  Committed as `57cbf96`.
 - [Research the PDF render engine](issues/07-research-the-pdf-render-engine.md): `typst` via
   `typst-as-lib`, **in-process** — a sidecar was proposed for panic isolation then withdrawn, since
   the repo sets no `panic = "abort"` (verified) so `catch_unwind` gives the same protection, and
