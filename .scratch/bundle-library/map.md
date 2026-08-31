@@ -157,8 +157,20 @@ the scope boundary does.
   for that act. Three named outcomes while a Bundle still holds its Findings, one per thing worth
   keeping: `Disassemble` (captures stay), `Discard originals` (Bundle stays), `Delete` (neither).
   Once sealed, only `Delete` remains. The whole `bundles/<id>/` folder goes,
-  **files before the database row**, so a failure stays visible and retryable. Bulk lives in a
+  **the database row before its files** — *corrected 2026-08-31, see below* — and bulk lives in a
   `Reclaim space` screen reached from the Library header and from Settings.
+- **Correction, 2026-08-31, found by `wdi-review`.** Ticket 02's line above used to read *"files
+  before the database row, so a failure stays visible and retryable"*. That contradicts `AD-2`, which
+  ticket 02 never checked itself against: *"MUST leave the prior state intact if any part of it fails.
+  A record MUST NOT be committed before its files exist, and files MUST NOT be removed before the
+  record is."* Both halves bite — the order is reversed, and `AD-2` forbids the partial state the
+  ticket was deliberately buying. The visibility it wanted is real, but it pays for it with a `bundle`
+  row whose Markdown points at images that are gone, which is the **second of the two harms `AD-2`'s
+  own Prevents names**. Row first, then files: a crash then leaves orphan files that nothing points at,
+  which `AD-2` also dislikes but which is recoverable by inspection, and that is why its Rule picks
+  this order rather than the other. `BR-5` was challenged over this and survived — its all-or-nothing
+  is `AD-2` restated. If the owner still wants files-first, that narrows `AD-2` and a `DEC-` is
+  **mandatory**, not optional.
 - [Decide what Copy Markdown puts on the clipboard](issues/03-decide-what-copy-markdown-puts-on-the-clipboard.md):
   the whole stored document, image links rewritten to absolute paths, encoded as **forward slashes
   wrapped in `<>`** — settled by running six candidate forms through a CommonMark reference

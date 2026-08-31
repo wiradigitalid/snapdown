@@ -7,8 +7,11 @@ paradigm: hexagonal — a Rust domain core with ports for capture, storage, and 
 scope: The whole product — the desktop app, the MCP bridge, the web service, and the browser reader
 status: draft
 created: "2026-08-22"
-updated: "2026-08-22"
-binds: [CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-7, CAP-8]
+updated: "2026-08-31"
+# `binds:` read CAP-1..CAP-8 until 2026-08-31, when `wdi-review` found this file carrying THREE
+# disagreeing capability lists: this field stopped at CAP-8, the Capability -> Architecture Map
+# below reached CAP-10, and the registry holds CAP-12. All three now agree.
+binds: [CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-7, CAP-8, CAP-9, CAP-10, CAP-11, CAP-12]
 sources:
   - .what/_product-brief/brief.md
   - .what/_prd/capture-to-markdown/prd.md
@@ -153,13 +156,20 @@ depend on nothing in the Rust tree except the Markdown and image bytes a publish
   that two agents reading the same review disagree about it and nobody can say which is right.
 - **Rule:** A Bundle's Markdown MUST be composed once, by the core, and stored. Every handoff path
   MUST serve that same authored document. A path MAY substitute the base of the document's image
-  links so that they resolve for its own reader, and MUST change nothing else — no re-ordering, no
-  decoration, no summarising, and not one character of what the composer wrote. That substitution is
-  made BY THE COMPOSER, which takes the base path as a parameter; no surface may re-render, re-order,
-  decorate, or summarise a Bundle on the way out, and no surface may rewrite a document the composer
-  has already produced. A surface that needs a different shape is asking for a change to the composer.
+  links so that they resolve for its own reader, and MUST change nothing else — no re-rendering, no
+  re-ordering, no decoration, no summarising, and not one character of what the composer wrote. That
+  substitution is made **by the composer**, which takes the base path as a parameter; a surface MUST
+  NOT rewrite a document the composer has already produced. A surface that needs a different shape is
+  asking for a change to the composer.
 - **Narrowed** 2026-08-31 by `DEC-012`. Binds and Prevents are unchanged; the title and the Rule are
   not. The reasoning, the cost and the alternatives live in that decision.
+- **Condensed** 2026-08-31, prose only, on a `wdi-review` finding. The narrowing had pasted its new
+  clause in front of the old one, so the Rule forbade re-rendering, re-ordering, decoration and
+  summarising **twice** in one paragraph. The list is now stated once and `re-rendering` was folded
+  into it. All three load-bearing clauses are intact and quoted by other documents: *"composed once,
+  by the core, and stored"*, the prohibition on a surface rewriting a finished document, and *"a
+  surface that needs a different shape is asking for a change to the composer"*. **No scope changed**
+  — a second narrowing would need its own `DEC-`, and this is not one.
 
 ### AD-10 — Colour has exactly one authority, and every colour exists in both themes
 
@@ -281,6 +291,21 @@ snapdown/
 | CAP-8 Web sharing | `apps/desktop` publish client, `web/api`, `web/ui` | AD-5, AD-6, AD-7, AD-8, AD-9 |
 | CAP-9 The surface itself | `apps/desktop/ui`, `web/ui/src` | AD-10, AD-11 |
 | CAP-10 Precision guides & auto-detection | `snapdown-capture`, `apps/desktop/ui` | AD-2, AD-10 |
+| CAP-11 Canvas annotations & privacy redactions | `snapdown-capture`, `apps/desktop/ui` | AD-3, AD-4, AD-10 |
+| CAP-12 Export a Bundle as a PDF | undesigned — see `OQ-34` | AD-2, and **`AD-9` unresolved** — `OQ-34` |
+
+**Two rows added 2026-08-31**, both found missing by `wdi-review`. `CAP-11` had existed since the G2
+re-run of 2026-08-23 and `CAP-12` since 2026-08-31, and this table had neither.
+
+**`CAP-12`'s governance is deliberately left unresolved rather than guessed, and the reason is worth
+reading before anyone specs Export PDF.** `AD-9`'s Rule forbids a surface *re-rendering* a Bundle on
+the way out, in those words. A PDF is a re-rendering by any ordinary reading of the word. Two answers
+are available and they are not equivalent: either a PDF is not a *handoff path* in `AD-9`'s sense — its
+**Prevents** names the harm as *two agents* disagreeing about one review, and the PDF is settled as a
+**human** artifact with `Copy Markdown` as the agent path — or `AD-9` needs narrowing a second time to
+say so. `OQ-34` holds the question. It MUST NOT be answered by writing an `AD-N` into this row, and
+`FR-39` MUST NOT be specced until it is answered, because the answer decides whether the exporter is
+allowed to exist in the shape ticket 07 researched.
 
 ## Deferred
 

@@ -25,8 +25,8 @@ in a Bundle that already holds it, because a Bundle that drifts from what was ha
 than no Bundle. And a Bundle's Markdown is composed **once, by the core, and stored**, so that every
 handoff path serves the same authored document rather than each surface authoring its own.
 
-It runs at `mode: deep` and `risk_accepted: low`. Deleting a Bundle removes files from disk and cannot
-be undone, and a Bundle's images may hold anything that was on the Reviewer's screen. Since 2026-08-31
+It runs at `mode: guarded` and `risk_accepted: medium`. Deleting a Bundle removes files from disk and
+cannot be undone, and a Bundle's images may hold anything that was on the Reviewer's screen. Since 2026-08-31
 a Bundle's own title and notes can also be corrected after composition (`FR-40`), and the captures
 behind it can be destroyed while it survives (`FR-41`, which belongs to `finding`).
 
@@ -51,8 +51,16 @@ described a three-surface architecture for nine days while one surface existed, 
 recorded rather than quietly made because the claim was load-bearing: it is cited in § Risks as the
 reason a golden-file test is sufficient.
 
-The mode sentence also used to read *"It runs at the global `mode: outline`"*. `components.yaml` raised
-this component to an explicit `deep` on 2026-08-23 and the sentence was never updated.
+The mode sentence has now been wrong twice and is worth stating as a pattern rather than a third
+correction. It first read *"It runs at the global `mode: outline`"* while `components.yaml` had raised
+this component to `deep` on 2026-08-23. Corrected to `deep` on 2026-08-31 — and by then the owner had
+already moved it again, so *that correction was stale the day it was written*: the row has read
+`mode: guarded`, `risk_accepted: medium` since 2026-08-31. It now says so.
+
+**A depth setting does not belong in prose.** `components.yaml` is the only place it is true, it moves
+whenever the owner says so, and a copy here can only ever be right by luck. This sentence stays because
+a reader deserves to know at what depth the document was written — but it is a **statement about the
+past**, and if it disagrees with the registry, the registry is right and this line is the defect.
 
 ## Why · [G3]
 
@@ -110,10 +118,10 @@ a capture, and `bundle` has no authority to write one.
 | Editing a Finding, its Note, or its Markers changes nothing in a Bundle that already holds it | BR-10 |
 | A record and its files are created and removed in one unit of work | AD-2, BR-5 |
 | Composition refuses, naming the Finding, when a selected Finding's image file is missing | BR-13 |
-| A Finding may belong to several Bundles, and each Bundle keeps its own image copy | BR-12 |
+| The store permits one Finding to belong to several Bundles, each keeping its own image copy — but no surface offers it: a Finding a Bundle already holds leaves the filmstrip, which is the only place assembly selects from | BR-12 |
 | Marker positions arrive normalised and are burned in at the image's stored dimensions; nothing is re-scaled | AD-3, AD-4, BR-8 |
 | Deleting a published Bundle unpublishes it in the same action | BR-23 |
-| The Markdown is CommonMark with relative image paths, in the shape `cross-cutting.md` defines | NFR-8, cross-cutting.md § Bundle Markdown shape |
+| The **stored** Markdown is CommonMark with relative image paths, in the shape `cross-cutting.md` defines. `NFR-8` governs the file in the Vault, which is what makes the Vault movable; it does not govern what a handoff path serves — that is the row above | NFR-8, cross-cutting.md § Bundle Markdown shape |
 | Findings, Notes, and Markers are read-only here — `finding` owns them | `components.yaml` → `owns` |
 | The Vault location is read from `settings` | `components.yaml` → `owns` |
 
@@ -217,8 +225,8 @@ a different base, so *unchanged* is no longer the signal — *the same document*
 
 | Question | Answer |
 | --- | --- |
-| ★ Is every use case title a sentence a user would say? | Yes, all four in the Reviewer's own voice |
-| ★ Any `FR` with no use case? | No. FR-10, FR-11, FR-12, and FR-14 each have one |
+| ★ Is every use case title a sentence a user would say? | Yes, all six in the Reviewer's own voice |
+| ★ Any `FR` with no use case? | No. FR-10, FR-11, FR-12, FR-14, FR-39 and FR-40 each have one. `NFR-8` and `NFR-19` have none and need none |
 | ★ Do the inventories and this catalogue describe one system? | Yes. Tables 4–5, screens 8–10, and no endpoint of its own — the surfaces that expose a Bundle belong to other components |
 | Actor list: is one missing? | No. The agent is a reader of what this produces, not an actor here |
 | Does every `AD-N` here name a concrete failure that crosses components? | AD-9 does, across three components. AD-2 and AD-3 are shared with `finding` |
@@ -230,19 +238,29 @@ a different base, so *unchanged* is no longer the signal — *the same document*
 Paired with `.how/bundle/SDD-bundle.md`.
 
 Binding invariants: **AD-2** (a record and its files live or die together), **AD-3** (Marker
-coordinates normalised), **AD-4** (no re-encoding after capture), **AD-9** (one Bundle, one Markdown,
-every path). No applied `DEC-` binds this component yet.
+coordinates normalised), **AD-4** (no re-encoding after capture), **AD-9** (one Bundle, one authored
+document, on every path).
+
+**`DEC-012` is applied and binds this component** — it is what narrowed `AD-9`, and § Constraints cites
+it twice. This paragraph read *"No applied `DEC-` binds this component yet"* until 2026-08-31, which
+contradicted the same document two screens above it.
 
 ---
 
 ## Slots
 
-`02-rules/rules-bundle.md` — written at G4, `mode: outline`.
-`03-domain/domain-model.md` — written at G3, present.
-`04-usecases/` — at most three full flows at `outline`, written at G4.
-`05-scenarios/` — not written below `mode: deep`.
+`02-rules/rules-bundle.md` — written at G4. Present.
+`03-domain/domain-model.md` — written at G3. Present, alongside `state-machines.md`.
+`04-usecases/` — at most three full flows at `guarded`. Two are written, plus `EXPERIENCE.md`.
+`05-scenarios/` — `SCN-05` is present. It was written while this component was at `deep` on
+2026-08-23; lowering the mode to `guarded` stopped it being **required** and did not delete it.
+
+**Corrected 2026-08-31.** This block described `mode: outline` and said `05-scenarios/` was "not
+written below `mode: deep`" while `SCN-05-a-finding-deleted-out-from-under-a-bundle.md` sat on disk. A
+slots block that denies a file's existence is worse than no slots block: it is the one place a reader
+looks to find out what was written.
 
 ## Open Items
 
 - OQ-1 — whether a coding agent can open relative image paths. `.control/questions/assumptions.md`.
-- OQ-12 — recomposing in place of editing. `.control/questions/assumptions.md`.
+- ~~OQ-12 — recomposing in place of editing.~~ **Closed 2026-08-31**, answered `no`, and it now lives in `.control/questions/answered.md`. `FR-40` is what replaced the assumption.

@@ -177,16 +177,26 @@ Paired with `.how/finding/SDD-finding.md`.
 
 Binding invariants: **AD-1** (Markers and Note lines are one sequence), **AD-2** (a record and its
 files live or die together), **AD-3** (Marker coordinates normalised), **AD-4** (reduce once, at
-capture), **AD-6** (nothing leaves the machine). No applied `DEC-` binds this component yet.
+capture), **AD-6** (nothing leaves the machine).
+
+**Two applied decisions reach this component.** `DEC-007` moved the desktop app from a React webview
+to Slint, which is why the paired SDD's opening paragraph cites it; and `DEC-013` set this component's
+`risk_accepted` to `low`, the strictest of the three values and the only one that requires a
+two-reviewer panel on its code. This paragraph read *"No applied `DEC-` binds this component yet"*
+until 2026-08-31, while the SDD it names as its pair cited `DEC-007` in its first sentence.
 
 ---
 
 ## Slots
 
-`02-rules/rules-finding.md` — written at G4, `mode: guarded`.
-`03-domain/domain-model.md` — written at G3, present.
-`04-usecases/` — at most three full flows at `guarded`, written at G4.
-`05-scenarios/` — not written below `mode: deep`.
+`02-rules/rules-finding.md` — written at G4. Present.
+`03-domain/domain-model.md` — written at G3. Present, alongside `state-machines.md`.
+`04-usecases/` — three full flows at `guarded`: `UC-1`, `UC-5`, `UC-7`, plus `EXPERIENCE.md`.
+`05-scenarios/` — `SCN-03` and `SCN-04` are present, written while this component was at `deep` on
+2026-08-23. Lowering the mode to `guarded` stopped them being required and did not delete them.
+
+**Corrected 2026-08-31.** The last line said `05-scenarios/` was "not written below `mode: deep`" while
+two scenario files sat on disk.
 
 ## Open Items
 

@@ -104,9 +104,17 @@ capabilities:
     prd: capture-to-markdown
 
   # CAP-12 born 2026-08-31. Export is deliberately NOT folded into CAP-4. That capability reads
-  # "into a named Markdown Bundle" and names Markdown on purpose, because AD-9's one-set-of-bytes
-  # invariant is built on it; widening CAP-4 would blur exactly the distinction the clipboard path
-  # is currently disputing.
+  # "into a named Markdown Bundle" and names Markdown on purpose, because AD-9 is built on it;
+  # widening CAP-4 would blur exactly the distinction the clipboard path was disputing.
+  #
+  # This comment said "AD-9's one-set-of-bytes invariant" until 2026-08-31, when wdi-review caught it.
+  # DEC-012 retired that reading the same day: AD-9 guarantees one authored DOCUMENT, not one set of
+  # bytes. The point the comment was making survives - CAP-4 names Markdown on purpose - and the
+  # reason it gave for the point did not.
+  #
+  # OQ-34 is open against this capability and matters more than the naming: AD-9 forbids a surface
+  # re-rendering a Bundle on the way out, and a PDF is a re-rendering. Whether AD-9 reaches a
+  # human-only artifact at all is unsettled, and FR-39 MUST NOT be specced before it is.
   - id: CAP-12
     title: Render a composed Bundle as a document a person reads away from Snapdown
     # BG-2 is the nearest goal and the fit is KNOWN TO BE IMPERFECT. Its measure is "median handoff

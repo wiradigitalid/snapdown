@@ -78,6 +78,18 @@ saved Bundle is not a state the product may leave behind. The rule is therefore 
 joined by a sibling, which is also why its id does not change — the invariant was always
 *all-or-nothing on disk*, and deletion was simply the only direction that existed when it was written.
 
+**`wdi-review` then challenged the widening, and the challenge failed — which is worth recording,
+because it failed for a reason that found a different defect.** The objection was that the widened
+rule promises all-or-nothing while `.scratch/bundle-library/map.md` had settled that deletion runs
+*"files before the database row, so a failure stays visible and retryable"* — not all-or-nothing at
+all. Checking which of the two was wrong settled it against the map: `AD-2`'s Rule reads *"MUST leave
+the prior state intact if any part of it fails. A record MUST NOT be committed before its files exist,
+and files MUST NOT be removed before the record is."* `BR-5`'s all-or-nothing **is** `AD-2` restated,
+which is why `AD-2` has always been its first source. The map's ordering was the outlier, it
+contradicted an `AD-N` nobody had checked it against, and the state it bought — a row still pointing
+at deleted files — is the second of the two harms `AD-2`'s **Prevents** names outright. The map is
+corrected; this rule is unchanged by the challenge.
+
 The clause about the unsaved edit surviving is not decoration. Without it, all-or-nothing means the
 Reviewer loses their typing to a full disk, which is the one outcome neither option was arguing for.
 

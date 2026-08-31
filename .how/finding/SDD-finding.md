@@ -3,7 +3,7 @@ type: sdd
 component: finding
 status: draft
 created: "2026-08-22"
-updated: "2026-08-23"
+updated: "2026-08-31"
 realizes: [UC-1, UC-2, UC-3, UC-4, UC-5, UC-6, UC-7, UC-8]
 binds: [AD-1, AD-2, AD-3, AD-4, AD-6, AD-10]
 reviewed:
@@ -210,11 +210,17 @@ health check in `settings` was rejected rather than deferred.
 
 ## Slots
 
-`01-ux/` — not written below `mode: deep`, and not requested through `wdi-ux`. Screens are rows 1–7
-of `inventory-screen.md`; base elements are in `.how/_platform/design-system.md`.
-`02-contracts/` — not written. This component owns no endpoint.
+`01-ux/DESIGN.md` — present, and the largest slot this component has. Screens are rows 1–7 of
+`inventory-screen.md`; base elements are in `.how/_platform/design-system.md`.
+`02-contracts/contract-inventory.md` — present, though this component owns no endpoint.
 `03-integrations/` — not written. Windows is the platform, not a third party.
-`04-components/`, `05-model/`, `06-flows/` — `[deep]` only.
+`04-components/LC-003-image-reducer.md`, `05-model/data-model.md` and `06-flows/flow-capture.md` —
+all present.
+
+**Corrected 2026-08-31.** Four of these five lines were false: they said `01-ux/` was "not written
+below `mode: deep`, and not requested through `wdi-ux`" and put the other three slots at "`[deep]`
+only", while all four files exist. Every one was written while this component was at `deep` on
+2026-08-23; lowering the mode to `guarded` stopped them being required and did not delete them.
 
 ## Open Items
 
@@ -226,3 +232,9 @@ of `inventory-screen.md`; base elements are in `.how/_platform/design-system.md`
   test. `.control/registry/risks.yaml`.
 - RISK-2 — whether NFR-2 and NFR-3 both hold with the save-then-finish ordering. The Decision Summary
   commits to it; the numbers decide.
+- **`UC-30` and `UC-31` are deliberately absent from `realizes:`.** Both were born on 2026-08-31 from
+  `FR-41` (discard the captures behind a Bundle) and `FR-42` (reclaim space in bulk), and both belong
+  to this component because what they destroy is a `Finding`. Nothing here designs either: no `LC`, no
+  failure behaviour, no flow. They need a real design pass, and listing them would claim one had
+  happened. `BR-122` is the only part already settled — which of a Bundle's two states holds is read
+  from whether its Findings exist, never from a flag.

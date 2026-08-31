@@ -3,8 +3,8 @@ type: sdd
 component: bundle
 status: draft
 created: "2026-08-22"
-updated: "2026-08-23"
-realizes: [UC-9, UC-10, UC-11, UC-12]
+updated: "2026-08-31"
+realizes: [UC-9, UC-10, UC-11, UC-12, UC-29]
 binds: [AD-1, AD-2, AD-9, AD-10]
 reviewed:
   date: '2026-08-23'
@@ -14,9 +14,15 @@ reviewed:
 
 # SDD — bundle
 
-`mode: outline`. `Inherited Constraints` and `Failure Behaviour` are `[guarded]` sections and are
-deliberately absent — the four `AD-N` in `binds` still hold, because an invariant does not stop
-holding because a document is thin.
+`mode: guarded`. Every section this document carries a heading for is written, including
+`Inherited Constraints` and `Failure Behaviour`; the `[deep]`-only sections are marked as such where
+they appear.
+
+**Corrected 2026-08-31.** This paragraph said *"`mode: outline`. `Inherited Constraints` and
+`Failure Behaviour` are `[guarded]` sections and are deliberately absent"* — and both had been written
+since 2026-08-23, when the component was raised to `deep`. So the first thing a reader met was the
+document telling them its two largest sections did not exist. Its closing thought was sound and is kept
+here in its own right: an invariant does not stop holding because a document is thin.
 
 ## Decision Summary · [outline]
 
@@ -28,7 +34,11 @@ Finding's Markers drawn into it.
 Two choices cost the most to reverse.
 
 **The composed Markdown is a column, not a rendering.** `bundle.markdown` holds the finished bytes,
-and every handoff path — clipboard, Local API, publish — reads that column. The alternative, rendering
+and every handoff path reads that column. Of the three paths `AD-9` governs, **one exists**: the
+published page. The clipboard-Markdown path has no implementation and the Local API does not exist
+(`BUG-59`), so this choice is currently serving one reader and is stated in the present tense because
+it binds the paths as they arrive, not because three of them are there. This document named all three
+as present until 2026-08-31. The alternative, rendering
 on demand from the Findings, is cheaper to write and makes AD-9 unenforceable: the moment a Note is
 edited, the same Bundle produces different bytes on different days, and two agents reading "the same
 review" disagree. Storing it is what makes a Bundle citable.
@@ -176,11 +186,20 @@ over the Local API and owns those rows.
 | **Saving an edited Bundle → `library.db` + `bundle.md`** | The window stays open and Save cannot be pressed twice | Either write failing means **neither lands** (`BR-5`, widened 2026-08-31). The Reviewer is told which file refused and the edit stays in the buffer, so Save can be pressed again | A write reporting success over a file that did not change is not detected. The same limit as `LC-014`'s clipboard row, and stated for the same reason |
 | **Export PDF → a folder the Reviewer chooses** | The export shows progress and the window cannot be dismissed under it | Reported with the path. **The only boundary in this component that writes outside the Vault**, so the ordinary Vault guarantees do not reach it: the folder may be read-only, gone, or on a disk that filled between the dialog and the write | A partial PDF is a corrupt PDF. Nothing is left at the destination unless the whole document was written |
 
-**Two rows added 2026-08-31**, both raised as gaps by `wdi-review`. The Export PDF row deliberately
-names **no `LC`**: ticket 07 established `typst` as the engine but defers the exporter's *packaging*
-— in-process or its own crate — to the Export PDF effort, and inventing an `LC` here would decide by
-accident what that effort exists to decide. The row states the boundary's behaviour, which is what
-this section is for, and leaves the build unit to whoever draws it.
+**Two rows added 2026-08-31**, both raised as gaps by `wdi-review`, and they do not stand on the same
+footing.
+
+The **save** row constrains a boundary that exists: `update_bundle_markdown` is a named function in
+`LC-013`, and `BR-5` governs what happens when half of it lands.
+
+The **Export PDF** row does not. § Structure lists five `LC` and not one of them writes outside the
+Vault, so this row describes a boundary the design has not created yet — it is a **requirement on
+whoever draws the exporter**, not a description of this component as built. It deliberately names no
+`LC`: ticket 07 established `typst` as the engine but defers the exporter's *packaging* — in-process or
+its own crate — to the Export PDF effort, and inventing an `LC` here would decide by accident what that
+effort exists to decide. `wdi-review` flagged the row as unanchored on 2026-08-31 and it is kept with
+its status said out loud rather than removed, because a boundary that writes outside the Vault is the
+one thing about the exporter that is already certain.
 
 ## ABCE · [deep]
 
@@ -198,13 +217,20 @@ this section is for, and leaves the build unit to whoever draws it.
 | Object | Decides |
 |---|---|
 | `BundleComposer` | Order, naming, all-or-nothing across images, Markdown, and rows |
-| `MarkdownWriter` | The exact bytes. Pure — no I/O, which is what makes `AD-9` testable by golden file |
+| `MarkdownWriter` | The document, and every byte of it. Pure — no I/O, which is what makes `AD-9` testable by golden file |
 | `MarkerBurner` | Badges onto the image copies |
 | `BundleRemover` | Rows, image copies, and the Markdown file together (`AD-2`), plus the unpublish cascade (`BR-23`) |
 
-`MarkdownWriter` being pure is the load-bearing choice: `AD-9` says the bytes are identical on every
-path, and a pure function called once, whose output is stored, makes that true by construction rather
-than by three code paths being kept in step.
+`MarkdownWriter` being pure is the load-bearing choice: `AD-9` requires every handoff path to serve
+the same authored **document**, and a pure function called once, whose output is stored, makes that
+true by construction rather than by three code paths being kept in step. Purity is also what makes the
+rebasing `DEC-012` permits testable at all — a second rendering of the same document is a second call
+to the same pure function, comparable against the first.
+
+**Corrected 2026-08-31.** This sentence said *"`AD-9` says the bytes are identical on every path"*,
+which is the reading `DEC-012` retired. It survived the correction pass that fixed the identical claim
+in § Structure, three sections above, because that pass worked from a list of four `AD-9` citation
+sites and this one was a fifth nobody had grepped for.
 
 ### Entity
 
@@ -230,7 +256,9 @@ progress state. Everything else is a read or a delete. Nothing here is scheduled
 - **`bundle.markdown` and the file at `markdown_path` are written from the same bytes in the same
   transaction.** If they can ever differ, the column wins and the file is a stale copy — but nothing
   is designed to let them differ, and a check that they match belongs in the deletion path rather
-  than on every read.
+  than on every read. **Since `BR-5`'s widening on 2026-08-31 this is a rule rather than a design
+  preference**: a save in which either write fails changes neither, so the two cannot diverge through
+  a partial save. That closes the only route by which they realistically could.
 - **`bundle_item.position` is dense and contiguous.** It is the selection order, and there is no
   reorder operation, so it is written once and never rewritten. Anything that makes it sparse has
   invented the second ordering mechanism the SRS rules out.
@@ -246,16 +274,29 @@ progress state. Everything else is a read or a delete. Nothing here is scheduled
 
 ## Slots
 
-`01-ux/` — not written below `mode: deep`. Screens are rows 8–10 of `inventory-screen.md`.
-`02-contracts/` — not written. This component owns no endpoint.
-`03-integrations/` — `[guarded]`, and not applicable: no third party.
-`04-components/`, `05-model/`, `06-flows/` — `[deep]` only.
+`01-ux/DESIGN.md` — present. Screens are rows 8–10 of `inventory-screen.md`.
+`02-contracts/contract-inventory.md` — present, though this component owns no endpoint.
+`03-integrations/` — not applicable: no third party.
+`04-components/LC-013-bundle-store.md` and `05-model/data-model.md` — present.
+`06-flows/` — not written. The only flow worth drawing is composition, and § Decision Summary carries
+it in prose.
+
+**Corrected 2026-08-31.** This block claimed `01-ux/` was "not written below `mode: deep`" and put
+`04-components/`, `05-model/` and `06-flows/` at "`[deep]` only" — three of those four exist, and all
+were written while the component was at `deep` on 2026-08-23. Lowering it to `guarded` stopped them
+being **required** and did not delete them.
 
 ## Open Items
 
 - OQ-1 — whether a coding agent can open the relative image paths this component writes. It decides
   whether FR-12 is worth anything. `.control/questions/assumptions.md`.
-- OQ-12 — recomposing in place of editing. `.control/questions/assumptions.md`.
+- ~~OQ-12 — recomposing in place of editing.~~ **Closed 2026-08-31**, answered `no`; it lives in
+  `.control/questions/answered.md` now, and `FR-40` replaced the assumption.
+- **`UC-28` (export a Bundle as a PDF) is deliberately absent from `realizes:`.** There is no
+  exporter design here — no `LC`, no contract, nothing but the one Failure Behaviour row saying it
+  writes outside the Vault. Claiming it would claim a design this document does not contain.
+  `UC-29` **was** added on 2026-08-31, because the save path it needs is designed here.
+  `FR-39`, `FR-40` and `NFR-19` still need a real design pass; a citation fix is not one.
 - OQ-16 — whether a one-Finding Bundle is acceptable as the single-screenshot publish path.
   `.control/questions/assumptions.md`.
 - RISK-5 — the composer becoming three composers. `.control/registry/risks.yaml`.

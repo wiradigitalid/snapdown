@@ -169,3 +169,36 @@ All questions answered. What deleting destroys, the two-state lifecycle that rep
 delete, the naming, the dialogs, the bulk surface, and the failure ordering are all settled above.
 Two of the actions it produced are new promises and moved to
 [Grow the promises this map needs](08-grow-pdf-export-and-bundle-rename-into-scope.md).
+
+## Correction 2026-08-31 — the write ordering this ticket settled contradicts `AD-2`
+
+Found by `wdi-review` while checking whether `BR-5`'s widening had overreached. It had not; this had.
+
+This ticket settled that deletion removes **files before the database row**, *"so a failure stays
+visible and retryable"*. `AD-2` says the opposite, in the spine, and has since G3:
+
+> Any operation that creates or removes a Finding, a Bundle, or a BundleItem MUST create or remove that
+> record's files in the same unit of work, and MUST leave the prior state intact if any part of it
+> fails. A record MUST NOT be committed before its files exist, and files MUST NOT be removed before
+> the record is.
+
+Two things are wrong rather than one. The **order** is reversed. And the ticket was deliberately buying
+a partial state, which the first sentence forbids outright.
+
+**Why `AD-2` picks the other order, which is the part worth understanding rather than just obeying.**
+Both directions can fail halfway, and the two leftover states are not equally bad. Files-first leaves a
+row whose Markdown points at images that are gone — *"a Bundle whose Markdown references an image that
+is gone"*, named in `AD-2`'s **Prevents** as unrecoverable by inspection, because nothing on disk says
+whether the Bundle was meant to go. Row-first leaves image files nothing points at: also named there,
+also unwanted, but a state anything can identify and clean up. `AD-2` takes the recoverable failure.
+
+The retryability this ticket wanted is not lost, it just moves: the Reviewer retries a deletion whose
+**row** is already gone by having the leftover files identified and removed, rather than by seeing a
+half-deleted Bundle still listed.
+
+**Nothing here reopens what this ticket actually decided** — the three named outcomes, the two-state
+lifecycle, `Disassemble` as the honest name, the refusal of a single button that destroys both. Only
+the write ordering changes, and the map now carries the corrected line.
+
+If files-first is still wanted, that **narrows `AD-2`** and a `DEC-` is mandatory — this project makes
+recording optional everywhere except for a decision that contradicts an `AD-N`.

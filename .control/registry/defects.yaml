@@ -514,7 +514,13 @@ defects:
         `BUG-22` and `BUG-23` cover what it refuses;
       - DELETION and UNPUBLISH: there is no Slint caller at all. `bundle_store.delete_bundle` and the
         Publication path are unreachable from the running application, so `FR-14`, `BR-20` and
-        `BR-23` are unmet rather than mishandled. Tracked on `BUG-59`.
+        `BR-23` are unmet rather than mishandled. Tracked on `BUG-88`.
+        POINTER CORRECTED 2026-08-31 by `wdi-review`: this line said `Tracked on BUG-59`, and BUG-59
+        does not track it. That row is `component: agent-access`, its title is the Local API, and its
+        `contradicts:` lists FR-20, FR-21, FR-19, FR-22, CAP-7 and BG-3 - `FR-14` appears in none of
+        them. So three unmet promises, one of them behind the only `critical: yes` use case in
+        `bundle`, were recorded as tracked somewhere that did not track them, from inside a row marked
+        `fixed` where nobody would look. `BUG-88` now holds them.
     status: fixed
   - id: BUG-10
     title: "The MCP bridge can hand an agent an error with an empty message"
@@ -5225,3 +5231,52 @@ defects:
       `cargo test -p snapdown-store --lib image::burner::box_pass_regression_guard`: 3 passed.
       `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` clean.
     status: fixed
+  - id: BUG-88
+    title: Deleting a Bundle is unreachable, so FR-14, BR-20 and BR-23 are unmet
+    found: "2026-08-31"
+    found_by: wdi-review, tracing BR-5's widened all-or-nothing clause to the delete path it constrains
+    component: bundle
+    severity: high
+    contradicts: [FR-14, BR-5, BR-20, BR-23, AD-2, "UC-12", "CAP-5"]
+    root_cause: code
+    evidence: |
+      `BundleStore` has four methods. Counted call sites in `apps/desktop/src/`, the live Slint app:
+
+        create_bundle            1   main.rs:2579
+        list_bundles             1   main.rs:272   - and only to build the filmstrip's filter set
+        delete_bundle            0
+        update_bundle_markdown   0
+
+      The only callers of `delete_bundle` in the tree are in `archive/desktop-tauri/`
+      (`src-tauri/src/commands/bundle.rs:190` and `:253`), the implementation `DEC-007` replaced.
+
+      So a Reviewer running Snapdown cannot delete a Bundle at all. `UC-12` - "I get rid of a review
+      and everything in it" - is the ONLY use case in `bundle` marked `critical: yes`, on the grounds
+      that it removes files irreversibly and may end a Publication. It cannot be reached.
+
+      `crates/snapdown-store/tests/test_bundle_deletion.rs` exercises `delete_bundle` and passes. This
+      is the failure mode AGENTS.md names as this repository's most expensive: a green unit test over a
+      component nothing mounts. Four such components were found in one sweep on 2026-08-23; this is a
+      fifth instance, and the store method is the reachable half rather than the component.
+
+      There is also no file removal wired to it. `crates/snapdown-store/src/` contains exactly ONE
+      `fs::remove_file`, at `vault/mod.rs:152`, a generic blob helper. `delete_bundle` itself runs
+      `DELETE FROM bundle WHERE id = ?1` and nothing else (`sqlite/bundle_store.rs:277`), relying on
+      the `ON DELETE CASCADE` to `bundle_item`. So even when a caller exists, `AD-2`'s "create or
+      remove that record's files in the same unit of work" has nothing implementing the file half.
+    fix: |
+      Wire a deletion path in the Slint app, and give it the file half. The behaviour is already
+      specified and MUST NOT be re-decided here:
+
+      - `AD-2` sets the ordering - the row before its files, prior state intact if any part fails.
+      - `BR-5` (widened 2026-08-31) says nothing changes if any part fails, and the Reviewer is told
+        which file refused.
+      - `BR-23` requires the unpublish first, and `BR-20` forbids reporting a success that did not
+        happen - so an unreachable service means the deletion refuses rather than proceeds.
+      - `.scratch/bundle-library/` holds the surface: which verb sits on which row, and the four
+        confirmation dialogs. `BUG-9` already fixed the `let _ =` swallowing in the archived version;
+        do not reintroduce it.
+
+      Note the ordering trap: the map settled files-first and was corrected against `AD-2` on
+      2026-08-31. Read the map's correction entry before implementing, not the older line.
+    status: open
