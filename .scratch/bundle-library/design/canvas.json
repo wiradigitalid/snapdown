@@ -1,0 +1,100 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 840,
+      "title": "Library — dark, row hovered with menu open"
+    },
+    {
+      "file": "LibraryLight.dc.html",
+      "x": 1400,
+      "y": 0,
+      "w": 1280,
+      "h": 840,
+      "title": "Library — light theme"
+    },
+    {
+      "file": "States.dc.html",
+      "x": 0,
+      "y": 980,
+      "w": 1300,
+      "h": 460,
+      "title": "Empty · Loading · Cannot be read"
+    },
+    {
+      "file": "RowStates.dc.html",
+      "x": 0,
+      "y": 1580,
+      "w": 1000,
+      "h": 700,
+      "title": "Row states — has Findings vs originals discarded"
+    },
+    {
+      "file": "Dialogs.dc.html",
+      "x": 1120,
+      "y": 1580,
+      "w": 1900,
+      "h": 400,
+      "title": "Confirmations — one per outcome"
+    },
+    {
+      "file": "ReclaimSpace.dc.html",
+      "x": 0,
+      "y": 2400,
+      "w": 1280,
+      "h": 560,
+      "title": "Reclaim space — two doors, one room"
+    },
+    {
+      "file": "ReclaimEmpty.dc.html",
+      "x": 0,
+      "y": 3080,
+      "w": 1280,
+      "h": 360,
+      "title": "Reclaim space — nothing to reclaim"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -270,
+      "w": 660,
+      "text": "Ticket 01 — the Library screen.\n\nEvery value is lifted from theme.slint and the design-system guide, not chosen here: 52px header with a 15px accent icon, 26px close, 3px radii, 13px body, 11px/800 uppercase section labels, 10px IBM Plex Mono meta, 32px buttons at 11px/700, 28px menu rows at 210px wide.\n\nThumbnails sit on canvas-ground and are theme-invariant, so they are identical in both themes — the same reason the capture overlay is."
+    },
+    {
+      "id": "row-actions",
+      "x": 1400,
+      "y": -270,
+      "w": 620,
+      "text": "Row actions: two on hover, the rest in the menu (Option B, chosen).\n\nThe row itself opens the Bundle. Copy Markdown and Open file location appear on hover; everything destructive or rare lives in the menu, which the overflow button opens and right-click opens too — the gesture the filmstrip already teaches.\n\nExport PDF and Publish join the menu later without touching the row, which is the thing an all-labelled row could not have absorbed.\n\nThe accepted cost: the two hover icons are invisible until the pointer is on the row."
+    },
+    {
+      "id": "menu-slots",
+      "x": 2100,
+      "y": -270,
+      "w": 560,
+      "text": "Why Publish is marked and Export PDF is not.\n\nExport PDF was grown into MVP scope, so it is an ordinary enabled action and needs no marker.\n\nPublish is the one genuinely blocked — DEC-005 freezes the sharing component until the G2 experience bar is written and met.\n\nCaveat worth deciding before this ships: a greyed row promising \"soon\" is the same shape as the fake 1-6 shortcut badges just removed from the toolbar. Safer to not render Publish at all until it works, and keep this slot only as a note on the canvas."
+    },
+    {
+      "id": "two-states",
+      "x": 0,
+      "y": 1400,
+      "w": 900,
+      "text": "A Bundle has two states, and the schema already allows both: migration v6 deliberately dropped bundle_item's foreign key to finding, so a Bundle survives its source Findings being deleted.\n\nWhile it still holds its Findings, three outcomes are possible, and each gets its own named action - the question is simply what you want to keep:\n\n  Disassemble      Bundle goes, captures stay\n  Discard originals  Bundle stays, captures go\n  Delete           neither survives\n\nOnce the originals are gone only Delete remains, and Disassemble stays visible but disabled with a reason rather than vanishing: a menu that changes shape between rows confuses more than a greyed row that explains itself.\n\nThe most destructive action carries a different button label - 'Delete both' rather than 'Delete' - deliberately. A Reviewer who has deleted several sealed Bundles learns the gesture menu-Delete-Delete; that muscle memory must break at the one moment where the same gesture also destroys captures."
+    },
+    {
+      "id": "reclaim",
+      "x": 1400,
+      "y": 2400,
+      "w": 520,
+      "text": "Reached from the Library header and from Settings' Vault section. Settings is only a door: the destroying happens here, where the Bundles are visible, never behind a number on a settings page.\n\nThe size column is the whole point. A row list cannot tell you which Bundles are worth reclaiming, and that is the input to the decision - so each row carries its own size and the footer carries the running total of what is ticked.\n\nRejected: a single 'Discard all originals' button. One click, everything gone, nothing visible. Also rejected: multi-select on the Library list itself, which gives you the choice without giving you the basis for it.\n\nThe empty state below uses the Library's own empty-state treatment and says which of the two reasons it is: nothing was ever held, or everything has already been discarded. The header readout drops to 0 MB in text-dim rather than disappearing, so the number a Reviewer came looking for is still answered."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

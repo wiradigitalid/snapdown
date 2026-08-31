@@ -1,4 +1,4 @@
-# 08: Grow Export PDF and Bundle rename from non-goals into promises
+# 08: Grow the promises this map needs, from non-goals and gaps
 
 **Type:** task
 **Status:** open
@@ -41,6 +41,41 @@ the Reviewer gets, not that it is typst.
 objection is **already satisfied** by this map's design and should be recorded as such: editing the
 title block in the Review & Update window *does* rewrite the document's heading, so the "a rename
 that does not rewrite the heading is a lie" concern does not apply. Only the scope boundary did.
+
+## Added 2026-08-31 — two more promises, from ticket 02's grilling
+
+Ticket 02 surfaced a Bundle lifecycle nobody had written down, and the owner chose to build it. Two
+of its parts are **new promises** with no `FR-` behind them, so they belong in this same growth:
+
+3. **Discard originals.** A Reviewer can destroy the source Findings behind a Bundle they consider
+   final, reclaiming the disk their originals hold. The Bundle keeps its own burned copies and stays
+   readable; it simply can no longer be disassembled. This is **not** forbidden by `BR-59`, which
+   governs *composing* ("Composing does not remove the Findings it used from the Library") and stays
+   true — a separate, later, explicit act removes them. But destroying captures from the Library is
+   a capability the product does not currently promise at all.
+
+4. **Reclaim space.** The surface that makes (3) usable in bulk: a list of Bundles still holding
+   original captures, each with its size and a running total, reachable from the Library's header
+   and from Settings' Vault section. Needs a screen-registry entry as well as its `FR-`.
+
+**Open for the run to settle, not to guess here:** which `CAP-` (3) and (4) serve. `CAP-4` is
+Bundles and is the nearest, but the act destroys Findings, so it may belong with `finding` or want a
+capability of its own. `wdi-blueprint` territory if the answer is "a new one".
+
+**The determination this ticket was asked for: yes, `wdi-product` intent `update` is required, for
+all four.** Two of them (Export PDF, rename) are *explicit* non-goals and cannot be specced while
+that stands. The other two are simply absent — and a capability that is absent still needs an `FR-`
+before `/to-spec` can rest on it, since `/to-spec` must cite every requirement it uses by id. There
+is no lighter door: `wdi-decision` is the wrong skill (its own routing table sends scope growth to
+`wdi-product`), and `AGENTS.md` forbids stepping over a stated boundary on the grounds that the
+corpus is "an input, not a gate" — that rule governs documents trailing *existing* code, and here
+there is no code at all.
+
+**One wave or several is the run's own call.** A PRD update normally lands several `FR-`s, and these
+four are separable: Export PDF is a greenfield capability with its own effort, rename is one field,
+and (3)+(4) are one storage-lifecycle story. Landing them as separate requirements is expected;
+coupling their *fates* is not — if Export PDF stalls in review, rename and Discard originals must
+still be able to proceed.
 
 ## Afterwards
 

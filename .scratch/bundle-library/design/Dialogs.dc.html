@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans", system-ui, sans-serif; }
+    a { color: #4c8dff; } a:hover { color: #6ba0ff; }
+  </style>
+</helmet>
+
+<div style="width: 1900px; height: 400px; background: #1c1c1f; padding: 24px; box-sizing: border-box; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; align-items: start;">
+
+  <div style="display: flex; flex-direction: column; gap: 12px; min-width: 0;">
+    <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #6b6c70;">Disassemble &mdash; keep the captures</div>
+    <div style="background: #232326; border: 1px solid #3a3a3f; border-radius: 3px; box-shadow: 0 16px 32px rgba(0,0,0,0.45); padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #c9cacd;">Disassemble this Bundle?</div>
+      <div style="font-size: 12px; line-height: 1.6; color: #c9cacd; text-wrap: pretty;">&ldquo;Mobile nav &mdash; drawer overlaps the header&rdquo; and its image copies go. Its 3 Findings become available to assemble again, with their notes and markers intact. This cannot be undone.</div>
+      <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <div style="height: 30px; border-radius: 3px; background: #232326; border: 1px solid #3a3a3f; display: flex; align-items: center; padding: 0 12px;"><div style="font-size: 11px; font-weight: 700; color: #c9cacd;">Keep it</div></div>
+        <div style="height: 30px; border-radius: 3px; background: #4c8dff; box-shadow: 0 0 2px rgba(76,141,255,0.35); display: flex; align-items: center; padding: 0 12px;"><div style="font-size: 11px; font-weight: 700; color: #ffffff;">Disassemble</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px; min-width: 0;">
+    <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #6b6c70;">Discard originals &mdash; keep the Bundle</div>
+    <div style="background: #232326; border: 1px solid #3a3a3f; border-radius: 3px; box-shadow: 0 16px 32px rgba(0,0,0,0.45); padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #c9cacd;">Discard the original captures?</div>
+      <div style="font-size: 12px; line-height: 1.6; color: #c9cacd; text-wrap: pretty;">The 3 original captures behind &ldquo;Mobile nav &mdash; drawer overlaps the header&rdquo; go, with their notes, markers and annotations. This Bundle keeps its own copies and stays readable, but it can no longer be disassembled. This cannot be undone.</div>
+      <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <div style="height: 30px; border-radius: 3px; background: #232326; border: 1px solid #3a3a3f; display: flex; align-items: center; padding: 0 12px;"><div style="font-size: 11px; font-weight: 700; color: #c9cacd;">Keep them</div></div>
+        <div style="height: 30px; border-radius: 3px; background: #4c8dff; box-shadow: 0 0 2px rgba(76,141,255,0.35); display: flex; align-items: center; padding: 0 12px;"><div style="font-size: 11px; font-weight: 700; color: #ffffff;">Discard</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px; min-width: 0;">
+    <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #6b6c70;">Delete &mdash; keep neither</div>
+    <div style="background: #232326; border: 1px solid #3a3a3f; border-radius: 3px; box-shadow: 0 16px 32px rgba(0,0,0,0.45); padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #c9cacd;">Delete this Bundle and its captures?</div>
+      <div style="font-size: 12px; line-height: 1.6; color: #c9cacd; text-wrap: pretty;">&ldquo;Mobile nav &mdash; drawer overlaps the header&rdquo; goes, and so do the 3 original captures behind it, with their notes, markers and annotations. Nothing comes back to the filmstrip. This cannot be undone.</div>
+      <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <div style="height: 30px; border-radius: 3px; background: #232326; border: 1px solid #3a3a3f; display: flex; align-items: center; padding: 0 12px;"><div style="font-size: 11px; font-weight: 700; color: #c9cacd;">Keep it</div></div>
+        <div style="height: 30px; border-radius: 3px; background: #4c8dff; box-shadow: 0 0 2px rgba(76,141,255,0.35); display: flex; align-items: center; padding: 0 12px;"><div style="font-size: 11px; font-weight: 700; color: #ffffff;">Delete both</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px; min-width: 0;">
+    <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #6b6c70;">Delete &mdash; already sealed</div>
+    <div style="background: #232326; border: 1px solid #3a3a3f; border-radius: 3px; box-shadow: 0 16px 32px rgba(0,0,0,0.45); padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #c9cacd;">Delete this Bundle?</div>
+      <div style="font-size: 12px; line-height: 1.6; color: #c9cacd; text-wrap: pretty;">&ldquo;Settings &mdash; vault migration walkthrough&rdquo; and its image copies go. Its original captures were discarded earlier, so nothing comes back. This cannot be undone.</div>
+      <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <div style="height: 30px; border-radius: 3px; background: #232326; border: 1px solid #3a3a3f; display: flex; align-items: center; padding: 0 12px;"><div style="font-size: 11px; font-weight: 700; color: #c9cacd;">Keep it</div></div>
+        <div style="height: 30px; border-radius: 3px; background: #4c8dff; box-shadow: 0 0 2px rgba(76,141,255,0.35); display: flex; align-items: center; padding: 0 12px;"><div style="font-size: 11px; font-weight: 700; color: #ffffff;">Delete</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

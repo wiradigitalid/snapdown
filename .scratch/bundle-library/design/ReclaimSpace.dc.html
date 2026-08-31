@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans", system-ui, sans-serif; }
+    a { color: #4c8dff; } a:hover { color: #6ba0ff; }
+  </style>
+</helmet>
+
+<div style="width: 1280px; height: 560px; background: #1c1c1f; display: flex; flex-direction: column; overflow: hidden;">
+
+  <div style="height: 52px; background: #232326; border-bottom: 1px solid #2a2a2e; display: flex; align-items: center; padding-left: 16px; padding-right: 12px; gap: 10px; flex-shrink: 0;">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#4c8dff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 5.5h11"/><path d="M4 5.5l.8 7.2a1 1 0 001 .8h4.4a1 1 0 001-.8l.8-7.2"/><path d="M6.2 5.5V3.2a.7.7 0 01.7-.7h2.2a.7.7 0 01.7.7v2.3"/></svg>
+      <div style="font-size: 13px; font-weight: 800; color: #f2f2f3;">Reclaim space</div>
+    </div>
+    <div style="flex-grow: 1;"></div>
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #9a9ba0;">373.1 MB reclaimable</div>
+    <div style="width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 3px;">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#9a9ba0" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-height: 0;">
+
+    <div style="display: flex; flex-direction: column; gap: 5px;">
+      <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #c9cacd;">Bundles still holding their original captures</div>
+      <div style="font-size: 10px; line-height: 1.6; color: #9a9ba0;">Discarding a Bundle&rsquo;s originals keeps the Bundle readable and shareable. It can no longer be disassembled.</div>
+    </div>
+
+    <div style="background: #232326; border: 1px solid #3a3a3f; border-radius: 3px; overflow: hidden;">
+
+      <div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid #2a2a2e; background: #2c2c30;">
+        <div style="width: 15px; height: 15px; border-radius: 3px; background: #4c8dff; border: 1px solid #4c8dff; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 4.8l2 2 4-4.6"/></svg>
+        </div>
+        <div style="width: 44px; height: 30px; border-radius: 3px; background: #0f172a; border: 1px solid #3a3a3f; flex-shrink: 0; overflow: hidden; position: relative;">
+          <div style="position: absolute; left: 5px; top: 5px; width: 26px; height: 4px; background: #3a3a3f;"></div>
+          <div style="position: absolute; left: 5px; top: 13px; width: 34px; height: 3px; background: #2a2a2e;"></div>
+          <div style="position: absolute; left: 5px; top: 20px; width: 18px; height: 3px; background: #2a2a2e;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1; min-width: 0;">
+          <div style="font-size: 13px; color: #f2f2f3;">Checkout flow &mdash; payment step regressions</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #9a9ba0;">7 original captures &middot; 2 hours ago</div>
+        </div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #f2f2f3; flex-shrink: 0;">92.4 MB</div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid #2a2a2e;">
+        <div style="width: 15px; height: 15px; border-radius: 3px; background: #232326; border: 1px solid #3a3a3f; flex-shrink: 0;"></div>
+        <div style="width: 44px; height: 30px; border-radius: 3px; background: #0f172a; border: 1px solid #3a3a3f; flex-shrink: 0; overflow: hidden; position: relative;">
+          <div style="position: absolute; left: 5px; top: 5px; width: 20px; height: 4px; background: #3a3a3f;"></div>
+          <div style="position: absolute; left: 5px; top: 13px; width: 34px; height: 3px; background: #2a2a2e;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1; min-width: 0;">
+          <div style="font-size: 13px; color: #f2f2f3;">Mobile nav &mdash; drawer overlaps the header</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #9a9ba0;">3 original captures &middot; yesterday</div>
+        </div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #9a9ba0; flex-shrink: 0;">31.7 MB</div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid #2a2a2e; background: #2c2c30;">
+        <div style="width: 15px; height: 15px; border-radius: 3px; background: #4c8dff; border: 1px solid #4c8dff; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 4.8l2 2 4-4.6"/></svg>
+        </div>
+        <div style="width: 44px; height: 30px; border-radius: 3px; background: #0f172a; border: 1px solid #3a3a3f; flex-shrink: 0; overflow: hidden; position: relative;">
+          <div style="position: absolute; left: 5px; top: 6px; width: 32px; height: 4px; background: #3a3a3f;"></div>
+          <div style="position: absolute; left: 5px; top: 15px; width: 22px; height: 3px; background: #2a2a2e;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1; min-width: 0;">
+          <div style="font-size: 13px; color: #f2f2f3;">Onboarding copy review &mdash; round 2</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #9a9ba0;">12 original captures &middot; 3 days ago</div>
+        </div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #f2f2f3; flex-shrink: 0;">148.6 MB</div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid #2a2a2e;">
+        <div style="width: 15px; height: 15px; border-radius: 3px; background: #232326; border: 1px solid #3a3a3f; flex-shrink: 0;"></div>
+        <div style="width: 44px; height: 30px; border-radius: 3px; background: #0f172a; border: 1px solid #3a3a3f; flex-shrink: 0; overflow: hidden; position: relative;">
+          <div style="position: absolute; left: 5px; top: 5px; width: 24px; height: 4px; background: #3a3a3f;"></div>
+          <div style="position: absolute; left: 5px; top: 13px; width: 30px; height: 3px; background: #2a2a2e;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1; min-width: 0;">
+          <div style="font-size: 13px; color: #f2f2f3;">Dashboard empty states</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #9a9ba0;">2 original captures &middot; 5 days ago</div>
+        </div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #9a9ba0; flex-shrink: 0;">18.9 MB</div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid #2a2a2e; background: #2c2c30;">
+        <div style="width: 15px; height: 15px; border-radius: 3px; background: #4c8dff; border: 1px solid #4c8dff; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 4.8l2 2 4-4.6"/></svg>
+        </div>
+        <div style="width: 44px; height: 30px; border-radius: 3px; background: #0f172a; border: 1px solid #3a3a3f; flex-shrink: 0; overflow: hidden; position: relative;">
+          <div style="position: absolute; left: 5px; top: 7px; width: 30px; height: 4px; background: #3a3a3f;"></div>
+          <div style="position: absolute; left: 5px; top: 16px; width: 20px; height: 3px; background: #2a2a2e;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1; min-width: 0;">
+          <div style="font-size: 13px; color: #f2f2f3;">Settings &mdash; vault migration walkthrough</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #9a9ba0;">5 original captures &middot; last week</div>
+        </div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #f2f2f3; flex-shrink: 0;">54.2 MB</div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px;">
+        <div style="width: 15px; height: 15px; border-radius: 3px; background: #232326; border: 1px solid #3a3a3f; flex-shrink: 0;"></div>
+        <div style="width: 44px; height: 30px; border-radius: 3px; background: #0f172a; border: 1px solid #3a3a3f; flex-shrink: 0; overflow: hidden; position: relative;">
+          <div style="position: absolute; left: 5px; top: 6px; width: 18px; height: 4px; background: #3a3a3f;"></div>
+          <div style="position: absolute; left: 5px; top: 14px; width: 34px; height: 3px; background: #2a2a2e;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1; min-width: 0;">
+          <div style="font-size: 13px; color: #f2f2f3;">Pricing page &mdash; spacing audit</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #9a9ba0;">4 original captures &middot; last week</div>
+        </div>
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #9a9ba0; flex-shrink: 0;">27.3 MB</div>
+      </div>
+
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #c9cacd;">3 of 6 selected &middot; 295.2 MB will be freed</div>
+      <div style="flex-grow: 1;"></div>
+      <div style="height: 32px; border-radius: 3px; background: #232326; border: 1px solid #3a3a3f; display: flex; align-items: center; padding: 0 12px;"><div style="font-size: 11px; font-weight: 700; color: #c9cacd;">Cancel</div></div>
+      <div style="height: 32px; border-radius: 3px; background: #4c8dff; box-shadow: 0 0 2px rgba(76,141,255,0.35); display: flex; align-items: center; padding: 0 12px;"><div style="font-size: 11px; font-weight: 700; color: #ffffff;">Discard originals</div></div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

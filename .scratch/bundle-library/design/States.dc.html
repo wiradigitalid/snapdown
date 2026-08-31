@@ -1,0 +1,82 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans", system-ui, sans-serif; }
+    a { color: #4c8dff; } a:hover { color: #6ba0ff; }
+  </style>
+</helmet>
+
+<div style="width: 1300px; height: 460px; background: #1c1c1f; padding: 24px; box-sizing: border-box; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px;">
+
+  <div style="display: flex; flex-direction: column; gap: 10px; min-width: 0;">
+    <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #c9cacd;">Empty</div>
+    <div style="flex-grow: 1; background: #232326; border: 1px solid #3a3a3f; border-radius: 3px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; box-sizing: border-box;">
+      <svg width="34" height="34" viewBox="0 0 16 16" fill="none" stroke="#3a3a3f" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 2.5h3v11h-3z"/><path d="M6.5 2.5h3v11h-3z"/><path d="M10.8 3.1l2.7.7-2.6 10.3-2.7-.7z"/></svg>
+      <div style="font-size: 13px; color: #f2f2f3; text-align: center;">No Bundles yet</div>
+      <div style="font-size: 10px; line-height: 1.6; color: #9a9ba0; text-align: center; max-width: 240px; text-wrap: pretty;">Tick Findings in the strip and press Assemble. The Bundle you compose lands here.</div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px; min-width: 0;">
+    <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #c9cacd;">Loading</div>
+    <div style="flex-grow: 1; background: #232326; border: 1px solid #3a3a3f; border-radius: 3px; overflow: hidden;">
+      <div style="display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 14px; border-bottom: 1px solid #2a2a2e;">
+        <div style="width: 44px; height: 30px; border-radius: 3px; background: #2c2c30; flex-shrink: 0;"></div>
+        <div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1; min-width: 0;">
+          <div style="height: 9px; width: 72%; border-radius: 2px; background: #2c2c30;"></div>
+          <div style="height: 7px; width: 38%; border-radius: 2px; background: #2a2a2e;"></div>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 14px; border-bottom: 1px solid #2a2a2e;">
+        <div style="width: 44px; height: 30px; border-radius: 3px; background: #2c2c30; flex-shrink: 0;"></div>
+        <div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1; min-width: 0;">
+          <div style="height: 9px; width: 54%; border-radius: 2px; background: #2c2c30;"></div>
+          <div style="height: 7px; width: 30%; border-radius: 2px; background: #2a2a2e;"></div>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 14px; border-bottom: 1px solid #2a2a2e;">
+        <div style="width: 44px; height: 30px; border-radius: 3px; background: #2c2c30; flex-shrink: 0;"></div>
+        <div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1; min-width: 0;">
+          <div style="height: 9px; width: 64%; border-radius: 2px; background: #2c2c30;"></div>
+          <div style="height: 7px; width: 34%; border-radius: 2px; background: #2a2a2e;"></div>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 14px;">
+        <div style="width: 44px; height: 30px; border-radius: 3px; background: #2c2c30; flex-shrink: 0;"></div>
+        <div style="display: flex; flex-direction: column; gap: 6px; flex-grow: 1; min-width: 0;">
+          <div style="height: 9px; width: 46%; border-radius: 2px; background: #2c2c30;"></div>
+          <div style="height: 7px; width: 26%; border-radius: 2px; background: #2a2a2e;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px; min-width: 0;">
+    <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #c9cacd;">Cannot be read</div>
+    <div style="flex-grow: 1; background: #232326; border: 1px solid #3a3a3f; border-radius: 3px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; box-sizing: border-box;">
+      <svg width="30" height="30" viewBox="0 0 16 16" fill="none" stroke="#ef4444" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.6"/><path d="M8 10.9v.1"/></svg>
+      <div style="font-size: 13px; color: #f2f2f3; text-align: center;">The Library could not be read</div>
+      <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; line-height: 1.6; color: #9a9ba0; text-align: center; max-width: 260px; word-break: break-word;">library.db is in use by another process</div>
+      <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+        <div style="height: 32px; border-radius: 3px; background: #4c8dff; box-shadow: 0 0 2px rgba(76,141,255,0.35); display: flex; align-items: center; padding: 0 12px;">
+          <div style="font-size: 11px; font-weight: 700; color: #ffffff;">Try again</div>
+        </div>
+        <div style="height: 32px; border-radius: 3px; background: #232326; border: 1px solid #3a3a3f; display: flex; align-items: center; padding: 0 12px;">
+          <div style="font-size: 11px; font-weight: 700; color: #c9cacd;">Open file location</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -24,6 +24,11 @@ map is a planning artifact, so its output routes to `/to-spec` → `/to-tickets`
 The corpus (`.what/`, `.how/`, `.control/`) is an **input, never a gate** — where a document and the
 code disagree, the code wins and the document is what gets corrected.
 
+**The design lives in two places, both current.** The canvas at
+https://claude.ai/code/artifact/6f798d70-77a0-491e-973b-92e7a2641a2f is what to look at; the
+artboard source in `.scratch/bundle-library/design/` is what to build from, because it carries the
+exact values. Its `README.md` records which running-app component each value was lifted from.
+
 **Skills every session on this map should consult.**
 - `.constitution/project/design-system-guide.md` — mandatory for any UI change, in either window.
 - `grilling` + `domain-modeling` for decision tickets.
@@ -85,6 +90,16 @@ the scope boundary does.
   `Delete`, with `Export PDF` and `Publish` arriving later from their own efforts/stages. A payload
   verb (Copy/Export/Publish) always beats the umbrella word, and an unbacked button repeats the
   mistake of the toolbar's fake 1-6 shortcut badges.
+- **A Bundle has two states, and the verb on its row says which.** While its source Findings still
+  exist: `Disassemble…` (Bundle goes, Findings become assemblable again) and `Discard originals…`
+  (Findings go, Bundle stays and seals). Once the originals are gone: `Delete…` only. There is
+  deliberately **no single button that destroys both** — it is reachable in two steps, and one click
+  is the wrong price for the most destructive act in the product. Migration v6 dropped
+  `bundle_item`'s foreign key to `finding` precisely so the sealed state is legal.
+- **Assembling copies, it never moves.** A Finding's image survives assembly untouched; the Bundle
+  gets a burned copy. What looks like the Finding vanishing is the filmstrip filtering out anything
+  a Bundle holds. This is why deleting a Bundle returns its Findings, and why `Disassemble` is the
+  honest name for that.
 - **A button lives next to the object it acts on.** Ribbon → the active Finding on canvas. Filmstrip
   footer → the ticked selection. Library row → that Bundle.
 - **No local Markdown export.** The Markdown and its images already sit together on disk in the
@@ -110,6 +125,14 @@ the scope boundary does.
   menu the overflow button and right-click both open — matching the filmstrip's existing gesture, and
   leaving room for Export PDF and Publish to join without touching the row. Menu order: Edit ·
   Copy Markdown · Open file location · Export PDF — Publish — Delete. No search or filter.
+- [Decide what deleting a Bundle destroys](issues/02-decide-what-deleting-a-bundle-destroys.md):
+  deleting turned out to be a two-state lifecycle. Assembling **copies**, never moves, so a Bundle's
+  Findings survive it and reappear once the Bundle goes — which makes `Disassemble` the honest name
+  for that act. Three named outcomes while a Bundle still holds its Findings, one per thing worth
+  keeping: `Disassemble` (captures stay), `Discard originals` (Bundle stays), `Delete` (neither).
+  Once sealed, only `Delete` remains. The whole `bundles/<id>/` folder goes,
+  **files before the database row**, so a failure stays visible and retryable. Bulk lives in a
+  `Reclaim space` screen reached from the Library header and from Settings.
 - [Research the PDF render engine](issues/07-research-the-pdf-render-engine.md): `typst` via
   `typst-as-lib`, **in-process** — a sidecar was proposed for panic isolation then withdrawn, since
   the repo sets no `panic = "abort"` (verified) so `catch_unwind` gives the same protection, and
