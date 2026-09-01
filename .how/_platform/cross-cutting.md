@@ -85,11 +85,18 @@ the same Bundle read on the desktop and on the server says the same thing.
 ### Colour, theme, and contrast
 
 **Applies to:** every surface that draws — `desktop-app` and `web-ui`.
-**Enforced by:** a lint rule refusing a colour literal outside the token stylesheet; an automated
-contrast assertion rendering every screen under both `prefers-color-scheme` values and checking every
-text element against its own background; a both-themes render test over every screen.
+**Enforced by:** two Rust guards over the shipped palette — `apps/desktop/tests/test_theme_contrast.rs`
+measures WCAG contrast over every token in both themes, and `apps/desktop/tests/test_capture_interaction.rs`
+refuses a colour literal in the overlay.
 
-Colour has one authority — `web/ui/src/styles/tokens.css` — and every colour is defined for both the
+**Corrected 2026-09-01.** This paragraph named *"a lint rule refusing a colour literal outside the token
+stylesheet"* plus a contrast assertion over `prefers-color-scheme`, and gave the authority as the token
+stylesheet inside `web/ui`. Both halves were browser-shaped and neither reached the product: `DEC-007`
+moved the UI to Slint, which has no `prefers-color-scheme`, and `OQ-27` deleted `web/ui` entirely on
+2026-09-01. The lint had never covered a Slint file, which is how nine colour literals accumulated
+across them undetected until `DEC-009`'s study found them on 2026-08-27.
+
+Colour has one authority — `apps/desktop/ui/theme.slint` — and every colour is defined for both the
 Windows light and the Windows dark theme (AD-10, NFR-16, NFR-17). A component contains no colour
 literal. Meaning colours come in pairs, a background and the foreground proven against it, so the
 pair is checked once rather than at each use.

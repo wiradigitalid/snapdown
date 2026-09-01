@@ -31,30 +31,11 @@ jobs:
       - name: Run Cargo tests
         run: cargo test --workspace
 
-  shared-ui-check:
-    name: Shared UI Check
-    runs-on: windows-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - name: Install dependencies
-        run: npm --prefix web/ui ci
-
-      - name: Shared UI typecheck
-        run: npm --prefix web/ui run typecheck
-
-      - name: Shared UI lint
-        run: npm --prefix web/ui run lint
-
-      - name: Shared UI unit tests
-        run: npm --prefix web/ui run test
-
+  # `shared-ui-check` stood here until 2026-09-01 and is deliberately NOT replaced. It ran
+  # typecheck, lint and vitest over `web/ui`, which was deleted the same day under `OQ-27`: nothing
+  # in the active workspace had consumed `@snapdown/ui` since `DEC-007` moved the desktop app to
+  # Slint, and `apps/web-service` (Go) never did. The job was green over a package no shipped
+  # artifact contained. There is no Node in the active workspace now, so no job takes its place.
   desktop-build:
     name: Desktop Build & Verify
     runs-on: windows-latest

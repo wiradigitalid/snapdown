@@ -48,3 +48,34 @@ specced and `CAP-12` keeps serving a goal it is known to misfit. `OQ-33` owes a 
 to `AGENTS.md`'s composition-check guidance, which currently names a directory that is being deleted and a
 syntax the desktop stopped using at `DEC-007`. **An answered question here is a decision recorded, never a
 change made** - that distinction is what this file is for.
+
+## Corrections to the 2026-09-01 batch, made while working its debts
+
+The six answers above were acted on the same day, and doing the work found three things wrong with how
+they were recorded. The rows themselves MUST NOT be rewritten - they are the archive - so the
+corrections live here.
+
+**`OQ-31`'s answer says "a sixth business goal is owed". The new goal is `BG-8`.** `BG-6` (*the tool
+never becomes the thing being managed*) and `BG-7` (*Snapdown's own surface costs the Reviewer no
+attention*) have both existed since G1, so the phrase was already wrong in the open row it was copied
+from, written 2026-08-31. `BG-8` - *a review is readable by someone who does not have Snapdown* - was
+born in `requirements.yaml` and in the brief on 2026-09-01, and `CAP-12`'s `goal:` moved from `BG-2` to
+it. Ids are allocated from the highest ever used; nothing about the answer changes.
+
+**`OQ-27`'s answer names "the `web-check` CI job". No job has ever had that name.** The job was
+`shared-ui-check` in `.github/workflows/desktop-ci.yml`, and it was one of four rather than one of
+three. The error was copied from `AGENTS.md`, which had carried it uncorrected; both are fixed now, and
+the job is removed along with the package it tested.
+
+**`OQ-23`'s answer reads as though the convention had to be invented. It did not - a working example
+was already in the tree.** `apps/desktop/tests/test_annotation_wiring.rs`, built for `CAP-11` under
+`BUG-72`, opens with *"`CAP-11` is REACHABLE, not merely built"* and asserts exactly what the
+convention now requires. That mattered practically: `codebase-conventions-guide.md` forbids being
+filled before code exists that ratifies it, so the existence of that file is what allowed the
+convention to land there and the guide to rise from `Draft` to `Accepted` with `ratified_by: a06a8f3`,
+rather than sitting as an aspiration in `AGENTS.md`.
+
+**One thing the debts also settled that no row had asked.** `OQ-20`'s split lands on `BG-7`'s own
+wording in the brief, not only on ticket 06: `BG-7` was where the sentence *"the bar is the experience
+of Snagit and of Cobalt Capture"* actually lived, applied to the whole product. The capture half keeps
+that benchmark; the handoff half is measured against `BG-2` and `BG-3`.

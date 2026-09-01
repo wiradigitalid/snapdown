@@ -160,7 +160,13 @@ depend on nothing in the Rust tree except the Markdown and image bytes a publish
   re-ordering, no decoration, no summarising, and not one character of what the composer wrote. That
   substitution is made **by the composer**, which takes the base path as a parameter; a surface MUST
   NOT rewrite a document the composer has already produced. A surface that needs a different shape is
-  asking for a change to the composer.
+  asking for a change to the composer. **This Rule governs the handoff paths an agent reads — the
+  clipboard, MCP, and the published web copy. It does NOT reach an artifact produced for a person to
+  read away from Snapdown**, and `CAP-12`'s PDF export is such an artifact.
+- **Scoped** 2026-09-01 by `DEC-014`, which is where the reasoning, the cost and the reversal trigger
+  live. Binds, Prevents, and every clause governing an agent path are unchanged. Read that decision
+  before treating the exception as an opening: it is bounded by the PDF being composed from the same
+  stored Markdown, and a second authoring path retires it.
 - **Narrowed** 2026-08-31 by `DEC-012`. Binds and Prevents are unchanged; the title and the Rule are
   not. The reasoning, the cost and the alternatives live in that decision.
 - **Condensed** 2026-08-31, prose only, on a `wdi-review` finding. The narrowing had pasted its new
@@ -292,20 +298,19 @@ snapdown/
 | CAP-9 The surface itself | `apps/desktop/ui`, `web/ui/src` | AD-10, AD-11 |
 | CAP-10 Precision guides & auto-detection | `snapdown-capture`, `apps/desktop/ui` | AD-2, AD-10 |
 | CAP-11 Canvas annotations & privacy redactions | `snapdown-capture`, `apps/desktop/ui` | AD-3, AD-4, AD-10 |
-| CAP-12 Export a Bundle as a PDF | undesigned — see `OQ-34` | AD-2, and **`AD-9` unresolved** — `OQ-34` |
+| CAP-12 Export a Bundle as a PDF | undesigned; `bundle` owns the composer | AD-2 · **not** AD-9, per `DEC-014` |
 
 **Two rows added 2026-08-31**, both found missing by `wdi-review`. `CAP-11` had existed since the G2
 re-run of 2026-08-23 and `CAP-12` since 2026-08-31, and this table had neither.
 
-**`CAP-12`'s governance is deliberately left unresolved rather than guessed, and the reason is worth
-reading before anyone specs Export PDF.** `AD-9`'s Rule forbids a surface *re-rendering* a Bundle on
-the way out, in those words. A PDF is a re-rendering by any ordinary reading of the word. Two answers
-are available and they are not equivalent: either a PDF is not a *handoff path* in `AD-9`'s sense — its
-**Prevents** names the harm as *two agents* disagreeing about one review, and the PDF is settled as a
-**human** artifact with `Copy Markdown` as the agent path — or `AD-9` needs narrowing a second time to
-say so. `OQ-34` holds the question. It MUST NOT be answered by writing an `AD-N` into this row, and
-`FR-39` MUST NOT be specced until it is answered, because the answer decides whether the exporter is
-allowed to exist in the shape ticket 07 researched.
+**`CAP-12`'s governance was left unresolved here from 2026-08-31 until 2026-09-01, and `DEC-014`
+settled it.** The question was whether `AD-9` reaches a PDF: its Rule forbids a surface *re-rendering*
+a Bundle on the way out, in those words, and a PDF is a re-rendering by any ordinary reading — while
+its **Prevents** names the harm as *two agents* disagreeing about one review, which a PDF cannot cause.
+The answer is that `AD-9` governs the paths an agent reads and does not reach an artifact made for a
+person. `AD-9` now says so in its own text, which was the condition attached to the answer; the row
+above cites `DEC-014` rather than restating it, and **an `AD-N`'s scope MUST NOT be settled by editing
+this table**. `FR-39` was blocked from being specced while the question stood, and that block is lifted.
 
 ## Deferred
 

@@ -31,6 +31,17 @@ goals:
     measure: A Reviewer who has never seen Snapdown reaches their first handed-over Bundle without
       being told how; every text element meets WCAG AA contrast in both Windows themes; no primary
       surface requires scrolling to discover that a control exists
+  # BG-8 born 2026-09-01, closing OQ-31. CAP-12 (Export PDF) hung off BG-2 and the misfit was recorded
+  # as known: BG-2's measure is a handoff TIME, which cannot report on an exporter, and BG-2 promises
+  # "no file management" while an export exists precisely to produce a file a person manages - so the
+  # capability was serving a goal whose own words it contradicts. Stretching that phrase to admit an
+  # exporter would have weakened a promise the product holds elsewhere. A different audience earns its
+  # own goal. NOT numbered BG-6: that id has been taken since G1, and so has BG-7 - the OQ-31 row said
+  # "a sixth goal" and was already wrong when written, which is recorded in answered.md.
+  - id: BG-8
+    title: A review is readable by someone who does not have Snapdown
+    measure: Zero Findings lost, reordered, or stripped of their image or note between a Bundle's
+      stored Markdown and the document exported from it
 
 capabilities:
   - id: CAP-1
@@ -117,12 +128,10 @@ capabilities:
   # human-only artifact at all is unsettled, and FR-39 MUST NOT be specced before it is.
   - id: CAP-12
     title: Render a composed Bundle as a document a person reads away from Snapdown
-    # BG-2 is the nearest goal and the fit is KNOWN TO BE IMPERFECT. Its measure is "median handoff
-    # time for a five-Finding review under 120 seconds", which does not measure a human-readable
-    # artifact, and an export creates a file to manage where BG-2 promises none. Assigned rather
-    # than invented: birthing a BG- is a G1 act, not G2's. `wdi-problem` may owe BG-2 a measure
-    # amendment, and OQ-31 holds that.
-    goal: BG-2
+    # `goal:` was BG-2 from this capability's birth on 2026-08-31 until 2026-09-01, under a comment
+    # that admitted the fit was KNOWN TO BE IMPERFECT and pointed at OQ-31. The owner answered OQ-31
+    # by birthing BG-8 rather than amending BG-2's measure, and BG-8 is this capability's own goal.
+    goal: BG-8
     component: bundle
     target_release: r3
     prd: capture-to-markdown
@@ -635,8 +644,14 @@ nonfunctional:
       Windows theme and under a change of it while running
     goal: BG-7
     component: settings
-    enforced_by: A both-themes render test over every screen, plus a lint rule refusing a literal
-      colour outside the token file
+    # `enforced_by` read "a lint rule refusing a literal colour outside the token file" until
+    # 2026-09-01. That lint only ever covered `web/ui/src`, which was deleted under OQ-27, and it never
+    # covered the Slint surfaces that are the whole shipped UI - which is how nine colour literals
+    # accumulated across them undetected until DEC-009's study found them on 2026-08-27. The promise in
+    # `title` is unchanged; only the mechanism named beneath it is corrected to the one that exists.
+    enforced_by: Two Rust guards over `apps/desktop/ui/theme.slint`, the palette that actually ships -
+      `test_theme_contrast.rs` measures WCAG contrast over every token in both themes, and
+      `test_capture_interaction.rs` refuses a colour literal in the overlay
   - id: NFR-18
     title: The parameters Auto resolved for a Capture are stored with that Finding
     goal: BG-3

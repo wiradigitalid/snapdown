@@ -166,7 +166,8 @@ shell — opening on Settings — instead of `CaptureOverlay`. No dim, no crossh
 note field, no Finding. `FR-1`, `FR-2`, `UC-1`, `UC-2` unmet.
 
 **`BUG-5` — the Editor never renders a Finding's image.** `MarkerLayer` is exported from
-`web/ui/src/index.ts` and mounted nowhere. `FindingsEditor.tsx` shows metadata, a Note field, and
+`web/ui`'s package index and mounted nowhere (that package was deleted on 2026-09-01 under `OQ-27`;
+this document is a W1–W5 snapshot and is left as history). `FindingsEditor.tsx` shows metadata, a Note field, and
 `{f.markers.length} markers` as *text*. Markers cannot be placed. `AD-1` — Markers and Note lines are
 one sequence, the invariant this product is built on — has **no user interface**. `BG-1` says a note
 is unambiguously attached to the image it describes; the attachment lives in the database and is

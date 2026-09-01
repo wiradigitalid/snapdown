@@ -17,9 +17,16 @@ The complete visual catalog and interactive design system artifact is permanentl
 
 | Source of truth | Path | Holds |
 |---|---|---|
-| Token stylesheet | `web/ui/src/styles/tokens.css` | Every colour, space, radius, type step, elevation, z-index. The **only** place a literal colour may appear |
-| Desktop reset | `apps/desktop/src/styles/tokens.css` | Imports the above; adds the desktop reset and nothing else |
-| Shared UI package | `web/ui/src/` | The base elements the desktop imports as `@snapdown/ui`. Where an element's states actually live |
+| Token file | `apps/desktop/ui/theme.slint` | Every colour, in both themes. The **only** place a literal colour may appear |
+| Surfaces | `apps/desktop/ui/appwindow.slint` | Every screen and every component of the desktop app, composing from the tokens above |
+
+**All three rows this table used to hold were retired on 2026-09-01, and the table is smaller because
+the product is.** They named a token stylesheet and a shared package inside `web/ui`, deleted under
+`OQ-27`, and a desktop reset under `apps/desktop/src/styles/` that `DEC-007` retired when the app left
+React for Slint. Note the shape of the failure rather than the individual paths: this table's whole job
+is to say where the values live, and every row in it was wrong for weeks. Nothing in the tooling
+noticed — `V24` never checks an `apps/` path, because its pattern only matches a handful of top-level
+prefixes and `apps` is not one of them.
 
 **One rule governs this whole document.** A literal colour outside the token stylesheet is a defect,
 not a shortcut.

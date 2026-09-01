@@ -280,8 +280,12 @@ verifies the result, and lands the memlog.
 | Writing or reviewing code | `.constitution/project/codebase-stack-guide.md` · `.constitution/project/codebase-conventions-guide.md` · `.constitution/project/codebase-brownfield-guide.md` |
 | Building or changing any UI, in either window | `.constitution/project/design-system-guide.md` |
 
-All three `.constitution/project/codebase-*-guide.md` start as `status: Draft`. While they are, their contents MAY be read
-as guidance but MUST NOT be used to reject a change.
+The three `.constitution/project/codebase-*-guide.md` were **not** all `Draft`, and this line said they were until
+2026-09-01. Read each file's own frontmatter; as of that date: `codebase-conventions-guide.md` is **Accepted**, filled
+and ratified by `a06a8f3` — it binds. `codebase-stack-guide.md` has been **Accepted** since W1 — it binds too, and its
+§1 and §2 were corrected on 2026-09-01 because they still described the Tauri/React/Node stack `DEC-007` retired, which
+is the worst combination there is: a guide that binds and is wrong. `codebase-brownfield-guide.md` is the only one still
+**Draft**, and while it is, its contents MAY be read as guidance but MUST NOT be used to reject a change.
 
 The two structure maps MUST NOT be installed as `doc_standards` — they are facts, not standards. Nor
 MUST anything in `.constitution/method/why/`; `status: Reference` forbids it. A guide in
@@ -329,17 +333,19 @@ cargo test --workspace
 three `npm --prefix apps/desktop` lines that used to be here fail with `enoent` and always will. They
 were left behind by that decision and cost a session's time before being noticed.
 
-`web/ui` still has one, and nothing in the active workspace builds or tests it: the desktop app no
-longer consumes `@snapdown/ui` and the Go service never did (`OQ-27`). Run it only when changing
-`web/ui` itself:
+`web/ui` had one until 2026-09-01, when `OQ-27` deleted the package: nothing in the active workspace
+had consumed `@snapdown/ui` since `DEC-007` moved the desktop app to Slint, and `apps/web-service`
+(Go) never did. **There is no Node anywhere in the active workspace now.** An `npm` line in an older
+document — `HANDOVER.md`, `codebase-stack-guide.md`, an `RTR-`, a `w*-` spec — is a record of a repo
+that no longer exists, not an instruction.
 
-```bash
-npm --prefix web/ui ci
-npm --prefix web/ui run typecheck && npm --prefix web/ui run lint && npm --prefix web/ui run test
-```
-
-Three CI jobs cover these: `rust-check`, `web-check`, and `web-service`. A green `korpus.yml` is
-**not** proof the code compiles — it validates the corpus, and they answer different questions.
+The workflow is `desktop-ci.yml` and it holds **four** jobs: `rust-check`, `desktop-build`,
+`web-service`, and — until 2026-09-01 — `shared-ui-check`, now removed with the package it tested.
+**This paragraph used to say "three CI jobs: `rust-check`, `web-check`, and `web-service`", and every
+part of that was wrong**: there were four jobs, no job has ever been called `web-check`, and the one
+it meant was `shared-ui-check`. Read the workflow, not this sentence, if the two ever disagree again.
+A green `korpus.yml` is **not** proof the code compiles — it validates the corpus, and they answer
+different questions.
 
 **`cargo build` does NOT build this application.** A Tauri app needs the Tauri CLI; without it the
 release binary requests `devUrl` from `tauri.conf.json` and shows `ERR_CONNECTION_REFUSED` instead of
@@ -368,10 +374,26 @@ mounted nowhere: `CaptureOverlay` (the capture path — `BUG-4`), `MarkerLayer` 
 `BUG-5`), `OrphanReportView` (`BUG-6`), and `EmptyState`. Three requirements — `FR-1`/`FR-2`, `FR-8`,
 `FR-15` — were unmet in a build whose tests all passed, for four waves.
 
-There is no composition test class here yet (`OQ-23`). Until there is, **before closing any story
-that adds a component, grep for `<ComponentName` across `apps/desktop/src` and `web/ui/src`,
-excluding its own file and its tests.** No hit means nobody can reach it. `V12` will not catch this:
-it checks that an `LC` is *registered*, not that it is *reached*.
+**A reachability test is now a standing convention** — `OQ-23`, answered by the owner on 2026-09-01.
+`.constitution/project/codebase-conventions-guide.md` states it and owns it; the short form is that
+every UI component ships with one test asserting something **mounts** it and its callbacks are
+**wired**, not merely that it behaves. `V12` will not catch this: it checks that an `LC` is
+*registered*, not that it is *reached*.
+
+The pattern is not hypothetical — `apps/desktop/tests/test_annotation_wiring.rs` is a working
+example, built for `CAP-11` under `BUG-72`, and it names its own purpose in its first line:
+*"`CAP-11` is REACHABLE, not merely built."* Copy its shape.
+
+**The guidance this paragraph replaced on 2026-09-01 had rotted into uselessness, and the way it
+rotted is the lesson.** It said: *grep for `<ComponentName` across `apps/desktop/src` and
+`web/ui/src`*. That is JSX syntax. `apps/desktop/src` has been **Rust** since `DEC-007`, and
+`web/ui` was deleted under `OQ-27` — so the single guard standing between this repository and its
+signature failure pointed at a syntax the product no longer uses, in one directory that had changed
+language and one that no longer existed. It was written when both facts were true, and nothing
+re-read it when they stopped being true. In Slint the equivalent question is asked of two files at
+once: is the component **instantiated** in `apps/desktop/ui/*.slint`, and is each of its callbacks
+**bound** by an `.on_<callback>(` in `apps/desktop/src/`? Either half missing means nobody can reach
+it.
 
 **A panic in the desktop process takes the whole product with it.** `AD-11` puts the tray, the
 hotkeys, the capture overlay and the Editor in one process, and `DEC-003` accepted that cost in
@@ -389,10 +411,19 @@ worst of them leaves a published Bundle **live on the internet** after the Revie
 reads as deliberate, clippy ignores it at default levels, and no test catches it because every store
 test uses a writable temp directory. Before writing one, ask what invariant the call is holding up.
 
-**Colour lives in exactly one file.** `web/ui/src/styles/tokens.css`, defined for both themes
-(`AD-10`). A lint rule refuses a colour literal anywhere else. The four deliberately theme-invariant
-groups — `--color-marker*`, `--color-overlay-scrim`, `--color-overlay-ring`, `--canvas-checker` —
-are the one exception and they live in that file too, each with a comment saying why.
+**Colour lives in exactly one file, and as of 2026-09-01 that file is `apps/desktop/ui/theme.slint`.**
+Defined for both themes (`AD-10`), with the deliberately theme-invariant group — the overlay scrim,
+the selection ring and the loupe grid — carrying no `is-dark` branch and a comment beside it saying
+why: they sit over a *screenshot*, not over chrome, so a light scrim on a dark capture is invisible.
+
+**This paragraph named the token stylesheet inside `web/ui` until that whole package was deleted
+under `OQ-27`, and it had already been the wrong answer before then.** `theme.slint` is the palette that actually ships
+— `apps/desktop/tests/test_theme_contrast.rs` says so in its own first line — and the lint this
+paragraph invoked only ever covered `web/ui/src`, so the Slint surfaces had no enforcement at all
+until `DEC-009`'s study found nine colour literals across them on 2026-08-27. The enforcement that is
+real today is a pair of Rust tests, not a lint: `test_theme_contrast.rs` measures WCAG contrast over
+every token in both themes, and `test_capture_interaction.rs` refuses a literal in the overlay.
+`NFR-17`'s `enforced_by` was corrected to match on 2026-09-01.
 
 **An image test that asserts a signature and a dimension is a test that a fake header passes.** That
 is not a hypothetical: a 17-byte `PNG` + width + height passed every image assertion in this

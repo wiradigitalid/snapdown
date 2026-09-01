@@ -86,16 +86,23 @@ product_components:
     # required here, and the files already written for them stay on disk.
     risk_accepted: high
     risk_accepted_by: DEC-013
-    risk_note: No money, no personal data, no irreversible action. The worst outcome is a hotkey
-      that does not register, which is visible immediately.
+    risk_note: No money and no personal data. One IRREVERSIBLE action - choosing a different Vault
+      folder moves every stored file on disk (FR-16 with BR-29, "either moves every existing file or
+      moves none"), and a move that completes is not undone by choosing the old folder back when that
+      folder sat on a drive since removed. The everyday worst outcome is milder and is what the
+      component is usually judged on - a hotkey that does not register, which is visible immediately.
     # `risk_accepted` medium -> high on 2026-08-31, owner's instruction. NOT free, and DEC-013 is the
-    # ratification - still `draft`, because only the Product Owner may accept it. Two reasons it is owed
-    # even though the note above denies all five categories: V23 matches keywords against `risk_note` as
-    # prose, so a note that DENIES personal data trips the same marker as one that admits it, and that is
-    # deliberate - the check discloses rather than judges. And the note may understate this component:
-    # FR-16 plus BR-29 ("either moves every existing file or moves none") means choosing a Vault folder
-    # touches every stored file on disk. Whether that is an irreversible action is the owner's call and is
-    # unresolved. Rewording the note to slip past V23 would be gaming the check.
+    # ratification - `applied` since that day. (This comment read "still `draft`" until 2026-09-01, which
+    # was already false when written; the file it points at has carried `status: applied` from the start.)
+    #
+    # The note above was CORRECTED on 2026-09-01, closing OQ-33. It used to deny all five categories -
+    # "No money, no personal data, no irreversible action" - and that third denial was wrong. FR-16 plus
+    # BR-29 moves every stored file on disk, and all-or-nothing guarantees ATOMICITY, not REVERSIBILITY;
+    # the old note conflated the two. DEC-013 is unaffected and stands: `settings` was covered either way,
+    # because V23 matches keywords against `risk_note` as PROSE, so a note that DENIES a category trips the
+    # same marker as one that admits it - the check discloses rather than judges. What was wrong was only
+    # the reason recorded beside the acceptance. Rewording the note to slip past V23 would be gaming the
+    # check, and the correction above deliberately moves in the opposite direction.
     # Was false-and-meaningless while this sat at `catalog`, because catalog skips G4. At `deep` it
     # means something again, and G4 ran for this component for the FIRST time on 2026-08-23.
     g4_passed: true

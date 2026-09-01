@@ -128,8 +128,18 @@ them that way.
   startup behaviour are set once and stay out of the way.
 - **BG-7** — Snapdown's own surface costs the Reviewer no attention. Every screen is legible at a
   glance, every control is answerable without a manual, and no screen asks the Reviewer for a number
-  they have no way to judge. The bar is the experience of Snagit and of Cobalt Capture, on a product
-  that does less than either.
+  they have no way to judge.
+- **BG-8** — a review is readable by someone who does not have Snapdown: the document exported from a
+  Bundle carries every Finding, in the composer's order, with its image and its note intact.
+
+**BG-7's bar is split, and the split is the point.** It used to end *"the bar is the experience of
+Snagit and of Cobalt Capture, on a product that does less than either"*, applied to the whole product.
+That was put to the owner as `OQ-20` on 2026-09-01 and they split it. The **capture** half — the part
+a person operates with their hands — keeps Snagit and Cobalt Capture as its benchmark. The **handoff**
+half is measured against `BG-2` and `BG-3` instead, time and tokens, because its reader is a machine
+and a human-tool benchmark spends effort there on affordances an agent cannot use. What the split buys
+is checkability: *median handoff under 120 seconds* can be verified and *feels as good as Snagit*
+cannot, and `DEC-005` lifts only on a bar that is **met and verified** by its own wording.
 
 BG-6 and BG-7 look adjacent and are not the same goal. BG-6 is about **frequency** — a setting the
 Reviewer touches once. BG-7 is about **cost per encounter** — what that one touch, and every capture

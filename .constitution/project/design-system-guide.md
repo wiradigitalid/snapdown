@@ -78,9 +78,10 @@ chrome. Its scrim, ring, grid and floating chrome are therefore **theme-invarian
 `theme.slint` group 6 with no `is-dark` branch — a light scrim over a dark screenshot is invisible.
 The note panel is a document surface and does follow `bg-card` into light mode.
 
-This is the same reasoning as the four deliberately theme-invariant groups in
-`web/ui/src/styles/tokens.css`, and it is an exception to `NFR-17`'s "defined for both themes"
-wording rather than a violation of its intent.
+It is an exception to `NFR-17`'s *"defined for both themes"* wording rather than a violation of its
+intent. This sentence used to add *"the same reasoning as the four deliberately theme-invariant groups
+in `web/ui`'s token stylesheet"*; that package was deleted on 2026-09-01 under `OQ-27`, so `theme.slint`
+group 6 above is not a parallel case any more — it is the only one there is.
 
 ## What is still open
 

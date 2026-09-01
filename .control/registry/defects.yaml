@@ -3271,10 +3271,11 @@ defects:
       No user has reported it. That is not evidence it does not matter; it is evidence that nobody
       was checking, which is the point of the gate.
     why_undetected: |
-      `NFR-17`'s stated enforcement is a lint plus `contrast.test.ts`, and both cover
-      `web/ui/src/styles/tokens.css`. `web/ui` builds nothing in the active workspace (`OQ-27`), so
-      the file being checked is not the file that ships. `theme.slint` had no check at all until
-      `DEC-009`'s study went looking for one.
+      `NFR-17`'s stated enforcement was a lint plus `contrast.test.ts`, and both covered the token
+      stylesheet inside `web/ui` - a package that built nothing in the active workspace and was
+      deleted outright on 2026-09-01 (`OQ-27`). So the file being checked was not the file that
+      ships. `theme.slint` had no check at all until `DEC-009`'s study went looking for one.
+      NFR-17's `enforced_by` was corrected on 2026-09-01 to name the two Rust guards that exist.
 
       The palette also ASSERTS its own compliance in a comment, which is the most effective way to
       stop anyone verifying it.
@@ -3392,9 +3393,9 @@ defects:
     contradicts: [NFR-17]
     root_cause: code
     evidence: |
-      `NFR-17` puts colour in one file and names a lint plus `contrast.test.ts` as the enforcement.
-      Both cover `web/ui/src/styles/tokens.css`, which builds nothing in the active workspace
-      (`OQ-27`). The Slint files had no equivalent, and held nine:
+      `NFR-17` put colour in one file and named a lint plus `contrast.test.ts` as the enforcement.
+      Both covered the token stylesheet inside `web/ui`, which built nothing in the active workspace
+      and was deleted on 2026-09-01 (`OQ-27`). The Slint files had no equivalent, and held nine:
 
         appwindow.slint      #e81123          the close button's hover red
         appwindow.slint      #ffffff          its glyph
