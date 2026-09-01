@@ -74,7 +74,7 @@ shared concern.
 
 ### Timestamps
 
-**Applies to:** all — `desktop-app`, `mcp-bridge`, `web-api`, `web-ui`.
+**Applies to:** all — `desktop-app`, `mcp-bridge`, `web-api`.
 **Enforced by:** a serialisation test asserting every timestamp field matches RFC 3339 with a `Z`
 offset, run over the Local API responses, the published Markdown, and the publish request body.
 
@@ -84,7 +84,8 @@ the same Bundle read on the desktop and on the server says the same thing.
 
 ### Colour, theme, and contrast
 
-**Applies to:** every surface that draws — `desktop-app` and `web-ui`.
+**Applies to:** every surface that draws — `desktop-app`. (`web-ui` was listed here until
+`DEC-015` withdrew that container; `web-api`'s published page carries no palette of its own.)
 **Enforced by:** two Rust guards over the shipped palette — `apps/desktop/tests/test_theme_contrast.rs`
 measures WCAG contrast over every token in both themes, and `apps/desktop/tests/test_capture_interaction.rs`
 refuses a colour literal in the overlay.

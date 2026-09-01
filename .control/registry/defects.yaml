@@ -419,7 +419,14 @@ defects:
       Withdrawing is the cheaper answer and may be the correct one: Snapdown's reader is a machine.
       Either way it goes through wdi-blueprint intent `platform`, which owns `containers` and the C4.
     related: [BUG-2, OQ-22]
-    blocked_by: DEC-005, which freezes `sharing`.
+    fixed_by: DEC-015, 2026-09-01.
+    blocked_by: |
+      WAS "DEC-005, which freezes `sharing`", and that was a MISQUOTE of the decision - the same
+      misquote AGENTS.md already records as the reason BUG-3 and BUG-10 sat unfixed. DEC-005 says in
+      its own words: "This decision does not forbid a fix. It forbids new work." Withdrawing a
+      registration of something that does not exist is a fix, and it removes a claim rather than
+      adding work. DEC-005's one protection - "nothing built for them is removed" - does not bite,
+      because nothing was built. THIRD instance of one register field misreading one decision.
     stale_reference: |
       OPEN, and the row's own reasoning still holds - but the entry-point file it names above as a
       counter-example never existed, and `web/ui` now consumes nothing at all (`OQ-27`). `DEC-007`
@@ -427,7 +434,13 @@ defects:
       so `web-ui` as a deployable container is not a thing that was left unbuilt, it is a thing the
       architecture no longer has. Withdrawing the container is the cheap and probably correct move,
       and it changes a C4 drawing, so it goes through the architecture skill rather than a patch.
-    status: open
+
+      CLOSED 2026-09-01 by DEC-015, which did exactly that. `web-ui` left `containers`, the C4 L2
+      diagram, element table, arrow table and PC matrix, the structure map's headings, and AD-3's and
+      AD-5's Binds. LC-027 `bundle-reader` was NOT retired: it moved to `web-api`, because the page
+      exists and is rendered there in Go. OQ-22 is deliberately still open - whether that page should
+      become three real screens is a promise, and this defect was about a false claim.
+    status: fixed
   - id: BUG-9
     title: "Bundle composition and deletion swallow every filesystem and unpublish Result"
     found: "2026-08-23"

@@ -30,8 +30,6 @@ graph TB
         WSTORE[("Publication store<br/>SQLite + blob dir")]
     end
 
-    WU["<b>web-ui</b><br/>React + Vite SPA<br/><i>renders one Publication</i>"]
-
     R -->|"hotkey, window, tray"| DA
     LA -->|"MCP over stdio"| MB
     MB -->|"HTTP on 127.0.0.1,<br/>Access Key on every request"| DA
@@ -50,7 +48,6 @@ graph TB
 | `desktop-app` | A single Rust process (`snapdown-desktop`) owning the domain core, the SQLite and Vault adapters, the capture adapter, the Local API, and the publish client, with a native Slint UI (`apps/desktop/ui`) for the Editor and Settings — `DEC-007` moved this off the original Tauri v2 + React + Vite + TypeScript webview, archived for reference at `archive/desktop-tauri` | `built: true`. The only writer in the whole system. Holds five of the five Product Components, so it is the one container with an L3. **One process, two personas** — the tray (**Snapdown**) and the workspace window (**Snapdown Editor**) — and exactly one executable, `Snapdown.exe`, per AD-11 and `DEC-003` |
 | `mcp-bridge` | Rust command-line executable speaking the Model Context Protocol over stdio to an agent, and HTTP to the Local API | `built: true`. Stateless by design — it holds no Library data and no Access Key between runs, which is what makes revocation immediate (AD-5) |
 | `web-api` | Go service, `net/http` with `chi`, embedded SQLite and a blob directory, deployed as one binary with one configuration file | `built: true`. Serves Publications and nothing else. Never reads the Library |
-| `web-ui` | React + Vite single-page application, built to static assets and served by `web-api` | `built: true`. Runs in the reader's browser, which is its own process — that is why it is a container and not "static assets". It renders one Publication and calls nothing but `web-api` |
 | Vault folder + `library.db` | The Reviewer's chosen folder of image and Markdown files, plus the SQLite file holding metadata | **Not a container.** Embedded SQLite and a filesystem are storage inside `desktop-app`'s own process, with no runtime anyone deploys. Their invariants are AD-2 and AD-4 |
 | Publication store | `web-api`'s SQLite file and blob directory | **Not a container**, for the same reason. NFR-14 keeps the whole of it inside one directory |
 
@@ -66,7 +63,6 @@ Windows 11 is the platform, not a container, and appears at L1.
 | `desktop-app` | Vault + `library.db` | Read and write Findings, Notes, Markers, Bundles, Publications, Settings, and their files | Filesystem and embedded SQLite, in the same process |
 | `desktop-app` | `web-api` | Publish a confirmed Bundle, and remove it on unpublish | HTTPS with a publish credential |
 | Remote coding agent | `web-api` | Fetch a published Bundle as raw Markdown, and the images it references | HTTPS GET |
-| `web-ui` | `web-api` | Fetch the same Publication to render it for a person | HTTPS GET |
 | `web-api` | Publication store | Read and write published Markdown, images, and slug records | Filesystem and embedded SQLite, in the same process |
 
 ## Product Components per container
@@ -78,10 +74,18 @@ Rendering of each Product Component's `containers:` in `components.yaml`.
 | `desktop-app` | `finding`, `bundle`, `settings`, `agent-access`, `sharing` |
 | `mcp-bridge` | `agent-access` |
 | `web-api` | `sharing` |
-| `web-ui` | `sharing` |
 
-`desktop-app` holds more than one Product Component, so `c4-l3-desktop-app.md` exists. The other
-three hold one each, and the matrix already places them.
+`desktop-app` holds more than one Product Component, so `c4-l3-desktop-app.md` exists. The other two
+hold one each, and the matrix already places them.
+
+**A fourth container, `web-ui`, was drawn on this diagram, listed in the element table, given an HTTPS
+arrow to `web-api`, and mapped to `sharing` — until 2026-09-01, when `DEC-015` withdrew it.** It never
+existed: no such application was written, and `web-api` serves no static assets to deliver one with.
+Its element row argued explicitly that it *is* a container rather than static assets, because it runs
+in the reader's browser as its own process. **That argument was sound and would be correct again the
+day such a client exists** — it is recorded here because deleting the row deletes the reasoning with
+it. The published Bundle page is rendered by `web-api` itself, in Go, and `LC-027 bundle-reader` moved
+there rather than being retired.
 
 ## What is deliberately not shown
 

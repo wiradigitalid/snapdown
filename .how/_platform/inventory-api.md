@@ -35,7 +35,7 @@ Three surfaces, one list. Not one of them accepts a write from outside the deskt
 | 6 | TOOL | `mcp:read_bundle` | `agent-access` | MCP tool over row 3. Returns the Markdown as text | draft |
 | 7 | TOOL | `mcp:read_bundle_image` | `agent-access` | MCP tool over row 4. Returns the image as an MCP image content block | draft |
 | 8 | TOOL | `mcp:set_access_key` | `agent-access` | Accepts the Access Key the Reviewer pasted, for the lifetime of this bridge process only. The bridge persists nothing (AD-5) | draft |
-| 9 | GET | `/b/{slug}` | `sharing` | A Publication. Raw Markdown when the client asks for `text/markdown` or `text/plain`; the `web-ui` document when a browser asks for HTML. Same bytes of Markdown either way | draft |
+| 9 | GET | `/b/{slug}` | `sharing` | A Publication. Raw Markdown when the client asks for `text/markdown` or `text/plain`; an HTML document `web-api` renders itself when a browser asks for HTML (`DEC-015`). Same bytes of Markdown either way | draft |
 | 10 | GET | `/b/{slug}/raw.md` | `sharing` | The same Markdown, unambiguously, for a client that will not negotiate content types | draft |
 | 11 | GET | `/b/{slug}/images/{filename}` | `sharing` | One image of that Publication. Resolves relative to row 9's document, which is what makes the Markdown's relative paths work | draft |
 | 12 | PUT | `/publish/{slug}` | `sharing` | Create or replace one Publication: its Markdown and its images, in one request that either completes or leaves nothing (FR-23). Requires the publish credential | draft |

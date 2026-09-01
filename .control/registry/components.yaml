@@ -136,7 +136,7 @@ product_components:
       back again.
     caps: [CAP-8]
     owns: [Publication]
-    containers: [desktop-app, web-api, web-ui]
+    containers: [desktop-app, web-api]
     # `mode` was an explicit `guarded`, removed when the global became `guarded`, written back as an
     # explicit `guarded` when the global moved to `outline`. Depth unchanged throughout.
     mode: guarded
@@ -177,11 +177,19 @@ containers:
     technology: Go — net/http with chi, embedded SQLite, a blob directory
     built: true
     runs: A single binary on a host the Reviewer controls
-  - id: web-ui
-    title: Published Bundle Reader
-    technology: React + Vite single-page application, served as static assets by web-api
-    built: true
-    runs: The browser of whoever opens a Publication URL
+  # A FOURTH container, `web-ui`, stood here until 2026-09-01 and is withdrawn by DEC-015, closing
+  # BUG-8. It read "Published Bundle Reader / React + Vite single-page application, served as static
+  # assets by web-api / built: true", and no part of that was ever true: no such application was
+  # written, web-api serves no static assets (no FileServer, no embed, no http.Dir anywhere in it),
+  # and DEC-007 removed React from the product entirely. The published Bundle page is server-rendered
+  # HTML built in Go, so LC-027 `bundle-reader` moved to `web-api` rather than being retired - the
+  # reader was never missing, it was in the wrong language in this file. `built: false` was rejected:
+  # it means we deploy someone else's implementation, and nobody deploys this one.
+  #
+  # This does NOT answer OQ-22 (is a bare <pre> sufficient, or are three real screens wanted). If a
+  # browser client is ever built, a container is born for it then, and it MUST be named something that
+  # cannot be confused with a package path - the collision between `web-ui` the container and `web/ui`
+  # the package is what hid BUG-8 for nine days.
 
 # LC are born by the skill that draws them — wdi-component intent `design`, or wdi-ux for a screen.
 # Registered here for every component at mode guarded or deep, checked at wave close by V12.
@@ -373,7 +381,7 @@ logical_components:
     component: agent-access
     area: editor-ui
     depends_on: [LC-016]
-  # --- sharing · desktop-app + web-api + web-ui ------------------------------------
+  # --- sharing · desktop-app + web-api ---------------------------------------------
   - id: LC-020
     name: publish-client
     lc_type: gateway
@@ -412,7 +420,10 @@ logical_components:
   - id: LC-027
     name: bundle-reader
     lc_type: ui-screen
-    container: web-ui
+    # `container` was `web-ui` until 2026-09-01. DEC-015 moved it to the container that actually
+    # renders the page: web-api builds the HTML inline and serves it as text/html. Still `ui-screen`
+    # - it is a screen a person looks at; what changed is that it is drawn on the server.
+    container: web-api
     component: sharing
     area: web-service
     depends_on: [LC-023]

@@ -12,8 +12,11 @@ verified: ""
 # Inventory — screens
 
 Two front ends. Rows 1–13 are the desktop UI inside `desktop-app` — a React webview until `DEC-007`,
-native Slint since; rows 14–15 are `web-ui` in the reader's browser, unaffected by that decision. A
-desktop surface that is a window rather than a route has `—` for its route.
+native Slint since. Rows 14–15 were `web-ui` in the reader's browser; `DEC-015` withdrew that
+container on 2026-09-01, and those two rows now describe screens that would live in `web-api` if they
+were ever built. **They are still `BUG-2` and are deliberately left standing** — withdrawing them is
+`OQ-22`'s answer, not `DEC-015`'s, and that question is still the owner's. A desktop surface that is a
+window rather than a route has `—` for its route.
 
 `No` is stable. A new row takes the next number; a removed one keeps its number with
 `status: removed`.
@@ -35,8 +38,10 @@ each of them as *"planned but not read in code"*, which is accurate: there is no
 `screens/settings-view.slint`, `screens/orphan-report-view.slint`, `screens/agent-access-view.slint`,
 `components/confirm-dialog.slint` and `components/publish-dialog.slint`. None exists. The shipped
 desktop UI is one file — `apps/desktop/ui/appwindow.slint` — so the row-per-file structure this
-inventory assumes was never built. Two `web-ui` rows are absent for the same reason
-(`PublishedBundleReader.tsx`, `PublicationNotFound.tsx`).
+inventory assumes was never built. Rows 14 and 15 are absent for a different reason and it is worth
+keeping the two apart: the desktop screens exist and are simply not in the files the plan expects,
+while `PublishedBundleReader.tsx` and `PublicationNotFound.tsx` were never written at all — and after
+`DEC-015` there is no browser container for a `.tsx` to be deployed into.
 
 **What this does NOT mean.** It is not evidence that the screens are unreachable. The Capture Overlay,
 the Findings list, the Bundle list, the compose modal and Settings all exist and run; they live inside

@@ -40,7 +40,7 @@ the outside:
 | --- | --- | --- |
 | Domain core | `crates/snapdown-core` | Entities, invariants, the composition rules. No I/O, no OS calls |
 | Ports | `crates/snapdown-core/ports` | Traits the core calls out through: capture, blob store, metadata store, clock, publisher |
-| Adapters | `crates/snapdown-*`, `apps/*` | Screen capture, SQLite, the Vault filesystem, the Local API, the MCP bridge, the publish client, the Slint desktop UI, the React web-ui |
+| Adapters | `crates/snapdown-*`, `apps/*` | Screen capture, SQLite, the Vault filesystem, the Local API, the MCP bridge, the publish client, the Slint desktop UI |
 
 The rule the paradigm buys: **a promise is implemented once, in the core, and every surface is a
 translation of it.** Three handoff paths existing is a fact about adapters, not about the domain.
@@ -59,14 +59,15 @@ graph TD
     CORE --> CAP["Screen capture adapter"]
     BRIDGE["MCP Bridge<br/>(separate process)"] --> API
     PUB -->|"HTTPS, confirmed act only"| WEB["web-api (Go)"]
-    WEBUI["web-ui (browser)"] --> WEB
     CORE -.->|"never"| UI
     CORE -.->|"never"| API
 ```
 
 Dependency direction is one-way into the core. No adapter is imported by another adapter, and the
-core imports none of them. `web-api` and `web-ui` are a separate program in a separate language and
-depend on nothing in the Rust tree except the Markdown and image bytes a publish hands them.
+core imports none of them. `web-api` is a separate program in a separate language and depends on
+nothing in the Rust tree except the Markdown and image bytes a publish hands it. A `web-ui` node stood
+beside it in the diagram above until 2026-09-01; `DEC-015` withdrew that container, and the page a
+person opens is rendered by `web-api` itself.
 
 ### AD-1 — Markers and Note lines are one sequence, not two
 
@@ -92,7 +93,13 @@ depend on nothing in the Rust tree except the Markdown and image bytes a publish
 
 ### AD-3 — Marker coordinates are normalised to the image, never in pixels
 
-- **Binds:** `finding`, `bundle`, `sharing`, and the `web-ui` container that renders them.
+- **Binds:** `finding`, `bundle`, `sharing`.
+- **Shortened** 2026-09-01 by `DEC-015`. Binds read *"…and the `web-ui` container that renders them"*
+  until that container was withdrawn. It is NOT replaced by `web-api`, and the reason matters more
+  than the edit: this invariant governs anything that **draws a Marker**, and the withdrawn clause
+  named the browser client because such a client would have drawn Markers itself. `web-api` draws
+  nothing — Markers are burned into the image at compose time (`AD-4`, `FR-8`) and it serves the
+  resulting bytes. Naming it here would bind a container the Rule cannot reach.
 - **Prevents:** every Marker on every Finding sliding off its target the first time the Quality
   Budget changes, or when a Bundle image is rendered at a different size than it was authored at.
 - **Rule:** A Marker's position MUST be stored as a fraction of the image's width and height, in the
@@ -112,13 +119,18 @@ depend on nothing in the Rust tree except the Markdown and image bytes a publish
 
 ### AD-5 — Every surface outside the desktop process is read-only
 
-- **Binds:** `agent-access`, `sharing`, and the `mcp-bridge`, `web-api`, `web-ui` containers.
+- **Binds:** `agent-access`, `sharing`, and the `mcp-bridge` and `web-api` containers.
 - **Prevents:** an agent holding an Access Key, or anyone holding a Publication URL, changing or
   deleting a review — on a machine where the Reviewer's judgement is the only thing of value.
-- **Rule:** The Local API, the MCP Bridge, `web-api`, and `web-ui` MUST expose no operation that
+- **Rule:** The Local API, the MCP Bridge, and `web-api` MUST expose no operation that
   creates, changes, or deletes anything in the Library. Write authority lives in the desktop process
   and reaches it only from the Reviewer's own actions. A new route or tool on any of those surfaces
   that is not a read is a violation, not a feature.
+- **Narrowed in scope** 2026-09-01 by `DEC-015`, which withdrew the `web-ui` container: it left this
+  Binds list and this Rule, and `AD-3`'s Binds with it. Prevents is unchanged and the invariant is
+  not weakened — `web-api` is the process that actually serves the published page and it is still
+  bound. But the net is one name shorter, and **if a browser client is ever built it MUST be added
+  back to both.** Nothing will remind anyone.
 
 ### AD-6 — Nothing leaves the machine except a confirmed publish of a named Bundle
 
@@ -215,7 +227,6 @@ depend on nothing in the Rust tree except the Markdown and image bytes a publish
 | Naming — entities | The glossary's nouns, verbatim, in `PascalCase`: `Finding`, `Note`, `Marker`, `Bundle`, `BundleItem`, `Publication`, `AccessKey`, `Setting` |
 | Naming — Rust | `snake_case` items, `PascalCase` types, one crate per adapter named `snapdown-<adapter>` |
 | Naming — Go | Standard Go style; package per concern, no `util` package |
-| Naming — TypeScript (`web-ui` only) | `camelCase` values, `PascalCase` components and types; one file per component |
 | Naming — Slint (`apps/desktop/ui`) | `kebab-case` file names, `PascalCase` component names, `Sd`-prefixed where the component is this product's own rather than a Slint builtin |
 | Naming — database | `snake_case` tables and columns, singular table names matching the entity: `finding`, `note`, `marker`, `bundle`, `bundle_item`, `publication`, `setting` |
 | Ids | UUIDv7 as a lowercase hyphenated string, generated by the writer. Sortable by creation, opaque to the reader |
@@ -225,6 +236,11 @@ depend on nothing in the Rust tree except the Markdown and image bytes a publish
 | Config | One TOML file per program, plus environment variables that override it. No config in code |
 | Secrets | The Access Key and the publish credential are held in the OS credential store on the desktop and in the environment on the server. Neither is written to a config file, a log, or this repository |
 | Logging | Structured, one event per line, no Finding, Note, or Bundle content in any field |
+
+A **TypeScript** row stood in this table until 2026-09-01, scoped to `web-ui`. There is no TypeScript
+left in the active workspace: `DEC-007` took it out of the desktop app, `OQ-27` deleted `web/ui`, and
+`DEC-015` withdrew the container the row was scoped to. The archived Tauri implementation still holds
+`.tsx` files and is not governed by this table.
 
 ## Stack
 
