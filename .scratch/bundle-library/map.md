@@ -218,14 +218,29 @@ the scope boundary does.
   measured from the PDF's own placement matrices: clamp to 85% text height above aspect 1.25, slice
   across pages above aspect 3 with the image embedded once — both thresholds still need calibrating
   against real screenshots.
+- [Write and verify the G2 experience bar](issues/06-write-and-verify-the-g2-experience-bar.md):
+  **the bar is not met, so `DEC-005` does not lift and Publish stays unspecified.** The ticket's own
+  first bullet was stale — `wdi-ux` ran on 2026-08-23 and G2 sharpened `BG-7` into `FR-27`, `FR-28`,
+  `FR-29`, `NFR-16` and `NFR-17` the same day `DEC-005` said the bar did not exist. What was missing
+  was the verdict, now at `.control/reports/ASSESS-EXPERIENCE-BAR-2026-09-01.md`: four of six
+  checkable items fail, and a seventh has never been observed. The decisive one is `BUG-54` — six
+  token pairings below WCAG AA, including every primary button label in dark mode — and the trap
+  worth carrying is that **`test_theme_contrast.rs` is green while `NFR-16` is unmet**, because it is
+  a ratchet over known failures rather than a pass mark. **The dependency runs opposite to what the
+  ticket assumed:** the Library is not blocked by the bar, the bar is blocked by the Library, since
+  `FR-28`'s Bundles surface is one of the four items that fail. Landed: `BUG-89` (the Editor window
+  titles itself `Snapdown`, not `Snapdown Editor` — a regression `DEC-007`'s rewrite dropped in
+  silence), plus `BUG-57` and `BUG-61` re-counted against the tree after going stale.
 
 ## Not yet specified
 
-- **Publish / cloud.** In scope for this map's destination, but its questions are not sharp yet and
-  `DEC-005` forbids new FR/UC/UX for the `sharing` component in the meantime. The gate is
-  [Write and verify the G2 experience bar](issues/06-write-and-verify-the-g2-experience-bar.md):
-  `DEC-005` lifts *by its own terms* once that bar is met and verified, with no supersession needed.
-  Once it lifts, this patch graduates into its own tickets — publish/unpublish lifecycle, slug
+- **Publish / cloud.** In scope for this map's destination, and **still frozen.** `DEC-005` forbids
+  new FR/UC/UX for the `sharing` component, it lifts *by its own terms* once the G2 experience bar is
+  met and verified, and ticket 06 assessed that bar on 2026-09-01 and found it **not met** — so the
+  freeze stands and nothing here graduates yet. Do not re-litigate the freeze; the route out is the
+  four failing items in `.control/reports/ASSESS-EXPERIENCE-BAR-2026-09-01.md`, of which this map owns
+  exactly one (the Library, which is `FR-28`'s missing Bundles surface). When it does lift, this patch
+  graduates into its own tickets — publish/unpublish lifecycle, slug
   handling, credential storage, the `apps/web-service` (Go) side, and what a Reviewer sees when a
   published Bundle is edited afterwards.
 - **Export PDF.** In scope. The engine question is sharp and now sits in

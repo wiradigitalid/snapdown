@@ -11,9 +11,14 @@
 //!   instance - there is no assertion. An earlier draft asserted 1.5:1 for `border-strong` on
 //!   `bg-card`, reported a failure at 1.39, and the failure was in the invented bar rather than in
 //!   the palette. A gate that reports noise gets ignored, and then it protects nothing;
-//! - it does not lower a real bar to reach green. Four pairings fail AA today. They are listed as
+//! - it does not lower a real bar to reach green. SIX pairings fail AA today. They are listed as
 //!   EXCEPTIONS with their measured ratio and the defect that owns them, so this file passes now,
 //!   fails if any of them gets worse, and fails when a defect is closed without updating it.
+//!
+//! This line said "Four" until 2026-09-01 and `EXCEPTIONS` has held six entries since the day it was
+//! written - the count came from an earlier draft and nothing re-read it. A green run here is
+//! therefore NOT evidence that `NFR-16` is met; it is evidence that six known failures have not got
+//! worse. `BUG-54` owns all six.
 
 use std::collections::HashMap;
 use std::fs;

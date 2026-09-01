@@ -3483,6 +3483,21 @@ defects:
 
       Until they exist, the honest interim is to disable the buttons or say "not built yet" on screen
       rather than accept the click. That is a product decision and it is left to the owner.
+    note: |
+      PARTLY STALE, corrected 2026-09-01 during the experience-bar assessment. It is now TWO buttons,
+      not three: `settings-clicked` was wired to a real Settings screen (`main.rs:4860` opens
+      `SdSettings`, 1154 lines, four tabs) and `KNOWN_STUBS` in
+      `apps/desktop/tests/test_ui_callbacks_reach_rust.rs` now holds only `library-clicked` and
+      `bundles-drawer-clicked`. The ratchet did its job - a stub that starts doing real work must
+      leave the list, and that test fails if it does not - so the CODE was never wrong here. This ROW
+      was, for as long as nobody re-read it, which is the standing hazard AGENTS.md names.
+
+      The title is left as written rather than renumbered: a defect row is a claim about code at a
+      moment, and rewriting the moment loses what was found. Read this note, not the title.
+
+      Also corrected: the evidence says "a Tauri release binary on Windows has no console". `DEC-007`
+      retired Tauri. The sentence is still true of the Slint release binary for the same reason, and
+      the reason is what mattered.
     status: open
 
   - id: BUG-58
@@ -3709,6 +3724,36 @@ defects:
         that can be made but not opened is half a feature;
       - Settings (`UC-13` to `UC-16`) is what stops "edit library.db by hand" being the answer;
       - publish (`FR-23`, `FR-25`) stays behind `DEC-005` until the owner lifts it.
+    note: |
+      RE-COUNTED 2026-09-01 during the experience-bar assessment, against `apps/desktop/src/` and
+      `apps/desktop/ui/` as they stand. Nine surfaces were listed; FOUR have since landed, and the
+      row read `high` on all nine until this note.
+
+      Landed since 2026-08-27:
+        /bundles/compose      the Assemble & Review modal - already noted in the list above
+        /findings/delete      `delete_finding` has 4 call sites in `main.rs`; a confirmation is
+                              wired through `delete-finding-confirmed`. Reachable ONLY from the
+                              context menu, which is `BUG-77` and stays open
+        /settings             `on_settings_clicked` -> `SdSettings`. Vault path, Quality Budget and
+                              hotkey rebinding are all present, so "every setting can only be
+                              changed by editing library.db by hand" is no longer true
+        /settings/agent-access  present as an `Agent Bridge` TAB inside Settings, read-only, showing
+                              a status string. That satisfies `DEC-005`'s freeze (it shows state and
+                              gains no behaviour) but NOT `FR-28`, which promises a primary surface
+
+      Still absent, verified by counting call sites in `apps/desktop/src/`:
+        /findings             partial, as originally written - the filmstrip shows, nothing manages
+        /findings/orphans     no Slint file, and no `orphan` string anywhere in `apps/desktop/ui/`
+        /bundles              `BundleStore::list_bundles` has 1 call site and it only builds the
+                              filmstrip's filter set; `get_bundle` and `update_bundle_markdown` have
+                              none
+        /bundles/:id          same
+        /bundles/:id/publish  behind `DEC-005`
+      Store operations still with no caller: `reorder_markers`, `update_finding_image`, `get_bundle`,
+      `update_bundle_markdown`, `delete_bundle` (`BUG-88` owns the last one).
+
+      `/bundles` and `/bundles/:id` are the two that `.scratch/bundle-library/` is designing, so they
+      have an owner and are not loose. `/findings/orphans` does not.
     status: open
 
   - id: BUG-62
@@ -5293,4 +5338,65 @@ defects:
 
       Note the ordering trap: the map settled files-first and was corrected against `AD-2` on
       2026-08-31. Read the map's correction entry before implementing, not the older line.
+    status: open
+  - id: BUG-89
+    title: "The Editor window does not name its persona, and two of FR-27's three names are unasserted"
+    found: "2026-09-01"
+    found_by: the experience-bar assessment for DEC-005, ticket 06 of the Bundle Library map
+    component: settings
+    severity: medium
+    contradicts: [FR-27, DEC-003]
+    root_cause: code
+    evidence: |
+      `FR-27`, verbatim: "the tray and the installed executable are Snapdown, and the workspace
+      window titles itself Snapdown Editor."
+
+      The shipped window says `Snapdown` in both places it says a name:
+
+        apps/desktop/ui/appwindow.slint:1132   title: "Snapdown";
+        apps/desktop/ui/appwindow.slint:1630   text: "Snapdown";   <-- the custom titlebar's label,
+                                               which is what a Reviewer actually reads, because the
+                                               window is `no-frame: true` and draws its own chrome
+
+      The tray tooltip (`apps/desktop/src/tray.rs:54`) and the executable are `Snapdown`, and both are
+      correct. So all three agree - and that IS the failure. `FR-27` asks the Editor to be
+      DISTINGUISHABLE from the tray persona, and a Reviewer looking at the window cannot say which
+      part of the product they are in.
+
+      This is a REGRESSION and the register already holds the proof. `BUG-11`'s note records the one
+      thing verified from the Tauri build before it was retired: "the window title read 'Snapdown
+      Editor'. W6-S2's persona naming (DEC-003, FR-27) is correct in a real running window." `DEC-007`
+      rewrote the front end in Slint and the name did not travel.
+    impact: |
+      `FR-27` exists because the owner, on their first sustained look at r2, could not name the
+      application they had opened. Half of that requirement - the half about which persona is on
+      screen - is not delivered, and it is the half a Reviewer meets every time they open the Editor.
+
+      Small in code, and it is one of the two cheapest items standing between the product and
+      `DEC-005`'s experience bar. See `.control/reports/ASSESS-EXPERIENCE-BAR-2026-09-01.md`, item B1.
+    why_undetected: |
+      `FR-27`'s own consequence promises "A test asserts the three against one source." ONE of the
+      three is asserted: `apps/desktop/tests/test_executable_identity.rs` reads the crate's `[[bin]]`
+      table and requires exactly one binary named `Snapdown`. Nothing asserts the tray tooltip and
+      nothing asserts either window label, so a whole front-end rewrite could drop one of them in
+      silence - and did.
+
+      The gap is the same shape as `NFR-17`'s was before `DEC-009`: a requirement naming an
+      enforcement that covers a third of what it claims to cover.
+    fix: |
+      Two string literals and one test, and the test is the part that matters:
+
+      - `appwindow.slint:1132` and `:1630` become `Snapdown Editor`. The capture overlay's own title
+        (`:99`, "Snapdown Capture Overlay") is correct already and is not touched - it belongs to the
+        tray persona and names itself as an overlay, not as the Editor;
+      - extend `test_executable_identity.rs` to assert all three of `FR-27`'s names against one
+        source, which is what the requirement already promised. Assert the SHIPPED strings, not a
+        copy of them: AGENTS.md's "a test that asserts a literal is a test that cannot fail" applies
+        directly - read `appwindow.slint` and `tray.rs` and compare, do not restate the names in the
+        test.
+
+      Do NOT fold this into a wider naming pass. The executable half is already covered and fixed -
+      `BUG-13` corrected the CI guard to count DESKTOP executables rather than every `.exe`, and
+      `test_executable_identity.rs` keeps the second-binary confusion from returning. What is missing
+      is only the window's own two labels and the assertions over the other two names.
     status: open
