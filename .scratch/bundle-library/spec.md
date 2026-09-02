@@ -220,8 +220,14 @@ the last-edited time differs from the composed time. Two hover actions — Copy 
 location — and an overflow button; right-click on the row opens the same menu, matching the gesture
 the filmstrip already teaches. Clicking the row opens Review & Update.
 
-**Menu order and the two states.** Edit · Copy Markdown · Open file location · [Export PDF] —
-[Publish] — then the destructive group, which depends on state. **Whether a Bundle still holds its
+**Menu order and the two states.** **Corrected 2026-09-02, found by `/code-review` against tickets
+10-19's landed code.** This paragraph used to list the menu as *"Edit · Copy Markdown · Open file
+location · [Export PDF] — [Publish] — then the destructive group"*. Tickets 11/12/16/17's own
+acceptance checklists never asked for an Edit row, and none of the four implementer agents that built
+the menu added one: Edit is reached by clicking the row into Review & Update (ticket 13) and pressing
+its footer's Edit button (ticket 14), not from the row menu. The built order is: Copy Markdown · Open
+file location · [Export PDF] — [Publish] — then the destructive group, which depends on state.
+**Whether a Bundle still holds its
 Findings is read live from whether those Findings exist, never from a stored flag** (`BR-122`): a
 Bundle is *unsealed* when every one of its BundleItems' Findings still exists and *sealed* otherwise.
 Unsealed: **Disassemble…**, **Discard originals…**. Sealed: **Delete…** only. The **Delete both**

@@ -204,8 +204,9 @@ export component SdReviewUpdate inherits Rectangle {
                                 edited => { root.field-edited("title", 0, 0, self.text); }
                             }
 
-                            // `## Bundle Notes` - only when the document carried one, or while it is
-                            // being typed into for the first time.
+                            // `## Bundle Notes` - only when the document already carried one. A Bundle
+                            // that started with no notes cannot gain a first one here; this is a
+                            // correction surface, not an addition surface (ticket 14).
                             if block.kind == "bundle-notes" : SdDocHeading {
                                 level: 2;
                                 text: "Bundle Notes";
@@ -281,8 +282,9 @@ export component SdReviewUpdate inherits Rectangle {
                                 }
                             }
 
-                            // `### Notes` - only when the document carried one, or while it is being
-                            // typed into for the first time.
+                            // `### Notes` - only when the document already carried one. A Finding
+                            // that started with no note cannot gain a first one here; this is a
+                            // correction surface, not an addition surface (ticket 14).
                             if block.kind == "note" : SdDocHeading {
                                 level: 3;
                                 text: "Notes";
