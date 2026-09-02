@@ -1,0 +1,405 @@
+import { Theme } from "../theme.slint";
+import { SdModalHeader } from "modal.slint";
+import { SdActionButton, SdSectionLabel, SdCaption } from "action-button.slint";
+import { ScrollView } from "std-widgets.slint";
+
+// ONE ROW - one composed Bundle, as the Library lists it.
+//
+// The thumbnail is always the BundleItem at position 1 (Rust resolves and decodes it before this
+// ever reaches Slint - a Bundle with no items at all gets `image.default`, which Slint renders as
+// nothing rather than a broken frame). `meta-line` is composed in Rust too ("N Findings · composed
+// <relative time>") rather than built here out of three fields, because the pluralisation and the
+// relative-time ladder are Rust's job and a second copy of that logic in Slint is a second place for
+// the two to disagree.
+export struct LibraryBundleRow {
+    id: string,
+    name: string,
+    thumbnail: image,
+    meta-line: string,
+}
+
+// THE LIBRARY.
+//
+// `ticket 11` of the Bundle Library spec. A full-window overlay, gated by `AppWindow.library-open`
+// the same way `bundle-preview-open` gates Assemble & Review - but drawn OPAQUE edge to edge rather
+// than as a floating card over a dimmed Editor: the artboards (`Main.dc.html`, `States.dc.html`)
+// draw no scrim and no inset panel border anywhere, which reads as "this is a screen", not "this is
+// a dialog". `SdSettings` is the nearer precedent for that shape; Assemble & Review is the nearer
+// precedent for Escape-to-close, which this borrows instead of Settings' deliberate omission of it
+// (Settings auto-saves as you go, so a stray Escape closing it would read as losing a change - the
+// Library has no editable state at all in this ticket, so that risk does not apply here).
+//
+// Rows carry NO actions yet. `ticket 12`/`ticket 16` wire Copy Markdown, Open file location, and the
+// row menu; this ticket only lays out where they go, per the map's own note (`canvas.json`,
+// "row-actions"): two icons on hover, an overflow button beside them, both drawn but neither given a
+// `TouchArea` - an icon with no click handler invites nothing, which is the point. Wiring one now
+// would either do nothing when clicked (the toolbar's fake-shortcut mistake `AGENTS.md` names
+// directly) or reach into ticket 12/16's own scope.
+export component SdLibrary inherits Rectangle {
+    // "loading" | "error" | "ready". "ready" with an empty `rows` IS the empty state - there is no
+    // fourth value for it, because a value that only restates `rows.length == 0` is a second place
+    // for that fact to live and go stale.
+    in property <string> state: "loading";
+    in property <string> error-message: "";
+    in property <[LibraryBundleRow]> rows: [];
+
+    callback closed();
+    callback try-again-clicked();
+    callback open-file-location-clicked();
+
+    width: 100%;
+    height: 100%;
+    background: Theme.bg-app;
+
+    // Swallows any click that would otherwise fall through. The Library is opaque edge to edge (see
+    // the header comment above), so nothing behind this Rectangle is ever visible to hit - this is
+    // defence in depth, the same reasoning Assemble & Review's own scrim-covering TouchArea gives,
+    // not the thing actually keeping the Editor inert.
+    TouchArea { }
+
+    // Escape closes it - Assemble & Review's own pattern. Declared before the content and focused on
+    // creation, so it holds the keyboard until the Reviewer clicks into something else.
+    library-keys := FocusScope {
+        init => { self.focus(); }
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                root.closed();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    VerticalLayout {
+        padding: 0px;
+        spacing: 0px;
+
+        // HEADER - the shared one. Icon and title are the Library's own ribbon icon
+        // (`library.svg`), the same asset the Editor's own Library button already uses - the
+        // artboard draws a different, invented glyph for this, and the running app's own icon is
+        // the one that ships, not a shape redrawn once on the canvas and never reconciled with it.
+        SdModalHeader {
+            icon: @image-url("../../assets/icons/library.svg");
+            title: "Library";
+            closed => { root.closed(); }
+
+            // The Bundle count. Read directly off `rows.length`, never a separately-carried number -
+            // two places agreeing by a shared value rather than by matching numbers is exactly what
+            // `design-system-guide.md` asks for, and it is what makes "the header count equals the
+            // number of rows" true by construction rather than by remembering to keep two numbers in
+            // step.
+            Text {
+                text: root.rows.length + " Bundle" + (root.rows.length == 1 ? "" : "s");
+                font-size: 10px;
+                color: Theme.text-muted;
+                vertical-alignment: center;
+                font-family: "IBM Plex Mono";
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+            background: Theme.bg-app;
+
+            VerticalLayout {
+                padding: 16px;
+                spacing: 16px;
+
+                // "ALL BUNDLES" / "Newest first" - STATIC READOUTS of what the list is, never
+                // controls. There is no search, filter or sort in this release (`r2` per the corpus),
+                // and the map's own rule is that a control nobody can operate repeats the toolbar's
+                // fake shortcut-badge mistake - so neither of these carries a `TouchArea`.
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: start;
+                    SdSectionLabel { text: "ALL BUNDLES"; }
+                    SdCaption { text: "Newest first"; }
+                }
+
+                Rectangle {
+                    vertical-stretch: 1;
+                    background: Theme.bg-card;
+                    border-width: 1px;
+                    border-color: Theme.border-strong;
+                    border-radius: Theme.radius-sharp;
+                    clip: true;
+
+                    // LOADING - skeleton rows in the list's own shape, so nothing jumps into place
+                    // once the real rows land. Four of them, matching `States.dc.html`.
+                    if root.state == "loading" : VerticalLayout {
+                        for i in [0, 1, 2, 3] : Rectangle {
+                            height: 54px;
+                            border-width: i == 3 ? 0px : 1px;
+                            border-color: Theme.border-subtle;
+
+                            HorizontalLayout {
+                                padding-top: 12px;
+                                padding-bottom: 12px;
+                                padding-left: 14px;
+                                padding-right: 12px;
+                                spacing: 12px;
+
+                                Rectangle {
+                                    width: 44px;
+                                    height: 30px;
+                                    border-radius: Theme.radius-sharp;
+                                    background: Theme.bg-hover;
+                                }
+                                VerticalLayout {
+                                    spacing: 6px;
+                                    alignment: center;
+                                    Rectangle { height: 9px; width: 60%; border-radius: 2px; background: Theme.bg-hover; }
+                                    Rectangle { height: 7px; width: 32%; border-radius: 2px; background: Theme.border-subtle; }
+                                }
+                            }
+                        }
+                    }
+
+                    // CANNOT BE READ - names what refused (Rust's `error-message`), with Try again
+                    // (re-reads the store) and Open file location (reveals `library.db`) beside it.
+                    if root.state == "error" : VerticalLayout {
+                        alignment: center;
+                        spacing: 14px;
+
+                        HorizontalLayout {
+                            alignment: center;
+                            // A drawn ring-and-exclamation, not a font glyph and not a new SVG asset
+                            // for one screen - the same "draw it, do not type it" rule the modal
+                            // close and the checkbox tick already follow in this product.
+                            Rectangle {
+                                width: 30px;
+                                height: 30px;
+                                Rectangle {
+                                    width: 30px;
+                                    height: 30px;
+                                    border-radius: 15px;
+                                    border-width: 1.3px;
+                                    border-color: Theme.semantic-error;
+                                }
+                                Rectangle {
+                                    x: 14px;
+                                    y: 8px;
+                                    width: 2px;
+                                    height: 10px;
+                                    border-radius: 1px;
+                                    background: Theme.semantic-error;
+                                }
+                                Rectangle {
+                                    x: 14px;
+                                    y: 20.5px;
+                                    width: 2px;
+                                    height: 2px;
+                                    border-radius: 1px;
+                                    background: Theme.semantic-error;
+                                }
+                            }
+                        }
+
+                        Text {
+                            text: "The Library could not be read";
+                            font-size: 13px;
+                            color: Theme.text-primary;
+                            horizontal-alignment: center;
+                            font-family: "IBM Plex Sans";
+                        }
+
+                        Text {
+                            text: root.error-message;
+                            font-size: 10px;
+                            color: Theme.text-muted;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
+                            font-family: "IBM Plex Mono";
+                        }
+
+                        HorizontalLayout {
+                            alignment: center;
+                            spacing: 8px;
+
+                            SdActionButton {
+                                label: "Try again";
+                                primary: true;
+                                clicked => { root.try-again-clicked(); }
+                            }
+                            SdActionButton {
+                                label: "Open file location";
+                                primary: false;
+                                clicked => { root.open-file-location-clicked(); }
+                            }
+                        }
+                    }
+
+                    // EMPTY - names the next action rather than showing a dead end.
+                    if root.state == "ready" && root.rows.length == 0 : VerticalLayout {
+                        alignment: center;
+                        spacing: 14px;
+
+                        HorizontalLayout {
+                            alignment: center;
+                            Image {
+                                width: 34px;
+                                height: 34px;
+                                image-fit: contain;
+                                source: @image-url("../../assets/icons/library.svg");
+                                colorize: Theme.border-strong;
+                            }
+                        }
+
+                        Text {
+                            text: "No Bundles yet";
+                            font-size: 13px;
+                            color: Theme.text-primary;
+                            horizontal-alignment: center;
+                            font-family: "IBM Plex Sans";
+                        }
+
+                        Text {
+                            text: "Tick Findings in the strip and press Assemble. The Bundle you compose lands here.";
+                            font-size: 10px;
+                            color: Theme.text-muted;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
+                            font-family: "IBM Plex Sans";
+                        }
+                    }
+
+                    // THE LIST - every Bundle, newest-composed first (Rust preserves the store's own
+                    // order; nothing here re-sorts it).
+                    if root.state == "ready" && root.rows.length > 0 : ScrollView {
+                        width: 100%;
+                        height: 100%;
+                        vertical-scrollbar-policy: as-needed;
+                        horizontal-scrollbar-policy: always-off;
+
+                        VerticalLayout {
+                            for row[i] in root.rows : Rectangle {
+                                height: 54px;
+                                background: row-touch.has-hover ? Theme.bg-hover : transparent;
+                                border-width: i == root.rows.length - 1 ? 0px : 1px;
+                                border-color: Theme.border-subtle;
+
+                                row-touch := TouchArea {
+                                    // No `clicked` handler and a `default` cursor: this ticket does
+                                    // not open Review & Update (a later ticket does), so the row
+                                    // must not read as clickable yet. The TouchArea exists only to
+                                    // detect hover, for the background and the two placeholder
+                                    // affordances below.
+                                    mouse-cursor: default;
+                                }
+
+                                HorizontalLayout {
+                                    padding-top: 12px;
+                                    padding-bottom: 12px;
+                                    padding-left: 14px;
+                                    padding-right: 12px;
+                                    spacing: 12px;
+
+                                    // Thumbnail. `canvas-ground` is theme-invariant - the same
+                                    // reasoning the capture overlay's own ground follows - so this
+                                    // reads identically in both themes, which is what the ticket's
+                                    // acceptance criteria ask for explicitly.
+                                    Rectangle {
+                                        width: 44px;
+                                        height: 30px;
+                                        border-radius: Theme.radius-sharp;
+                                        background: Theme.canvas-ground;
+                                        border-width: 1px;
+                                        border-color: Theme.border-strong;
+                                        clip: true;
+
+                                        Image {
+                                            width: 100%;
+                                            height: 100%;
+                                            image-fit: cover;
+                                            source: row.thumbnail;
+                                        }
+                                    }
+
+                                    VerticalLayout {
+                                        horizontal-stretch: 1;
+                                        spacing: 3px;
+                                        alignment: center;
+
+                                        Text {
+                                            text: row.name;
+                                            font-size: 13px;
+                                            color: Theme.text-primary;
+                                            overflow: elide;
+                                            font-family: "IBM Plex Sans";
+                                        }
+                                        Text {
+                                            text: row.meta-line;
+                                            font-size: 10px;
+                                            color: Theme.text-muted;
+                                            overflow: elide;
+                                            font-family: "IBM Plex Mono";
+                                        }
+                                    }
+
+                                    // The row's two hover actions and its overflow button - placed
+                                    // now, per the ticket's own last bullet, so `ticket 12`/`ticket
+                                    // 16` add Copy Markdown, Open file location and the row menu
+                                    // without moving the row. Decorative only: no `TouchArea`, no
+                                    // `clicked` - see the file header comment.
+                                    if row-touch.has-hover : HorizontalLayout {
+                                        spacing: 4px;
+                                        alignment: end;
+
+                                        Rectangle {
+                                            width: 28px;
+                                            height: 28px;
+                                            border-radius: Theme.radius-sharp;
+                                            background: Theme.bg-card;
+                                            border-width: 1px;
+                                            border-color: Theme.border-strong;
+                                            Image {
+                                                width: 13px;
+                                                height: 13px;
+                                                image-fit: contain;
+                                                colorize: Theme.text-secondary;
+                                                source: @image-url("../../assets/icons/copy.svg");
+                                            }
+                                        }
+                                        Rectangle {
+                                            width: 28px;
+                                            height: 28px;
+                                            border-radius: Theme.radius-sharp;
+                                            background: Theme.bg-card;
+                                            border-width: 1px;
+                                            border-color: Theme.border-strong;
+                                            Image {
+                                                width: 13px;
+                                                height: 13px;
+                                                image-fit: contain;
+                                                colorize: Theme.text-secondary;
+                                                source: @image-url("../../assets/icons/folder.svg");
+                                            }
+                                        }
+                                        // Overflow - three drawn dots, not a typed "...", for the
+                                        // same reason the checkbox tick and the modal close are
+                                        // drawn: a glyph falls back to whatever the font has.
+                                        Rectangle {
+                                            width: 28px;
+                                            height: 28px;
+                                            border-radius: Theme.radius-sharp;
+                                            background: Theme.bg-card;
+                                            border-width: 1px;
+                                            border-color: Theme.border-strong;
+                                            HorizontalLayout {
+                                                alignment: center;
+                                                spacing: 3px;
+                                                Rectangle { width: 2.3px; height: 2.3px; border-radius: 1.15px; background: Theme.text-secondary; }
+                                                Rectangle { width: 2.3px; height: 2.3px; border-radius: 1.15px; background: Theme.text-secondary; }
+                                                Rectangle { width: 2.3px; height: 2.3px; border-radius: 1.15px; background: Theme.text-secondary; }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

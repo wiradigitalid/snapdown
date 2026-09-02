@@ -36,11 +36,12 @@ fn code_only(source: &str) -> String {
         )
 }
 
-/// Both modals wear the same header.
+/// Every modal wears the same header - Assemble & Review, Settings, and now the Library.
 #[test]
 fn every_modal_header_is_the_same_component() {
     let window = ui("appwindow.slint");
     let settings = ui("components/settings.slint");
+    let library = ui("components/library.slint");
 
     assert!(
         window.contains("SdModalHeader {"),
@@ -51,10 +52,19 @@ fn every_modal_header_is_the_same_component() {
         "and so must Settings. It grew its own - 700-weight title, no icon, a Done button where the \
          close is - which is the drift the guide describes"
     );
+    assert!(
+        library.contains("SdModalHeader {"),
+        "and so must the Library (ticket 11) - a hand-rolled header here would be the same drift a \
+         third time"
+    );
 
-    // Neither may hand-write one again. A 52px bar with a bottom hairline and a title is the header,
+    // None may hand-write one again. A 52px bar with a bottom hairline and a title is the header,
     // whatever it is called locally.
-    for (name, source) in [("appwindow.slint", &window), ("settings.slint", &settings)] {
+    for (name, source) in [
+        ("appwindow.slint", &window),
+        ("settings.slint", &settings),
+        ("library.slint", &library),
+    ] {
         let hand_written = source.matches("height: 52px;").count();
         let shared = source.matches("SdModalHeader {").count();
         assert!(
