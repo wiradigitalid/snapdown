@@ -42,6 +42,22 @@ nothing else. The badges promised a shortcut that was never written.
       failures. Exit codes were captured into variables rather than read from a pipe or a trailing
       `echo`, per `AGENTS.md`.
 
+## Confirmed in the running product, not only by reasoning
+
+The owner built and drove `target/release/Snapdown.exe` on 2026-09-02 (rebuilt at 11:38 from the
+commit that removed the badges) and confirmed the toolbar. That matters because every acceptance
+criterion above was argued from the source rather than observed: the strongest of them - that spacing
+and alignment cannot shift - rests on the badge having been an absolutely-positioned child of a
+fixed-size box, which is sound but is still an argument.
+
+The one worth naming is the **active-tool accent bar**. It is the badge's sibling inside the same
+`Rectangle` (`if root.active : Rectangle`, directly above the block that was deleted), so it was the
+only part of the button that a careless edit could plausibly have taken with it. It survives.
+
+This is the check no test in this repository performs. `ordinal-hint` never appeared under
+`apps/desktop/tests/`, and nothing there asserts the toolbar's appearance at all - so the suite was
+green and blind to the entire change, which is the standing lesson this repo keeps relearning.
+
 ## The dead path, and why no test guards it
 
 The ticket's second paragraph applied: with the six call sites cleared, `IconButton`'s badge path had

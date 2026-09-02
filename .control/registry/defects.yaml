@@ -5367,6 +5367,13 @@ defects:
       thing verified from the Tauri build before it was retired: "the window title read 'Snapdown
       Editor'. W6-S2's persona naming (DEC-003, FR-27) is correct in a real running window." `DEC-007`
       rewrote the front end in Slint and the name did not travel.
+
+      OBSERVED IN A RUNNING RELEASE BINARY, 2026-09-02. Until now this row rested on reading two
+      string literals. `target/release/Snapdown.exe`, rebuilt at 11:38 that day, was launched and
+      the running process reported `MainWindowTitle` = `Snapdown`. So the defect is confirmed from
+      the outside, by the operating system rather than by the source, which is the one form of
+      evidence `BUG-11`'s note had for the OPPOSITE result on the retired Tauri build. The two
+      observations together are what make this a regression rather than a thing never done.
     impact: |
       `FR-27` exists because the owner, on their first sustained look at r2, could not name the
       application they had opened. Half of that requirement - the half about which persona is on
