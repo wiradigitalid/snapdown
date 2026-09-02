@@ -5406,4 +5406,30 @@ defects:
       `BUG-13` corrected the CI guard to count DESKTOP executables rather than every `.exe`, and
       `test_executable_identity.rs` keeps the second-binary confusion from returning. What is missing
       is only the window's own two labels and the assertions over the other two names.
-    status: open
+    resolved: |
+      2026-09-02, on the owner's decision: the executable and the tray stay `Snapdown`, and the
+      main working window is `Snapdown Editor` - which is `FR-27` as already written, so no
+      requirement moved.
+
+      `appwindow.slint:1132` (the OS title) and `:1630` (the custom titlebar's own label, which is
+      what a Reviewer actually reads, the window being `no-frame`) both say `Snapdown Editor`.
+      `:99`, the capture overlay's `Snapdown Capture Overlay`, was deliberately left alone: it
+      belongs to the tray persona and already names itself past the product name.
+
+      `test_executable_identity.rs` now delivers what `FR-27`'s consequence promised - the three
+      names against ONE source. The source is the crate's `[[bin]]` name; the other two are
+      DERIVED from it (`{product}` for the tray, `{product} Editor` for the window), so the
+      product's name is never restated in the test and a rename in `Cargo.toml` makes every
+      assertion demand the new name rather than passing on a stale copy of its own input.
+      A fourth test forbids any label in `appwindow.slint` from being the bare product name,
+      which is the assertion that catches a second `:1630`-shaped site being added later.
+
+      SEEN RED FIRST, per the standing rule that a guard never watched failing is a claim rather
+      than proof. Against the unfixed file: `the_workspace_window_titles_itself_the_editor`
+      failed `left: "Snapdown"` / `right: "Snapdown Editor"`, and
+      `no_label_in_the_editor_window_wears_the_bare_product_name` failed `left: 2` / `right: 0`.
+      The two names that were already correct - the executable and the tray - stayed green
+      throughout, so the guard discriminates rather than failing wholesale. After the fix all
+      four pass; `cargo fmt`, `clippy -D warnings` and `cargo test --workspace --no-fail-fast`
+      all exit 0 with 41 `test result: ok` lines.
+    status: fixed
