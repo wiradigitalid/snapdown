@@ -14,11 +14,19 @@ pub trait BundleStore {
     /// without the other would leave the Library and the document disagreeing about the Bundle's own
     /// name. Subsumes the document-only `update_bundle_markdown` that ticket 05's audit found nothing
     /// called.
+    ///
+    /// `updated_at` moves the Bundle's last-edited time (ticket 15) to exactly the instant the
+    /// caller names - the same `Clock`-supplied-string shape `FindingStore::update_note` already
+    /// uses, rather than this method reaching for its own clock. The ONE caller
+    /// (`save_review_update_edit`) only ever calls this method on the branch that already decided a
+    /// real change exists, so "moves only when the update actually writes" holds by construction:
+    /// there is no separate no-op guard in here to keep in sync with that one.
     fn update_bundle_name_and_markdown(
         &self,
         id: &str,
         name: &str,
         markdown: &str,
+        updated_at: &str,
     ) -> Result<(), CoreError>;
 
     fn delete_bundle(&self, id: &str) -> Result<(), CoreError>;

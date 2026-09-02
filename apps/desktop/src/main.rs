@@ -325,10 +325,26 @@ fn load_bundle_thumbnail(ctx: &AppContext, image_path: &str) -> slint::Image {
     }
 }
 
+/// Ticket 15's own " · edited <relative time>" suffix, shared by the Library row's meta line and
+/// Review & Update's own provenance line so the two surfaces cannot drift apart on the wording or
+/// the comparison. Empty when `updated_at` still reads as never-edited - either a Bundle that has
+/// never been saved through, or one backfilled by migration v9 - never when the two happen to render
+/// the same relative-time WORD (e.g. both "yesterday"): the comparison is on the stored strings, not
+/// on `relative_time`'s output, which is what ticket 09's option B actually asked for ("only when it
+/// differs from `composed_at`").
+fn edited_suffix(bundle: &Bundle, now: chrono::DateTime<chrono::Utc>) -> String {
+    if bundle.updated_at == bundle.composed_at {
+        String::new()
+    } else {
+        format!(" · edited {}", relative_time(&bundle.updated_at, now))
+    }
+}
+
 /// One `BundleDetail` from the store, as one Library row. The meta line is composed here - "N
 /// Findings · composed <relative time>", the exact wording `spec.md`'s Implementation Decisions
 /// section gives three times over - rather than in Slint, so the pluralisation and the relative-time
-/// ladder live in exactly one place.
+/// ladder live in exactly one place. Ticket 15 appends `edited_suffix`'s " · edited <relative time>"
+/// only when the Bundle's last-edited time differs from when it was composed.
 fn library_row_from_detail(
     ctx: &AppContext,
     detail: &BundleDetail,
@@ -345,9 +361,10 @@ fn library_row_from_detail(
         name: detail.bundle.name.clone().into(),
         thumbnail,
         meta_line: format!(
-            "{count} Finding{} · composed {}",
+            "{count} Finding{} · composed {}{}",
             if count == 1 { "" } else { "s" },
-            relative_time(&detail.bundle.composed_at, now)
+            relative_time(&detail.bundle.composed_at, now),
+            edited_suffix(&detail.bundle, now)
         )
         .into(),
     }
@@ -569,6 +586,22 @@ fn review_update_doc_blocks(
     Ok(blocks)
 }
 
+/// Review & Update's own provenance line - the same wording `library_row_from_detail` gives the
+/// Library row's meta line, and the same `edited_suffix` (ticket 15), kept as its own function
+/// rather than inlined into `set_review_update_view` so it can be tested without an `AppWindow`.
+fn review_update_provenance_line(
+    bundle: &Bundle,
+    finding_count: usize,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
+    format!(
+        "{finding_count} Finding{} · composed {}{}",
+        if finding_count == 1 { "" } else { "s" },
+        relative_time(&bundle.composed_at, now),
+        edited_suffix(bundle, now)
+    )
+}
+
 /// Pushes one Bundle's locked-mode rendering into the window's own properties - the provenance line
 /// and the block list. Shared by `open_review_update` and ticket 14's Save success path, which needs
 /// exactly this same refresh once the document the window is showing has changed underneath it.
@@ -580,12 +613,7 @@ fn set_review_update_view(
     let blocks = review_update_doc_blocks(ctx, bundle)?;
     let finding_count = blocks.iter().filter(|b| b.kind == "finding").count();
     window.set_review_update_provenance(
-        format!(
-            "{finding_count} Finding{} · composed {}",
-            if finding_count == 1 { "" } else { "s" },
-            relative_time(&bundle.composed_at, chrono::Utc::now())
-        )
-        .into(),
+        review_update_provenance_line(bundle, finding_count, chrono::Utc::now()).into(),
     );
     window.set_review_update_blocks(ModelRc::from(Rc::new(VecModel::from(blocks))));
     Ok(())
@@ -842,9 +870,19 @@ fn save_review_update_edit(
     write_file_atomically(&absolute_path, new_document.as_bytes())
         .map_err(|e| format!("Could not write the Bundle's file: {e}"))?;
 
-    if let Err(e) =
-        bundle_store.update_bundle_name_and_markdown(&bundle.id, &new_name, &new_document)
-    {
+    // Ticket 15: the last-edited time moves to exactly this instant - computed here, once, so the
+    // same string lands in the row and in the caller's own in-memory `bundle` below, never two
+    // separate clock reads that could disagree by a tick. Reached only past the no-op guard above,
+    // which is what makes "moves only when the update actually writes" true by construction rather
+    // than by a second check inside the store.
+    let updated_at = SystemClock::new().now_rfc3339();
+
+    if let Err(e) = bundle_store.update_bundle_name_and_markdown(
+        &bundle.id,
+        &new_name,
+        &new_document,
+        &updated_at,
+    ) {
         // The row refused after the file already changed. Put the file back exactly as it was -
         // BR-5's "an unsaved edit survives so it can be tried again" for the file half of the pair.
         // Seen red first by commenting this call out - the write-ordering test then finds the file
@@ -864,6 +902,7 @@ fn save_review_update_edit(
 
     bundle.markdown = new_document;
     bundle.name = new_name;
+    bundle.updated_at = updated_at;
     Ok(ReviewUpdateSaveOutcome::Saved)
 }
 
@@ -8389,6 +8428,7 @@ mod tests {
             _id: &str,
             _name: &str,
             _markdown: &str,
+            _updated_at: &str,
         ) -> Result<(), CoreError> {
             Err(CoreError::Validation("simulated row-write failure".into()))
         }
@@ -8806,6 +8846,287 @@ mod tests {
         assert_eq!(
             marker_block.finding_ordinal, 2,
             "the OWNING Finding's position, separate from the marker's own ordinal"
+        );
+    }
+
+    // ===== ticket 15: an edited Bundle says so =================================================
+
+    /// `edited_suffix`'s own two branches: nothing appended while `updated_at` still equals
+    /// `composed_at` (a Bundle that has never been saved through, or one migration v9 just
+    /// backfilled), and the exact " · edited <relative time>" text ticket 09's option B settles once
+    /// it differs.
+    #[test]
+    fn edited_suffix_is_empty_when_the_times_match_and_names_the_edit_when_they_differ() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-09-02T10:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        let never_edited = Bundle::new(
+            "b-never-edited".into(),
+            "Untouched".into(),
+            "# Untouched".into(),
+            "bundles/b-never-edited/bundle.md".into(),
+            "2026-08-28T10:00:00Z".into(),
+        )
+        .unwrap();
+        assert_eq!(
+            edited_suffix(&never_edited, now),
+            "",
+            "a Bundle whose last-edited time still equals its composed time must show no suffix"
+        );
+
+        let mut edited = never_edited.clone();
+        edited.updated_at = "2026-09-01T10:00:00Z".into();
+        assert_eq!(
+            edited_suffix(&edited, now),
+            " · edited yesterday",
+            "a Bundle whose last-edited time differs must name it, exactly as spec.md's wording gives"
+        );
+    }
+
+    /// Review & Update's own provenance line follows the identical rule the Library row's meta line
+    /// does - both built over the shared `edited_suffix`, so the two surfaces cannot say different
+    /// things about the same Bundle.
+    #[test]
+    fn review_update_provenance_line_matches_the_librarys_own_wording_rule() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-09-02T10:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        let mut bundle = Bundle::new(
+            "b-prov".into(),
+            "A Review".into(),
+            "# A Review".into(),
+            "bundles/b-prov/bundle.md".into(),
+            "2026-08-28T10:00:00Z".into(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            review_update_provenance_line(&bundle, 2, now),
+            "2 Findings · composed 5 days ago",
+            "an unedited Bundle's provenance line must carry no edited suffix"
+        );
+
+        bundle.updated_at = "2026-09-01T10:00:00Z".into();
+        assert_eq!(
+            review_update_provenance_line(&bundle, 1, now),
+            "1 Finding · composed 5 days ago · edited yesterday",
+            "an edited Bundle's provenance line must append the same suffix the Library row does"
+        );
+    }
+
+    /// The Library row itself, end to end: a never-edited Bundle's meta line carries no "edited"
+    /// text at all, and one whose `updated_at` differs from `composed_at` carries exactly one. Built
+    /// with a bare struct literal (not `Bundle::new`, which always sets `updated_at` from
+    /// `composed_at` at construction) because this is standing in for a Bundle a real Save already
+    /// touched.
+    #[test]
+    fn library_row_appends_the_edited_suffix_only_when_updated_at_differs_from_composed_at() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+        let now = chrono::DateTime::parse_from_rfc3339("2026-09-02T10:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        let untouched = BundleDetail {
+            bundle: Bundle::new(
+                "b-untouched".into(),
+                "Untouched Review".into(),
+                "# Untouched Review".into(),
+                "bundles/b-untouched/bundle.md".into(),
+                "2026-08-28T10:00:00Z".into(),
+            )
+            .unwrap(),
+            items: vec![],
+        };
+        let untouched_row = library_row_from_detail(&ctx, &untouched, now);
+        assert_eq!(untouched_row.meta_line, "0 Findings · composed 5 days ago");
+
+        let edited = BundleDetail {
+            bundle: Bundle {
+                id: "b-edited".into(),
+                name: "Edited Review".into(),
+                markdown: "# Edited Review".into(),
+                markdown_path: "bundles/b-edited/bundle.md".into(),
+                composed_at: "2026-08-28T10:00:00Z".into(),
+                updated_at: "2026-09-01T10:00:00Z".into(),
+            },
+            items: vec![],
+        };
+        let edited_row = library_row_from_detail(&ctx, &edited, now);
+        assert_eq!(
+            edited_row.meta_line,
+            "0 Findings · composed 5 days ago · edited yesterday"
+        );
+    }
+
+    /// A Save that actually changes the document or the title moves `updated_at` to a fresh instant,
+    /// distinct from the fixed `composed_at` the fixture gives every Bundle - asserted both on the
+    /// caller's own in-memory `bundle` and on the row read back from the store, which must agree.
+    /// `composed_at` itself must never move.
+    #[test]
+    fn save_with_a_real_change_moves_updated_at() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (mut bundle, items) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-touch",
+            "Original Title",
+            "",
+            &["Original note."],
+        );
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("seed the row");
+
+        let original_updated_at = bundle.updated_at.clone();
+        assert_eq!(
+            original_updated_at, bundle.composed_at,
+            "a freshly composed Bundle must read as never edited before any Save"
+        );
+
+        let mut parsed = MarkdownSerializer::parse_bundle_document(&bundle.markdown)
+            .expect("the fixture's own document must parse");
+        apply_review_update_field_edit(&mut parsed, "note", 1, 0, "Corrected note.");
+
+        let outcome =
+            save_review_update_edit(vault_dir.path(), &bundle_store, &mut bundle, &parsed)
+                .expect("a real change must save");
+        assert!(matches!(outcome, ReviewUpdateSaveOutcome::Saved));
+
+        assert_ne!(
+            bundle.updated_at, original_updated_at,
+            "a Save that actually changed the document must move the last-edited time"
+        );
+        assert_ne!(
+            bundle.updated_at, bundle.composed_at,
+            "the moved last-edited time must differ from composed_at"
+        );
+        assert_eq!(
+            bundle.composed_at, "2026-08-20T10:00:00Z",
+            "composed_at itself must never move"
+        );
+
+        let row = bundle_store.get_bundle("b-touch").unwrap().unwrap();
+        assert_eq!(
+            row.bundle.updated_at, bundle.updated_at,
+            "the row's own last-edited time must match exactly what the caller now holds"
+        );
+        assert_eq!(row.bundle.composed_at, bundle.composed_at);
+    }
+
+    /// A no-op Save - the same guard `save_with_nothing_changed_writes_neither_file_nor_row` proves
+    /// for the file and the row - must leave `updated_at` exactly as it was too: ticket 09's option B
+    /// is what keeps ticket 05's always-clickable Save free of a visible side effect, and a moved
+    /// last-edited time on a "nothing had changed" Save would BE that side effect.
+    #[test]
+    fn save_with_nothing_changed_leaves_updated_at_untouched() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (mut bundle, items) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-noop-touch",
+            "Untouched Title",
+            "Untouched notes.",
+            &["Untouched note."],
+        );
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("seed the row");
+
+        let original_updated_at = bundle.updated_at.clone();
+
+        let parsed = MarkdownSerializer::parse_bundle_document(&bundle.markdown)
+            .expect("the fixture's own document must parse");
+
+        let outcome =
+            save_review_update_edit(vault_dir.path(), &bundle_store, &mut bundle, &parsed)
+                .expect("a no-op Save must not error");
+        assert!(matches!(outcome, ReviewUpdateSaveOutcome::NoChange));
+
+        assert_eq!(
+            bundle.updated_at, original_updated_at,
+            "a no-op Save must leave the last-edited time exactly as it was"
+        );
+        let row = bundle_store.get_bundle("b-noop-touch").unwrap().unwrap();
+        assert_eq!(
+            row.bundle.updated_at, original_updated_at,
+            "the row itself must not have moved either"
+        );
+    }
+
+    /// Ticket 15's own "the sort does not change": editing the OLDER of two Bundles through a real
+    /// `save_review_update_edit` must not move it in `list_bundles`' own order - newest-composed
+    /// first, `bundle_store.rs`'s `ORDER BY composed_at DESC`, never re-sorted by the last-edited
+    /// time this ticket adds. `composed_at`/`updated_at` are overridden after the fixture builds each
+    /// Bundle (the fixture itself always uses one fixed composed time), which is safe here because
+    /// neither field affects the document `create_bundle` stores.
+    #[test]
+    fn editing_the_oldest_bundle_does_not_move_it_in_the_stores_own_order() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+
+        let (mut older, older_items) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-order-older",
+            "Older review",
+            "",
+            &["Original note."],
+        );
+        older.composed_at = "2026-08-10T10:00:00Z".into();
+        older.updated_at = older.composed_at.clone();
+
+        let (mut newer, newer_items) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-order-newer",
+            "Newer review",
+            "",
+            &["Another note."],
+        );
+        newer.composed_at = "2026-08-25T10:00:00Z".into();
+        newer.updated_at = newer.composed_at.clone();
+
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        bundle_store
+            .create_bundle(&older, &older_items)
+            .expect("seed the older row");
+        bundle_store
+            .create_bundle(&newer, &newer_items)
+            .expect("seed the newer row");
+
+        let before = bundle_store.list_bundles().expect("list before editing");
+        assert_eq!(before[0].bundle.id, "b-order-newer");
+        assert_eq!(before[1].bundle.id, "b-order-older");
+
+        let mut parsed = MarkdownSerializer::parse_bundle_document(&older.markdown)
+            .expect("the older Bundle's own document must parse");
+        apply_review_update_field_edit(&mut parsed, "note", 1, 0, "Corrected the older one.");
+        let outcome = save_review_update_edit(vault_dir.path(), &bundle_store, &mut older, &parsed)
+            .expect("a real change to the older Bundle must save");
+        assert!(matches!(outcome, ReviewUpdateSaveOutcome::Saved));
+        assert_ne!(
+            older.updated_at, older.composed_at,
+            "the edit must actually move the older Bundle's last-edited time"
+        );
+
+        let after = bundle_store.list_bundles().expect("list after editing");
+        assert_eq!(
+            after[0].bundle.id, "b-order-newer",
+            "editing the older Bundle must not move it ahead of the newer one"
+        );
+        assert_eq!(
+            after[1].bundle.id, "b-order-older",
+            "the sort stays keyed on composed_at, never on the last-edited time"
         );
     }
 }

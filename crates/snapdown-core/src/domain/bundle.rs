@@ -9,6 +9,12 @@ pub struct Bundle {
     pub markdown: String,
     pub markdown_path: String,
     pub composed_at: String,
+    /// Ticket 15 ("An edited Bundle says so", ticket 09's option B): the last time Save actually
+    /// changed the stored document or the title. A no-op Save never touches it (`FR-40`'s
+    /// always-clickable Save relies on that). Every Bundle that existed before this column did is
+    /// backfilled with its own `composed_at` (`migrations.rs`, version 9) - which is exactly what
+    /// `Bundle::new` below does for a freshly composed Bundle too, since neither has been edited yet.
+    pub updated_at: String,
 }
 
 impl Bundle {
@@ -22,12 +28,14 @@ impl Bundle {
         if name.trim().is_empty() {
             return Err(CoreError::Validation("Bundle name cannot be empty".into()));
         }
+        let updated_at = composed_at.clone();
         Ok(Self {
             id,
             name,
             markdown,
             markdown_path,
             composed_at,
+            updated_at,
         })
     }
 }
@@ -95,6 +103,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(bundle.name, "Release 1.0 Review");
+        assert_eq!(
+            bundle.updated_at, bundle.composed_at,
+            "a freshly composed Bundle has not been edited yet, so its last-edited time must equal \
+             the time it was composed (ticket 15)"
+        );
     }
 
     #[test]

@@ -178,6 +178,22 @@ pub const MIGRATIONS: &[Migration] = &[
             ON visual_annotation(finding_id, position);
     "#,
     },
+    // Ticket 15 of the Bundle Library spec ("An edited Bundle says so"), ticket 09's option B: a
+    // Bundle gains a last-edited time, distinct from `composed_at`. Every row that existed before
+    // this column did is backfilled with its own `composed_at` in the SAME statement batch (one
+    // transaction, per `apply_migration`) - so a pre-migration Bundle reads as "never edited", which
+    // is true: nothing has touched it since `composed_at` was set. A fresh insert after this
+    // migration supplies its own `updated_at` (`Bundle::new` sets it equal to `composed_at` at
+    // construction, for the same reason), so the `WHERE updated_at IS NULL` guard only ever matches
+    // rows this migration itself just widened.
+    Migration {
+        version: 9,
+        description: "add updated_at to bundle table, backfilled from composed_at",
+        sql: r#"
+        ALTER TABLE bundle ADD COLUMN updated_at TEXT;
+        UPDATE bundle SET updated_at = composed_at WHERE updated_at IS NULL;
+    "#,
+    },
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> Result<(), StoreError> {
