@@ -1403,6 +1403,13 @@ defects:
       read rather than dropping the item, and `a_planned_bundle_refuses_an_image_it_cannot_read`
       proves it by mutation. When the Publication path is rebuilt in Slint it must read the same way,
       and this row is what says so.
+
+      `share-bundle-clicked` itself is gone as of ticket 19
+      (`.scratch/bundle-library/issues/19-the-ribbon-acts-on-the-canvas.md`): the ribbon's Share
+      button had nothing behind it, not even the frozen path this row describes, so it was removed
+      along with its `DELIBERATELY_UNHANDLED` excuse row in `test_ui_callbacks_reach_rust.rs`. That
+      does not close this row either - Publication still has no Slint entry point of any kind, which
+      is a stronger version of "no Slint caller" than before, not a weaker one.
     status: open
   - id: BUG-24
     title: Capture overlay opens at the default window size instead of covering the monitor, so selecting a region never produces a screenshot

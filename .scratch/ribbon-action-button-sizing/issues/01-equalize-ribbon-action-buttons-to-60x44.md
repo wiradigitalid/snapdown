@@ -26,11 +26,16 @@ action-vocabulary rework and also carries this ticket's sizing work; completing 
 The original wording follows. The action-vocabulary rework itself (removal of Share and ribbon Assemble, rename of
 Copy). Do not size the group before those land — the layout question is meaningless until then.
 
-**Status:** blocked
+**Status:** done, by ticket 19 — 2026-09-02
 
-- [ ] The ribbon's remaining action button is sized and placed so the group reads as intentional in
+Completing `.scratch/bundle-library/issues/19-the-ribbon-acts-on-the-canvas.md` marked this ticket
+done, per this file's own note above: "completing 19 marks this done." The ribbon's action group now
+holds one button, `Copy Image`, 84px wide by 44px tall, sized to fit its longer label without clipping
+rather than sitting inside the old 52px width chosen for a shorter "Copy" beside a wider Assemble.
+
+- [x] The ribbon's remaining action button is sized and placed so the group reads as intentional in
       both light and dark theme
-- [ ] The `share-bundle-clicked` row is gone from `DELIBERATELY_UNHANDLED` and the callback-reachability
+- [x] The `share-bundle-clicked` row is gone from `DELIBERATELY_UNHANDLED` and the callback-reachability
       test passes
-- [ ] `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and
-      `cargo test --workspace` all pass
+- [x] `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and
+      `cargo test --workspace --no-fail-fast` all pass — verified 2026-09-02, all three exit 0

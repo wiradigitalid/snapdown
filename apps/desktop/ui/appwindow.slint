@@ -1358,7 +1358,6 @@ export component AppWindow inherits Window {
     callback paste-clicked();
     callback assemble-bundle-clicked();
     callback copy-image-clicked();
-    callback share-bundle-clicked();
     callback marker-placed(float, float);
     callback delete-marker-clicked(string);
     callback marker-comment-edited(string, string);
@@ -1874,40 +1873,22 @@ export component AppWindow inherits Window {
                         }
                     }
 
-                    // Group 3 (Right): Assemble & Sharing Action Buttons
+                    // Group 3 (Right): Canvas Action.
+                    //
+                    // Ticket 19 (`.scratch/bundle-library/issues/19-...`): Share had no Rust handler
+                    // at all, and Assemble acted on the filmstrip's ticked selection rather than the
+                    // canvas beside it - the filmstrip footer and the finding context menu already
+                    // carry Assemble, so it lost nothing by leaving the ribbon. Copy is the one
+                    // ribbon action that is actually about the canvas: it copies the burned image of
+                    // the open Finding.
+                    // Sized on its own now rather than at the 52px that used to sit beside a wider
+                    // Assemble - a single narrow button in the spot three used to fill read as a gap,
+                    // not a choice.
                     HorizontalLayout {
-                        spacing: 6px;
                         alignment: end;
 
                         Rectangle {
-                            width: 68px;
-                            height: 44px;
-                            border-radius: Theme.radius-sharp;
-                            background: assem-touch.pressed ? Theme.accent-pressed : (assem-touch.has-hover ? Theme.accent-hover : Theme.accent-primary);
-                            drop-shadow-blur: assem-touch.has-hover ? 6px : 2px;
-                            drop-shadow-color: Theme.accent-primary.with-alpha(0.35);
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 16px; height: 16px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    // Coloured like the label beside it. These SVGs are baked white, which was invisible
-                                    // as a choice until BUG-54 made `text-on-accent` dark in dark mode and the label went
-                                    // dark while the glyph stayed white. `SdActionButton` already does this; the ribbon's
-                                    // three hand-rolled buttons did not.
-                                    source: @image-url("../assets/icons/package.svg");
-                                    colorize: Theme.text-on-accent;
-                                }
-                                Text { text: "Assemble"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; font-family: "IBM Plex Sans"; }
-                            }
-                            assem-touch := TouchArea { clicked => { root.assemble-bundle-clicked(); } }
-                        }
-
-                        Rectangle {
-                            width: 52px;
+                            width: 84px;
                             height: 44px;
                             border-radius: Theme.radius-sharp;
                             background: cp-touch.pressed ? Theme.accent-pressed : (cp-touch.has-hover ? Theme.accent-hover : Theme.accent-primary);
@@ -1918,38 +1899,17 @@ export component AppWindow inherits Window {
                                 alignment: center;
                                 spacing: 3px;
                                 Image {
-                                    width: 15px; height: 15px;
+                                    width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
+                                    // Coloured like the label beside it - the pattern BUG-54's follow-up
+                                    // fix established for every hand-rolled ribbon button.
                                     source: @image-url("../assets/icons/copy-white.svg");
                                     colorize: Theme.text-on-accent;
                                 }
-                                Text { text: "Copy"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; font-family: "IBM Plex Sans"; }
+                                Text { text: "Copy Image"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; font-family: "IBM Plex Sans"; }
                             }
                             cp-touch := TouchArea { clicked => { root.copy-image-clicked(); } }
-                        }
-
-                        Rectangle {
-                            width: 52px;
-                            height: 44px;
-                            border-radius: Theme.radius-sharp;
-                            background: sh-touch.pressed ? Theme.accent-pressed : (sh-touch.has-hover ? Theme.accent-hover : Theme.accent-primary);
-                            drop-shadow-blur: sh-touch.has-hover ? 6px : 2px;
-                            drop-shadow-color: Theme.accent-primary.with-alpha(0.35);
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 15px; height: 15px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    source: @image-url("../assets/icons/share-white.svg");
-                                    colorize: Theme.text-on-accent;
-                                }
-                                Text { text: "Share"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; font-family: "IBM Plex Sans"; }
-                            }
-                            sh-touch := TouchArea { clicked => { root.share-bundle-clicked(); } }
                         }
                     }
                 }

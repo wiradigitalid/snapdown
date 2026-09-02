@@ -61,16 +61,10 @@ fn declared_callbacks() -> Vec<String> {
 ///
 /// A name may sit here only while the feature behind it is genuinely absent. It is not a place to
 /// park something that was forgotten — that is the state this whole file exists to make visible.
-const DELIBERATELY_UNHANDLED: &[(&str, &str)] = &[
-    (
-        "paste-clicked",
-        "clipboard-in is not built: nothing reads an image out of the Windows clipboard yet",
-    ),
-    (
-        "share-bundle-clicked",
-        "publishing is frozen by DEC-005, and the Publication path has no Slint caller",
-    ),
-];
+const DELIBERATELY_UNHANDLED: &[(&str, &str)] = &[(
+    "paste-clicked",
+    "clipboard-in is not built: nothing reads an image out of the Windows clipboard yet",
+)];
 
 /// Handlers that exist and do nothing but print, each with what is actually missing behind it.
 ///
