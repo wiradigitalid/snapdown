@@ -78,11 +78,12 @@ fn bundle_store_crud_and_cascade_operations() {
     assert_eq!(detail.items[0].finding_id, fid);
     assert_eq!(detail.items[0].position, 1);
 
-    // 4. Update Markdown
+    // 4. Update name and Markdown together (ticket 14, BR-5: the two never make sense apart)
     bundle_store
-        .update_bundle_markdown(bundle_id, "# Updated Markdown content")
-        .expect("update markdown");
+        .update_bundle_name_and_markdown(bundle_id, "Renamed Bundle", "# Updated Markdown content")
+        .expect("update name and markdown");
     let detail2 = bundle_store.get_bundle(bundle_id).unwrap().unwrap();
+    assert_eq!(detail2.bundle.name, "Renamed Bundle");
     assert_eq!(detail2.bundle.markdown, "# Updated Markdown content");
 
     // 5. List Bundles

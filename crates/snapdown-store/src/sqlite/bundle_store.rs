@@ -254,7 +254,12 @@ impl BundleStore for SqliteBundleStore {
         Ok(details)
     }
 
-    fn update_bundle_markdown(&self, id: &str, markdown: &str) -> Result<(), CoreError> {
+    fn update_bundle_name_and_markdown(
+        &self,
+        id: &str,
+        name: &str,
+        markdown: &str,
+    ) -> Result<(), CoreError> {
         let conn = self
             .conn
             .lock()
@@ -262,8 +267,8 @@ impl BundleStore for SqliteBundleStore {
 
         let rows = conn
             .execute(
-                "UPDATE bundle SET markdown = ?1 WHERE id = ?2;",
-                rusqlite::params![markdown, id],
+                "UPDATE bundle SET name = ?1, markdown = ?2 WHERE id = ?3;",
+                rusqlite::params![name, markdown, id],
             )
             .map_err(|e| CoreError::Validation(e.to_string()))?;
 

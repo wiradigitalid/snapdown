@@ -1,9 +1,11 @@
-//! Review & Update, locked mode, is REACHABLE - not merely built. Ticket 13 of the Bundle Library
-//! spec. `AGENTS.md` names this repository's signature failure in plain words: a component built,
-//! unit-tested, and mounted nowhere. `test_annotation_wiring.rs`'s
-//! `the_annotation_component_is_mounted_on_the_canvas` is the shape to copy - imported AND
-//! instantiated, not merely defined - and `test_library_wiring.rs` is ticket 11's copy of it. This
-//! file is that same shape for `SdReviewUpdate`.
+//! Review & Update is REACHABLE - not merely built. Ticket 13 of the Bundle Library spec built
+//! locked mode; ticket 14 adds editing on top of it, and every one of its five new callbacks
+//! (`edit-clicked`, `field-edited`, `save-clicked`, `cancel-clicked`, `discard-clicked`) gets the
+//! same reachability proof locked mode's own callback already had. `AGENTS.md` names this
+//! repository's signature failure in plain words: a component built, unit-tested, and mounted
+//! nowhere. `test_annotation_wiring.rs`'s `the_annotation_component_is_mounted_on_the_canvas` is the
+//! shape to copy - imported AND instantiated, not merely defined - and `test_library_wiring.rs` is
+//! ticket 11's copy of it. This file is that same shape for `SdReviewUpdate`.
 
 use std::fs;
 use std::path::Path;
@@ -155,10 +157,11 @@ fn every_review_update_callback_is_bound_from_slint_to_rust() {
     );
 }
 
-/// Escape closes it - the same pattern the Library and Assemble & Review both use, borrowed rather
-/// than reinvented.
+/// Escape closes it when locked - the same pattern the Library and Assemble & Review both use,
+/// borrowed rather than reinvented - and behaves exactly like Cancel while editing (ticket 14):
+/// leaving must ask first when there is something to lose, whichever key tries to leave.
 #[test]
-fn escape_closes_review_update() {
+fn escape_closes_locked_and_cancels_editing() {
     let component = read("ui/components/review-update.slint");
     let at = component.find("review-update-keys := FocusScope").expect(
         "Review & Update must hold its own FocusScope for Escape, the way `library-keys` does for \
@@ -167,7 +170,15 @@ fn escape_closes_review_update() {
     let body = flat(&component[at..(at + 500).min(component.len())]);
     assert!(
         body.contains("Key.Escape") && body.contains("root.closed()"),
-        "Escape must fire `closed()`"
+        "Escape must fire `closed()` when locked"
+    );
+    assert!(
+        body.contains("root.cancel-clicked()"),
+        "Escape must fire `cancel-clicked()` while editing, not bypass its confirmation: {body}"
+    );
+    assert!(
+        body.contains("if (root.editing)"),
+        "the two must be chosen by `editing`, not always the same one: {body}"
     );
     assert!(
         body.contains("init => { self.focus(); }"),
@@ -230,51 +241,122 @@ fn review_update_never_binds_to_the_finding_store() {
         !open_body.contains("finding_store"),
         "`open_review_update` must never reference `ctx.finding_store` either"
     );
+
+    // Ticket 14's editing path, checked the strongest way a source-reading test can: none of these
+    // three functions even TAKES a `FindingStore` or an `AppContext` - `apply_review_update_field_edit`
+    // and `review_update_edit_is_dirty` take only the parsed buffer and/or a `Bundle`, and
+    // `save_review_update_edit` takes a `&dyn BundleStore` and a vault path. `BR-10`/`BR-11`'s "never
+    // reads or writes a Finding" holds by construction for all three, not merely by their bodies
+    // happening not to mention it.
+    for (fn_name, signature_must_not_contain) in [
+        (
+            "apply_review_update_field_edit",
+            ["FindingStore", "AppContext"],
+        ),
+        (
+            "review_update_edit_is_dirty",
+            ["FindingStore", "AppContext"],
+        ),
+        ("save_review_update_edit", ["FindingStore", "AppContext"]),
+    ] {
+        let needle = format!("fn {fn_name}(");
+        let at = main
+            .find(&needle)
+            .unwrap_or_else(|| panic!("`{fn_name}` must exist in main.rs"));
+        let signature_end = main[at..]
+            .find(") -> ")
+            .or_else(|| main[at..].find(") {"))
+            .map(|i| at + i)
+            .unwrap_or_else(|| panic!("`{fn_name}`'s signature never closes"));
+        let signature = &main[at..signature_end];
+        for forbidden in signature_must_not_contain {
+            assert!(
+                !signature.contains(forbidden),
+                "`{fn_name}`'s own signature must not take a `{forbidden}` - ticket 14's editing \
+                 path must be structurally unable to reach a Finding: {signature}"
+            );
+        }
+        let body = rust_fn_body(&main, fn_name);
+        assert!(
+            !body.contains("finding_store"),
+            "`{fn_name}` must never reference `finding_store`"
+        );
+    }
 }
 
-/// No affordance of any kind in locked mode: no `SdTextField` (its own `flat` mode still lightens on
+/// No affordance of any kind in LOCKED mode: no `SdTextField` (its own `flat` mode still lightens on
 /// hover and shows a text cursor - `text-field.slint:87-102` - which is exactly the kind of
-/// affordance this mode must not offer), no `TouchArea` on an image, no "Fixed at compose" chip (that
-/// belongs to ticket 14's edit mode only), and no Edit/Preview control.
+/// affordance locked mode must not offer), no `TouchArea` on an image, no "Fixed at compose" chip
+/// (ticket 14 restricts that to edit mode), and no Edit/Preview control. Every `SdTextField` ticket
+/// 14 DOES add must be gated by `root.editing` - checked by finding each occurrence's own enclosing
+/// `if` condition and requiring it to mention `editing`, rather than forbidding the component from
+/// the file outright the way ticket 13's version of this test did.
 ///
 /// Checked against the CODE only (`//` comment lines stripped) - this file's own doc comments name
-/// `SdTextField`, `TouchArea` and `IconButton` to explain why they are absent, and an "absent"
-/// assertion run against the raw source would match its own explanation.
+/// `SdTextField`, `TouchArea` and `IconButton` by name to explain why locked mode does not use them,
+/// and an "absent" assertion run against the raw source would match its own explanation.
 #[test]
 fn locked_mode_declares_no_affordance() {
     let component = code_only(&read("ui/components/review-update.slint"));
 
-    assert!(
-        !component.contains("SdTextField"),
-        "locked mode must not use `SdTextField` anywhere - even flat and read-only, it lightens and \
-         shows a text cursor on hover"
-    );
-    assert!(
-        !component.contains("Fixed at compose"),
-        "the `Fixed at compose` chip belongs to ticket 14's edit mode, not to locked mode"
-    );
     assert!(
         !component.contains("SdSegmented"),
         "there must be no Edit/Preview pair: locked already IS the preview (ticket 05's resolved \
          variant C)"
     );
 
-    // Exactly ONE `TouchArea` is legitimate in this file: the scrim, which swallows a miss-click.
-    // The FocusScope needs none of its own, and every button goes through `SdActionButton` /
-    // `SdModalHeader`, which own their `TouchArea` internally - so THIS file itself must declare no
-    // more than the scrim's.
-    let own_touch_areas = component.matches("TouchArea {").count();
-    assert_eq!(
-        own_touch_areas, 1,
-        "review-update.slint itself must declare exactly one `TouchArea` (the scrim) - any more is \
-         an affordance this locked mode must not have"
+    // Every `SdTextField {` in this file must sit inside an `if` condition that mentions `editing` -
+    // ticket 14's whole guarantee that locked mode never renders one. Found by scanning backward
+    // from each occurrence for the nearest `if ` keyword.
+    for (at, _) in component.match_indices("SdTextField {") {
+        let before = &component[..at];
+        let if_at = before
+            .rfind("if ")
+            .expect("every `SdTextField` must sit inside an `if` condition");
+        let condition_end = before[if_at..]
+            .find(':')
+            .map(|i| if_at + i)
+            .unwrap_or(before.len());
+        let condition = &before[if_at..condition_end];
+        assert!(
+            condition.contains("editing"),
+            "an `SdTextField` whose enclosing condition does not mention `editing` would render in \
+             locked mode too: {condition:?}"
+        );
+    }
+
+    // The `Fixed at compose` chip must sit inside a condition that mentions `editing` too - ticket
+    // 14 restricts it to edit mode outright.
+    let chip_at = component
+        .find("Fixed at compose")
+        .expect("the `Fixed at compose` chip must exist somewhere (ticket 14)");
+    let before_chip = &component[..chip_at];
+    let chip_if_at = before_chip
+        .rfind("if ")
+        .expect("the chip must sit inside an `if` condition");
+    assert!(
+        before_chip[chip_if_at..].contains("editing"),
+        "the `Fixed at compose` chip must be gated on `editing`"
     );
 
-    // No affordance on the image block specifically.
+    // Every `TouchArea {` this file itself declares (not one owned internally by `SdTextField`,
+    // `SdActionButton` or `SdModalHeader`): the scrim that swallows a miss-click, and the discard-
+    // changes confirmation's own scrim + panel guard, borrowed from the Library's Disassemble/Delete
+    // dialogs. Three, not one, now that ticket 14 added that confirmation - any more would be an
+    // affordance nothing here asked for.
+    let own_touch_areas = component.matches("TouchArea {").count();
+    assert_eq!(
+        own_touch_areas, 3,
+        "review-update.slint itself must declare exactly three `TouchArea`s: the scrim, and the \
+         discard-changes confirmation's own scrim and panel guard"
+    );
+
+    // No affordance on the image block specifically, beyond the `Fixed at compose` chip already
+    // checked above.
     let image_block_at = component
         .find(r#"if block.kind == "image""#)
         .expect("the image block must exist");
-    let image_block = flat(&component[image_block_at..(image_block_at + 700).min(component.len())]);
+    let image_block = flat(&component[image_block_at..(image_block_at + 900).min(component.len())]);
     assert!(
         !image_block.contains("TouchArea") && !image_block.contains("IconButton"),
         "no TouchArea/IconButton on the image - ticket 05 found none on an image in the compose \
@@ -282,11 +364,12 @@ fn locked_mode_declares_no_affordance() {
     );
 }
 
-/// The header carries the static provenance line and the `As composed` badge; there is no
-/// Edit/Preview pair (checked above) and the footer's `Edit` is disabled, per the hand-off's own
-/// choice: rendered, not omitted, and never enabled ahead of ticket 14.
+/// The header carries the static provenance line and the `As composed`/`Editing` badge (ticket 14
+/// gives it a second state rather than a second control); there is no Edit/Preview pair (checked
+/// above), and the footer's Edit is a REAL control now - `enabled: false` is gone, because ticket 14
+/// is the thing that used to be missing behind it.
 #[test]
-fn header_and_footer_match_the_locked_spec() {
+fn header_and_footer_match_the_spec() {
     let component = read("ui/components/review-update.slint");
 
     assert!(
@@ -302,18 +385,207 @@ fn header_and_footer_match_the_locked_spec() {
         "the header must carry the `As composed` badge"
     );
     assert!(
-        !component.contains("\"Editing\""),
-        "no `Editing` state exists yet - that is ticket 14's, and rendering it now would be a \
-         control with nothing behind it"
+        component.contains("\"Editing\""),
+        "the header must carry the `Editing` badge too (ticket 14)"
     );
 
     assert!(
-        component.contains("label: \"Edit\";") && component.contains("enabled: false;"),
-        "the footer's Edit button must exist and be disabled - it does nothing until ticket 14, and \
-         the map's own rule forbids a control that does"
+        component.contains("label: \"Edit\";") && !component.contains("enabled: false;"),
+        "the footer's Edit button must exist and be a real, enabled control now that ticket 14 gives \
+         it something to do"
     );
+    let edit_at = component.find("label: \"Edit\";").expect("checked above");
+    let edit_button = flat(&component[edit_at..(edit_at + 150).min(component.len())]);
+    assert!(
+        edit_button.contains("root.edit-clicked()"),
+        "Edit must actually fire `edit-clicked()`: {edit_button}"
+    );
+
     assert!(
         component.contains("label: \"Close\";"),
-        "the footer's secondary action must be Close"
+        "the footer's locked-mode secondary action must be Close"
+    );
+    assert!(
+        component.contains("label: \"Save\";") && component.contains("label: \"Cancel\";"),
+        "the footer's editing-mode actions must be Save and Cancel"
+    );
+    // Save carries no `enabled:` binding at all - "always clickable once editing" (ticket 05's
+    // amendment) means it is simply never disabled, not disabled-then-re-enabled by some condition.
+    let save_at = component.find("label: \"Save\";").expect("checked above");
+    let save_button = flat(&component[save_at..(save_at + 200).min(component.len())]);
+    assert!(
+        !save_button.contains("enabled:"),
+        "Save must carry no `enabled:` binding of any kind: {save_button}"
+    );
+    assert!(
+        save_button.contains("root.save-clicked()"),
+        "Save must actually fire `save-clicked()`: {save_button}"
+    );
+}
+
+/// Every callback ticket 14 added is bound at the mount site to a root-level callback with a real
+/// handler in `main.rs` - the same reachability proof `every_review_update_callback_is_bound_from_
+/// slint_to_rust` already gives locked mode's own `closed()`.
+#[test]
+fn every_ticket_14_callback_is_bound_from_slint_to_rust() {
+    let component = read("ui/components/review-update.slint");
+    let window = read("ui/appwindow.slint");
+    let main = read("src/main.rs");
+
+    for callback in [
+        "callback edit-clicked();",
+        "callback field-edited(string, int, int, string);",
+        "callback save-clicked();",
+        "callback cancel-clicked();",
+        "callback discard-clicked();",
+    ] {
+        assert!(
+            component.contains(callback),
+            "`SdReviewUpdate` must declare `{callback}`"
+        );
+    }
+
+    let at = window
+        .find("if root.review-update-open : SdReviewUpdate {")
+        .expect("the mount site must exist");
+    let mount = flat(&window[at..(at + 900).min(window.len())]);
+
+    for (forward, root_callback, handler) in [
+        (
+            "edit-clicked => { root.review-update-edit-clicked(); }",
+            "callback review-update-edit-clicked();",
+            "on_review_update_edit_clicked(",
+        ),
+        (
+            "save-clicked => { root.review-update-save-clicked(); }",
+            "callback review-update-save-clicked();",
+            "on_review_update_save_clicked(",
+        ),
+        (
+            "cancel-clicked => { root.review-update-cancel-clicked(); }",
+            "callback review-update-cancel-clicked();",
+            "on_review_update_cancel_clicked(",
+        ),
+        (
+            "discard-clicked => { root.review-update-discard-clicked(); }",
+            "callback review-update-discard-clicked();",
+            "on_review_update_discard_clicked(",
+        ),
+    ] {
+        assert!(
+            mount.contains(forward),
+            "the mount site must forward `{forward}`"
+        );
+        assert!(
+            window.contains(root_callback),
+            "`AppWindow` must declare `{root_callback}`"
+        );
+        assert!(
+            main.contains(handler),
+            "`{handler}` must exist in main.rs, or the forwarded callback reaches nobody"
+        );
+    }
+
+    // `field-edited` carries arguments, so its forwarding line reads differently from the other
+    // four - checked on its own.
+    assert!(
+        mount.contains(
+            "root.review-update-field-edited(kind, finding-ordinal, marker-ordinal, text)"
+        ),
+        "the mount site must forward `field-edited`'s four arguments through by name: {mount}"
+    );
+    assert!(
+        window.contains("callback review-update-field-edited(string, int, int, string);"),
+        "`AppWindow` must declare `review-update-field-edited` with all four argument types"
+    );
+    assert!(
+        main.contains("on_review_update_field_edited("),
+        "`on_review_update_field_edited` must exist in main.rs"
+    );
+
+    // `editing` and `cancel-pending` are the two-way/one-way properties the whole mode switch and
+    // the confirmation dialog stand on - both must actually be bound at the mount site, not merely
+    // declared somewhere.
+    assert!(
+        mount.contains("editing: root.review-update-editing;"),
+        "the mount site must bind `editing` to `AppWindow`'s own property: {mount}"
+    );
+    assert!(
+        mount.contains("cancel-pending <=> root.review-update-cancel-pending;"),
+        "`cancel-pending` must be bound TWO-WAY, so `SdReviewUpdate`'s own \"Keep editing\" button \
+         can dismiss it without a Rust round trip: {mount}"
+    );
+}
+
+/// The discard-changes confirmation itself: shown only when `cancel-pending` is set, "Keep editing"
+/// clears it locally (no callback - a two-way property write is enough), and "Discard changes"
+/// clears it AND fires `discard-clicked()`.
+#[test]
+fn the_discard_changes_confirmation_is_wired() {
+    let component = code_only(&read("ui/components/review-update.slint"));
+
+    let at = component
+        .find("if root.cancel-pending : Rectangle {")
+        .expect("the confirmation must be gated on `cancel-pending`");
+    let dialog = flat(&component[at..(at + 2200).min(component.len())]);
+
+    assert!(
+        dialog.contains("label: \"Keep editing\";"),
+        "the confirmation's cancel verb must keep what the act would destroy (the map's own \
+         confirmation copy rule): {dialog}"
+    );
+    assert!(
+        dialog.contains("label: \"Discard changes\";"),
+        "the confirmation's confirm verb must be the act: {dialog}"
+    );
+    assert!(
+        dialog.contains("root.discard-clicked()"),
+        "\"Discard changes\" must fire `discard-clicked()`: {dialog}"
+    );
+}
+
+/// Cancel's own decision lives in Rust, not in Slint: `on_review_update_cancel_clicked` must check
+/// dirtiness (via `review_update_edit_is_dirty`) before deciding whether to show the confirmation or
+/// return to locked immediately, and Save's failure path must leave `editing` on and the buffer
+/// alive so a retry has something to retry with.
+#[test]
+fn cancel_decides_in_rust_and_a_failed_save_keeps_the_buffer_alive() {
+    let main = read("src/main.rs");
+
+    assert!(
+        main.contains("on_review_update_cancel_clicked("),
+        "`on_review_update_cancel_clicked` must exist"
+    );
+    let cancel_at = main.find("on_review_update_cancel_clicked(").unwrap();
+    let cancel_body = flat(&main[cancel_at..(cancel_at + 1200).min(main.len())]);
+    assert!(
+        cancel_body.contains("review_update_edit_is_dirty("),
+        "Cancel must ask the dirty predicate, not guess: {cancel_body}"
+    );
+    assert!(
+        cancel_body.contains("set_review_update_cancel_pending(true)"),
+        "a dirty buffer must raise the confirmation: {cancel_body}"
+    );
+
+    assert!(
+        main.contains("on_review_update_save_clicked("),
+        "`on_review_update_save_clicked` must exist"
+    );
+    let save_at = main.find("on_review_update_save_clicked(").unwrap();
+    // Scanned as flat text rather than `rust_fn_body`, which matches braces from a top-level `fn` -
+    // this is a closure passed to `on_review_update_save_clicked(`, not a `fn` of that name.
+    let save_handler = flat(&main[save_at..(save_at + 1800).min(main.len())]);
+    let err_arm_at = save_handler
+        .find("Err(message) =>")
+        .expect("the Save handler must have an Err arm");
+    let err_arm = &save_handler[err_arm_at..(err_arm_at + 200).min(save_handler.len())];
+    assert!(
+        !err_arm.contains("set_review_update_editing(false)") && !err_arm.contains("= None"),
+        "a failed Save must not flip `editing` off or drop the buffer - BR-5's \"an unsaved edit \
+         survives so it can be tried again\": {err_arm}"
+    );
+    assert!(
+        err_arm.contains("toast(&win, message, true)"),
+        "a failed Save must tell the Reviewer what refused: {err_arm}"
     );
 }
