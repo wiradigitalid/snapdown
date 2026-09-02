@@ -30,14 +30,20 @@ export struct LibraryBundleRow {
 // (Settings auto-saves as you go, so a stray Escape closing it would read as losing a change - the
 // Library has no editable state at all in this ticket, so that risk does not apply here).
 //
-// Rows carry two everyday actions - `ticket 12` of the Bundle Library spec: Copy Markdown and Open
-// file location, on hover and in the row's own right-click/overflow menu. `ticket 16` adds the
-// destructive group (Disassemble…/Delete…) to the SAME `row-menu` model rather than a second menu:
-// the menu order matches `spec.md`'s "Menu order and the two states" - Copy Markdown, Open file
-// location, then the destructive group, whose single verb is read live from whether the Bundle's
-// Findings still exist (`BR-122`), never cached. Opening the menu (right-click or the overflow
-// button) always asks Rust via `row-menu-requested`, because that live read has to happen at open
-// time - ticket 12's two hover icons stay direct callbacks, unaffected by the menu at all.
+// A row's CLICK opens Review & Update, locked (`ticket 13`) - `bundle-opened(id)` below, wired on
+// the row's own `TouchArea` (`row-touch`) alongside that same TouchArea's right-click, which still
+// raises the row menu (see below). Rows also carry two everyday actions - `ticket 12` of the Bundle
+// Library spec: Copy Markdown and Open file location, on hover and in the row's own
+// right-click/overflow menu. `ticket 16` adds the destructive group (Disassemble…/Delete…) to the
+// SAME `row-menu` model rather than a second menu: the menu order matches `spec.md`'s "Menu order
+// and the two states" - Copy Markdown, Open file location, then the destructive group, whose single
+// verb is read live from whether the Bundle's Findings still exist (`BR-122`), never cached. Opening
+// the menu (right-click or the overflow button) always asks Rust via `row-menu-requested`, because
+// that live read has to happen at open time - ticket 12's two hover icons stay direct callbacks,
+// unaffected by the menu at all, and ticket 13's click-to-open stays a direct callback too: the two
+// hover icons and the overflow button sit in front of `row-touch` in the same Rectangle, so they
+// intercept their own clicks before `row-touch` ever sees them, and `row-touch` itself splits its
+// own left click (open) from its own right click (menu).
 export component SdLibrary inherits Rectangle {
     // "loading" | "error" | "ready". "ready" with an empty `rows` IS the empty state - there is no
     // fourth value for it, because a value that only restates `rows.length == 0` is a second place
@@ -49,6 +55,8 @@ export component SdLibrary inherits Rectangle {
     callback closed();
     callback try-again-clicked();
     callback open-file-location-clicked();
+    // A row was clicked - the Bundle's id. Opens Review & Update, locked (ticket 13).
+    callback bundle-opened(string);
     // Bundle id. Copy Markdown puts the Bundle's stored document on the clipboard, rebased so its
     // image links resolve on this disk - the rebasing itself is Rust's job (the composer's own
     // `rebase_image_links`), this callback only says WHICH Bundle.
@@ -328,16 +336,20 @@ export component SdLibrary inherits Rectangle {
                                 border-color: Theme.border-subtle;
 
                                 row-touch := TouchArea {
-                                    // No `clicked` handler and a `default` cursor: this ticket does
-                                    // not open Review & Update (a later ticket does), so the row
-                                    // must not read as clickable on the LEFT click. The TouchArea
-                                    // exists for hover (the background and the two hover actions)
-                                    // and for a right-click, which raises the same row menu the
-                                    // overflow button does - the filmstrip's own gesture
-                                    // (`appwindow.slint`'s `finding-menu`), copied here. Both routes
-                                    // ask Rust (`row-menu-requested`), never set state locally, so the
-                                    // destructive entry's verb is read live every time the menu opens.
-                                    mouse-cursor: default;
+                                    // LEFT click opens Review & Update, locked, on the Bundle exactly
+                                    // as composed (`ticket 13`) - `pointer`, not `default`, because
+                                    // this now reads as clickable. A RIGHT click raises the same row
+                                    // menu the overflow button does - the filmstrip's own gesture
+                                    // (`appwindow.slint`'s `finding-menu`), copied here (`ticket
+                                    // 12`/`ticket 16`). Both routes ask Rust (`row-menu-requested`
+                                    // for the right click; `bundle-opened` for the left), never set
+                                    // state locally, so the destructive entry's verb is read live
+                                    // every time the menu opens. The two hover icons and the overflow
+                                    // button sit later in this same Rectangle's tree, so they draw on
+                                    // top of `row-touch` and intercept their own clicks first - a
+                                    // click on either never reaches this TouchArea at all.
+                                    mouse-cursor: pointer;
+                                    clicked => { root.bundle-opened(row.id); }
                                     pointer-event(ev) => {
                                         if (ev.kind == PointerEventKind.down
                                             && ev.button == PointerEventButton.right) {

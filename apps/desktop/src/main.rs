@@ -452,6 +452,169 @@ fn remove_bundle_row_and_folder(ctx: &AppContext, bundle_id: &str) -> Result<boo
     }
 }
 
+/// The widest a Review & Update image is ever decoded - the same bound `PREVIEW_MAX_EDGE` gives the
+/// Assemble preview, for the same reason: an open window should not hold several full-resolution
+/// decodes at once.
+const REVIEW_UPDATE_MAX_EDGE: u32 = 900;
+
+/// Resolves one Finding's stored image link the way a CommonMark reader resolves it: against the
+/// document's OWN folder, exactly as `test_nfr8_image_resolution.rs` already proves for the
+/// serializer's own output. This - not `BundleItem.image_path`, and never a Finding's `image_path` -
+/// is "the Bundle's own stored image path" ticket 13 means: it comes from the parsed document alone,
+/// so it resolves identically whether the Bundle is sealed or not.
+fn resolve_bundle_document_image(
+    vault_path: &Path,
+    markdown_path: &str,
+    image_link: &str,
+) -> PathBuf {
+    let relative = image_link.trim_start_matches("./");
+    let folder = markdown_path
+        .trim_start_matches('/')
+        .rsplit_once('/')
+        .map(|(folder, _)| folder);
+    match folder {
+        Some(folder) => vault_path.join(folder).join(relative),
+        None => vault_path.join(relative),
+    }
+}
+
+/// The Bundle exactly as composed, as a flat sequence of blocks - Review & Update's locked view
+/// (`ticket 13`). Built ENTIRELY from `MarkdownSerializer::parse_bundle_document`'s read of the
+/// Bundle's own stored document: this function never touches `ctx.finding_store` and never looks at
+/// a `BundleItem` either, which is exactly what lets a sealed Bundle (`BR-11`, its Findings already
+/// deleted) open exactly like an unsealed one - there is nothing here that COULD notice the
+/// difference.
+fn review_update_doc_blocks(
+    ctx: &AppContext,
+    bundle: &Bundle,
+) -> Result<Vec<ReviewUpdateBlock>, String> {
+    let parsed = MarkdownSerializer::parse_bundle_document(&bundle.markdown)
+        .map_err(|e| format!("This Bundle's document could not be read: {e}"))?;
+
+    let mut blocks = Vec::new();
+    blocks.push(ReviewUpdateBlock {
+        kind: "title".into(),
+        text: parsed.title.clone().into(),
+        ..Default::default()
+    });
+    if !parsed.notes.trim().is_empty() {
+        blocks.push(ReviewUpdateBlock {
+            kind: "bundle-notes".into(),
+            text: parsed.notes.clone().into(),
+            ..Default::default()
+        });
+    }
+
+    for finding in &parsed.findings {
+        let position = finding.position as i32;
+        blocks.push(ReviewUpdateBlock {
+            kind: "finding".into(),
+            ordinal: position,
+            ..Default::default()
+        });
+
+        // The BUNDLE's own copy, decoded from disk at the path the stored document itself names -
+        // never a Finding's clean image, and never read through the Finding store.
+        let image_path = resolve_bundle_document_image(
+            &ctx.vault_path,
+            &bundle.markdown_path,
+            &finding.image_link,
+        );
+        let image = std::fs::read(&image_path)
+            .ok()
+            .and_then(|bytes| image::load_from_memory(&bytes).ok())
+            .map(|decoded| {
+                rgba_to_slint_image(
+                    &decoded
+                        .thumbnail(REVIEW_UPDATE_MAX_EDGE, REVIEW_UPDATE_MAX_EDGE)
+                        .to_rgba8(),
+                )
+            })
+            .unwrap_or_default();
+
+        blocks.push(ReviewUpdateBlock {
+            kind: "image".into(),
+            ordinal: position,
+            image,
+            ..Default::default()
+        });
+
+        if !finding.note.trim().is_empty() {
+            blocks.push(ReviewUpdateBlock {
+                kind: "note".into(),
+                text: finding.note.clone().into(),
+                ..Default::default()
+            });
+        }
+
+        for (marker_index, marker) in finding.markers.iter().enumerate() {
+            blocks.push(ReviewUpdateBlock {
+                kind: "marker".into(),
+                ordinal: marker.ordinal as i32,
+                text: marker.comment.clone().into(),
+                // The heading prints once, above the first Marker.
+                starts_section: marker_index == 0,
+                ..Default::default()
+            });
+        }
+    }
+
+    Ok(blocks)
+}
+
+/// Opens Review & Update, locked, on the Bundle a Library row named. Re-reads the store rather than
+/// trusting the row's own cached fields, the same discipline `open_library` follows for Try again -
+/// the Library and this window can otherwise disagree about a Bundle that changed between the two.
+fn open_review_update(window: &AppWindow, ctx: &AppContext, bundle_id: &str) {
+    let Some(store) = ctx.bundle_store.as_ref() else {
+        toast(window, "The Bundle library could not be opened.", true);
+        return;
+    };
+    let bundle = match store.get_bundle(bundle_id) {
+        Ok(Some(detail)) => detail.bundle,
+        Ok(None) => {
+            toast(window, "That Bundle is no longer in the Library.", true);
+            return;
+        }
+        Err(e) => {
+            toast(window, format!("Could not open that Bundle: {e}"), true);
+            return;
+        }
+    };
+
+    let blocks = match review_update_doc_blocks(ctx, &bundle) {
+        Ok(blocks) => blocks,
+        Err(message) => {
+            toast(window, message, true);
+            return;
+        }
+    };
+
+    let finding_count = blocks.iter().filter(|b| b.kind == "finding").count();
+    window.set_review_update_provenance(
+        format!(
+            "{finding_count} Finding{} · composed {}",
+            if finding_count == 1 { "" } else { "s" },
+            relative_time(&bundle.composed_at, chrono::Utc::now())
+        )
+        .into(),
+    );
+    window.set_review_update_blocks(ModelRc::from(Rc::new(VecModel::from(blocks))));
+    window.set_review_update_open(true);
+}
+
+/// Closes Review & Update. Only its own gate and its own blocks - never `library_open` or anything
+/// else the Library or the Editor own, which is what keeps the Library's scroll position intact on
+/// the way back (`ticket 13`'s own acceptance criterion).
+fn close_review_update(window: &AppWindow) {
+    window.set_review_update_open(false);
+    // The blocks hold every decoded image. Dropping them on close bounds the cost to the time the
+    // window is open, the same reasoning `close_bundle_preview` already follows.
+    window.set_review_update_blocks(ModelRc::from(Rc::new(VecModel::from(Vec::<
+        ReviewUpdateBlock,
+    >::new()))));
+}
+
 fn load_findings_into_window(
     window: &AppWindow,
     ctx: &AppContext,
@@ -4627,6 +4790,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // REVIEW & UPDATE, LOCKED MODE (ticket 13 of the Bundle Library spec). Opens over the Library on
+    // a row click, built entirely from the Bundle's own stored document - never a Finding. Closing
+    // touches nothing the Library or the Editor own, which is what keeps the Library's scroll
+    // position intact underneath.
+    let win_review_update = main_window.as_weak();
+    let ctx_review_update = ctx.clone();
+    main_window.on_library_bundle_clicked(move |bundle_id| {
+        let Some(win) = win_review_update.upgrade() else {
+            return;
+        };
+        open_review_update(&win, &ctx_review_update, &bundle_id);
+    });
+
+    let win_review_update_closed = main_window.as_weak();
+    main_window.on_review_update_closed(move || {
+        if let Some(win) = win_review_update_closed.upgrade() {
+            close_review_update(&win);
+        }
+    });
+
     // Bundles Drawer Toggle. Deliberately untouched by this ticket - the spec's own "Out of Scope"
     // names it as a separate, undescribed pattern nothing has asked for yet.
     main_window.on_bundles_drawer_clicked(|| {
@@ -7048,5 +7231,221 @@ mod tests {
         );
 
         drop(held_open);
+    }
+
+    // ===== ticket 13: Review & Update opens locked, and never reads a Finding =================
+
+    /// A `Bundle` whose stored document differs from what its Findings would produce today, plus a
+    /// real burned image file laid out on a temp Vault the way `write_bundle` lays one out - the
+    /// fixture this ticket's own acceptance criteria name: "verified against a Bundle whose stored
+    /// document was hand-edited to differ from what its Findings would produce today".
+    fn stored_document_edited_after_composing_fixture(
+        vault_dir: &Path,
+        bundle_id: &str,
+        stored_note: &str,
+    ) -> Bundle {
+        let markdown_path = format!("bundles/{bundle_id}/bundle.md");
+        let mut stored_detail = detail("f-1", 20, 14, vec![]);
+        stored_detail.note.body = stored_note.to_string();
+        let item = BundleItem::new(
+            format!("{bundle_id}-item-1"),
+            bundle_id.to_string(),
+            "f-1".to_string(),
+            1,
+            format!("bundles/{bundle_id}/finding_1_burned.png"),
+        )
+        .unwrap();
+        let stored_markdown = MarkdownSerializer::serialize_bundle(
+            "Hand-Edited Review",
+            "",
+            &[(&item, &stored_detail)],
+            &markdown_path,
+        );
+
+        let image_path = vault_dir
+            .join("bundles")
+            .join(bundle_id)
+            .join("finding_1_burned.png");
+        std::fs::create_dir_all(image_path.parent().unwrap()).unwrap();
+        std::fs::write(&image_path, png_fixture(20, 14)).unwrap();
+
+        Bundle::new(
+            bundle_id.to_string(),
+            "Hand-Edited Review".into(),
+            stored_markdown,
+            markdown_path,
+            "2026-08-20T10:00:00Z".into(),
+        )
+        .unwrap()
+    }
+
+    /// The ticket's own fixture: the stored document says one thing, a LIVE Finding with the same id
+    /// says another. `review_update_doc_blocks` must render the stored text - which it does simply
+    /// by never asking the Finding store anything at all.
+    #[test]
+    fn review_update_doc_blocks_render_the_stored_document_even_when_a_live_finding_disagrees() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle = stored_document_edited_after_composing_fixture(
+            vault_dir.path(),
+            "b-hand-edited",
+            "Corrected by hand after composing.",
+        );
+
+        // A live Finding for the same id, carrying text the stored document does NOT have. If this
+        // path read the Finding store even once, this is what it would surface instead.
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        let mut live_detail = detail("f-1", 20, 14, vec![]);
+        live_detail.note.body = "What the Finding says RIGHT NOW - unrelated to the Bundle.".into();
+        finding_store
+            .create_finding(
+                &live_detail.finding,
+                &live_detail.note,
+                &live_detail.markers,
+            )
+            .expect("seed a live Finding");
+
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+
+        let blocks =
+            review_update_doc_blocks(&ctx, &bundle).expect("a well-formed document must parse");
+        let notes: Vec<&str> = blocks
+            .iter()
+            .filter(|b| b.kind == "note")
+            .map(|b| b.text.as_str())
+            .collect();
+        assert_eq!(
+            notes,
+            vec!["Corrected by hand after composing."],
+            "the STORED document's text must render, not a regeneration from the live Finding"
+        );
+        assert!(
+            !blocks.iter().any(|b| b.text.contains("RIGHT NOW")),
+            "the live Finding's text must never appear anywhere: this path reads only the stored \
+             document"
+        );
+    }
+
+    /// A sealed Bundle (`BR-11`: its Findings already deleted) must render IDENTICALLY to how it did
+    /// before sealing. Built the same fixture twice - once against an EMPTY Finding store, once
+    /// against one seeded with a Finding for the same id - and asserts the two renders are the same,
+    /// which is only possible because neither call can see the Finding store at all.
+    #[test]
+    fn review_update_doc_blocks_render_a_sealed_bundle_identically_to_an_unsealed_one() {
+        let sealed_vault = tempfile::tempdir().expect("a temp dir");
+        let sealed_bundle = stored_document_edited_after_composing_fixture(
+            sealed_vault.path(),
+            "b-sealed",
+            "The original note.",
+        );
+        let sealed_ctx = AppContext {
+            vault_store: VaultBlobStore::new(sealed_vault.path()).expect("a vault at a temp path"),
+            vault_path: sealed_vault.path().to_path_buf(),
+            // EMPTY - the sealed case: every Finding this Bundle ever held is gone.
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+        let sealed_blocks = review_update_doc_blocks(&sealed_ctx, &sealed_bundle)
+            .expect("a sealed Bundle's own document must still parse");
+
+        let unsealed_vault = tempfile::tempdir().expect("a temp dir");
+        // Same bundle id and same stored text, laid out on a second Vault, but with a Finding of the
+        // same id still present in the store this time.
+        let unsealed_bundle = stored_document_edited_after_composing_fixture(
+            unsealed_vault.path(),
+            "b-sealed",
+            "The original note.",
+        );
+        let unsealed_finding_store =
+            SqliteFindingStore::open_in_memory().expect("a findings store");
+        let present = detail("f-1", 20, 14, vec![]);
+        unsealed_finding_store
+            .create_finding(&present.finding, &present.note, &present.markers)
+            .expect("seed the still-present Finding");
+        let unsealed_ctx = AppContext {
+            vault_store: VaultBlobStore::new(unsealed_vault.path())
+                .expect("a vault at a temp path"),
+            vault_path: unsealed_vault.path().to_path_buf(),
+            finding_store: Arc::new(unsealed_finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+        let unsealed_blocks = review_update_doc_blocks(&unsealed_ctx, &unsealed_bundle)
+            .expect("an unsealed Bundle's own document must parse the same way");
+
+        assert_eq!(
+            sealed_blocks.len(),
+            unsealed_blocks.len(),
+            "sealing must not change the block count"
+        );
+        for (sealed, unsealed) in sealed_blocks.iter().zip(unsealed_blocks.iter()) {
+            assert_eq!(sealed.kind, unsealed.kind);
+            assert_eq!(sealed.ordinal, unsealed.ordinal);
+            assert_eq!(sealed.text, unsealed.text);
+            assert_eq!(sealed.starts_section, unsealed.starts_section);
+        }
+        // And the image itself DECODED in both cases - the Bundle's own copy, read from disk by the
+        // path the stored document names, present whether or not the Finding is.
+        let sealed_image = sealed_blocks
+            .iter()
+            .find(|b| b.kind == "image")
+            .expect("an image block must exist");
+        let unsealed_image = unsealed_blocks
+            .iter()
+            .find(|b| b.kind == "image")
+            .expect("an image block must exist");
+        assert!(
+            sealed_image.image.size().width > 0,
+            "the sealed image must actually decode"
+        );
+        assert_eq!(sealed_image.image.size(), unsealed_image.image.size());
+    }
+
+    /// A document `parse_bundle_document` refuses (never produced by this composer) must refuse out
+    /// loud, the same shape every other Bundle-library path in this file uses, rather than panicking
+    /// or silently opening an empty window.
+    #[test]
+    fn review_update_doc_blocks_refuses_out_loud_on_a_document_it_cannot_parse() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle = Bundle::new(
+            "b-broken".into(),
+            "Broken".into(),
+            "Not a Bundle document at all".into(),
+            "bundles/b-broken/bundle.md".into(),
+            "2026-08-20T10:00:00Z".into(),
+        )
+        .unwrap();
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+
+        let err = review_update_doc_blocks(&ctx, &bundle)
+            .expect_err("a document this composer never wrote must be refused, not guessed at");
+        assert!(
+            err.contains("could not be read"),
+            "the message must name what refused: {err}"
+        );
     }
 }

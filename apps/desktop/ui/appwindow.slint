@@ -21,6 +21,7 @@ import { SdModalHeader } from "components/modal.slint";
 import { SdActionButton, SdSectionLabel, SdCaption, SdDocHeading } from "components/action-button.slint";
 import { AnnotationItem, AnnotationData } from "components/annotation.slint";
 import { SdLibrary, LibraryBundleRow } from "components/library.slint";
+import { SdReviewUpdate, ReviewUpdateBlock } from "components/review-update.slint";
 
 import "../assets/fonts/IBMPlexSans-Medium.ttf";
 import "../assets/fonts/IBMPlexSans-SemiBold.ttf";
@@ -1381,6 +1382,14 @@ export component AppWindow inherits Window {
     callback library-delete-cancelled();
     callback library-delete-confirmed(string);
 
+    // REVIEW & UPDATE, LOCKED MODE (`ticket 13`). Sits ABOVE the Library (declared after it below),
+    // never closes it - `library-open` is left alone by every callback here, which is what makes
+    // "Close returns to the Library with its scroll position intact" true by construction: the
+    // Library's own `SdLibrary` instance, and its `ScrollView`'s state, are never torn down.
+    in-out property <bool> review-update-open: false;
+    in property <[ReviewUpdateBlock]> review-update-blocks: [];
+    in property <string> review-update-provenance: "";
+
     // id, ctrl held, shift held. One callback rather than two, because a click on a card is one
     // gesture whose MEANING depends on the modifiers - splitting it into "selected" and "toggled"
     // put the interpretation in the UI, where the anchor for a Shift range does not live.
@@ -1393,6 +1402,9 @@ export component AppWindow inherits Window {
     // Bundle id, forwarded from `SdLibrary`'s own row-level callbacks (`ticket 12`).
     callback library-copy-markdown-clicked(string);
     callback library-bundle-open-file-location-clicked(string);
+    // A Library row was clicked - the Bundle's id. Opens Review & Update, locked.
+    callback library-bundle-clicked(string);
+    callback review-update-closed();
     callback capture-clicked();
     callback open-file-clicked();
     callback paste-clicked();
@@ -3132,6 +3144,16 @@ export component AppWindow inherits Window {
             disassemble-confirmed(id) => { root.library-disassemble-confirmed(id); }
             delete-cancelled => { root.library-delete-cancelled(); }
             delete-confirmed(id) => { root.library-delete-confirmed(id); }
+            bundle-opened(id) => { root.library-bundle-clicked(id); }
+        }
+
+        // REVIEW & UPDATE, LOCKED MODE (`ticket 13`) - declared AFTER the Library so it stacks above
+        // it, never in place of it. `library-open` stays true underneath the whole time this is open.
+        if root.review-update-open : SdReviewUpdate {
+            blocks: root.review-update-blocks;
+            provenance: root.review-update-provenance;
+
+            closed => { root.review-update-closed(); }
         }
 
         // SETTINGS - above the Editor, below the context menu and the confirmations, because those
