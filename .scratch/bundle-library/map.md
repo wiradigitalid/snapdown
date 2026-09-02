@@ -12,7 +12,8 @@ terms.
 
 The map ends when `/to-spec` can be run without a further decision being needed. It does not build
 anything. **That condition was met on 2026-09-02**, when ticket 09 - the last open decision - closed.
-The next step is `/to-spec`.
+`/to-spec` ran the same day and produced `spec.md`; `/to-tickets` cut it into implementation tickets
+`issues/10`-`19`, numbered after the nine decision tickets. Three can start at once: 10, 11, 19.
 
 ## Notes
 

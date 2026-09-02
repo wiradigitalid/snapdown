@@ -21,7 +21,9 @@ Give it a size and placement that looks deliberate on its own rather than like a
 buttons used to be — the old 52px width was chosen to sit beside a wider Assemble that is no longer
 there. No wording change beyond the Copy → Copy Image rename.
 
-**Blocked by:** the action-vocabulary rework itself (removal of Share and ribbon Assemble, rename of
+**Blocked by:** `.scratch/bundle-library/issues/19-the-ribbon-acts-on-the-canvas.md`, which IS the
+action-vocabulary rework and also carries this ticket's sizing work; completing 19 marks this done.
+The original wording follows. The action-vocabulary rework itself (removal of Share and ribbon Assemble, rename of
 Copy). Do not size the group before those land — the layout question is meaningless until then.
 
 **Status:** blocked
