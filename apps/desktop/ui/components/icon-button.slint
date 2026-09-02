@@ -5,7 +5,6 @@ export component IconButton {
     in-out property <string> text: "";
     in-out property <bool> active: false;
     in-out property <bool> enabled: true;
-    in-out property <string> ordinal-hint: "";
     in-out property <color> custom-text-color: transparent;
     in-out property <length> icon-size: 16px;
 
@@ -29,17 +28,6 @@ export component IconButton {
             height: 2px;
             border-radius: Theme.radius-pill;
             background: Theme.accent-primary;
-        }
-
-        // Ordinal hint badge in top-right corner if present
-        if root.ordinal-hint != "" : Text {
-            x: parent.width - self.width - 4px;
-            y: 2px;
-            text: root.ordinal-hint;
-            font-size: 8.5px;
-            font-weight: 700;
-            font-family: "IBM Plex Mono";
-            color: root.active ? Theme.accent-active : Theme.text-dim;
         }
 
         // Content: vertical layout if text is present, or centered icon

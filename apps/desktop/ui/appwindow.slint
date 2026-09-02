@@ -1797,7 +1797,6 @@ export component AppWindow inherits Window {
                             icon: root.active-tool-index == 0 ? @image-url("../assets/icons/marker-active.svg") : @image-url("../assets/icons/marker-inactive.svg");
                             text: "Marker";
                             active: root.active-tool-index == 0;
-                            ordinal-hint: "1";
                             clicked => { root.active-tool-index = 0; }
                         }
 
@@ -1807,7 +1806,6 @@ export component AppWindow inherits Window {
                             icon: root.active-tool-index == 1 ? @image-url("../assets/icons/square-active.svg") : @image-url("../assets/icons/square.svg");
                             text: "Shape";
                             active: root.active-tool-index == 1;
-                            ordinal-hint: "2";
                             clicked => { root.active-tool-index = 1; }
                         }
 
@@ -1817,7 +1815,6 @@ export component AppWindow inherits Window {
                             icon: root.active-tool-index == 2 ? @image-url("../assets/icons/message-square-active.svg") : @image-url("../assets/icons/message-square.svg");
                             text: "Callout";
                             active: root.active-tool-index == 2;
-                            ordinal-hint: "3";
                             clicked => { root.active-tool-index = 2; }
                         }
 
@@ -1827,7 +1824,6 @@ export component AppWindow inherits Window {
                             icon: root.active-tool-index == 3 ? @image-url("../assets/icons/blur-active.svg") : @image-url("../assets/icons/blur.svg");
                             text: "Blur";
                             active: root.active-tool-index == 3;
-                            ordinal-hint: "4";
                             clicked => { root.active-tool-index = 3; }
                         }
 
@@ -1837,7 +1833,6 @@ export component AppWindow inherits Window {
                             icon: root.active-tool-index == 4 ? @image-url("../assets/icons/arrow-up-right-active.svg") : @image-url("../assets/icons/arrow-up-right.svg");
                             text: "Arrow";
                             active: root.active-tool-index == 4;
-                            ordinal-hint: "5";
                             clicked => { root.active-tool-index = 4; }
                         }
 
@@ -1847,7 +1842,6 @@ export component AppWindow inherits Window {
                             icon: root.active-tool-index == 5 ? @image-url("../assets/icons/type-active.svg") : @image-url("../assets/icons/type.svg");
                             text: "Text";
                             active: root.active-tool-index == 5;
-                            ordinal-hint: "6";
                             clicked => { root.active-tool-index = 5; }
                         }
 
