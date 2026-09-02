@@ -1548,6 +1548,43 @@ fn open_folder(_path: &Path) -> Result<(), String> {
     Err("Showing a folder in the file manager is implemented on Windows only.".to_string())
 }
 
+/// A Bundle's own folder, absolute - its Markdown and its burned image copies together, never a
+/// single file inside it. `AD-4`'s layout puts a Bundle's own document at `bundles/{id}/bundle.md`
+/// under the Vault root, so the folder is the document's own parent - derived from `markdown_path`
+/// rather than assumed as `"bundles".join(id)` a second time, so a Bundle laid out differently one
+/// day (nothing in this codebase promises it never will be) is still followed correctly.
+fn bundle_folder_path(ctx: &AppContext, bundle: &Bundle) -> PathBuf {
+    match Path::new(&bundle.markdown_path).parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => ctx.vault_path.join(parent),
+        _ => ctx.vault_path.clone(),
+    }
+}
+
+/// Ticket 12's Copy Markdown: the Bundle's whole stored document, with every image link rewritten
+/// to an absolute path a local agent can open - same words, same order, only the link destinations
+/// differ (`AD-9` as narrowed by `DEC-012`). The rewriting itself is the composer rebasing its own
+/// document (`MarkdownSerializer::rebase_image_links`, ticket 10) - nothing here edits the text.
+///
+/// Works identically for a sealed Bundle (its original Findings gone): this reads only the Bundle's
+/// own stored `markdown`/`markdown_path`, never a Finding.
+fn bundle_markdown_for_clipboard(ctx: &AppContext, bundle_id: &str) -> Result<String, String> {
+    let store = ctx
+        .bundle_store
+        .as_ref()
+        .ok_or_else(|| "The Bundle library could not be opened.".to_string())?;
+    let detail = store
+        .get_bundle(bundle_id)
+        .map_err(|e| format!("Could not read the Bundle: {e}"))?
+        .ok_or_else(|| "That Bundle is no longer in the Library.".to_string())?;
+
+    MarkdownSerializer::rebase_image_links(
+        &detail.bundle.markdown,
+        &ctx.vault_path.to_string_lossy(),
+        &detail.bundle.markdown_path,
+    )
+    .map_err(|e| format!("Could not prepare the Markdown for copying: {e}"))
+}
+
 /// Which Findings a confirmed deletion should take.
 ///
 /// The filmstrip's own rule, the one every file manager uses: a right-click ON the selection acts on
@@ -3075,6 +3112,26 @@ fn put_bitmap_on_clipboard(bmp: &[u8]) -> Result<(), String> {
         .map_err(|e| format!("Could not write to the clipboard: {e}"))
 }
 
+/// Text onto the Windows clipboard, emptying it FIRST - ticket 12's Copy Markdown, and the same
+/// `Clipboard::new_attempts(10)` + explicit-clear discipline `put_bitmap_on_clipboard` established
+/// above. Unlike `raw::set_bitmap`, `raw::set_string_with` is passed `DoClear` here rather than
+/// relying on a default, for the same reason: the crate's own default for the STRING path already
+/// clears (`raw::set_string` is `DoClear` by default, unlike the bitmap path's `NoClear`), but the
+/// bitmap comment above is exactly why that default is not trusted silently a second time - it is
+/// named explicitly instead of assumed.
+#[cfg(windows)]
+fn put_text_on_clipboard(text: &str) -> Result<(), String> {
+    let _clip = clipboard_win::Clipboard::new_attempts(10)
+        .map_err(|e| format!("Could not open the clipboard: {e}"))?;
+    clipboard_win::raw::set_string_with(text, clipboard_win::options::DoClear)
+        .map_err(|e| format!("Could not write to the clipboard: {e}"))
+}
+
+#[cfg(not(windows))]
+fn put_text_on_clipboard(_text: &str) -> Result<(), String> {
+    Err("Writing to the clipboard is implemented on Windows only.".to_string())
+}
+
 /// `has_text_selection`: the note field currently holds a text selection.
 /// `force_image`: the chord is Ctrl+Enter, which never means text.
 fn copy_chord_target(has_text_selection: bool, force_image: bool) -> CopyChordTarget {
@@ -4313,6 +4370,64 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let db_path = app_database_path();
         if let Err(e) = open_file_location(&ctx_library_reveal, &db_path.to_string_lossy()) {
             toast(&win, e, true);
+        }
+    });
+
+    // COPY MARKDOWN (ticket 12) - the Bundle's whole stored document, image links rebased to an
+    // absolute path a local agent can open. The toast follows the house pattern of saying what did
+    // and did not travel: the paths carry the operator's user name, so it says so.
+    let win_library_copy_md = main_window.as_weak();
+    let ctx_library_copy_md = ctx.clone();
+    main_window.on_library_copy_markdown_clicked(move |bundle_id| {
+        let Some(win) = win_library_copy_md.upgrade() else {
+            return;
+        };
+        let markdown = match bundle_markdown_for_clipboard(&ctx_library_copy_md, bundle_id.as_str())
+        {
+            Ok(markdown) => markdown,
+            Err(message) => {
+                toast(&win, message, true);
+                return;
+            }
+        };
+        match put_text_on_clipboard(&markdown) {
+            Ok(()) => toast(
+                &win,
+                "Markdown copied. The image links carry their location on this disk.",
+                false,
+            ),
+            Err(message) => toast(&win, message, true),
+        }
+    });
+
+    // OPEN FILE LOCATION, per row (ticket 12) - the Bundle's OWN folder, not one file inside it
+    // (`open_folder`, not `open_file_location` - see that pair's own doc comments for why they are
+    // two different functions). Distinct from `library-open-file-location-clicked` above, which has
+    // no Bundle to point at.
+    let win_library_reveal_bundle = main_window.as_weak();
+    let ctx_library_reveal_bundle = ctx.clone();
+    main_window.on_library_bundle_open_file_location_clicked(move |bundle_id| {
+        let Some(win) = win_library_reveal_bundle.upgrade() else {
+            return;
+        };
+        let Some(store) = ctx_library_reveal_bundle.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+        let bundle = match store.get_bundle(bundle_id.as_str()) {
+            Ok(Some(detail)) => detail.bundle,
+            Ok(None) => {
+                toast(&win, "That Bundle is no longer in the Library.", true);
+                return;
+            }
+            Err(e) => {
+                toast(&win, format!("Could not read the Bundle: {e}"), true);
+                return;
+            }
+        };
+        let folder = bundle_folder_path(&ctx_library_reveal_bundle, &bundle);
+        if let Err(message) = open_folder(&folder) {
+            toast(&win, message, true);
         }
     });
 
@@ -6205,5 +6320,237 @@ mod tests {
             rows[0].thumbnail.size().width > 0,
             "the thumbnail must be a real decoded image, not the empty default"
         );
+    }
+
+    // ===== ticket 12: Copy Markdown and Open file location, from a Library row ==============
+
+    /// Builds a `(Bundle, [BundleItem])` pair whose `markdown` is a real composed document (via
+    /// `MarkdownSerializer::serialize_bundle`, not a hand-typed fixture), so `rebase_image_links`
+    /// has the exact grammar it expects to parse.
+    fn bundle_fixture(bundle_id: &str) -> (Bundle, Vec<BundleItem>) {
+        let fid = format!("f-{bundle_id}");
+        let finding_detail = detail(&fid, 40, 30, vec![]);
+        let item = BundleItem::new(
+            format!("bi-{bundle_id}"),
+            bundle_id.to_string(),
+            fid,
+            1,
+            format!("bundles/{bundle_id}/finding_1_burned.png"),
+        )
+        .unwrap();
+        let markdown_path = format!("bundles/{bundle_id}/bundle.md");
+        let markdown = MarkdownSerializer::serialize_bundle(
+            "Checkout Flow Review",
+            "",
+            &[(&item, &finding_detail)],
+            &markdown_path,
+        );
+        let bundle = Bundle::new(
+            bundle_id.to_string(),
+            "Checkout Flow Review".to_string(),
+            markdown,
+            markdown_path,
+            "2026-09-01T10:00:00Z".to_string(),
+        )
+        .unwrap();
+        (bundle, vec![item])
+    }
+
+    fn library_test_ctx(vault_dir: &Path, bundle_store: SqliteBundleStore) -> AppContext {
+        AppContext {
+            vault_store: VaultBlobStore::new(vault_dir).expect("a vault at a temp path"),
+            vault_path: vault_dir.to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        }
+    }
+
+    /// The acceptance criterion at its own seam: the clipboard text is produced by calling
+    /// `MarkdownSerializer::rebase_image_links` - not a second, UI-side reimplementation - so this
+    /// asserts equality against calling that function directly, the same way the ticket's checklist
+    /// asks for.
+    #[test]
+    fn bundle_markdown_for_clipboard_is_exactly_what_rebase_image_links_produces() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let (bundle, items) = bundle_fixture("b-1");
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("creating the Bundle must succeed");
+        let ctx = library_test_ctx(vault_dir.path(), bundle_store);
+
+        let got = bundle_markdown_for_clipboard(&ctx, "b-1").expect("must produce clipboard text");
+        let expected = MarkdownSerializer::rebase_image_links(
+            &bundle.markdown,
+            &vault_dir.path().to_string_lossy(),
+            &bundle.markdown_path,
+        )
+        .expect("rebase must succeed independently too");
+        assert_eq!(
+            got, expected,
+            "Copy Markdown must hand the composer's own rebase output to the clipboard, unchanged"
+        );
+
+        // And the diff from the stored document is exactly the image link destinations: absolute,
+        // forward-slashed, `<>`-wrapped - never anything else in the document.
+        assert_ne!(
+            got, bundle.markdown,
+            "rebasing must actually change something"
+        );
+        assert!(
+            got.contains('<'),
+            "the rebased link must be angle-bracket wrapped"
+        );
+        let vault_forward_slash = vault_dir.path().to_string_lossy().replace('\\', "/");
+        assert!(
+            got.contains(&format!(
+                "<{vault_forward_slash}/bundles/b-1/finding_1_burned.png>"
+            )),
+            "the rebased link must be absolute and point at the Bundle's own burned copy: {got}"
+        );
+    }
+
+    /// The stored file itself is never touched by Copy Markdown - `bundle_markdown_for_clipboard`
+    /// only reads the row and transforms a string in memory. Proven against a real file on disk,
+    /// not merely by reading the function's own source.
+    #[test]
+    fn bundle_markdown_for_clipboard_leaves_the_stored_file_byte_identical() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let (bundle, items) = bundle_fixture("b-1");
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("creating the Bundle must succeed");
+
+        let folder = vault_dir.path().join("bundles").join("b-1");
+        std::fs::create_dir_all(&folder).unwrap();
+        let markdown_file = folder.join("bundle.md");
+        std::fs::write(&markdown_file, bundle.markdown.as_bytes()).unwrap();
+        let before = std::fs::read(&markdown_file).unwrap();
+
+        let ctx = library_test_ctx(vault_dir.path(), bundle_store);
+        bundle_markdown_for_clipboard(&ctx, "b-1").expect("must succeed");
+
+        let after = std::fs::read(&markdown_file).unwrap();
+        assert_eq!(
+            before, after,
+            "Copy Markdown must not write to the stored Markdown file at all"
+        );
+    }
+
+    /// `AD-11`/`BR-11`: a sealed Bundle (its Findings deleted) works exactly the same as an
+    /// unsealed one, because nothing here ever reads a Finding - it stands entirely on the Bundle's
+    /// own stored `markdown`/`markdown_path`. Proven by never creating the Finding at all; the
+    /// `finding_store` in `library_test_ctx` is empty for both this test and the one above.
+    #[test]
+    fn bundle_markdown_for_clipboard_works_the_same_for_a_sealed_bundle() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let (bundle, items) = bundle_fixture("b-sealed");
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("creating the Bundle must succeed");
+        // No Finding is ever created for "f-b-sealed" - the Bundle is sealed from the moment it
+        // exists, per `BR-122`'s "computed live, no stored flag" rule.
+        let ctx = library_test_ctx(vault_dir.path(), bundle_store);
+
+        let got = bundle_markdown_for_clipboard(&ctx, "b-sealed").expect(
+            "a sealed Bundle must copy exactly like an unsealed one - nothing here reads a Finding",
+        );
+        assert!(got.contains("Checkout Flow Review"));
+    }
+
+    #[test]
+    fn bundle_markdown_for_clipboard_refuses_when_the_bundle_is_gone() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let ctx = library_test_ctx(vault_dir.path(), bundle_store);
+
+        let err = bundle_markdown_for_clipboard(&ctx, "does-not-exist")
+            .expect_err("a missing Bundle must refuse");
+        assert!(
+            err.contains("no longer in the Library"),
+            "the message must say what refused: {err}"
+        );
+    }
+
+    #[test]
+    fn bundle_markdown_for_clipboard_refuses_when_the_store_is_none() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+
+        let err = bundle_markdown_for_clipboard(&ctx, "b-1").expect_err("a None store must refuse");
+        assert!(
+            err.contains("could not be opened"),
+            "the message must name what refused: {err}"
+        );
+    }
+
+    /// The Bundle's OWN folder - `AD-4`'s layout, `bundles/{id}/` under the Vault root - derived
+    /// from `markdown_path`'s own parent rather than a second `"bundles".join(id)` construction.
+    #[test]
+    fn bundle_folder_path_is_the_markdown_files_own_folder() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (bundle, _items) = bundle_fixture("b-1");
+        let ctx = library_test_ctx(
+            vault_dir.path(),
+            SqliteBundleStore::open_in_memory().expect("a bundle store"),
+        );
+
+        let folder = bundle_folder_path(&ctx, &bundle);
+        assert_eq!(folder, vault_dir.path().join("bundles").join("b-1"));
+    }
+
+    /// The degenerate case: a Bundle whose document sits at the Vault root has no folder of its
+    /// own to speak of, so the Vault root itself is what "its folder" means - the same fallback
+    /// `MarkdownSerializer::image_reference` uses for a document with no folder prefix.
+    #[test]
+    fn bundle_folder_path_falls_back_to_the_vault_root_when_markdown_path_has_no_folder() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let mut bundle = bundle_fixture("b-1").0;
+        bundle.markdown_path = "bundle.md".to_string();
+        let ctx = library_test_ctx(
+            vault_dir.path(),
+            SqliteBundleStore::open_in_memory().expect("a bundle store"),
+        );
+
+        let folder = bundle_folder_path(&ctx, &bundle);
+        assert_eq!(folder, vault_dir.path().to_path_buf());
+    }
+
+    /// Open file location's other half - a folder that no longer exists must refuse rather than
+    /// silently do nothing, which is what lets `on_library_bundle_open_file_location_clicked` toast
+    /// instead of leaving the Reviewer looking at nothing happening. Only the "not a directory"
+    /// branch is exercised here: `open_folder` would spawn `explorer.exe` for a path that DOES
+    /// exist, which a background test run must never do.
+    #[cfg(windows)]
+    #[test]
+    fn open_folder_refuses_when_the_bundles_folder_no_longer_exists() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (bundle, _items) = bundle_fixture("b-gone");
+        let ctx = library_test_ctx(
+            vault_dir.path(),
+            SqliteBundleStore::open_in_memory().expect("a bundle store"),
+        );
+        let folder = bundle_folder_path(&ctx, &bundle);
+        assert!(!folder.exists(), "the fixture must not create the folder");
+
+        let err = open_folder(&folder).expect_err("a missing folder must refuse, not do nothing");
+        assert_eq!(err, "That folder no longer exists.");
     }
 }
