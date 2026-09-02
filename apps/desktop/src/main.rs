@@ -19,7 +19,7 @@ use snapdown_core::domain::finding::{
     AnnotationShape, Finding, FindingDetail, Note, Region, VisualAnnotation,
 };
 use snapdown_core::domain::image::ImageDimensions;
-use snapdown_core::domain::markdown::MarkdownSerializer;
+use snapdown_core::domain::markdown::{MarkdownSerializer, ParsedBundleDocument};
 use snapdown_core::domain::setting::{
     HotkeyAction, NamedBudget, QualityBudget, ResolvedPair, Setting, SettingKey, SettingValue,
 };
@@ -542,6 +542,9 @@ fn review_update_doc_blocks(
         if !finding.note.trim().is_empty() {
             blocks.push(ReviewUpdateBlock {
                 kind: "note".into(),
+                // This Finding's own position - ticket 14's edit routing key for a "note" block,
+                // the same role `ordinal` already plays on the "finding" block above.
+                ordinal: position,
                 text: finding.note.clone().into(),
                 ..Default::default()
             });
@@ -551,6 +554,10 @@ fn review_update_doc_blocks(
             blocks.push(ReviewUpdateBlock {
                 kind: "marker".into(),
                 ordinal: marker.ordinal as i32,
+                // The OWNING Finding's position, ticket 14's edit routing key: a Marker's own
+                // `ordinal` is scoped to its Finding (`AD-1`) and repeats across Findings, so it
+                // alone cannot tell Finding 2's Marker 1 apart from Finding 1's.
+                finding_ordinal: position,
                 text: marker.comment.clone().into(),
                 // The heading prints once, above the first Marker.
                 starts_section: marker_index == 0,
@@ -562,10 +569,41 @@ fn review_update_doc_blocks(
     Ok(blocks)
 }
 
+/// Pushes one Bundle's locked-mode rendering into the window's own properties - the provenance line
+/// and the block list. Shared by `open_review_update` and ticket 14's Save success path, which needs
+/// exactly this same refresh once the document the window is showing has changed underneath it.
+fn set_review_update_view(
+    window: &AppWindow,
+    ctx: &AppContext,
+    bundle: &Bundle,
+) -> Result<(), String> {
+    let blocks = review_update_doc_blocks(ctx, bundle)?;
+    let finding_count = blocks.iter().filter(|b| b.kind == "finding").count();
+    window.set_review_update_provenance(
+        format!(
+            "{finding_count} Finding{} · composed {}",
+            if finding_count == 1 { "" } else { "s" },
+            relative_time(&bundle.composed_at, chrono::Utc::now())
+        )
+        .into(),
+    );
+    window.set_review_update_blocks(ModelRc::from(Rc::new(VecModel::from(blocks))));
+    Ok(())
+}
+
 /// Opens Review & Update, locked, on the Bundle a Library row named. Re-reads the store rather than
 /// trusting the row's own cached fields, the same discipline `open_library` follows for Try again -
 /// the Library and this window can otherwise disagree about a Bundle that changed between the two.
-fn open_review_update(window: &AppWindow, ctx: &AppContext, bundle_id: &str) {
+///
+/// `current` is ticket 14's own state: the Bundle this window is showing, kept alive for as long as
+/// the window is open so `on_review_update_edit_clicked` has something to build a buffer from, and
+/// refreshed in place by a successful Save.
+fn open_review_update(
+    window: &AppWindow,
+    ctx: &AppContext,
+    bundle_id: &str,
+    current: &Rc<RefCell<Option<Bundle>>>,
+) {
     let Some(store) = ctx.bundle_store.as_ref() else {
         toast(window, "The Bundle library could not be opened.", true);
         return;
@@ -582,37 +620,169 @@ fn open_review_update(window: &AppWindow, ctx: &AppContext, bundle_id: &str) {
         }
     };
 
-    let blocks = match review_update_doc_blocks(ctx, &bundle) {
-        Ok(blocks) => blocks,
-        Err(message) => {
-            toast(window, message, true);
-            return;
-        }
-    };
-
-    let finding_count = blocks.iter().filter(|b| b.kind == "finding").count();
-    window.set_review_update_provenance(
-        format!(
-            "{finding_count} Finding{} · composed {}",
-            if finding_count == 1 { "" } else { "s" },
-            relative_time(&bundle.composed_at, chrono::Utc::now())
-        )
-        .into(),
-    );
-    window.set_review_update_blocks(ModelRc::from(Rc::new(VecModel::from(blocks))));
+    if let Err(message) = set_review_update_view(window, ctx, &bundle) {
+        toast(window, message, true);
+        return;
+    }
+    *current.borrow_mut() = Some(bundle);
     window.set_review_update_open(true);
 }
 
 /// Closes Review & Update. Only its own gate and its own blocks - never `library_open` or anything
 /// else the Library or the Editor own, which is what keeps the Library's scroll position intact on
-/// the way back (`ticket 13`'s own acceptance criterion).
+/// the way back (`ticket 13`'s own acceptance criterion). Also resets `editing` and the "discard
+/// changes?" confirmation (ticket 14) - the caller drops the Bundle and the edit buffer themselves,
+/// since those live outside the window's own properties.
 fn close_review_update(window: &AppWindow) {
     window.set_review_update_open(false);
+    window.set_review_update_editing(false);
+    window.set_review_update_cancel_pending(false);
     // The blocks hold every decoded image. Dropping them on close bounds the cost to the time the
     // window is open, the same reasoning `close_bundle_preview` already follows.
     window.set_review_update_blocks(ModelRc::from(Rc::new(VecModel::from(Vec::<
         ReviewUpdateBlock,
     >::new()))));
+}
+
+/// One edit landing in the in-memory buffer - ticket 14's whole editing model. `kind` matches
+/// `ReviewUpdateBlock.kind`; `finding_ordinal` is the owning Finding's position (0 for "title" and
+/// "bundle-notes", which have none); `marker_ordinal` is a Marker's own ordinal (0 unless `kind` is
+/// "marker"). Never touches `FindingStore` - it cannot: nothing here is given one - which is what
+/// keeps `BR-10`/`BR-11` true by construction rather than by discipline.
+fn apply_review_update_field_edit(
+    parsed: &mut ParsedBundleDocument,
+    kind: &str,
+    finding_ordinal: i32,
+    marker_ordinal: i32,
+    text: &str,
+) {
+    match kind {
+        "title" => parsed.title = text.to_string(),
+        "bundle-notes" => parsed.notes = text.to_string(),
+        "note" => {
+            if let Some(finding) = parsed
+                .findings
+                .iter_mut()
+                .find(|f| f.position as i32 == finding_ordinal)
+            {
+                finding.note = text.to_string();
+            }
+        }
+        "marker" => {
+            if let Some(finding) = parsed
+                .findings
+                .iter_mut()
+                .find(|f| f.position as i32 == finding_ordinal)
+            {
+                if let Some(marker) = finding
+                    .markers
+                    .iter_mut()
+                    .find(|m| m.ordinal as i32 == marker_ordinal)
+                {
+                    marker.comment = text.to_string();
+                }
+            }
+        }
+        other => {
+            // "finding" and "image" are generated by the composer and are not editable, so nothing
+            // should be able to send them here.
+            eprintln!("A Review & Update field of kind `{other}` reported an edit; ignoring it.");
+        }
+    }
+}
+
+/// Whether Cancel must ask before it discards the buffer: true unless serialising `parsed` reproduces
+/// `bundle`'s own stored document byte for byte AND the title matches its row name - the exact same
+/// predicate Save's own no-op check uses (`save_review_update_edit` below), because "nothing to lose"
+/// and "nothing to write" are the same question asked from two different buttons.
+fn review_update_edit_is_dirty(bundle: &Bundle, parsed: &ParsedBundleDocument) -> bool {
+    let document_same = MarkdownSerializer::document_unchanged(parsed, &bundle.markdown);
+    let name_same = parsed.title.trim() == bundle.name.trim();
+    !(document_same && name_same)
+}
+
+/// Writes `bytes` to `path` atomically: a temporary file beside it, written in full, then renamed
+/// over the destination. `BR-5`/`AD-2`'s "lands completely or not at all" for a single file - a
+/// process killed mid-write leaves only the orphaned temporary file, never a half-written
+/// destination.
+fn write_file_atomically(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = path.file_name().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "path has no file name")
+    })?;
+    let mut tmp_name = file_name.to_os_string();
+    tmp_name.push(".tmp");
+    let tmp_path = parent.join(tmp_name);
+    std::fs::write(&tmp_path, bytes)?;
+    std::fs::rename(&tmp_path, path)?;
+    Ok(())
+}
+
+#[derive(Debug)]
+enum ReviewUpdateSaveOutcome {
+    /// The edited blocks serialise to the stored document with the title unchanged - nothing was
+    /// written, per the map's "Saved. Nothing had changed."
+    NoChange,
+    Saved,
+}
+
+/// Ticket 14's Save, and the one place `BR-5` is kept: the file is written first, atomically, then
+/// the row - name and document together, under the store's `update_bundle_name_and_markdown`. If the
+/// row refuses, the file is put back exactly as it stood (the previous document text is still sitting
+/// in `bundle.markdown`, held for exactly this) and the caller is told which part refused; `bundle`
+/// and `parsed` are both left as they were on any error, so Save can be tried again.
+///
+/// Takes a store trait object and a vault root rather than an `&AppContext`, on purpose: this is the
+/// write-ordering guard's own seam. A test can hand it a `BundleStore` that fails on command, without
+/// needing a second concrete `AppContext` shape to do it.
+fn save_review_update_edit(
+    vault_path: &Path,
+    bundle_store: &dyn BundleStore,
+    bundle: &mut Bundle,
+    parsed: &ParsedBundleDocument,
+) -> Result<ReviewUpdateSaveOutcome, String> {
+    let new_document = MarkdownSerializer::serialize_parsed(parsed);
+    let new_name = parsed.title.trim().to_string();
+
+    // The no-op guard `FR-40`'s always-clickable Save relies on: a Save that changes nothing must
+    // write nothing. Seen red first by hard-coding `document_same` to `false` - the write below then
+    // runs unconditionally and the no-op test fails, exactly as it must to prove this line is load-
+    // bearing - then restored.
+    let document_same = MarkdownSerializer::document_unchanged(parsed, &bundle.markdown);
+    let name_same = new_name == bundle.name.trim();
+    if document_same && name_same {
+        return Ok(ReviewUpdateSaveOutcome::NoChange);
+    }
+
+    let absolute_path = vault_path.join(bundle.markdown_path.trim_start_matches('/'));
+    let previous_document = bundle.markdown.clone();
+
+    write_file_atomically(&absolute_path, new_document.as_bytes())
+        .map_err(|e| format!("Could not write the Bundle's file: {e}"))?;
+
+    if let Err(e) =
+        bundle_store.update_bundle_name_and_markdown(&bundle.id, &new_name, &new_document)
+    {
+        // The row refused after the file already changed. Put the file back exactly as it was -
+        // BR-5's "an unsaved edit survives so it can be tried again" for the file half of the pair.
+        // Seen red first by commenting this call out - the write-ordering test then finds the file
+        // still holding the NEW text after a forced row failure, and fails - then restored.
+        if let Err(restore_err) =
+            write_file_atomically(&absolute_path, previous_document.as_bytes())
+        {
+            return Err(format!(
+                "The Bundle's row could not be updated ({e}), and putting its file back also \
+                 failed ({restore_err}). The file on disk may no longer match the Library."
+            ));
+        }
+        return Err(format!(
+            "The Bundle's row could not be updated: {e}. Its file was put back exactly as it was."
+        ));
+    }
+
+    bundle.markdown = new_document;
+    bundle.name = new_name;
+    Ok(ReviewUpdateSaveOutcome::Saved)
 }
 
 fn load_findings_into_window(
@@ -4790,23 +4960,177 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // REVIEW & UPDATE, LOCKED MODE (ticket 13 of the Bundle Library spec). Opens over the Library on
-    // a row click, built entirely from the Bundle's own stored document - never a Finding. Closing
-    // touches nothing the Library or the Editor own, which is what keeps the Library's scroll
+    // REVIEW & UPDATE (ticket 13's locked mode, ticket 14's editing). Opens over the Library on a row
+    // click, built entirely from the Bundle's own stored document - never a Finding, in either mode.
+    // Closing touches nothing the Library or the Editor own, which is what keeps the Library's scroll
     // position intact underneath.
+    //
+    // Two cells, not one: `review_update_bundle` is the Bundle this window is showing, kept alive so
+    // Edit has something to build a buffer from and refreshed in place by a successful Save;
+    // `review_update_edit` is `Some` only while editing - the in-memory buffer `BR-10`/`BR-11` keep
+    // every keystroke inside until Save actually writes it.
+    let review_update_bundle: Rc<RefCell<Option<Bundle>>> = Rc::new(RefCell::new(None));
+    let review_update_edit: Rc<RefCell<Option<ParsedBundleDocument>>> = Rc::new(RefCell::new(None));
+
     let win_review_update = main_window.as_weak();
     let ctx_review_update = ctx.clone();
+    let bundle_review_update = review_update_bundle.clone();
     main_window.on_library_bundle_clicked(move |bundle_id| {
         let Some(win) = win_review_update.upgrade() else {
             return;
         };
-        open_review_update(&win, &ctx_review_update, &bundle_id);
+        open_review_update(&win, &ctx_review_update, &bundle_id, &bundle_review_update);
     });
 
     let win_review_update_closed = main_window.as_weak();
+    let bundle_review_update_closed = review_update_bundle.clone();
+    let edit_review_update_closed = review_update_edit.clone();
     main_window.on_review_update_closed(move || {
         if let Some(win) = win_review_update_closed.upgrade() {
             close_review_update(&win);
+        }
+        *bundle_review_update_closed.borrow_mut() = None;
+        *edit_review_update_closed.borrow_mut() = None;
+    });
+
+    // EDIT - builds the in-memory buffer from the Bundle's own stored document (never re-reading the
+    // store: `review_update_bundle` already holds what `open_review_update` last confirmed) and flips
+    // the badge to Editing.
+    let win_review_update_edit = main_window.as_weak();
+    let bundle_review_update_edit = review_update_bundle.clone();
+    let edit_review_update_edit = review_update_edit.clone();
+    main_window.on_review_update_edit_clicked(move || {
+        let Some(win) = win_review_update_edit.upgrade() else {
+            return;
+        };
+        let Some(bundle) = bundle_review_update_edit.borrow().clone() else {
+            return;
+        };
+        match MarkdownSerializer::parse_bundle_document(&bundle.markdown) {
+            Ok(parsed) => {
+                *edit_review_update_edit.borrow_mut() = Some(parsed);
+                win.set_review_update_editing(true);
+            }
+            Err(e) => {
+                toast(
+                    &win,
+                    format!("This Bundle's document could not be read: {e}"),
+                    true,
+                );
+            }
+        }
+    });
+
+    // EVERY field edit in the window comes through here, straight into the buffer above. Never the
+    // Finding store, never the row - that only happens on Save.
+    let edit_review_update_field = review_update_edit.clone();
+    main_window.on_review_update_field_edited(
+        move |kind, finding_ordinal, marker_ordinal, text| {
+            let mut slot = edit_review_update_field.borrow_mut();
+            let Some(parsed) = slot.as_mut() else {
+                return;
+            };
+            apply_review_update_field_edit(
+                parsed,
+                kind.as_str(),
+                finding_ordinal,
+                marker_ordinal,
+                text.as_str(),
+            );
+        },
+    );
+
+    // CANCEL - returns to locked at once when the buffer already matches what is stored, otherwise
+    // asks first. The dialog's own confirm is `discard-clicked`, below.
+    let win_review_update_cancel = main_window.as_weak();
+    let bundle_review_update_cancel = review_update_bundle.clone();
+    let edit_review_update_cancel = review_update_edit.clone();
+    main_window.on_review_update_cancel_clicked(move || {
+        let Some(win) = win_review_update_cancel.upgrade() else {
+            return;
+        };
+        let dirty = {
+            let bundle_slot = bundle_review_update_cancel.borrow();
+            let edit_slot = edit_review_update_cancel.borrow();
+            match (bundle_slot.as_ref(), edit_slot.as_ref()) {
+                (Some(bundle), Some(parsed)) => review_update_edit_is_dirty(bundle, parsed),
+                _ => false,
+            }
+        };
+        if dirty {
+            win.set_review_update_cancel_pending(true);
+        } else {
+            *edit_review_update_cancel.borrow_mut() = None;
+            win.set_review_update_editing(false);
+        }
+    });
+
+    // DISCARD CHANGES - the confirmation's own confirm action. Drops the buffer without writing
+    // anything; the locked-mode blocks were never mutated while editing, so they already show the
+    // Bundle exactly as it was stored.
+    let win_review_update_discard = main_window.as_weak();
+    let edit_review_update_discard = review_update_edit.clone();
+    main_window.on_review_update_discard_clicked(move || {
+        let Some(win) = win_review_update_discard.upgrade() else {
+            return;
+        };
+        *edit_review_update_discard.borrow_mut() = None;
+        win.set_review_update_cancel_pending(false);
+        win.set_review_update_editing(false);
+    });
+
+    // SAVE - `BR-5`'s write ordering, all in `save_review_update_edit`. On success the window's
+    // blocks are refreshed from the Bundle `save_review_update_edit` just updated in place, so locked
+    // mode shows the new text; on failure `editing` stays true and the buffer survives untouched, so
+    // Save can be tried again.
+    let win_review_update_save = main_window.as_weak();
+    let ctx_review_update_save = ctx.clone();
+    let bundle_review_update_save = review_update_bundle.clone();
+    let edit_review_update_save = review_update_edit.clone();
+    main_window.on_review_update_save_clicked(move || {
+        let Some(win) = win_review_update_save.upgrade() else {
+            return;
+        };
+        let Some(store) = ctx_review_update_save.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be reached.", true);
+            return;
+        };
+        let mut bundle_slot = bundle_review_update_save.borrow_mut();
+        let Some(bundle) = bundle_slot.as_mut() else {
+            return;
+        };
+        let mut edit_slot = edit_review_update_save.borrow_mut();
+        let Some(parsed) = edit_slot.as_ref() else {
+            return;
+        };
+
+        let outcome = save_review_update_edit(
+            &ctx_review_update_save.vault_path,
+            store.as_ref(),
+            bundle,
+            parsed,
+        );
+        match outcome {
+            Ok(ReviewUpdateSaveOutcome::NoChange) => {
+                *edit_slot = None;
+                win.set_review_update_editing(false);
+                toast(&win, "Saved. Nothing had changed.", false);
+            }
+            Ok(ReviewUpdateSaveOutcome::Saved) => {
+                if let Err(message) = set_review_update_view(&win, &ctx_review_update_save, bundle)
+                {
+                    toast(&win, message, true);
+                } else {
+                    toast(&win, "Saved.", false);
+                }
+                *edit_slot = None;
+                win.set_review_update_editing(false);
+            }
+            Err(message) => {
+                // `editing` stays true and `edit_slot` stays `Some` - BR-5's "an unsaved edit
+                // survives so it can be tried again."
+                toast(&win, message, true);
+            }
         }
     });
 
@@ -7446,6 +7770,511 @@ mod tests {
         assert!(
             err.contains("could not be read"),
             "the message must name what refused: {err}"
+        );
+    }
+
+    // ===== ticket 14: edit and save a Bundle ===================================================
+
+    /// Lays out a real Bundle the way the compose path does: the composed document AND its `.md`
+    /// file on disk, plus each Finding's burned image - what ticket 14's Save needs something real
+    /// to read back and write over. One Finding per entry in `finding_notes`, no Markers.
+    fn review_update_save_fixture(
+        vault_dir: &Path,
+        bundle_id: &str,
+        title: &str,
+        bundle_notes: &str,
+        finding_notes: &[&str],
+    ) -> (Bundle, Vec<BundleItem>) {
+        let markdown_path = format!("bundles/{bundle_id}/bundle.md");
+        let mut items = Vec::new();
+        let mut owned_details = Vec::new();
+        for (index, note) in finding_notes.iter().enumerate() {
+            let position = (index + 1) as u32;
+            let fid = format!("f-{bundle_id}-{position}");
+            let mut d = detail(&fid, 20, 14, vec![]);
+            d.note.body = note.to_string();
+            let item = BundleItem::new(
+                format!("{bundle_id}-item-{position}"),
+                bundle_id.to_string(),
+                fid,
+                position,
+                format!("bundles/{bundle_id}/finding_{position}_burned.png"),
+            )
+            .unwrap();
+
+            let image_path = vault_dir
+                .join("bundles")
+                .join(bundle_id)
+                .join(format!("finding_{position}_burned.png"));
+            std::fs::create_dir_all(image_path.parent().unwrap()).unwrap();
+            std::fs::write(&image_path, png_fixture(20, 14)).unwrap();
+
+            items.push(item.clone());
+            owned_details.push((item, d));
+        }
+
+        let refs: Vec<(&BundleItem, &FindingDetail)> =
+            owned_details.iter().map(|(item, d)| (item, d)).collect();
+        let markdown =
+            MarkdownSerializer::serialize_bundle(title, bundle_notes, &refs, &markdown_path);
+
+        let md_file = vault_dir.join(&markdown_path);
+        std::fs::create_dir_all(md_file.parent().unwrap()).unwrap();
+        std::fs::write(&md_file, &markdown).unwrap();
+
+        let bundle = Bundle::new(
+            bundle_id.to_string(),
+            title.to_string(),
+            markdown,
+            markdown_path,
+            "2026-08-20T10:00:00Z".to_string(),
+        )
+        .unwrap();
+        (bundle, items)
+    }
+
+    /// A `BundleStore` that forwards everything to a real store except
+    /// `update_bundle_name_and_markdown`, which always refuses - the fixture the write-ordering
+    /// guard needs: a failure that lands strictly AFTER the file has already been renamed into place
+    /// and strictly BEFORE the row would have changed. `inner` shares the real store's own
+    /// `Arc<Mutex<Connection>>` (`SqliteBundleStore: Clone`), so a query made through the ORIGINAL
+    /// handle after a call through this wrapper sees the same database.
+    struct FailingRowUpdateStore {
+        inner: SqliteBundleStore,
+    }
+
+    impl BundleStore for FailingRowUpdateStore {
+        fn create_bundle(&self, bundle: &Bundle, items: &[BundleItem]) -> Result<(), CoreError> {
+            self.inner.create_bundle(bundle, items)
+        }
+        fn get_bundle(&self, id: &str) -> Result<Option<BundleDetail>, CoreError> {
+            self.inner.get_bundle(id)
+        }
+        fn list_bundles(&self) -> Result<Vec<BundleDetail>, CoreError> {
+            self.inner.list_bundles()
+        }
+        fn update_bundle_name_and_markdown(
+            &self,
+            _id: &str,
+            _name: &str,
+            _markdown: &str,
+        ) -> Result<(), CoreError> {
+            Err(CoreError::Validation("simulated row-write failure".into()))
+        }
+        fn delete_bundle(&self, id: &str) -> Result<(), CoreError> {
+            self.inner.delete_bundle(id)
+        }
+    }
+
+    /// `FR-40`'s own proof: a changed title and a changed Finding note produce a stored document
+    /// whose heading and that note read the new text, with every other line - the second Finding's
+    /// note, both image references - untouched. The file on disk and the row end up holding the
+    /// exact same document.
+    #[test]
+    fn save_with_a_changed_title_and_note_updates_only_what_changed() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (mut bundle, items) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-save",
+            "Original Title",
+            "",
+            &["First finding note.", "Second finding note."],
+        );
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("seed the row");
+
+        let mut parsed = MarkdownSerializer::parse_bundle_document(&bundle.markdown)
+            .expect("the fixture's own document must parse");
+        apply_review_update_field_edit(&mut parsed, "title", 0, 0, "New Title");
+        apply_review_update_field_edit(&mut parsed, "note", 1, 0, "Corrected first note.");
+
+        let outcome =
+            save_review_update_edit(vault_dir.path(), &bundle_store, &mut bundle, &parsed)
+                .expect("a real change must save");
+        assert!(matches!(outcome, ReviewUpdateSaveOutcome::Saved));
+
+        assert!(
+            bundle.markdown.starts_with("# New Title\n\n"),
+            "the heading must read the new title: {}",
+            bundle.markdown
+        );
+        assert!(
+            bundle.markdown.contains("Corrected first note."),
+            "the edited Finding's note must read the new text"
+        );
+        assert!(
+            !bundle.markdown.contains("First finding note."),
+            "the old note text must be gone"
+        );
+        assert!(
+            bundle.markdown.contains("Second finding note."),
+            "the OTHER Finding's note must be untouched"
+        );
+        assert!(
+            bundle
+                .markdown
+                .contains("![Finding 1](./finding_1_burned.png)")
+                && bundle
+                    .markdown
+                    .contains("![Finding 2](./finding_2_burned.png)"),
+            "both image references must be untouched: {}",
+            bundle.markdown
+        );
+        assert_eq!(bundle.name, "New Title");
+
+        let on_disk = std::fs::read_to_string(vault_dir.path().join(&bundle.markdown_path))
+            .expect("the file must exist");
+        assert_eq!(
+            on_disk, bundle.markdown,
+            "the file must hold what was saved"
+        );
+
+        let row = bundle_store
+            .get_bundle("b-save")
+            .unwrap()
+            .expect("the row must still exist");
+        assert_eq!(
+            row.bundle.markdown, bundle.markdown,
+            "the row must match the file"
+        );
+        assert_eq!(row.bundle.name, "New Title");
+    }
+
+    /// A Save whose edited blocks serialise to the stored document with the title unchanged writes
+    /// NEITHER the file nor the row - proven by modification time AND a byte comparison, the
+    /// stronger of the two the ticket asks for. The no-op guard this proves is
+    /// `save_review_update_edit`'s `document_same && name_same` check: hard-coding `document_same` to
+    /// `false` and re-running this test is how it was seen red before being restored (see this
+    /// ticket's final report for the exact steps taken).
+    #[test]
+    fn save_with_nothing_changed_writes_neither_file_nor_row() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (mut bundle, items) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-noop",
+            "Untouched Title",
+            "Untouched notes.",
+            &["Untouched note."],
+        );
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("seed the row");
+
+        let parsed = MarkdownSerializer::parse_bundle_document(&bundle.markdown)
+            .expect("the fixture's own document must parse");
+
+        let md_path = vault_dir.path().join(&bundle.markdown_path);
+        let before_bytes = std::fs::read(&md_path).unwrap();
+        let before_modified = std::fs::metadata(&md_path).unwrap().modified().unwrap();
+        // Windows' filesystem timestamp resolution is coarse enough that two writes a few
+        // milliseconds apart can share one mtime - which would make a mtime assertion pass even for
+        // a bug that DID rewrite the file. Sleeping past that resolution first is what makes an
+        // unchanged mtime actually mean something.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        let outcome =
+            save_review_update_edit(vault_dir.path(), &bundle_store, &mut bundle, &parsed)
+                .expect("a no-op Save must not error");
+        assert!(matches!(outcome, ReviewUpdateSaveOutcome::NoChange));
+
+        let after_bytes = std::fs::read(&md_path).unwrap();
+        let after_modified = std::fs::metadata(&md_path).unwrap().modified().unwrap();
+        assert_eq!(
+            before_bytes, after_bytes,
+            "the file's bytes must be untouched"
+        );
+        assert_eq!(
+            before_modified, after_modified,
+            "the file must not have been written at all"
+        );
+
+        let row = bundle_store.get_bundle("b-noop").unwrap().unwrap();
+        assert_eq!(row.bundle.markdown, bundle.markdown);
+        assert_eq!(row.bundle.name, "Untouched Title");
+    }
+
+    /// Write ordering (`BR-5`): a failure injected strictly after the file has been renamed into
+    /// place and strictly before the row would change leaves the file restored to its previous
+    /// content, the row untouched, and the error naming the row as what refused. `bundle` and
+    /// `parsed` are both left exactly as the caller passed them, which is the data half of "the
+    /// edited text is still in the fields" - the window keeps `editing` true and the buffer alive on
+    /// this same `Err`, proven at the wiring level in `test_review_update_wiring.rs`.
+    ///
+    /// The restore step this proves was seen red first: with `write_file_atomically` for the restore
+    /// commented out, this test failed with the file still holding the NEW text after the forced row
+    /// failure. See this ticket's final report for the exact steps taken.
+    #[test]
+    fn save_write_ordering_restores_the_file_when_the_row_refuses() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (mut bundle, items) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-fail",
+            "Original Title",
+            "",
+            &["Original note."],
+        );
+        let real_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        real_store
+            .create_bundle(&bundle, &items)
+            .expect("seed the row");
+        let failing_store = FailingRowUpdateStore {
+            inner: real_store.clone(),
+        };
+
+        let original_document = bundle.markdown.clone();
+        let mut parsed = MarkdownSerializer::parse_bundle_document(&bundle.markdown)
+            .expect("the fixture's own document must parse");
+        apply_review_update_field_edit(&mut parsed, "title", 0, 0, "New Title");
+        apply_review_update_field_edit(&mut parsed, "note", 1, 0, "New note.");
+
+        let err = save_review_update_edit(vault_dir.path(), &failing_store, &mut bundle, &parsed)
+            .expect_err("the row was made to refuse");
+        assert!(
+            err.contains("row") && err.contains("could not be updated"),
+            "the toast must name the part that refused: {err}"
+        );
+
+        let md_path = vault_dir.path().join(&bundle.markdown_path);
+        let on_disk = std::fs::read_to_string(&md_path).unwrap();
+        assert_eq!(
+            on_disk, original_document,
+            "the file must be put back exactly as it was"
+        );
+
+        let row = real_store.get_bundle("b-fail").unwrap().unwrap();
+        assert_eq!(
+            row.bundle.markdown, original_document,
+            "the row must be untouched - the failing store never actually wrote to it"
+        );
+        assert_eq!(row.bundle.name, "Original Title");
+
+        // `bundle` (the caller's own buffer) is left exactly as it was passed - it is only mutated
+        // on success.
+        assert_eq!(bundle.markdown, original_document);
+        assert_eq!(bundle.name, "Original Title");
+        // `parsed` (the edit buffer) is untouched by the failure - it still holds the edit, so a
+        // retried Save has something to retry with.
+        assert_eq!(parsed.title, "New Title");
+    }
+
+    /// Editing a Finding's note IN THE BUNDLE leaves that Finding's own note - and every OTHER Bundle
+    /// holding it - byte-identical. Asserted at the store seam: a real `FindingStore` for the
+    /// Finding, and a second real Bundle (`b-other`) that embeds the same Finding's note at its OWN
+    /// compose time. `save_review_update_edit` never takes a `FindingStore` at all, so this also
+    /// stands as the strongest form of `BR-10`/`BR-11`'s "never reads or writes a Finding": the type
+    /// signature makes it impossible, not merely unexercised.
+    #[test]
+    fn editing_a_findings_note_in_one_bundle_leaves_the_finding_and_every_other_bundle_untouched() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+
+        // The live Finding, independent of either Bundle's own snapshot of it (`BR-10`: a Bundle is
+        // a snapshot).
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        let mut shared = detail("f-shared", 20, 14, vec![]);
+        shared.note.body = "The Finding's own live note.".to_string();
+        finding_store
+            .create_finding(&shared.finding, &shared.note, &shared.markers)
+            .expect("seed the shared Finding");
+
+        // Bundle A: the one that gets edited.
+        let (mut bundle_a, items_a) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-a",
+            "Bundle A",
+            "",
+            &["Snapshot note for A."],
+        );
+        // Bundle B: shares the SAME Finding id, with its OWN snapshot text, and is never touched.
+        let (bundle_b, items_b) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-b",
+            "Bundle B",
+            "",
+            &["Snapshot note for B."],
+        );
+
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        bundle_store.create_bundle(&bundle_a, &items_a).unwrap();
+        bundle_store.create_bundle(&bundle_b, &items_b).unwrap();
+
+        let mut parsed = MarkdownSerializer::parse_bundle_document(&bundle_a.markdown)
+            .expect("Bundle A's own document must parse");
+        apply_review_update_field_edit(&mut parsed, "note", 1, 0, "Corrected in Bundle A only.");
+
+        let outcome =
+            save_review_update_edit(vault_dir.path(), &bundle_store, &mut bundle_a, &parsed)
+                .expect("editing a Bundle's own snapshot must save");
+        assert!(matches!(outcome, ReviewUpdateSaveOutcome::Saved));
+
+        // Bundle A now reads the correction.
+        assert!(bundle_a.markdown.contains("Corrected in Bundle A only."));
+
+        // The Finding's own row: byte-identical to what it was seeded with.
+        let live = finding_store
+            .get_finding("f-shared")
+            .unwrap()
+            .expect("the Finding must still exist");
+        assert_eq!(
+            live.note.body, "The Finding's own live note.",
+            "the Finding's own note must be byte-identical - nothing in the save path may write it"
+        );
+
+        // Bundle B's row: byte-identical to what it was composed with, and unaware Bundle A changed.
+        let other = bundle_store.get_bundle("b-b").unwrap().unwrap();
+        assert_eq!(
+            other.bundle.markdown, bundle_b.markdown,
+            "Bundle B's stored document must be untouched by editing Bundle A"
+        );
+        assert!(other.bundle.markdown.contains("Snapshot note for B."));
+        assert!(!other
+            .bundle
+            .markdown
+            .contains("Corrected in Bundle A only."));
+    }
+
+    /// Editing and saving a SEALED Bundle (its Findings already deleted) works identically to an
+    /// unsealed one. `save_review_update_edit`'s signature has no `FindingStore` parameter at all -
+    /// there is no `finding_store` in scope for this test to even seed - so "identically" holds by
+    /// construction rather than by a comparison against a second run.
+    #[test]
+    fn editing_and_saving_a_sealed_bundle_works_the_same_as_an_unsealed_one() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (mut bundle, items) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-sealed-save",
+            "Sealed Bundle",
+            "",
+            &["A note from before the Finding was discarded."],
+        );
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        bundle_store.create_bundle(&bundle, &items).unwrap();
+
+        let mut parsed = MarkdownSerializer::parse_bundle_document(&bundle.markdown)
+            .expect("a sealed Bundle's own document must still parse");
+        apply_review_update_field_edit(&mut parsed, "note", 1, 0, "Corrected after sealing.");
+
+        let outcome =
+            save_review_update_edit(vault_dir.path(), &bundle_store, &mut bundle, &parsed)
+                .expect("a sealed Bundle must save exactly like an unsealed one");
+        assert!(matches!(outcome, ReviewUpdateSaveOutcome::Saved));
+        assert!(bundle.markdown.contains("Corrected after sealing."));
+
+        let row = bundle_store.get_bundle("b-sealed-save").unwrap().unwrap();
+        assert_eq!(row.bundle.markdown, bundle.markdown);
+    }
+
+    /// Cancel's own predicate: dirty only once something was actually typed, clean for an untouched
+    /// buffer - the same `document_unchanged` + title comparison Save's no-op check uses.
+    #[test]
+    fn review_update_edit_is_dirty_only_after_a_real_edit() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (bundle, _items) =
+            review_update_save_fixture(vault_dir.path(), "b-dirty", "A Title", "", &["A note."]);
+        let mut parsed = MarkdownSerializer::parse_bundle_document(&bundle.markdown).unwrap();
+        assert!(
+            !review_update_edit_is_dirty(&bundle, &parsed),
+            "an untouched buffer must not be dirty"
+        );
+
+        apply_review_update_field_edit(&mut parsed, "title", 0, 0, "A Different Title");
+        assert!(
+            review_update_edit_is_dirty(&bundle, &parsed),
+            "a typed change must be dirty"
+        );
+    }
+
+    /// `review_update_doc_blocks`' own wiring key for ticket 14: a "note" block's `ordinal` names its
+    /// owning Finding's position, and a "marker" block's `finding-ordinal` does too - separate from
+    /// the marker's own `ordinal`, which is scoped to its Finding (`AD-1`) and repeats across them.
+    #[test]
+    fn review_update_doc_blocks_give_note_and_marker_blocks_their_owning_findings_position() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let m1 = marker("m-2-1", "f-b-ordinals-2", 1, "Marker on Finding 2");
+        let bundle_id = "b-ordinals";
+        let markdown_path = format!("bundles/{bundle_id}/bundle.md");
+        let mut d1 = detail("f-b-ordinals-1", 20, 14, vec![]);
+        d1.note.body = "Finding 1 note".into();
+        let mut d2 = detail("f-b-ordinals-2", 20, 14, vec![m1]);
+        d2.note.body = "Finding 2 note".into();
+        let item1 = BundleItem::new(
+            format!("{bundle_id}-item-1"),
+            bundle_id.to_string(),
+            "f-b-ordinals-1".to_string(),
+            1,
+            format!("bundles/{bundle_id}/finding_1_burned.png"),
+        )
+        .unwrap();
+        let item2 = BundleItem::new(
+            format!("{bundle_id}-item-2"),
+            bundle_id.to_string(),
+            "f-b-ordinals-2".to_string(),
+            2,
+            format!("bundles/{bundle_id}/finding_2_burned.png"),
+        )
+        .unwrap();
+        for position in [1u32, 2] {
+            let image_path = vault_dir
+                .path()
+                .join("bundles")
+                .join(bundle_id)
+                .join(format!("finding_{position}_burned.png"));
+            std::fs::create_dir_all(image_path.parent().unwrap()).unwrap();
+            std::fs::write(&image_path, png_fixture(20, 14)).unwrap();
+        }
+        let markdown = MarkdownSerializer::serialize_bundle(
+            "Ordinals",
+            "",
+            &[(&item1, &d1), (&item2, &d2)],
+            &markdown_path,
+        );
+        let bundle = Bundle::new(
+            bundle_id.to_string(),
+            "Ordinals".into(),
+            markdown,
+            markdown_path,
+            "2026-08-20T10:00:00Z".into(),
+        )
+        .unwrap();
+
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+        let blocks = review_update_doc_blocks(&ctx, &bundle).expect("must parse");
+
+        let note1 = blocks
+            .iter()
+            .find(|b| b.kind == "note" && b.text == "Finding 1 note")
+            .expect("Finding 1's note block must exist");
+        assert_eq!(
+            note1.ordinal, 1,
+            "a note block's ordinal names its owning Finding's position"
+        );
+
+        let note2 = blocks
+            .iter()
+            .find(|b| b.kind == "note" && b.text == "Finding 2 note")
+            .expect("Finding 2's note block must exist");
+        assert_eq!(note2.ordinal, 2);
+
+        let marker_block = blocks
+            .iter()
+            .find(|b| b.kind == "marker")
+            .expect("the Marker block must exist");
+        assert_eq!(marker_block.ordinal, 1, "the marker's OWN ordinal");
+        assert_eq!(
+            marker_block.finding_ordinal, 2,
+            "the OWNING Finding's position, separate from the marker's own ordinal"
         );
     }
 }

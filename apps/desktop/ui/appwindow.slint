@@ -1382,13 +1382,21 @@ export component AppWindow inherits Window {
     callback library-delete-cancelled();
     callback library-delete-confirmed(string);
 
-    // REVIEW & UPDATE, LOCKED MODE (`ticket 13`). Sits ABOVE the Library (declared after it below),
-    // never closes it - `library-open` is left alone by every callback here, which is what makes
-    // "Close returns to the Library with its scroll position intact" true by construction: the
-    // Library's own `SdLibrary` instance, and its `ScrollView`'s state, are never torn down.
+    // REVIEW & UPDATE (`ticket 13` locked mode, `ticket 14` editing). Sits ABOVE the Library
+    // (declared after it below), never closes it - `library-open` is left alone by every callback
+    // here, which is what makes "Close returns to the Library with its scroll position intact" true
+    // by construction: the Library's own `SdLibrary` instance, and its `ScrollView`'s state, are
+    // never torn down.
     in-out property <bool> review-update-open: false;
     in property <[ReviewUpdateBlock]> review-update-blocks: [];
     in property <string> review-update-provenance: "";
+    // Locked / Editing (`ticket 14`). Rust-driven both ways: `true` only after `edit-clicked`
+    // successfully builds an in-memory buffer, `false` again only after Save completes or Cancel/
+    // Discard gives up on it.
+    in-out property <bool> review-update-editing: false;
+    // The "discard changes?" confirmation. `in-out` so `SdReviewUpdate`'s own "Keep editing" can
+    // dismiss it without a Rust round trip, two-way bound at the mount site below.
+    in-out property <bool> review-update-cancel-pending: false;
 
     // id, ctrl held, shift held. One callback rather than two, because a click on a card is one
     // gesture whose MEANING depends on the modifiers - splitting it into "selected" and "toggled"
@@ -1405,6 +1413,15 @@ export component AppWindow inherits Window {
     // A Library row was clicked - the Bundle's id. Opens Review & Update, locked.
     callback library-bundle-clicked(string);
     callback review-update-closed();
+    // Ticket 14: Edit unlocks editing; every field edit forwards here as
+    // (kind, finding-ordinal, marker-ordinal, text); Save and Cancel are their own callbacks because
+    // each needs its own decision made in Rust (write ordering for Save, dirty-check for Cancel);
+    // Discard is the "discard changes?" confirmation's own confirm action.
+    callback review-update-edit-clicked();
+    callback review-update-field-edited(string, int, int, string);
+    callback review-update-save-clicked();
+    callback review-update-cancel-clicked();
+    callback review-update-discard-clicked();
     callback capture-clicked();
     callback open-file-clicked();
     callback paste-clicked();
@@ -3147,13 +3164,23 @@ export component AppWindow inherits Window {
             bundle-opened(id) => { root.library-bundle-clicked(id); }
         }
 
-        // REVIEW & UPDATE, LOCKED MODE (`ticket 13`) - declared AFTER the Library so it stacks above
-        // it, never in place of it. `library-open` stays true underneath the whole time this is open.
+        // REVIEW & UPDATE (`ticket 13` locked mode, `ticket 14` editing) - declared AFTER the Library
+        // so it stacks above it, never in place of it. `library-open` stays true underneath the whole
+        // time this is open.
         if root.review-update-open : SdReviewUpdate {
             blocks: root.review-update-blocks;
             provenance: root.review-update-provenance;
+            editing: root.review-update-editing;
+            cancel-pending <=> root.review-update-cancel-pending;
 
             closed => { root.review-update-closed(); }
+            edit-clicked => { root.review-update-edit-clicked(); }
+            field-edited(kind, finding-ordinal, marker-ordinal, text) => {
+                root.review-update-field-edited(kind, finding-ordinal, marker-ordinal, text);
+            }
+            save-clicked => { root.review-update-save-clicked(); }
+            cancel-clicked => { root.review-update-cancel-clicked(); }
+            discard-clicked => { root.review-update-discard-clicked(); }
         }
 
         // SETTINGS - above the Editor, below the context menu and the confirmations, because those
