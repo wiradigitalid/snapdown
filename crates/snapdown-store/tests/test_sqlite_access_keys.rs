@@ -8,7 +8,7 @@ fn migrations_apply_cleanly_and_create_access_key_table() {
     let temp = NamedTempFile::new().unwrap();
     let store = SqliteAccessKeyStore::open(temp.path()).expect("open access key store");
 
-    assert_eq!(store.get_schema_version().unwrap(), 8);
+    assert_eq!(store.get_schema_version().unwrap(), 9);
 }
 
 #[test]
