@@ -3251,7 +3251,10 @@ defects:
     found_by: agent, the contrast gate required by DEC-009
     component: capture
     severity: high
-    contradicts: [NFR-17]
+    # Read `[NFR-17]` until 2026-09-02. NFR-17 is "no colour defined for one theme only", which this
+    # palette SATISFIED throughout; a contrast failure contradicts NFR-16, "every text element meets
+    # WCAG AA in both themes". Corrected when the row was closed.
+    contradicts: [NFR-16]
     root_cause: code
     measurement: |
       Measured over `theme.slint`, both themes, WCAG 2.1 relative contrast:
@@ -3316,7 +3319,40 @@ defects:
       (c) is small and hard to object to. (a) and (b) both repaint every primary button in dark mode,
       and choosing between them is a design decision the owner has corrected the agent on five times
       in this component already. It is put here with numbers rather than taken.
-    status: open
+    resolved: |
+      2026-09-02. The owner chose (b) plus (c), with (a) held as the fallback if the dark-mode label
+      colour does not please the eye once seen.
+
+      The palette, all in `theme.slint`:
+        text-on-accent   #ffffff  ->  is-dark ? #0f172a : #ffffff   5.58 primary, 6.88 hover (dark)
+        accent-pressed   dark #3a72e0 -> #4383fa                     4.99 (was 3.96 under the new label)
+        text-dim         dark #6b6c70 -> #8e8f95, light #94a3b8 -> #6f7c91   5.27 / 4.86 / 3.86 / 4.23
+        text-muted       light #64748b -> #5d6d84                     4.81 / 5.27
+      Every asserted pairing in both themes now clears AA and `EXCEPTIONS` in `test_theme_contrast.rs`
+      is empty. The ratchet was watched releasing: with the palette changed and the old list still in
+      place, `every_recorded_exception_still_actually_fails` went red on "now measures 5.58 and
+      passes its 4.5 requirement, but is still listed" - then the list was emptied and it went green.
+
+      WHAT THE (b) COSTING MISSED, and why the fix is one token larger than the row proposed:
+      `text-on-accent` was used in 22 places and only 17 of them sit on the accent triple. The other
+      five are white glyphs on plates that do NOT follow the theme - the close button's Windows red,
+      the Marker badge's red, and a Callout's filled bubble (three sites). Two of those are burned
+      into the PNG by `burner.rs` in `COLOR_MARKER_TEXT` white; had they followed the theme-aware
+      token, the canvas would have previewed dark text where the burn draws white, in dark mode only.
+      So the token was SPLIT: `text-on-accent` is now "on the accent triple, and only that", and a new
+      theme-invariant `text-on-plate: #ffffff` carries the five, with a comment binding it to
+      `COLOR_MARKER_TEXT` the way `annotation-stroke` is bound to `COLOR_MARKER_FILL`.
+
+      Seen while doing it and NOT fixed here: the Marker badge previews in `semantic-error` #ef4444
+      but burns in `COLOR_MARKER_FILL` #dc2626, so the preview and the PNG disagree about which red
+      a Marker is. Small, pre-existing, and a different defect.
+
+      The heading in `theme.slint` that read "(WCAG AA Compliant)" - false for the dark column from
+      the day it was written - now says to trust the test and not the heading.
+
+      The one visual judgement left is the owner's: dark text on a bright blue button in dark mode is
+      what Windows 11 does, and it is also a look one has to see. Fallback (a) is a three-value edit.
+    status: fixed
 
   - id: BUG-55
     title: Six UI callbacks were declared, fired by the interface, and handled by nothing

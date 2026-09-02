@@ -15,14 +15,29 @@ export global Theme {
     // 3. Text & Typography Tokens
     out property <color> text-primary:   is-dark ? #f2f2f3 : #0f172a; // Judul & Teks Utama (Slate 900 / 50)
     out property <color> text-secondary: is-dark ? #c9cacd : #334155; // Label & Button Text (Slate 700 / 200)
-    out property <color> text-muted:     is-dark ? #9a9ba0 : #64748b; // Subtitle, Timestamp, Dimensions
-    out property <color> text-dim:       is-dark ? #6b6c70 : #94a3b8; // Placeholder & Inactive Glyphs
-    out property <color> text-on-accent: #ffffff;                     // Teks putih di atas background aksen
+    out property <color> text-muted:     is-dark ? #9a9ba0 : #5d6d84; // Subtitle, Timestamp, Dimensions
+    out property <color> text-dim:       is-dark ? #8e8f95 : #6f7c91; // Placeholder & Inactive Glyphs
+    // Text on the accent triple below, and ONLY on it. Theme-aware since BUG-54: white on the dark
+    // theme's #4c8dff measured 3.20 (2.59 under the pointer) against AA's 4.5, on every primary
+    // button in the product. The fix keeps the bright dark-mode blue and darkens the label instead -
+    // which is what Windows 11 itself does with accent buttons in dark mode - so hover still lightens.
+    // Anything white on a plate that does NOT follow the theme takes `text-on-plate`, never this.
+    out property <color> text-on-accent: is-dark ? #0f172a : #ffffff;
+    // White on a plate that stays the same in both themes: the Marker badge's red, a Callout's
+    // filled bubble, the close button's Windows red. This used to be `text-on-accent` too, and when
+    // that token became theme-aware these would have gone dark with it - two of them are BURNED into
+    // the PNG by `burner.rs`, whose `COLOR_MARKER_TEXT` is #ffffff and which this MUST stay equal to,
+    // for the same reason `annotation-stroke` tracks `COLOR_MARKER_FILL`: the canvas previews the burn.
+    out property <color> text-on-plate:  #ffffff;
 
-    // 4. Accent & Active State Tokens (WCAG AA Compliant)
+    // 4. Accent & Active State Tokens
+    //
+    // This heading said "(WCAG AA Compliant)" from the day it was written until 2026-09-02, and for the
+    // dark column it was false the whole time. A comment asserting compliance is the surest way to stop
+    // anyone measuring it. `test_theme_contrast.rs` measures it; trust that, not a heading.
     out property <color> accent-primary: is-dark ? #4c8dff : #2563eb; // Primary Actions (Assemble, Tab Active Bar)
     out property <color> accent-hover:   is-dark ? #6ba0ff : #1d4ed8; // Primary Action Hover
-    out property <color> accent-pressed: is-dark ? #3a72e0 : #1e40af; // Primary Action Pressed
+    out property <color> accent-pressed: is-dark ? #4383fa : #1e40af; // Primary Action Pressed - dark lightened from #3a72e0, which gave #0f172a only 3.96
     out property <color> accent-surface: is-dark ? #4c8dff.with-alpha(0.16) : #38bdf8.with-alpha(0.18); // Active Tool Pill
     out property <color> accent-active:  is-dark ? #7db2ff : #0369a1; // Active Tool Text/Icon Color
 

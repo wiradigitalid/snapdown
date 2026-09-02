@@ -401,11 +401,11 @@ export component AnnotationItem inherits Rectangle {
         height: max(1px, root.bh - 20px);
         text: root.ann.text;
         // White on a Callout's filled plate, red on a bare Text - the same pair the burn uses.
-        color: root.ann.kind == "callout" ? Theme.text-on-accent : Theme.annotation-stroke;
+        color: root.ann.kind == "callout" ? Theme.text-on-plate : Theme.annotation-stroke;
         font-size: root.shown-size * 1px;
         font-family: root.ann.font-family;
         selection-background-color: Theme.annotation-select-ring;
-        selection-foreground-color: Theme.text-on-accent;
+        selection-foreground-color: Theme.text-on-plate;
         wrap: word-wrap;
         horizontal-alignment: root.ann.text-align == "center"
             ? TextHorizontalAlignment.center
@@ -421,7 +421,7 @@ export component AnnotationItem inherits Rectangle {
         width: max(1px, root.bw - 20px);
         height: max(1px, root.bh - 20px);
         text: root.ann.text == "" ? "Double-click to type" : root.ann.text;
-        color: root.ann.kind == "callout" ? Theme.text-on-accent : Theme.annotation-stroke;
+        color: root.ann.kind == "callout" ? Theme.text-on-plate : Theme.annotation-stroke;
         // OPAQUE, prompt included. The prompt was drawn at 55% and read as transparent text with the
         // capture showing through it - *"ada font di callout yang transparant"*. Dimming is the
         // wrong signal here anyway: over an unknown screenshot, a half-opacity glyph is not "this is

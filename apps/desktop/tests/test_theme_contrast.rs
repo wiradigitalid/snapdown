@@ -11,14 +11,18 @@
 //!   instance - there is no assertion. An earlier draft asserted 1.5:1 for `border-strong` on
 //!   `bg-card`, reported a failure at 1.39, and the failure was in the invented bar rather than in
 //!   the palette. A gate that reports noise gets ignored, and then it protects nothing;
-//! - it does not lower a real bar to reach green. SIX pairings fail AA today. They are listed as
-//!   EXCEPTIONS with their measured ratio and the defect that owns them, so this file passes now,
-//!   fails if any of them gets worse, and fails when a defect is closed without updating it.
+//! - it does not lower a real bar to reach green. A pairing that fails goes into `EXCEPTIONS` with
+//!   its measured ratio and the defect that owns it, so this file stays green, fails if the pairing
+//!   gets worse, and fails when the defect is closed without the entry being removed.
 //!
-//! This line said "Four" until 2026-09-01 and `EXCEPTIONS` has held six entries since the day it was
-//! written - the count came from an earlier draft and nothing re-read it. A green run here is
-//! therefore NOT evidence that `NFR-16` is met; it is evidence that six known failures have not got
-//! worse. `BUG-54` owns all six.
+//! `EXCEPTIONS` is EMPTY as of 2026-09-02. It held six entries from the day it was written, all
+//! owned by `BUG-54`, and this header said "Four" for most of that time - the count came from an
+//! earlier draft and nothing re-read it. The six were cleared by the palette change `BUG-54` records,
+//! and `every_recorded_exception_still_actually_fails` was watched going RED on the way: with the new
+//! palette in place and the old list still present, it reported "now measures 5.58 and passes its 4.5
+//! requirement, but is still listed as an exception". That is the ratchet releasing, which is the one
+//! thing a list like this has to be seen doing. A green run here now IS evidence that every asserted
+//! pairing meets `NFR-16`.
 
 use std::collections::HashMap;
 use std::fs;
@@ -167,22 +171,19 @@ const PAIRS: &[(&str, &str, f64, &str)] = &[
     ("semantic-error", "bg-card", 3.0, "a Marker pin"),
 ];
 
-/// Pairings that fail today, with the ratio measured on 2026-08-27 and the defect that owns them.
+/// Pairings that fail today, with the ratio measured when they were recorded and the defect that owns
+/// them: `(theme, foreground, background, measured, defect)`.
 ///
 /// This list is a ratchet, not an excuse. A pairing may appear here only with a measured number and
 /// an open defect, the assertions below fail if any of them gets WORSE, and the last assertion in
 /// this file fails if an entry is left here after its defect is closed.
-const EXCEPTIONS: &[(&str, &str, &str, f64, &str)] = &[
-    ("dark", "text-on-accent", "accent-primary", 3.20, "BUG-54"),
-    ("dark", "text-on-accent", "accent-hover", 2.59, "BUG-54"),
-    // `accent-pressed` is NOT here: white on the dark theme's #3a72e0 measures 4.50, which clears
-    // AA by a hair. It was listed on the first draft and `every_recorded_exception_still_actually_
-    // fails` rejected it immediately - the ratchet's release check earning its place on its first run.
-    ("light", "text-muted", "bg-app", 4.34, "BUG-54"),
-    ("light", "text-dim", "bg-app", 2.34, "BUG-54"),
-    ("dark", "text-dim", "bg-card", 2.99, "BUG-54"),
-    ("light", "text-dim", "bg-card", 2.56, "BUG-54"),
-];
+///
+/// Empty since 2026-09-02. The six `BUG-54` entries it held were, for the record:
+/// dark text-on-accent/accent-primary 3.20 - dark text-on-accent/accent-hover 2.59 -
+/// light text-muted/bg-app 4.34 - light text-dim/bg-app 2.34 - dark text-dim/bg-card 2.99 -
+/// light text-dim/bg-card 2.56. The type annotation is what lets the slice be empty and still be
+/// something the two functions below can iterate.
+const EXCEPTIONS: &[(&str, &str, &str, f64, &str)] = &[];
 
 fn exception(theme: &str, fg: &str, bg: &str) -> Option<f64> {
     EXCEPTIONS
