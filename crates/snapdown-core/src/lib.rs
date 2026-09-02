@@ -9,7 +9,7 @@ pub use domain::access_key::{AccessKey, AuthResult};
 pub use domain::bundle::{Bundle, BundleDetail, BundleItem};
 pub use domain::finding::{Finding, FindingDetail, Marker, Note, Region};
 pub use domain::image::ImageDimensions;
-pub use domain::markdown::MarkdownSerializer;
+pub use domain::markdown::{MarkdownSerializer, ParsedBundleDocument, ParsedFinding, ParsedMarker};
 pub use domain::publication::Publication;
 pub use domain::setting::{QualityBudget, Setting, SettingKey, SettingValue};
 pub use error::CoreError;
