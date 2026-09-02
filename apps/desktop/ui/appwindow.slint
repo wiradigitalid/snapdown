@@ -22,6 +22,7 @@ import { SdActionButton, SdSectionLabel, SdCaption, SdDocHeading } from "compone
 import { AnnotationItem, AnnotationData } from "components/annotation.slint";
 import { SdLibrary, LibraryBundleRow } from "components/library.slint";
 import { SdReviewUpdate, ReviewUpdateBlock } from "components/review-update.slint";
+import { SdReclaimSpace, ReclaimBundleRow } from "components/reclaim-space.slint";
 
 import "../assets/fonts/IBMPlexSans-Medium.ttf";
 import "../assets/fonts/IBMPlexSans-SemiBold.ttf";
@@ -1408,6 +1409,34 @@ export component AppWindow inherits Window {
     callback library-delete-both-requested(string);
     callback library-delete-both-cancelled();
     callback library-delete-both-confirmed(string);
+
+    // RECLAIM SPACE (`ticket 18`). Reached from two doors - a new entry beside the Library's own
+    // Bundle count, and a new button in Settings' Vault card - both of which fire THIS one callback,
+    // which is what makes "both open the same screen" true by construction. Gated the same way
+    // `library-open` is: Rust sets it, Slint never flips it itself. Opening or closing this never
+    // touches `library-open`/`settings-open`, so whichever screen was open underneath stays exactly
+    // as it was.
+    callback reclaim-space-clicked();
+    in-out property <bool> reclaim-space-open: false;
+    in property <[ReclaimBundleRow]> reclaim-space-rows: [];
+    in property <string> reclaim-space-total-label: "";
+    in property <string> reclaim-space-footer-label: "";
+    in property <int> reclaim-space-selected-count: 0;
+    callback reclaim-space-closed();
+    callback reclaim-space-row-toggled(string);
+    callback reclaim-space-discard-clicked();
+
+    // THE BULK CONFIRMATION. `reclaim-space-pending-ids` carries the ticked Bundle ids from the
+    // moment the confirmation opens through to the moment it is confirmed - an `in` property Rust
+    // both writes (on `reclaim-space-discard-clicked`) and reads back (on
+    // `reclaim-space-discard-confirmed`), the same round trip `library-pending-disassemble` makes
+    // for one id, widened to a list.
+    in property <bool> reclaim-space-confirm-open: false;
+    in property <string> reclaim-space-confirm-heading: "";
+    in property <string> reclaim-space-confirm-body: "";
+    in property <[string]> reclaim-space-pending-ids: [];
+    callback reclaim-space-discard-cancelled();
+    callback reclaim-space-discard-confirmed();
 
     // id, ctrl held, shift held. One callback rather than two, because a click on a card is one
     // gesture whose MEANING depends on the modifiers - splitting it into "selected" and "toggled"
@@ -3181,6 +3210,7 @@ export component AppWindow inherits Window {
             delete-both-requested(id) => { root.library-delete-both-requested(id); }
             delete-both-cancelled => { root.library-delete-both-cancelled(); }
             delete-both-confirmed(id) => { root.library-delete-both-confirmed(id); }
+            reclaim-space-clicked => { root.reclaim-space-clicked(); }
         }
 
         // REVIEW & UPDATE (`ticket 13` locked mode, `ticket 14` editing) - declared AFTER the Library
@@ -3240,6 +3270,28 @@ export component AppWindow inherits Window {
                 root.hotkey-key-pressed(action, ctrl, alt, shift, win, text);
             }
             hotkey-enabled-toggled(action, on) => { root.hotkey-enabled-toggled(action, on); }
+            reclaim-space-clicked => { root.reclaim-space-clicked(); }
+        }
+
+        // RECLAIM SPACE (`ticket 18`) - declared AFTER both the Library and Settings so it stacks
+        // ABOVE whichever one is open underneath (Slint draws later siblings on top), the same
+        // reasoning `SdReviewUpdate`'s own mount comment gives. Neither `library-open` nor
+        // `settings-open` is touched by this block - closing Reclaim space simply reveals whichever
+        // one was already there.
+        if root.reclaim-space-open : SdReclaimSpace {
+            rows: root.reclaim-space-rows;
+            total-label: root.reclaim-space-total-label;
+            footer-label: root.reclaim-space-footer-label;
+            selected-count: root.reclaim-space-selected-count;
+            confirm-open: root.reclaim-space-confirm-open;
+            confirm-heading: root.reclaim-space-confirm-heading;
+            confirm-body: root.reclaim-space-confirm-body;
+
+            closed => { root.reclaim-space-closed(); }
+            row-toggled(id) => { root.reclaim-space-row-toggled(id); }
+            discard-clicked => { root.reclaim-space-discard-clicked(); }
+            discard-cancelled => { root.reclaim-space-discard-cancelled(); }
+            discard-confirmed => { root.reclaim-space-discard-confirmed(); }
         }
 
         // MOVING THE VAULT - confirmed, because it moves every file the product owns.

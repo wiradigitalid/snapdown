@@ -1,0 +1,351 @@
+import { Theme } from "../theme.slint";
+import { SdModalHeader } from "modal.slint";
+import { SdActionButton, SdSectionLabel } from "action-button.slint";
+import { SdCheckbox } from "form-controls.slint";
+import { ScrollView } from "std-widgets.slint";
+
+// ONE ROW - one UNSEALED Bundle, as Reclaim space lists it. Ticket 18 of the Bundle Library spec.
+//
+// `meta-line` and `size-label` are both composed in Rust, the same discipline `LibraryBundleRow`
+// follows: the pluralisation, the relative-time ladder and the MB formatting each live in exactly
+// one place. `size-bytes` rides alongside the formatted `size-label` so the footer's running total
+// (below) can be recomputed straight off THIS model after a tick, rather than a second number kept
+// beside it that could drift from what the rows actually show.
+export struct ReclaimBundleRow {
+    id: string,
+    name: string,
+    thumbnail: image,
+    meta-line: string,
+    size-label: string,
+    size-bytes: float,
+    selected: bool,
+}
+
+// RECLAIM SPACE.
+//
+// `ticket 18` of the Bundle Library spec. A SECOND full-window overlay, the same opaque-edge-to-edge
+// shape `SdLibrary` uses (see that file's own header comment for why: this reads as "a screen", not
+// "a dialog" over the Editor). Reached from two doors - the Library header and Settings' Vault card
+// - both of which fire the SAME `appwindow.slint` callback, which is what makes "both open the same
+// screen" true by construction rather than by two builders agreeing to build it twice. Whichever
+// screen was open underneath (Library or Settings) is left alone - `library-open`/`settings-open`
+// are never touched by opening or closing this - so it simply layers on top and closing it reveals
+// whatever was already there.
+//
+// Lists every UNSEALED Bundle - `bundle_is_sealed`'s own live read decides which ones qualify
+// (`main.rs`'s `build_reclaim_rows`), never a stored flag, exactly the discipline ticket 16/17's row
+// menu already follows. A row's checkbox is the ONLY interactive surface on the row - there is no
+// click-to-open here, unlike the Library, because Reclaim space is a bulk-action screen, not a way
+// to reach one Bundle.
+export component SdReclaimSpace inherits Rectangle {
+    in property <[ReclaimBundleRow]> rows: [];
+    // "373.1 MB reclaimable" - the header readout, composed in Rust from the exact sum of every
+    // row's `size-bytes`.
+    in property <string> total-label: "";
+    // "3 of 6 selected · 295.2 MB will be freed" - composed in Rust, recomputed after every tick.
+    in property <string> footer-label: "";
+    in property <int> selected-count: 0;
+
+    callback closed();
+    // Bundle id. A tick or an untick - Rust owns flipping the bit and recomputing the footer, the
+    // same "Rust decides, Slint displays" split `library-menu-sealed` already follows.
+    callback row-toggled(string);
+    // Opens the ONE bulk confirmation below.
+    callback discard-clicked();
+
+    // THE ONE CONFIRMATION. Counts Bundles and captures across the WHOLE ticked set, and names any
+    // OTHER Bundle that will be sealed as a side effect (`BR-12`/`BR-122`, ticket 17's own notice,
+    // reused here over the ticked set rather than one Bundle at a time) - both composed in Rust
+    // (`reclaim_confirm_body`) so the counting and the pluralisation live in exactly one place.
+    in property <bool> confirm-open: false;
+    in property <string> confirm-heading: "";
+    in property <string> confirm-body: "";
+    callback discard-cancelled();
+    callback discard-confirmed();
+
+    width: 100%;
+    height: 100%;
+    background: Theme.bg-app;
+
+    // Swallows any click that would otherwise fall through - defence in depth, `SdLibrary`'s own
+    // reasoning, since this is opaque edge to edge and nothing behind it is ever visible to hit.
+    TouchArea { }
+
+    // Escape closes it - the Library's own pattern, borrowed rather than reinvented.
+    reclaim-space-keys := FocusScope {
+        init => { self.focus(); }
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                root.closed();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    VerticalLayout {
+        padding: 0px;
+        spacing: 0px;
+
+        SdModalHeader {
+            icon: @image-url("../../assets/icons/trash.svg");
+            title: "Reclaim space";
+            closed => { root.closed(); }
+
+            Text {
+                text: root.total-label;
+                font-size: 10px;
+                color: Theme.text-muted;
+                vertical-alignment: center;
+                font-family: "IBM Plex Mono";
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+            background: Theme.bg-app;
+
+            VerticalLayout {
+                padding: 16px;
+                spacing: 14px;
+
+                VerticalLayout {
+                    spacing: 5px;
+                    SdSectionLabel { text: "BUNDLES STILL HOLDING THEIR ORIGINAL CAPTURES"; }
+                    Text {
+                        text: "Discarding a Bundle's originals keeps the Bundle readable and shareable. It can no longer be disassembled.";
+                        font-size: 10px;
+                        color: Theme.text-muted;
+                        wrap: word-wrap;
+                        font-family: "IBM Plex Sans";
+                    }
+                }
+
+                Rectangle {
+                    vertical-stretch: 1;
+                    background: Theme.bg-card;
+                    border-width: 1px;
+                    border-color: Theme.border-strong;
+                    border-radius: Theme.radius-sharp;
+                    clip: true;
+
+                    // EMPTY - "Nothing to reclaim" (`ticket 18`'s own settled copy), names why rather
+                    // than showing a dead end, the same rule the Library's own empty state follows.
+                    if root.rows.length == 0 : VerticalLayout {
+                        alignment: center;
+                        spacing: 14px;
+
+                        HorizontalLayout {
+                            alignment: center;
+                            Image {
+                                width: 34px;
+                                height: 34px;
+                                image-fit: contain;
+                                source: @image-url("../../assets/icons/trash.svg");
+                                colorize: Theme.border-strong;
+                            }
+                        }
+
+                        Text {
+                            text: "Nothing to reclaim";
+                            font-size: 13px;
+                            color: Theme.text-primary;
+                            horizontal-alignment: center;
+                            font-family: "IBM Plex Sans";
+                        }
+
+                        Text {
+                            text: "No Bundle is holding original captures. Every Bundle here either had its originals discarded already, or has none left to discard.";
+                            font-size: 10px;
+                            color: Theme.text-muted;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
+                            font-family: "IBM Plex Sans";
+                        }
+                    }
+
+                    // THE LIST - every unsealed Bundle, in the order Rust handed it (the store's own
+                    // newest-composed-first order; nothing here re-sorts it).
+                    if root.rows.length > 0 : ScrollView {
+                        width: 100%;
+                        height: 100%;
+                        vertical-scrollbar-policy: as-needed;
+                        horizontal-scrollbar-policy: always-off;
+
+                        VerticalLayout {
+                            for row[i] in root.rows : Rectangle {
+                                height: 52px;
+                                background: row.selected ? Theme.bg-hover : transparent;
+                                border-width: i == root.rows.length - 1 ? 0px : 1px;
+                                border-color: Theme.border-subtle;
+
+                                HorizontalLayout {
+                                    padding-top: 11px;
+                                    padding-bottom: 11px;
+                                    padding-left: 14px;
+                                    padding-right: 14px;
+                                    spacing: 12px;
+
+                                    // The checkbox - the ONLY interactive surface on the row. A
+                                    // plain `Rectangle` cell, not a layout cell holding `SdCheckbox`
+                                    // directly: that component sizes itself from its own label text
+                                    // (empty here), and `form-controls.slint`'s own comment on
+                                    // `checkbox-box` explains why a free child positioned from its
+                                    // own resolved geometry is what keeps it centred regardless of
+                                    // what the row's layout does to its height - the same trick,
+                                    // applied one level up.
+                                    Rectangle {
+                                        width: 15px;
+                                        reclaim-checkbox := SdCheckbox {
+                                            y: (parent.height - self.height) / 2;
+                                            checked: row.selected;
+                                            toggled(on) => { root.row-toggled(row.id); }
+                                        }
+                                    }
+
+                                    // Thumbnail - always the BundleItem at position 1, decoded by
+                                    // Rust before this ever reaches Slint, exactly `SdLibrary`'s own
+                                    // row. `canvas-ground` is theme-invariant for the same reason the
+                                    // capture overlay's own ground is.
+                                    Rectangle {
+                                        width: 44px;
+                                        height: 30px;
+                                        border-radius: Theme.radius-sharp;
+                                        background: Theme.canvas-ground;
+                                        border-width: 1px;
+                                        border-color: Theme.border-strong;
+                                        clip: true;
+
+                                        Image {
+                                            width: 100%;
+                                            height: 100%;
+                                            image-fit: cover;
+                                            source: row.thumbnail;
+                                        }
+                                    }
+
+                                    VerticalLayout {
+                                        horizontal-stretch: 1;
+                                        spacing: 3px;
+                                        alignment: center;
+
+                                        Text {
+                                            text: row.name;
+                                            font-size: 13px;
+                                            color: Theme.text-primary;
+                                            overflow: elide;
+                                            font-family: "IBM Plex Sans";
+                                        }
+                                        Text {
+                                            text: row.meta-line;
+                                            font-size: 10px;
+                                            color: Theme.text-muted;
+                                            overflow: elide;
+                                            font-family: "IBM Plex Mono";
+                                        }
+                                    }
+
+                                    Text {
+                                        text: row.size-label;
+                                        font-size: 11px;
+                                        color: row.selected ? Theme.text-primary : Theme.text-muted;
+                                        vertical-alignment: center;
+                                        font-family: "IBM Plex Mono";
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // THE FOOTER - absent entirely when there is nothing to act on, matching
+                // `ReclaimEmpty.dc.html`'s own artboard (no footer bar at all over "Nothing to
+                // reclaim").
+                if root.rows.length > 0 : HorizontalLayout {
+                    spacing: 12px;
+
+                    Text {
+                        text: root.footer-label;
+                        font-size: 11px;
+                        color: Theme.text-secondary;
+                        vertical-alignment: center;
+                        font-family: "IBM Plex Mono";
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    SdActionButton {
+                        label: "Cancel";
+                        primary: false;
+                        height: 32px;
+                        clicked => { root.closed(); }
+                    }
+                    SdActionButton {
+                        label: "Discard originals";
+                        height: 32px;
+                        enabled: root.selected-count > 0;
+                        clicked => { root.discard-clicked(); }
+                    }
+                }
+            }
+        }
+    }
+
+    // THE BULK CONFIRMATION. Same 380px/20px/14px/12px/30px-buttons shape `SdLibrary`'s own four
+    // dialogs use, per `spec.md`'s "the four confirmations" - a fifth dialog in a sixth shape would
+    // be exactly the drift `design-system-guide.md` warns about.
+    if root.confirm-open : Rectangle {
+        width: 100%;
+        height: 100%;
+        background: Theme.overlay-scrim;
+        TouchArea {
+            clicked => { root.discard-cancelled(); }
+        }
+
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 380px;
+            height: confirm-layout.preferred-height;
+            background: Theme.bg-card;
+            border-width: 1px;
+            border-color: Theme.border-strong;
+            border-radius: Theme.radius-sharp;
+            drop-shadow-blur: 32px;
+            drop-shadow-color: Theme.overlay-shadow;
+            TouchArea { }
+
+            confirm-layout := VerticalLayout {
+                padding: 20px;
+                spacing: 14px;
+
+                SdSectionLabel {
+                    text: root.confirm-heading;
+                }
+
+                Text {
+                    text: root.confirm-body;
+                    font-size: 12px;
+                    color: Theme.text-secondary;
+                    wrap: word-wrap;
+                    font-family: "IBM Plex Sans";
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+
+                    SdActionButton {
+                        label: "Keep them";
+                        primary: false;
+                        height: 30px;
+                        clicked => { root.discard-cancelled(); }
+                    }
+                    SdActionButton {
+                        label: "Discard originals";
+                        height: 30px;
+                        clicked => { root.discard-confirmed(); }
+                    }
+                }
+            }
+        }
+    }
+}
