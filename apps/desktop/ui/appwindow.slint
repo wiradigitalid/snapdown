@@ -1366,6 +1366,9 @@ export component AppWindow inherits Window {
     callback library-closed();
     callback library-try-again-clicked();
     callback library-open-file-location-clicked();
+    // Bundle id, forwarded from `SdLibrary`'s own row-level callbacks (`ticket 12`).
+    callback library-copy-markdown-clicked(string);
+    callback library-bundle-open-file-location-clicked(string);
     callback capture-clicked();
     callback open-file-clicked();
     callback paste-clicked();
@@ -3087,6 +3090,8 @@ export component AppWindow inherits Window {
             closed => { root.library-closed(); }
             try-again-clicked => { root.library-try-again-clicked(); }
             open-file-location-clicked => { root.library-open-file-location-clicked(); }
+            copy-markdown-clicked(id) => { root.library-copy-markdown-clicked(id); }
+            bundle-open-file-location-clicked(id) => { root.library-bundle-open-file-location-clicked(id); }
         }
 
         // SETTINGS - above the Editor, below the context menu and the confirmations, because those

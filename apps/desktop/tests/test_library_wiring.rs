@@ -72,6 +72,17 @@ fn every_library_callback_is_bound_from_slint_to_rust() {
             "root.library-open-file-location-clicked();",
             "on_library_open_file_location_clicked",
         ),
+        // Ticket 12: the row's two everyday actions, both carrying the Bundle id.
+        (
+            "callback copy-markdown-clicked(string);",
+            "root.library-copy-markdown-clicked(id);",
+            "on_library_copy_markdown_clicked",
+        ),
+        (
+            "callback bundle-open-file-location-clicked(string);",
+            "root.library-bundle-open-file-location-clicked(id);",
+            "on_library_bundle_open_file_location_clicked",
+        ),
     ] {
         assert!(
             library.contains(slint_callback),

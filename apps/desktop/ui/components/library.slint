@@ -1,6 +1,7 @@
 import { Theme } from "../theme.slint";
 import { SdModalHeader } from "modal.slint";
 import { SdActionButton, SdSectionLabel, SdCaption } from "action-button.slint";
+import { SdContextMenu, MenuEntry } from "context-menu.slint";
 import { ScrollView } from "std-widgets.slint";
 
 // ONE ROW - one composed Bundle, as the Library lists it.
@@ -29,12 +30,11 @@ export struct LibraryBundleRow {
 // (Settings auto-saves as you go, so a stray Escape closing it would read as losing a change - the
 // Library has no editable state at all in this ticket, so that risk does not apply here).
 //
-// Rows carry NO actions yet. `ticket 12`/`ticket 16` wire Copy Markdown, Open file location, and the
-// row menu; this ticket only lays out where they go, per the map's own note (`canvas.json`,
-// "row-actions"): two icons on hover, an overflow button beside them, both drawn but neither given a
-// `TouchArea` - an icon with no click handler invites nothing, which is the point. Wiring one now
-// would either do nothing when clicked (the toolbar's fake-shortcut mistake `AGENTS.md` names
-// directly) or reach into ticket 12/16's own scope.
+// Rows carry two everyday actions - `ticket 12` of the Bundle Library spec: Copy Markdown and Open
+// file location, on hover and in the row's own right-click/overflow menu. `ticket 16` (Disassemble,
+// Delete) adds to the SAME `row-menu` model rather than a second menu, which is why that model is
+// built as a list here rather than two hard-coded rows: appending entries to it is the whole of what
+// a later ticket needs to do.
 export component SdLibrary inherits Rectangle {
     // "loading" | "error" | "ready". "ready" with an empty `rows` IS the empty state - there is no
     // fourth value for it, because a value that only restates `rows.length == 0` is a second place
@@ -46,6 +46,25 @@ export component SdLibrary inherits Rectangle {
     callback closed();
     callback try-again-clicked();
     callback open-file-location-clicked();
+    // Bundle id. Copy Markdown puts the Bundle's stored document on the clipboard, rebased so its
+    // image links resolve on this disk - the rebasing itself is Rust's job (the composer's own
+    // `rebase_image_links`), this callback only says WHICH Bundle.
+    callback copy-markdown-clicked(string);
+    // Bundle id. Distinct from `open-file-location-clicked` above, which has no Bundle to point at
+    // (it reveals `library.db` itself, from the Library's "cannot be read" state) - this one opens
+    // one Bundle's own folder.
+    callback bundle-open-file-location-clicked(string);
+
+    // THE ROW MENU - one model, so `ticket 16` can append Disassemble/Delete to it without a second
+    // menu implementation. `menu-target` holds which row's menu is open ("" means closed), the same
+    // shape `appwindow.slint`'s own `menu-subject`/`menu-target` uses for the canvas and filmstrip.
+    private property <string> menu-target: "";
+    private property <length> menu-x;
+    private property <length> menu-y;
+    private property <[MenuEntry]> row-menu: [
+        { action: "copy-markdown", label: "Copy Markdown", hint: "", separator: false, enabled: true },
+        { action: "reveal", label: "Open file location", hint: "", separator: false, enabled: true },
+    ];
 
     width: 100%;
     height: 100%;
@@ -281,10 +300,20 @@ export component SdLibrary inherits Rectangle {
                                 row-touch := TouchArea {
                                     // No `clicked` handler and a `default` cursor: this ticket does
                                     // not open Review & Update (a later ticket does), so the row
-                                    // must not read as clickable yet. The TouchArea exists only to
-                                    // detect hover, for the background and the two placeholder
-                                    // affordances below.
+                                    // must not read as clickable on the LEFT click. The TouchArea
+                                    // exists for hover (the background and the two hover actions)
+                                    // and for a right-click, which raises the same row menu the
+                                    // overflow button does - the filmstrip's own gesture
+                                    // (`appwindow.slint`'s `finding-menu`), copied here.
                                     mouse-cursor: default;
+                                    pointer-event(ev) => {
+                                        if (ev.kind == PointerEventKind.down
+                                            && ev.button == PointerEventButton.right) {
+                                            root.menu-target = row.id;
+                                            root.menu-x = self.absolute-position.x + self.mouse-x;
+                                            root.menu-y = self.absolute-position.y + self.mouse-y;
+                                        }
+                                    }
                                 }
 
                                 HorizontalLayout {
@@ -336,11 +365,10 @@ export component SdLibrary inherits Rectangle {
                                         }
                                     }
 
-                                    // The row's two hover actions and its overflow button - placed
-                                    // now, per the ticket's own last bullet, so `ticket 12`/`ticket
-                                    // 16` add Copy Markdown, Open file location and the row menu
-                                    // without moving the row. Decorative only: no `TouchArea`, no
-                                    // `clicked` - see the file header comment.
+                                    // The row's two hover actions and its overflow button. `ticket
+                                    // 11` laid these out undecorated on purpose ("an icon with no
+                                    // click handler invites nothing"); this ticket gives all three a
+                                    // `TouchArea`.
                                     if row-touch.has-hover : HorizontalLayout {
                                         spacing: 4px;
                                         alignment: end;
@@ -349,7 +377,7 @@ export component SdLibrary inherits Rectangle {
                                             width: 28px;
                                             height: 28px;
                                             border-radius: Theme.radius-sharp;
-                                            background: Theme.bg-card;
+                                            background: copy-touch.has-hover ? Theme.bg-hover : Theme.bg-card;
                                             border-width: 1px;
                                             border-color: Theme.border-strong;
                                             Image {
@@ -359,12 +387,16 @@ export component SdLibrary inherits Rectangle {
                                                 colorize: Theme.text-secondary;
                                                 source: @image-url("../../assets/icons/copy.svg");
                                             }
+                                            copy-touch := TouchArea {
+                                                mouse-cursor: MouseCursor.pointer;
+                                                clicked => { root.copy-markdown-clicked(row.id); }
+                                            }
                                         }
                                         Rectangle {
                                             width: 28px;
                                             height: 28px;
                                             border-radius: Theme.radius-sharp;
-                                            background: Theme.bg-card;
+                                            background: reveal-touch.has-hover ? Theme.bg-hover : Theme.bg-card;
                                             border-width: 1px;
                                             border-color: Theme.border-strong;
                                             Image {
@@ -374,15 +406,20 @@ export component SdLibrary inherits Rectangle {
                                                 colorize: Theme.text-secondary;
                                                 source: @image-url("../../assets/icons/folder.svg");
                                             }
+                                            reveal-touch := TouchArea {
+                                                mouse-cursor: MouseCursor.pointer;
+                                                clicked => { root.bundle-open-file-location-clicked(row.id); }
+                                            }
                                         }
                                         // Overflow - three drawn dots, not a typed "...", for the
                                         // same reason the checkbox tick and the modal close are
-                                        // drawn: a glyph falls back to whatever the font has.
+                                        // drawn: a glyph falls back to whatever the font has. Opens
+                                        // the same `row-menu` a right-click on the row does.
                                         Rectangle {
                                             width: 28px;
                                             height: 28px;
                                             border-radius: Theme.radius-sharp;
-                                            background: Theme.bg-card;
+                                            background: overflow-touch.has-hover ? Theme.bg-hover : Theme.bg-card;
                                             border-width: 1px;
                                             border-color: Theme.border-strong;
                                             HorizontalLayout {
@@ -392,6 +429,14 @@ export component SdLibrary inherits Rectangle {
                                                 Rectangle { width: 2.3px; height: 2.3px; border-radius: 1.15px; background: Theme.text-secondary; }
                                                 Rectangle { width: 2.3px; height: 2.3px; border-radius: 1.15px; background: Theme.text-secondary; }
                                             }
+                                            overflow-touch := TouchArea {
+                                                mouse-cursor: MouseCursor.pointer;
+                                                clicked => {
+                                                    root.menu-target = row.id;
+                                                    root.menu-x = self.absolute-position.x + self.mouse-x;
+                                                    root.menu-y = self.absolute-position.y + self.mouse-y;
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -400,6 +445,24 @@ export component SdLibrary inherits Rectangle {
                     }
                 }
             }
+        }
+    }
+
+    // THE ROW MENU - drawn last, so it sits above every row and dismisses on any outside press
+    // (`SdContextMenu`'s own scrim). Opened by the overflow button or a right-click on the row, both
+    // of which set `menu-target` to that row's Bundle id.
+    if root.menu-target != "" : SdContextMenu {
+        entries: root.row-menu;
+        at-x: root.menu-x;
+        at-y: root.menu-y;
+        dismissed => { root.menu-target = ""; }
+        chosen(action) => {
+            if (action == "copy-markdown") {
+                root.copy-markdown-clicked(root.menu-target);
+            } else if (action == "reveal") {
+                root.bundle-open-file-location-clicked(root.menu-target);
+            }
+            root.menu-target = "";
         }
     }
 }
