@@ -1,7 +1,7 @@
 # 09: Decide whether an edited Bundle says so
 
 **Type:** grilling
-**Status:** open
+**Status:** resolved 2026-09-02
 **Blocked by:** -
 
 ## Question
@@ -41,3 +41,33 @@ cost rather than a detail.
 
 **Do not reopen:** ticket 01's row shape beyond its meta line, ticket 05's window, or the decision
 that `Save` is always clickable.
+
+---
+
+## Answer
+
+**Option B**, the owner's decision on 2026-09-02, taken from a four-part brief - background,
+analysis, options, recommendation - rather than from the ticket text.
+
+- A Bundle gains `updated_at`. Existing Bundles are backfilled with their `composed_at`, which
+  reads as "never edited" and is true.
+- It moves **only when the stored content actually changes.** A `Save` that changes nothing leaves
+  it alone, so ticket 05's finding - a no-op Save disturbs nothing a Reviewer can see - stays true
+  instead of being traded away.
+- The Library row shows it **only when it differs** from `composed_at`: *composed 2 Sep - edited 1h
+  ago*. A never-edited Bundle's row keeps exactly ticket 01's shape.
+- **The sort does not change:** newest-composed first. Sorting by edit time would send a typo fix
+  to the top of the list.
+
+Why B and not silence (A): the asymmetry. The column can be added at any later date, but every
+edit made before it exists is unrecoverable - and the Publish patch under *Not yet specified*
+already lists *"what a Reviewer sees when a published Bundle is edited afterwards"*, a question that
+cannot be answered without it. Why not C (always shown) or D (sort by activity): C puts two
+identical dates on most rows, and D reorders the Library on a correction.
+
+Nothing here ships on its own. It is a spec input for the Library and lands with it through
+`/to-spec` -> `/to-tickets`; the `FR` that names it is written after the code, per the repo's rule
+that documents follow code.
+
+**This was the map's last open decision.** Its exit condition - `/to-spec` can be run without a
+further decision being needed - is met.

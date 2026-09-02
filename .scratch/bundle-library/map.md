@@ -11,7 +11,8 @@ location, and deletes it — together with the Editor action-vocabulary rework t
 terms.
 
 The map ends when `/to-spec` can be run without a further decision being needed. It does not build
-anything.
+anything. **That condition was met on 2026-09-02**, when ticket 09 - the last open decision - closed.
+The next step is `/to-spec`.
 
 ## Notes
 
@@ -232,14 +233,25 @@ the scope boundary does.
   titles itself `Snapdown`, not `Snapdown Editor` — a regression `DEC-007`'s rewrite dropped in
   silence), plus `BUG-57` and `BUG-61` re-counted against the tree after going stale.
 
+- **An edited Bundle says so (ticket 09, 2026-09-02).** Option B: a Bundle gains `updated_at`,
+  backfilled with `composed_at`, moved only when stored content actually changes, shown in the Library
+  row only when it differs from the composed time, and the sort stays newest-composed-first. The
+  deciding point was asymmetry - the column is free to add now and hide later, but edits made before it
+  exists are lost for good, and Publish's own future scope already asks a question only this answers.
+  **This was the last open decision on the map.** Also landed the same day, outside this map: `BUG-89`
+  (the Editor window now titles itself `Snapdown Editor`) and `BUG-54` (every token pairing clears
+  WCAG AA in both themes), which turns two of the experience bar's four failing items into passes.
+
 ## Not yet specified
 
 - **Publish / cloud.** In scope for this map's destination, and **still frozen.** `DEC-005` forbids
   new FR/UC/UX for the `sharing` component, it lifts *by its own terms* once the G2 experience bar is
   met and verified, and ticket 06 assessed that bar on 2026-09-01 and found it **not met** — so the
   freeze stands and nothing here graduates yet. Do not re-litigate the freeze; the route out is the
-  four failing items in `.control/reports/ASSESS-EXPERIENCE-BAR-2026-09-01.md`, of which this map owns
-  exactly one (the Library, which is `FR-28`'s missing Bundles surface). When it does lift, this patch
+  failing items in `.control/reports/ASSESS-EXPERIENCE-BAR-2026-09-01.md`. Two of its four were fixed
+  on 2026-09-02 (`BUG-89` for B1, `BUG-54` for B4); of the two left, this map owns one (B2 - the
+  Library, which is `FR-28`'s missing Bundles surface) and the other (B3) is the owner's call on
+  whether Settings has tabs. B7 still needs a first-encounter session nobody has run. When it does lift, this patch
   graduates into its own tickets — publish/unpublish lifecycle, slug
   handling, credential storage, the `apps/web-service` (Go) side, and what a Reviewer sees when a
   published Bundle is edited afterwards.
