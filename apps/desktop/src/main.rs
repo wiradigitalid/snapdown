@@ -615,6 +615,88 @@ fn close_review_update(window: &AppWindow) {
     >::new()))));
 }
 
+/// Names of other Bundles that share at least one of the given Finding ids, excluding the Bundle
+/// whose originals are about to be discarded. `BR-12`/`BR-122`: discarding one Bundle's originals
+/// can silently seal a second Bundle built from the same captures, and the Discard originals
+/// confirmation (`ticket 17`) is the only place that consequence is said out loud (`spec.md`'s "The
+/// four confirmations"). Computed here over the existing `list_bundles()` read rather than a new SQL
+/// path - the whole-Bundle listing already carries every `BundleItem` needed to answer this, and a
+/// second query for the same fact would be a second place for it to disagree.
+fn bundles_sharing_findings(
+    ctx: &AppContext,
+    exclude_bundle_id: &str,
+    finding_ids: &[String],
+) -> Vec<String> {
+    let Some(store) = ctx.bundle_store.as_ref() else {
+        return Vec::new();
+    };
+    let ids: std::collections::HashSet<&str> = finding_ids.iter().map(String::as_str).collect();
+    store
+        .list_bundles()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|detail| detail.bundle.id != exclude_bundle_id)
+        .filter(|detail| {
+            detail
+                .items
+                .iter()
+                .any(|item| ids.contains(item.finding_id.as_str()))
+        })
+        .map(|detail| detail.bundle.name)
+        .collect()
+}
+
+/// The extra sentence the Discard originals confirmation names any other affected Bundle with, per
+/// `spec.md`'s "The four confirmations". Empty when nothing else shares a Finding - `library.slint`
+/// only inserts it into the dialog body when it is non-empty.
+fn discard_warning_text(other_bundles: &[String]) -> String {
+    if other_bundles.is_empty() {
+        return String::new();
+    }
+    let quoted: Vec<String> = other_bundles
+        .iter()
+        .map(|name| format!("\"{name}\""))
+        .collect();
+    let verb = if other_bundles.len() == 1 {
+        "shares"
+    } else {
+        "share"
+    };
+    format!(
+        "{} {verb} one of these Findings and will also become sealed.",
+        quoted.join(", ")
+    )
+}
+
+/// Discards a Bundle's source Findings one at a time, through the existing whole-Finding deletion
+/// path (`delete_finding_everywhere`, record then files per Finding) - the Bundle's own row, items,
+/// document and image copies are never touched here. Stops at the first failure rather than skipping
+/// past it: the ticket's own acceptance criterion asks that Findings not yet processed stay intact,
+/// which a skip-and-continue strategy (the multi-select Delete Finding flow's own choice) would not
+/// give - a Finding after the failed one would already be gone too.
+///
+/// Returns `(discarded, orphaned, refused)`: how many Findings went, how many of those left an
+/// orphaned image file behind, and - on a partial run - the id of the Finding that refused and why.
+fn discard_originals(
+    ctx: &AppContext,
+    finding_ids: &[String],
+) -> (usize, usize, Option<(String, String)>) {
+    let mut discarded = 0usize;
+    let mut orphaned = 0usize;
+    for finding_id in finding_ids {
+        match delete_finding_everywhere(ctx, finding_id) {
+            Ok(orphan) => {
+                discarded += 1;
+                if orphan {
+                    orphaned += 1;
+                }
+            }
+            Err(e) => return (discarded, orphaned, Some((finding_id.clone(), e))),
+        }
+    }
+    (discarded, orphaned, None)
+}
+
 fn load_findings_into_window(
     window: &AppWindow,
     ctx: &AppContext,
@@ -4717,6 +4799,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         match action.as_str() {
             "disassemble-bundle" => win.set_library_pending_disassemble(id),
             "delete-bundle" => win.set_library_pending_delete(id),
+            "discard-originals-bundle" => {
+                let finding_ids: Vec<String> =
+                    detail.items.iter().map(|i| i.finding_id.clone()).collect();
+                let others = bundles_sharing_findings(&ctx_menu_action, id.as_str(), &finding_ids);
+                win.set_library_pending_discard_warning(discard_warning_text(&others).into());
+                win.set_library_pending_discard(id);
+            }
             _ => {}
         }
     });
@@ -4807,6 +4896,166 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     main_window.on_review_update_closed(move || {
         if let Some(win) = win_review_update_closed.upgrade() {
             close_review_update(&win);
+        }
+    });
+
+    let win_discard_cancel = main_window.as_weak();
+    main_window.on_library_discard_cancelled(move || {
+        if let Some(win) = win_discard_cancel.upgrade() {
+            win.set_library_pending_discard(SharedString::new());
+            win.set_library_pending_discard_warning(SharedString::new());
+        }
+    });
+
+    // DISCARD ORIGINALS (ticket 17). Deletes each of the Bundle's source Findings through the
+    // existing whole-Finding deletion path, stopping at the first refusal - the Bundle's own row,
+    // items, document and image copies are never touched. Sealing is a consequence of the Findings
+    // being gone, not a write made here: the very next menu open re-reads live state
+    // (`bundle_is_sealed`) and offers Delete… only, with no flag ever set anywhere.
+    let win_discard_confirm = main_window.as_weak();
+    let ctx_discard_confirm = ctx.clone();
+    main_window.on_library_discard_confirmed(move |id| {
+        let Some(win) = win_discard_confirm.upgrade() else {
+            return;
+        };
+        win.set_library_pending_discard(SharedString::new());
+        win.set_library_pending_discard_warning(SharedString::new());
+
+        let Some(store) = ctx_discard_confirm.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+        let detail = match store.get_bundle(id.as_str()) {
+            Ok(Some(detail)) => detail,
+            Ok(None) => {
+                open_library(&win, &ctx_discard_confirm);
+                return;
+            }
+            Err(e) => {
+                toast(&win, format!("Could not read the Bundle: {e}"), true);
+                return;
+            }
+        };
+        let finding_ids: Vec<String> = detail.items.iter().map(|i| i.finding_id.clone()).collect();
+        let total = finding_ids.len();
+
+        let (discarded, orphaned, refused) = discard_originals(&ctx_discard_confirm, &finding_ids);
+
+        open_library(&win, &ctx_discard_confirm);
+        load_findings_into_window(&win, &ctx_discard_confirm, None);
+
+        let noun = if discarded == 1 {
+            "Finding"
+        } else {
+            "Findings"
+        };
+        let had_failure = refused.is_some();
+        let message = match refused {
+            Some((finding_id, error)) => format!(
+                "{discarded} of {total} originals discarded. Finding {finding_id} refused: {error}"
+            ),
+            None if orphaned == 0 => {
+                format!("{discarded} {noun} discarded. The Bundle keeps its own copies.")
+            }
+            None => format!(
+                "{discarded} {noun} discarded. {orphaned} image file(s) could not be removed and \
+                 are now orphans."
+            ),
+        };
+        toast(&win, message, had_failure);
+    });
+
+    // DELETE BOTH's second-step request (ticket 17): swaps the Disassemble confirmation for the
+    // Delete both one, with a fresh live read of the Bundle's own name and Finding count - the same
+    // read every other confirmation opens with, never a value carried over from the dialog it
+    // replaces.
+    let win_delete_both_req = main_window.as_weak();
+    let ctx_delete_both_req = ctx.clone();
+    main_window.on_library_delete_both_requested(move |id| {
+        let Some(win) = win_delete_both_req.upgrade() else {
+            return;
+        };
+        win.set_library_pending_disassemble(SharedString::new());
+
+        let Some(store) = ctx_delete_both_req.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+        match store.get_bundle(id.as_str()) {
+            Ok(Some(detail)) => {
+                win.set_library_pending_bundle_name(detail.bundle.name.clone().into());
+                win.set_library_pending_bundle_finding_count(detail.items.len() as i32);
+                win.set_library_pending_delete_both(id);
+            }
+            Ok(None) => open_library(&win, &ctx_delete_both_req),
+            Err(e) => toast(&win, format!("Could not read the Bundle: {e}"), true),
+        }
+    });
+
+    let win_delete_both_cancel = main_window.as_weak();
+    main_window.on_library_delete_both_cancelled(move || {
+        if let Some(win) = win_delete_both_cancel.upgrade() {
+            win.set_library_pending_delete_both(SharedString::new());
+        }
+    });
+
+    // DELETE BOTH's confirmed act: the Bundle first (row, then folder - `remove_bundle_row_and_folder`,
+    // AD-2's ordering), then each source Finding (record, then files - `delete_finding_everywhere`,
+    // stopping at the first refusal the same way Discard originals does). Nothing returns to the
+    // filmstrip either way, because both the Bundle's hold on the Findings and the Findings
+    // themselves are gone by the time this finishes.
+    let win_delete_both_confirm = main_window.as_weak();
+    let ctx_delete_both_confirm = ctx.clone();
+    main_window.on_library_delete_both_confirmed(move |id| {
+        let Some(win) = win_delete_both_confirm.upgrade() else {
+            return;
+        };
+        win.set_library_pending_delete_both(SharedString::new());
+
+        let Some(store) = ctx_delete_both_confirm.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+        let detail = match store.get_bundle(id.as_str()) {
+            Ok(Some(detail)) => detail,
+            Ok(None) => {
+                open_library(&win, &ctx_delete_both_confirm);
+                return;
+            }
+            Err(e) => {
+                toast(&win, format!("Could not read the Bundle: {e}"), true);
+                return;
+            }
+        };
+        let finding_ids: Vec<String> = detail.items.iter().map(|i| i.finding_id.clone()).collect();
+        let total = finding_ids.len();
+
+        match remove_bundle_row_and_folder(&ctx_delete_both_confirm, id.as_str()) {
+            Ok(bundle_orphaned) => {
+                let (discarded, mut orphaned, refused) =
+                    discard_originals(&ctx_delete_both_confirm, &finding_ids);
+                if bundle_orphaned {
+                    orphaned += 1;
+                }
+
+                open_library(&win, &ctx_delete_both_confirm);
+                load_findings_into_window(&win, &ctx_delete_both_confirm, None);
+
+                let had_failure = refused.is_some();
+                let message = match refused {
+                    Some((finding_id, error)) => format!(
+                        "Bundle deleted. {discarded} of {total} originals discarded. Finding \
+                         {finding_id} refused: {error}"
+                    ),
+                    None if orphaned == 0 => "Bundle and its originals deleted.".to_string(),
+                    None => format!(
+                        "Bundle and its originals deleted. {orphaned} file(s) could not be \
+                         removed and are now orphans."
+                    ),
+                };
+                toast(&win, message, had_failure);
+            }
+            Err(e) => toast(&win, format!("Could not delete the Bundle: {e}"), true),
         }
     });
 
@@ -7446,6 +7695,288 @@ mod tests {
         assert!(
             err.contains("could not be read"),
             "the message must name what refused: {err}"
+        );
+    }
+
+    // ===== ticket 17: discard originals, and the two-step Delete both =========================
+
+    /// `BR-12`/`BR-122`: a second Bundle built from the same captures must be named, not silently
+    /// swept up. Two Bundles share `f1`; discarding `f1`/`f2` (the target Bundle's own Findings)
+    /// must name the OTHER Bundle and exclude the target itself from its own warning.
+    #[test]
+    fn bundles_sharing_findings_names_every_other_bundle_and_excludes_the_target() {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b-target", &["f1", "f2"]);
+        store_bundle_fixture(&bundle_store, "b-other", &["f1", "f3"]);
+        store_bundle_fixture(&bundle_store, "b-unrelated", &["f4"]);
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let others =
+            bundles_sharing_findings(&ctx, "b-target", &["f1".to_string(), "f2".to_string()]);
+        assert_eq!(
+            others,
+            vec!["Fixture Bundle".to_string()],
+            "b-other shares f1 with the target and must be named exactly once; b-unrelated shares \
+             nothing and b-target must never name itself"
+        );
+    }
+
+    /// The ordinary case: no other Bundle shares any of the Findings about to be discarded.
+    #[test]
+    fn bundles_sharing_findings_is_empty_when_nothing_else_shares_a_finding() {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b-target", &["f1"]);
+        store_bundle_fixture(&bundle_store, "b-unrelated", &["f2"]);
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let others = bundles_sharing_findings(&ctx, "b-target", &["f1".to_string()]);
+        assert!(
+            others.is_empty(),
+            "nothing else shares f1, so the warning list must be empty"
+        );
+    }
+
+    /// The confirmation's own wording: singular, plural, and the empty case `library.slint` treats
+    /// as "say nothing extra".
+    #[test]
+    fn discard_warning_text_covers_none_one_and_many() {
+        assert_eq!(discard_warning_text(&[]), "");
+        assert_eq!(
+            discard_warning_text(&["Q3 Report".to_string()]),
+            "\"Q3 Report\" shares one of these Findings and will also become sealed."
+        );
+        assert_eq!(
+            discard_warning_text(&["Q3 Report".to_string(), "Handover Notes".to_string()]),
+            "\"Q3 Report\", \"Handover Notes\" share one of these Findings and will also become \
+             sealed."
+        );
+    }
+
+    /// The clean path: every Finding goes, through the real whole-Finding deletion path, and none
+    /// refuses.
+    #[test]
+    fn discard_originals_deletes_every_finding_when_none_refuses() {
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        finding_fixture(&finding_store, "f1");
+        finding_fixture(&finding_store, "f2");
+        finding_fixture(&finding_store, "f3");
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        for id in ["f1", "f2", "f3"] {
+            vault_store
+                .write_blob(&format!("findings/{id}.png"), &png_fixture(4, 4))
+                .expect("writing the fixture image must succeed");
+        }
+
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+
+        let finding_ids = vec!["f1".to_string(), "f2".to_string(), "f3".to_string()];
+        let (discarded, orphaned, refused) = discard_originals(&ctx, &finding_ids);
+
+        assert_eq!(discarded, 3, "all three Findings must be discarded");
+        assert_eq!(orphaned, 0, "every image file was removed cleanly");
+        assert!(refused.is_none(), "nothing refused on the clean path");
+        for id in ["f1", "f2", "f3"] {
+            assert!(
+                ctx.finding_store.get_finding(id).unwrap().is_none(),
+                "{id} must be gone"
+            );
+        }
+    }
+
+    /// The acceptance criterion built to fail red first, by hand: inject a failure on the SECOND of
+    /// three Findings (`f2` is referenced by the caller but was never created, so
+    /// `delete_finding_everywhere`'s own `get_finding` refuses it for real - not a mock) and prove
+    /// the Findings not yet processed stay intact. `f1` (before the failure) must be gone; `f3`
+    /// (after it) must be untouched - row AND file both - which is only true if `discard_originals`
+    /// stops at the first refusal rather than skipping past it the way the multi-select Delete
+    /// Finding flow does.
+    #[test]
+    fn discard_originals_stops_at_the_first_refusal_and_leaves_the_rest_intact() {
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        finding_fixture(&finding_store, "f1");
+        // f2 is deliberately never created - the injected failure.
+        finding_fixture(&finding_store, "f3");
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        for id in ["f1", "f3"] {
+            vault_store
+                .write_blob(&format!("findings/{id}.png"), &png_fixture(4, 4))
+                .expect("writing the fixture image must succeed");
+        }
+
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+
+        let finding_ids = vec!["f1".to_string(), "f2".to_string(), "f3".to_string()];
+        let (discarded, orphaned, refused) = discard_originals(&ctx, &finding_ids);
+
+        assert_eq!(
+            discarded, 1,
+            "only f1, the one before the failure, must have gone"
+        );
+        assert_eq!(orphaned, 0);
+        let (refused_id, message) = refused.expect("f2 must have refused");
+        assert_eq!(refused_id, "f2");
+        assert!(
+            message.contains("no longer in the Library"),
+            "the message must name what refused: {message}"
+        );
+
+        assert!(
+            ctx.finding_store.get_finding("f1").unwrap().is_none(),
+            "f1 was processed before the failure and must be gone"
+        );
+        assert!(
+            ctx.finding_store.get_finding("f3").unwrap().is_some(),
+            "f3 was never reached - stopping at the first refusal must leave it INTACT, not \
+             deleted by a skip-and-continue strategy"
+        );
+        assert!(
+            vault_dir.path().join("findings/f3.png").exists(),
+            "f3's image file must still be on disk - not merely its row"
+        );
+    }
+
+    /// `FR-41`'s own proof: after Discard originals, the Bundle's row, `BundleItem`s, stored
+    /// document and every image copy are byte-identical to before. `discard_originals` never touches
+    /// `ctx.bundle_store` at all - this test proves that by reading the Bundle back and comparing
+    /// every field and every file's bytes, not merely asserting the row still exists.
+    #[test]
+    fn discard_originals_leaves_the_bundle_byte_identical() {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        finding_fixture(&finding_store, "f1");
+        finding_fixture(&finding_store, "f2");
+        store_bundle_fixture(&bundle_store, "b-kept", &["f1", "f2"]);
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        let md_bytes = b"# Fixture Bundle\n\nUntouched.";
+        vault_store
+            .write_blob("bundles/b-kept/bundle.md", md_bytes)
+            .expect("writing the fixture Markdown must succeed");
+        let image_1 = png_fixture(4, 4);
+        let image_2 = png_fixture(6, 6);
+        vault_store
+            .write_blob("bundles/b-kept/finding_1_burned.png", &image_1)
+            .expect("writing the fixture image must succeed");
+        vault_store
+            .write_blob("bundles/b-kept/finding_2_burned.png", &image_2)
+            .expect("writing the fixture image must succeed");
+        for id in ["f1", "f2"] {
+            vault_store
+                .write_blob(&format!("findings/{id}.png"), &png_fixture(3, 3))
+                .expect("writing the fixture Finding image must succeed");
+        }
+
+        let before = bundle_store.get_bundle("b-kept").unwrap().unwrap();
+
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let (discarded, _orphaned, refused) =
+            discard_originals(&ctx, &["f1".to_string(), "f2".to_string()]);
+        assert_eq!(discarded, 2);
+        assert!(refused.is_none());
+
+        // The Findings and their OWN images are gone.
+        assert!(ctx.finding_store.get_finding("f1").unwrap().is_none());
+        assert!(ctx.finding_store.get_finding("f2").unwrap().is_none());
+        assert!(!vault_dir.path().join("findings/f1.png").exists());
+        assert!(!vault_dir.path().join("findings/f2.png").exists());
+
+        // The Bundle's row, its BundleItems, and its stored document are byte-for-byte the same.
+        let after = ctx
+            .bundle_store
+            .as_ref()
+            .unwrap()
+            .get_bundle("b-kept")
+            .unwrap()
+            .expect("the Bundle itself must still exist - Discard originals never removes it");
+        assert_eq!(after.bundle.id, before.bundle.id);
+        assert_eq!(after.bundle.name, before.bundle.name);
+        assert_eq!(
+            after.bundle.markdown, before.bundle.markdown,
+            "the stored document must be byte-identical"
+        );
+        assert_eq!(after.bundle.markdown_path, before.bundle.markdown_path);
+        assert_eq!(after.bundle.composed_at, before.bundle.composed_at);
+        assert_eq!(
+            after.items.len(),
+            before.items.len(),
+            "every BundleItem must survive"
+        );
+        for (a, b) in after.items.iter().zip(before.items.iter()) {
+            assert_eq!(a.id, b.id);
+            assert_eq!(a.finding_id, b.finding_id);
+            assert_eq!(a.position, b.position);
+            assert_eq!(a.image_path, b.image_path);
+        }
+
+        // The Bundle's own Markdown file and both burned-image copies are byte-identical on disk.
+        assert_eq!(
+            std::fs::read(vault_dir.path().join("bundles/b-kept/bundle.md")).unwrap(),
+            md_bytes,
+            "the Bundle's Markdown file on disk must be untouched"
+        );
+        assert_eq!(
+            std::fs::read(vault_dir.path().join("bundles/b-kept/finding_1_burned.png")).unwrap(),
+            image_1,
+            "the Bundle's first image copy must be untouched"
+        );
+        assert_eq!(
+            std::fs::read(vault_dir.path().join("bundles/b-kept/finding_2_burned.png")).unwrap(),
+            image_2,
+            "the Bundle's second image copy must be untouched"
         );
     }
 }

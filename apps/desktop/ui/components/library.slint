@@ -80,21 +80,41 @@ export component SdLibrary inherits Rectangle {
     callback row-menu-dismissed();
     callback row-menu-action(string, string);
 
-    private property <[MenuEntry]> row-menu: [
+    // Two named, separately-typed models, not one array with a per-field ternary on the last entry:
+    // `ticket 17` adds a SECOND destructive row (Discard originals…) that must exist only in the
+    // unsealed model, and an array's own length cannot be conditional in Slint - a bare `cond ? [...]
+    // : [...]` expression also fails to infer `[MenuEntry]` for either branch (tried first; the
+    // compiler reports "Cannot convert [...] to [MenuEntry]" because an inline ternary's branches are
+    // typed before the property they are assigned to). Naming each branch as its own
+    // `[MenuEntry]`-typed property fixes the inference and reads better besides. The sealed model
+    // stays the one entry ticket 16 built. "delete-both" never appears in either model on purpose -
+    // `ticket 17`'s acceptance criteria asks that to be checked structurally, and this is what makes
+    // it true: the Delete both act only ever reaches Slint through `delete-both-requested`, fired
+    // from a link inside the Disassemble confirmation below, never from this model.
+    private property <[MenuEntry]> sealed-row-menu: [
         { action: "copy-markdown", label: "Copy Markdown", hint: "", separator: false, enabled: true },
         { action: "reveal", label: "Open file location", hint: "", separator: false, enabled: true },
         { action: "", label: "", hint: "", separator: true, enabled: false },
+        { action: "delete-bundle", label: "Delete…", hint: "", separator: false, enabled: true },
+    ];
+    private property <[MenuEntry]> unsealed-row-menu: [
+        { action: "copy-markdown", label: "Copy Markdown", hint: "", separator: false, enabled: true },
+        { action: "reveal", label: "Open file location", hint: "", separator: false, enabled: true },
+        { action: "", label: "", hint: "", separator: true, enabled: false },
+        { action: "disassemble-bundle", label: "Disassemble…", hint: "", separator: false, enabled: true },
         {
-            action: root.menu-sealed ? "delete-bundle" : "disassemble-bundle",
-            label: root.menu-sealed ? "Delete…" : "Disassemble…",
+            action: "discard-originals-bundle",
+            label: "Discard originals…",
             hint: "",
             separator: false,
             enabled: true,
         },
     ];
+    private property <[MenuEntry]> row-menu: root.menu-sealed ? root.sealed-row-menu : root.unsealed-row-menu;
 
-    // THE TWO CONFIRMATIONS. Bundle name and Finding count are supplied by Rust at the moment the
-    // dialog opens, fresh off the same live read that chose the verb.
+    // THE FOUR CONFIRMATIONS (`ticket 16` built the first two; `ticket 17` adds Discard originals
+    // and Delete both). Bundle name and Finding count are supplied by Rust at the moment a dialog
+    // opens, fresh off the same live read that chose the verb.
     in property <string> pending-disassemble: "";
     in property <string> pending-delete: "";
     in property <string> pending-bundle-name: "";
@@ -103,6 +123,24 @@ export component SdLibrary inherits Rectangle {
     callback disassemble-confirmed(string);
     callback delete-cancelled();
     callback delete-confirmed(string);
+
+    // DISCARD ORIGINALS. `pending-discard-warning` names any other Bundle that shares one of the
+    // Findings about to go and will therefore be sealed too (`BR-12`/`BR-122`) - empty when none
+    // does. Computed by Rust fresh at the moment this dialog opens, over the same live read.
+    in property <string> pending-discard: "";
+    in property <string> pending-discard-warning: "";
+    callback discard-cancelled();
+    callback discard-confirmed(string);
+
+    // DELETE BOTH - reachable ONLY as a second-step choice from inside the Disassemble confirmation
+    // (the link at the foot of that dialog below), never as its own menu row: `row-menu` above never
+    // carries a "delete-both" action. `delete-both-requested` asks Rust to swap the Disassemble
+    // dialog for this one; Rust owns that swap because the Bundle name and Finding count it fills in
+    // are its own live read, not something this component may cache across the transition.
+    in property <string> pending-delete-both: "";
+    callback delete-both-requested(string);
+    callback delete-both-cancelled();
+    callback delete-both-confirmed(string);
 
     width: 100%;
     height: 100%;
@@ -579,6 +617,28 @@ export component SdLibrary inherits Rectangle {
                         clicked => { root.disassemble-confirmed(root.pending-disassemble); }
                     }
                 }
+
+                // THE SECOND STEP (`ticket 17`). A link, not a menu row and not a third equal
+                // button next to Keep it/Disassemble - the most destructive act in the product must
+                // never be one click away, and this puts one deliberate extra click between the
+                // Reviewer and it. Fires `delete-both-requested`, which Rust answers by swapping this
+                // dialog for the Delete both one below.
+                Rectangle {
+                    height: 16px;
+                    HorizontalLayout {
+                        alignment: end;
+                        Text {
+                            text: "Delete the Bundle and its originals instead";
+                            font-size: 11px;
+                            color: Theme.semantic-error;
+                            font-family: "IBM Plex Sans";
+                        }
+                    }
+                    delete-both-link := TouchArea {
+                        mouse-cursor: MouseCursor.pointer;
+                        clicked => { root.delete-both-requested(root.pending-disassemble); }
+                    }
+                }
             }
         }
     }
@@ -637,6 +697,139 @@ export component SdLibrary inherits Rectangle {
                         label: "Delete";
                         height: 30px;
                         clicked => { root.delete-confirmed(root.pending-delete); }
+                    }
+                }
+            }
+        }
+    }
+
+    // DISCARD ORIGINALS (`ticket 17`). The source Findings behind an unsealed Bundle go through the
+    // existing whole-Finding deletion path, one at a time; the Bundle's own row, items, document and
+    // image copies are untouched. Sealing is a CONSEQUENCE of the Findings being gone, never a write
+    // here - the next menu open reads live state and offers Delete… only, per `bundle_is_sealed`'s
+    // own doc comment. `pending-discard-warning` names any other Bundle that shares one of these
+    // Findings and will therefore be sealed too (`BR-12`/`BR-122`) - empty when none does.
+    if root.pending-discard != "" : Rectangle {
+        width: 100%;
+        height: 100%;
+        background: Theme.overlay-scrim;
+        TouchArea {
+            clicked => { root.discard-cancelled(); }
+        }
+
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 380px;
+            height: discard-body.preferred-height;
+            background: Theme.bg-card;
+            border-width: 1px;
+            border-color: Theme.border-strong;
+            border-radius: Theme.radius-sharp;
+            drop-shadow-blur: 32px;
+            drop-shadow-color: Theme.overlay-shadow;
+            TouchArea { }
+
+            discard-body := VerticalLayout {
+                padding: 20px;
+                spacing: 14px;
+
+                SdSectionLabel {
+                    text: "DISCARD ORIGINALS FROM \"" + root.pending-bundle-name + "\"?";
+                }
+
+                Text {
+                    text: "Its " + root.pending-bundle-finding-count + " Finding"
+                        + (root.pending-bundle-finding-count == 1 ? "" : "s")
+                        + " and their notes, Markers and image files are discarded."
+                        + " This Bundle keeps its own copies and stays readable, but it can no longer be disassembled."
+                        + (root.pending-discard-warning == "" ? "" : " " + root.pending-discard-warning)
+                        + " This cannot be undone.";
+                    font-size: 12px;
+                    color: Theme.text-secondary;
+                    wrap: word-wrap;
+                    font-family: "IBM Plex Sans";
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+
+                    SdActionButton {
+                        label: "Keep it";
+                        primary: false;
+                        height: 30px;
+                        clicked => { root.discard-cancelled(); }
+                    }
+                    SdActionButton {
+                        label: "Discard";
+                        height: 30px;
+                        clicked => { root.discard-confirmed(root.pending-discard); }
+                    }
+                }
+            }
+        }
+    }
+
+    // DELETE BOTH (`ticket 17`) - the Bundle AND its originals. Reached only from the link inside
+    // the Disassemble confirmation above; never a menu row (`row-menu`'s own model never carries a
+    // "delete-both" action - see the comment beside it). Removes the Bundle (row, then folder) and
+    // then each source Finding (record, then files) - `AD-2`'s ordering, combined over both acts.
+    if root.pending-delete-both != "" : Rectangle {
+        width: 100%;
+        height: 100%;
+        background: Theme.overlay-scrim;
+        TouchArea {
+            clicked => { root.delete-both-cancelled(); }
+        }
+
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 380px;
+            height: delete-both-body.preferred-height;
+            background: Theme.bg-card;
+            border-width: 1px;
+            border-color: Theme.border-strong;
+            border-radius: Theme.radius-sharp;
+            drop-shadow-blur: 32px;
+            drop-shadow-color: Theme.overlay-shadow;
+            TouchArea { }
+
+            delete-both-body := VerticalLayout {
+                padding: 20px;
+                spacing: 14px;
+
+                SdSectionLabel {
+                    text: "DELETE BOTH \"" + root.pending-bundle-name + "\"?";
+                }
+
+                Text {
+                    text: "The Bundle and its " + root.pending-bundle-finding-count + " Finding"
+                        + (root.pending-bundle-finding-count == 1 ? "" : "s")
+                        + " are removed, with their notes, Markers and image files."
+                        + " Nothing comes back to the filmstrip."
+                        + " This cannot be undone.";
+                    font-size: 12px;
+                    color: Theme.text-secondary;
+                    wrap: word-wrap;
+                    font-family: "IBM Plex Sans";
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+
+                    SdActionButton {
+                        label: "Keep it";
+                        primary: false;
+                        height: 30px;
+                        clicked => { root.delete-both-cancelled(); }
+                    }
+                    SdActionButton {
+                        label: "Delete both";
+                        height: 30px;
+                        clicked => { root.delete-both-confirmed(root.pending-delete-both); }
                     }
                 }
             }
