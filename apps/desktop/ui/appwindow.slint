@@ -1894,7 +1894,12 @@ export component AppWindow inherits Window {
                                     width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
+                                    // Coloured like the label beside it. These SVGs are baked white, which was invisible
+                                    // as a choice until BUG-54 made `text-on-accent` dark in dark mode and the label went
+                                    // dark while the glyph stayed white. `SdActionButton` already does this; the ribbon's
+                                    // three hand-rolled buttons did not.
                                     source: @image-url("../assets/icons/package.svg");
+                                    colorize: Theme.text-on-accent;
                                 }
                                 Text { text: "Assemble"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; font-family: "IBM Plex Sans"; }
                             }
@@ -1917,6 +1922,7 @@ export component AppWindow inherits Window {
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
                                     source: @image-url("../assets/icons/copy-white.svg");
+                                    colorize: Theme.text-on-accent;
                                 }
                                 Text { text: "Copy"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; font-family: "IBM Plex Sans"; }
                             }
@@ -1939,6 +1945,7 @@ export component AppWindow inherits Window {
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
                                     source: @image-url("../assets/icons/share-white.svg");
+                                    colorize: Theme.text-on-accent;
                                 }
                                 Text { text: "Share"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; font-family: "IBM Plex Sans"; }
                             }

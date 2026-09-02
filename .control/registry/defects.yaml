@@ -3346,6 +3346,12 @@ defects:
       Seen while doing it and NOT fixed here: the Marker badge previews in `semantic-error` #ef4444
       but burns in `COLOR_MARKER_FILL` #dc2626, so the preview and the PNG disagree about which red
       a Marker is. Small, pre-existing, and a different defect.
+      -> Fixed the same day at the owner's word rather than filed: the badge now takes
+      `annotation-stroke`, so the canvas and the PNG agree on the Marker's red, and the numeral
+      on it measures 4.86 instead of 3.78. Also fixed then: the ribbon's Assemble, Copy and Share
+      icons were baked-white SVGs with no `colorize`, so they stayed white when the label went
+      dark - the owner saw it in the running build within minutes. `SdActionButton` had it
+      right; the three hand-rolled ribbon buttons did not.
 
       The heading in `theme.slint` that read "(WCAG AA Compliant)" - false for the dark column from
       the day it was written - now says to trust the test and not the heading.

@@ -42,7 +42,7 @@ export global Theme {
     out property <color> accent-active:  is-dark ? #7db2ff : #0369a1; // Active Tool Text/Icon Color
 
     // 5. Semantic Tokens (Theme Invariant & Feedback)
-    out property <color> semantic-error: #ef4444;                     // Pin Marker & Critical Issues (Selalu Solid Red Kontras)
+    out property <color> semantic-error: #ef4444;                     // Critical issues, the error toast, a destructive hover. Solid in both themes. The Marker badge borrowed this until 2026-09-02 and now takes `annotation-stroke`, the red the burn actually uses
     out property <color> semantic-success: is-dark ? #4ade80 : #166534; // Tag Status Editing Green
     out property <color> semantic-success-bg: is-dark ? #166534.with-alpha(0.3) : #ffffff.with-alpha(0.92);
 

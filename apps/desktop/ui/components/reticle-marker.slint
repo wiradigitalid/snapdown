@@ -23,7 +23,11 @@ export component ReticleMarker {
         width: 20px;
         height: 20px;
         border-radius: Theme.radius-pill;
-        background: Theme.semantic-error;
+        // The red the burn uses. This was `semantic-error` #ef4444 while `burner.rs` fills the
+        // badge in `COLOR_MARKER_FILL` #dc2626 - so the canvas previewed one red and the PNG held
+        // another. `annotation-stroke` is bound to `COLOR_MARKER_FILL` by its own comment, which
+        // makes it the one token that cannot drift from the saved image.
+        background: Theme.annotation-stroke;
         drop-shadow-blur: 4px;
         drop-shadow-color: Theme.marker-shadow;
 

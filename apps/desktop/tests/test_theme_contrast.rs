@@ -168,7 +168,21 @@ const PAIRS: &[(&str, &str, f64, &str)] = &[
         "the Capture action's label on a panel",
     ),
     ("semantic-success", "bg-card", 4.5, "the Editing tag"),
-    ("semantic-error", "bg-card", 3.0, "a Marker pin"),
+    ("semantic-error", "bg-card", 3.0, "the error toast's edge"),
+    // `text-on-plate` is theme-invariant white on plates that do not follow the theme. Both
+    // pairings are the same in both columns, so each is measured twice and that is fine.
+    (
+        "text-on-plate",
+        "annotation-stroke",
+        4.5,
+        "the Marker numeral and a Callout's words",
+    ),
+    (
+        "text-on-plate",
+        "chrome-close-hover",
+        3.0,
+        "the close glyph on its hover red",
+    ),
 ];
 
 /// Pairings that fail today, with the ratio measured when they were recorded and the defect that owns
