@@ -23,14 +23,15 @@ export struct ReclaimBundleRow {
 
 // RECLAIM SPACE.
 //
-// `ticket 18` of the Bundle Library spec. A SECOND full-window overlay, the same opaque-edge-to-edge
-// shape `SdLibrary` uses (see that file's own header comment for why: this reads as "a screen", not
-// "a dialog" over the Editor). Reached from two doors - the Library header and Settings' Vault card
-// - both of which fire the SAME `appwindow.slint` callback, which is what makes "both open the same
-// screen" true by construction rather than by two builders agreeing to build it twice. Whichever
-// screen was open underneath (Library or Settings) is left alone - `library-open`/`settings-open`
-// are never touched by opening or closing this - so it simply layers on top and closing it reveals
-// whatever was already there.
+// `ticket 18` of the Bundle Library spec. A SECOND floating card, the same panel shape `SdLibrary`
+// uses (see that file's own header comment: both used to be opaque edge to edge, and both were
+// changed to a capped floating window for the same reason - the owner found edge-to-edge left dead
+// space once there were only a few rows to show). Reached from two doors - the Library header and
+// Settings' Vault card - both of which fire the SAME `appwindow.slint` callback, which is what makes
+// "both open the same screen" true by construction rather than by two builders agreeing to build it
+// twice. Whichever screen was open underneath (Library or Settings) is left alone -
+// `library-open`/`settings-open` are never touched by opening or closing this - so it simply layers
+// on top and closing it reveals whatever was already there.
 //
 // Lists every UNSEALED Bundle - `bundle_is_sealed`'s own live read decides which ones qualify
 // (`main.rs`'s `build_reclaim_rows`), never a stored flag, exactly the discipline ticket 16/17's row
@@ -65,10 +66,10 @@ export component SdReclaimSpace inherits Rectangle {
 
     width: 100%;
     height: 100%;
-    background: Theme.bg-app;
+    background: Theme.overlay-scrim;
 
-    // Swallows any click that would otherwise fall through - defence in depth, `SdLibrary`'s own
-    // reasoning, since this is opaque edge to edge and nothing behind it is ever visible to hit.
+    // Swallows any click that misses the panel, so whatever is underneath (Library or Settings)
+    // stays inert - `SdLibrary`'s own reasoning, now that this IS a scrim.
     TouchArea { }
 
     // Escape closes it - the Library's own pattern, borrowed rather than reinvented.
@@ -83,7 +84,21 @@ export component SdReclaimSpace inherits Rectangle {
         }
     }
 
-    VerticalLayout {
+    // THE PANEL. Same cap `SdLibrary` uses - a floating card, not the whole window.
+    panel := Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: min(parent.width - 64px, 760px);
+        height: min(parent.height - 64px, 680px);
+        background: Theme.bg-app;
+        border-radius: Theme.radius-sharp;
+        border-width: 1px;
+        border-color: Theme.border-strong;
+        drop-shadow-blur: 32px;
+        drop-shadow-color: Theme.overlay-shadow;
+        TouchArea { }
+
+        VerticalLayout {
         padding: 0px;
         spacing: 0px;
 
@@ -286,6 +301,7 @@ export component SdReclaimSpace inherits Rectangle {
                     }
                 }
             }
+        }
         }
     }
 

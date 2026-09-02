@@ -21,14 +21,16 @@ export struct LibraryBundleRow {
 
 // THE LIBRARY.
 //
-// `ticket 11` of the Bundle Library spec. A full-window overlay, gated by `AppWindow.library-open`
-// the same way `bundle-preview-open` gates Assemble & Review - but drawn OPAQUE edge to edge rather
-// than as a floating card over a dimmed Editor: the artboards (`Main.dc.html`, `States.dc.html`)
-// draw no scrim and no inset panel border anywhere, which reads as "this is a screen", not "this is
-// a dialog". `SdSettings` is the nearer precedent for that shape; Assemble & Review is the nearer
-// precedent for Escape-to-close, which this borrows instead of Settings' deliberate omission of it
-// (Settings auto-saves as you go, so a stray Escape closing it would read as losing a change - the
-// Library has no editable state at all in this ticket, so that risk does not apply here).
+// `ticket 11` of the Bundle Library spec. A floating card over a dimmed Editor, `bundle-preview-open`
+// / Assemble & Review's own pattern - gated by `AppWindow.library-open`. **Corrected 2026-09-03**:
+// this used to be drawn OPAQUE edge to edge, on the reading that the artboards (`Main.dc.html`,
+// `States.dc.html`, both fixed at 1280x840) draw no scrim and no inset panel border. That reading
+// held for the artboard's own canvas size, but a real desktop window runs far larger than 1280x840,
+// so edge-to-edge left most of the screen as dead space once a Reviewer had only a handful of
+// Bundles - the owner asked for this to be a floating window instead, on exactly that observation.
+// Sized like Review & Update's own panel, capped rather than filling the window, with the same
+// Escape-to-close FocusScope Assemble & Review already establishes (the Library has no editable
+// state at all in this ticket, so a stray Escape closing it never risks losing a change).
 //
 // A row's CLICK opens Review & Update, locked (`ticket 13`) - `bundle-opened(id)` below, wired on
 // the row's own `TouchArea` (`row-touch`) alongside that same TouchArea's right-click, which still
@@ -148,15 +150,13 @@ export component SdLibrary inherits Rectangle {
 
     width: 100%;
     height: 100%;
-    background: Theme.bg-app;
+    background: Theme.overlay-scrim;
 
-    // Swallows any click that would otherwise fall through. The Library is opaque edge to edge (see
-    // the header comment above), so nothing behind this Rectangle is ever visible to hit - this is
-    // defence in depth, the same reasoning Assemble & Review's own scrim-covering TouchArea gives,
-    // not the thing actually keeping the Editor inert.
+    // Swallows any click that misses the panel, so the Editor beneath stays inert - Assemble &
+    // Review's own scrim-covering TouchArea, now that this IS a scrim rather than an opaque screen.
     TouchArea { }
 
-    // Escape closes it - Assemble & Review's own pattern. Declared before the content and focused on
+    // Escape closes it - Assemble & Review's own pattern. Declared before the panel and focused on
     // creation, so it holds the keyboard until the Reviewer clicks into something else.
     library-keys := FocusScope {
         init => { self.focus(); }
@@ -169,7 +169,24 @@ export component SdLibrary inherits Rectangle {
         }
     }
 
-    VerticalLayout {
+    // THE PANEL. Capped rather than filling the window - a floating card, Review & Update's own
+    // pattern, sized for a list rather than a document (no A4 aspect ratio: this is rows, not
+    // prose). Shrinks below the cap on a small window, never grows past it on a large one, so a
+    // handful of Bundles never has to fill an entire ultrawide monitor.
+    panel := Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: min(parent.width - 64px, 760px);
+        height: min(parent.height - 64px, 680px);
+        background: Theme.bg-app;
+        border-radius: Theme.radius-sharp;
+        border-width: 1px;
+        border-color: Theme.border-strong;
+        drop-shadow-blur: 32px;
+        drop-shadow-color: Theme.overlay-shadow;
+        TouchArea { }
+
+        VerticalLayout {
         padding: 0px;
         spacing: 0px;
 
@@ -555,6 +572,7 @@ export component SdLibrary inherits Rectangle {
                     }
                 }
             }
+        }
         }
     }
 
