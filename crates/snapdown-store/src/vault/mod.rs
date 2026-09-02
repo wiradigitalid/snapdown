@@ -37,6 +37,29 @@ impl VaultBlobStore {
         &self.root
     }
 
+    /// Removes a whole folder and everything in it, reusing `resolve_path`'s traversal guard so a
+    /// crafted relative path cannot escape the Vault root - the same protection every per-blob
+    /// method already gets.
+    ///
+    /// This is the primitive Disassemble and Delete (ticket 16 of the Bundle Library spec) build on
+    /// to remove a Bundle's own folder (`bundles/<id>/`, Markdown and image copies together) after
+    /// its row is gone (`AD-2`: record first, then files). No folder-level delete existed anywhere
+    /// in this store before it - every method on `BlobStore` is per-file.
+    pub fn delete_folder(&self, relative_path: &str) -> Result<(), CoreError> {
+        let path = self.resolve_path(relative_path)?;
+        if !path.exists() {
+            return Err(CoreError::NotFound(format!(
+                "Folder not found: {relative_path}"
+            )));
+        }
+        if !path.is_dir() {
+            return Err(CoreError::Validation(format!(
+                "Not a folder: {relative_path}"
+            )));
+        }
+        fs::remove_dir_all(&path).map_err(|e| CoreError::Validation(e.to_string()))
+    }
+
     /// Resolves and ensures that relative_path does not escape root.
     /// Rejects leading `/` or `\` that indicate absolute paths or root references,
     /// and ensures canonical target stays strictly inside `self.root`.

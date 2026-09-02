@@ -1357,6 +1357,30 @@ export component AppWindow inherits Window {
     in property <string> library-error-message: "";
     in property <[LibraryBundleRow]> library-rows: [];
 
+    // THE ROW MENU'S DESTRUCTIVE GROUP (ticket 16). Which single verb it offers - Disassemble… or
+    // Delete… - is decided in Rust every time the menu opens, from a live read of whether the
+    // Bundle's Findings still exist (`BR-122`). These properties are therefore only ever WRITTEN by
+    // Rust; Slint reads them to draw the menu and never derives the verb itself.
+    in property <string> library-menu-target: "";
+    in property <bool> library-menu-sealed: false;
+    in property <length> library-menu-x;
+    in property <length> library-menu-y;
+    callback library-row-menu-requested(string, length, length);
+    callback library-row-menu-dismissed();
+    callback library-row-menu-action(string, string);
+
+    // THE TWO CONFIRMATIONS. Bundle name and Finding count are supplied by Rust fresh at the moment
+    // a dialog opens - the same live read that decided the verb, never carried over from the row
+    // list, which can be stale by the time a Reviewer's click actually lands.
+    in property <string> library-pending-disassemble: "";
+    in property <string> library-pending-delete: "";
+    in property <string> library-pending-bundle-name: "";
+    in property <int> library-pending-bundle-finding-count: 0;
+    callback library-disassemble-cancelled();
+    callback library-disassemble-confirmed(string);
+    callback library-delete-cancelled();
+    callback library-delete-confirmed(string);
+
     // id, ctrl held, shift held. One callback rather than two, because a click on a card is one
     // gesture whose MEANING depends on the modifiers - splitting it into "selected" and "toggled"
     // put the interpretation in the UI, where the anchor for a Shift range does not live.
@@ -3084,9 +3108,25 @@ export component AppWindow inherits Window {
             error-message: root.library-error-message;
             rows: root.library-rows;
 
+            menu-target: root.library-menu-target;
+            menu-sealed: root.library-menu-sealed;
+            menu-x: root.library-menu-x;
+            menu-y: root.library-menu-y;
+            pending-disassemble: root.library-pending-disassemble;
+            pending-delete: root.library-pending-delete;
+            pending-bundle-name: root.library-pending-bundle-name;
+            pending-bundle-finding-count: root.library-pending-bundle-finding-count;
+
             closed => { root.library-closed(); }
             try-again-clicked => { root.library-try-again-clicked(); }
             open-file-location-clicked => { root.library-open-file-location-clicked(); }
+            row-menu-requested(id, x, y) => { root.library-row-menu-requested(id, x, y); }
+            row-menu-dismissed => { root.library-row-menu-dismissed(); }
+            row-menu-action(action, id) => { root.library-row-menu-action(action, id); }
+            disassemble-cancelled => { root.library-disassemble-cancelled(); }
+            disassemble-confirmed(id) => { root.library-disassemble-confirmed(id); }
+            delete-cancelled => { root.library-delete-cancelled(); }
+            delete-confirmed(id) => { root.library-delete-confirmed(id); }
         }
 
         // SETTINGS - above the Editor, below the context menu and the confirmations, because those
