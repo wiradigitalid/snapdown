@@ -53,6 +53,10 @@ export component SdLibrary inherits Rectangle {
     in property <[LibraryBundleRow]> rows: [];
 
     callback closed();
+    // Opens Reclaim space (`ticket 18`) - the header's own entry point, beside the Bundle count. The
+    // SAME callback Settings' Vault card fires, forwarded at `appwindow.slint`'s mount site to one
+    // root-level callback, which is what makes the two doors open the identical screen.
+    callback reclaim-space-clicked();
     callback try-again-clicked();
     callback open-file-location-clicked();
     // A row was clicked - the Bundle's id. Opens Review & Update, locked (ticket 13).
@@ -189,6 +193,28 @@ export component SdLibrary inherits Rectangle {
                 color: Theme.text-muted;
                 vertical-alignment: center;
                 font-family: "IBM Plex Mono";
+            }
+
+            // RECLAIM SPACE'S HEADER ENTRY (`ticket 18`) - `spec.md`'s "Header: title, Bundle count,
+            // a Reclaim space entry." A plain sibling `Rectangle` sized from its own label, not a
+            // layout cell holding the `Text` and a `TouchArea` as two separate cells - the same
+            // overlay-not-column trick every clickable label in this product uses, because a
+            // `TouchArea` given its own layout cell shrinks to a sliver instead of covering the text
+            // it belongs to.
+            Rectangle {
+                width: reclaim-space-label.preferred-width;
+                reclaim-space-label := Text {
+                    text: "Reclaim space";
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: reclaim-space-touch.has-hover ? Theme.accent-hover : Theme.accent-primary;
+                    vertical-alignment: center;
+                    font-family: "IBM Plex Sans";
+                }
+                reclaim-space-touch := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => { root.reclaim-space-clicked(); }
+                }
             }
         }
 

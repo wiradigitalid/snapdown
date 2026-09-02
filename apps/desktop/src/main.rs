@@ -697,6 +697,232 @@ fn discard_originals(
     (discarded, orphaned, None)
 }
 
+// ===== ticket 18: Reclaim space ==========================================================
+
+/// Resolves a stored image path against the Vault root the way every other reader in this file
+/// already does (`load_bundle_thumbnail`, `open_file_location`, …): an absolute path passes through,
+/// a relative one is Vault-relative. Pulled out here rather than duplicated a fifth time.
+fn vault_absolute(vault_path: &Path, image_path: &str) -> PathBuf {
+    let candidate = PathBuf::from(image_path);
+    if candidate.is_absolute() {
+        candidate
+    } else {
+        vault_path.join(image_path)
+    }
+}
+
+/// The disk space a Bundle's ORIGINAL captures still occupy - the sum of every one of its
+/// `BundleItem`s' own FINDING's image file, measured from the file on disk (`fs::metadata().len()`),
+/// per `spec.md`'s "Reclaim space": *"Sizes are measured from the files on disk, not estimated."*
+/// Never the Bundle's own burned copy under `bundles/<id>/` - that copy is what survives Discard
+/// originals and is why the Bundle stays readable at all afterwards.
+///
+/// A Finding that fails to resolve - already gone, or its file missing - contributes nothing rather
+/// than aborting the row: `bundle_is_sealed`'s own live read is what decides whether a Bundle
+/// qualifies for this list at all, and a race between that read and this sum must not crash Reclaim
+/// space, only under-report by whatever vanished in between.
+fn bundle_original_bytes(ctx: &AppContext, detail: &BundleDetail) -> u64 {
+    detail
+        .items
+        .iter()
+        .filter_map(|item| {
+            ctx.finding_store
+                .get_finding(&item.finding_id)
+                .ok()
+                .flatten()
+        })
+        .filter_map(|finding_detail| {
+            let path = vault_absolute(&ctx.vault_path, &finding_detail.finding.image_path);
+            std::fs::metadata(&path).ok().map(|m| m.len())
+        })
+        .sum()
+}
+
+/// "373.1 MB" - one decimal place, the exact wording `spec.md`'s own artboard uses
+/// (`ReclaimSpace.dc.html`). An exact zero prints bare ("0 MB"), matching `ReclaimEmpty.dc.html`.
+fn format_mb(bytes: u64) -> String {
+    if bytes == 0 {
+        "0 MB".to_string()
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    }
+}
+
+/// One unsealed Bundle, as Reclaim space lists it. "N original captures · <relative composed
+/// time>" - deliberately NOT `library_row_from_detail`'s "N Findings · composed <relative time>":
+/// the two screens count the same Findings for two different reasons (how many exist, versus how
+/// many are about to be discarded), and the wording says which. `bytes` is passed in rather than
+/// recomputed here, so `build_reclaim_rows` sums it exactly once per Bundle for the header total AND
+/// this row, never twice.
+fn reclaim_row_from_bytes(
+    ctx: &AppContext,
+    detail: &BundleDetail,
+    bytes: u64,
+    now: chrono::DateTime<chrono::Utc>,
+) -> ReclaimBundleRow {
+    let thumbnail = detail
+        .items
+        .first()
+        .map(|item| load_bundle_thumbnail(ctx, &item.image_path))
+        .unwrap_or_default();
+    let count = detail.items.len();
+    ReclaimBundleRow {
+        id: detail.bundle.id.clone().into(),
+        name: detail.bundle.name.clone().into(),
+        thumbnail,
+        meta_line: format!(
+            "{count} original capture{} · {}",
+            if count == 1 { "" } else { "s" },
+            relative_time(&detail.bundle.composed_at, now)
+        )
+        .into(),
+        size_label: format_mb(bytes).into(),
+        size_bytes: bytes as f32,
+        selected: false,
+    }
+}
+
+/// Every UNSEALED Bundle, as Reclaim space will show it, and the exact byte sum across all of
+/// them - `bundle_is_sealed`'s own live read decides which ones qualify, never a stored flag, the
+/// same discipline the Library's row menu already follows. Returns the sum as a plain `u64` rather
+/// than one derived from the rows' own `f32` fields afterwards, so the header total is never a
+/// float round-trip of numbers already known exactly.
+fn build_reclaim_rows(
+    ctx: &AppContext,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<(Vec<ReclaimBundleRow>, u64), String> {
+    let store = ctx
+        .bundle_store
+        .as_ref()
+        .ok_or_else(|| "The Bundle library could not be opened.".to_string())?;
+    let details = store
+        .list_bundles()
+        .map_err(|e| format!("Could not read the Library: {e}"))?;
+
+    let mut rows = Vec::new();
+    let mut total_bytes: u64 = 0;
+    for detail in details
+        .iter()
+        .filter(|detail| !bundle_is_sealed(ctx, detail))
+    {
+        let bytes = bundle_original_bytes(ctx, detail);
+        total_bytes += bytes;
+        rows.push(reclaim_row_from_bytes(ctx, detail, bytes, now));
+    }
+    Ok((rows, total_bytes))
+}
+
+/// Recomputes the footer readout ("N of M selected · X MB will be freed") and the Discard button's
+/// gate, straight off the rows model Rust itself just wrote - never a second running total kept
+/// beside it, which is what makes "the footer always agrees with the ticks" true by construction
+/// rather than by two numbers agreeing to move together.
+fn refresh_reclaim_space_footer(window: &AppWindow) {
+    let rows = window.get_reclaim_space_rows();
+    let total = rows.row_count();
+    let mut selected = 0usize;
+    let mut freed_bytes = 0f64;
+    for row in rows.iter() {
+        if row.selected {
+            selected += 1;
+            freed_bytes += row.size_bytes as f64;
+        }
+    }
+    window.set_reclaim_space_selected_count(selected as i32);
+    window.set_reclaim_space_footer_label(
+        format!(
+            "{selected} of {total} selected · {} will be freed",
+            format_mb(freed_bytes as u64)
+        )
+        .into(),
+    );
+}
+
+/// Opens Reclaim space and (re-)reads the store into it - the same function serves the initial open
+/// and the re-read after a bulk Discard, the discipline `open_library` already follows for Try
+/// again: the two must never be allowed to disagree about what "read the store" means. A refusal
+/// (the store never opened, or a locked/corrupt `library.db`) toasts and leaves the screen closed -
+/// unlike the Library, Reclaim space has no "cannot be read" state of its own to show one in.
+fn open_reclaim_space(window: &AppWindow, ctx: &AppContext) {
+    match build_reclaim_rows(ctx, chrono::Utc::now()) {
+        Ok((rows, total_bytes)) => {
+            window.set_reclaim_space_rows(ModelRc::from(Rc::new(VecModel::from(rows))));
+            window.set_reclaim_space_total_label(
+                format!("{} reclaimable", format_mb(total_bytes)).into(),
+            );
+            refresh_reclaim_space_footer(window);
+            window.set_reclaim_space_open(true);
+        }
+        Err(message) => toast(window, message, true),
+    }
+}
+
+/// Names of Bundles, other than the ones about to be discarded, that share a Finding with any of
+/// them and will therefore become sealed too (`BR-12`/`BR-122`) - the bulk form of ticket 17's own
+/// `bundles_sharing_findings`, which only ever excludes ONE Bundle at a time. Excluding the WHOLE
+/// ticked set here (not just the Bundle currently being reasoned about) is what stops a second
+/// Bundle in the same batch from being reported as a side effect of the first, when really both are
+/// simply being discarded together.
+fn bundles_sealed_by_bulk_discard(
+    ctx: &AppContext,
+    ticked_ids: &[String],
+    finding_ids: &[String],
+) -> Vec<String> {
+    let Some(store) = ctx.bundle_store.as_ref() else {
+        return Vec::new();
+    };
+    let ticked: std::collections::HashSet<&str> = ticked_ids.iter().map(String::as_str).collect();
+    let ids: std::collections::HashSet<&str> = finding_ids.iter().map(String::as_str).collect();
+    store
+        .list_bundles()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|detail| !ticked.contains(detail.bundle.id.as_str()))
+        .filter(|detail| {
+            detail
+                .items
+                .iter()
+                .any(|item| ids.contains(item.finding_id.as_str()))
+        })
+        .map(|detail| detail.bundle.name)
+        .collect()
+}
+
+/// The bulk Discard originals confirmation's body: counts Bundles and captures across the WHOLE
+/// ticked set (the ticket's own acceptance criterion) and appends ticket 17's own shared-Finding
+/// sentence (`discard_warning_text`) when it applies.
+fn reclaim_confirm_body(bundle_count: usize, capture_count: usize, warning: &str) -> String {
+    let bundle_word = if bundle_count == 1 {
+        "Bundle"
+    } else {
+        "Bundles"
+    };
+    let capture_word = if capture_count == 1 {
+        "capture"
+    } else {
+        "captures"
+    };
+    let mut text = format!(
+        "{capture_count} original {capture_word} across {bundle_count} {bundle_word}, with their \
+         notes, Markers and image files, are discarded. Each Bundle keeps its own copy and stays \
+         readable, but can no longer be disassembled."
+    );
+    if !warning.is_empty() {
+        text.push(' ');
+        text.push_str(warning);
+    }
+    text.push_str(" This cannot be undone.");
+    text
+}
+
+/// "DISCARD ORIGINALS FROM 3 BUNDLES?" - the bulk confirmation's heading, pluralised the same way
+/// every other heading in this file is.
+fn reclaim_confirm_heading(bundle_count: usize) -> String {
+    format!(
+        "DISCARD ORIGINALS FROM {bundle_count} BUNDLE{}?",
+        if bundle_count == 1 { "" } else { "S" }
+    )
+}
+
 fn load_findings_into_window(
     window: &AppWindow,
     ctx: &AppContext,
@@ -5059,6 +5285,176 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // RECLAIM SPACE (ticket 18 of the Bundle Library spec). Reached from two doors - the Library
+    // header's own entry and Settings' Vault card - both of which fire this SAME callback, so both
+    // land on the SAME handler and therefore the same screen; there is only ever one way this opens.
+    let win_reclaim_open = main_window.as_weak();
+    let ctx_reclaim_open = ctx.clone();
+    main_window.on_reclaim_space_clicked(move || {
+        let Some(win) = win_reclaim_open.upgrade() else {
+            return;
+        };
+        open_reclaim_space(&win, &ctx_reclaim_open);
+    });
+
+    let win_reclaim_closed = main_window.as_weak();
+    main_window.on_reclaim_space_closed(move || {
+        if let Some(win) = win_reclaim_closed.upgrade() {
+            win.set_reclaim_space_open(false);
+        }
+    });
+
+    // A row's checkbox was ticked or unticked. Flips just that row's `selected` bit in the model
+    // Rust itself owns and rebuilds the footer straight off it - no second running total kept
+    // anywhere else that could disagree with what the rows themselves show.
+    let win_reclaim_toggle = main_window.as_weak();
+    main_window.on_reclaim_space_row_toggled(move |id| {
+        let Some(win) = win_reclaim_toggle.upgrade() else {
+            return;
+        };
+        let mut rows: Vec<ReclaimBundleRow> = win.get_reclaim_space_rows().iter().collect();
+        if let Some(row) = rows.iter_mut().find(|r| r.id == id) {
+            row.selected = !row.selected;
+        }
+        win.set_reclaim_space_rows(ModelRc::from(Rc::new(VecModel::from(rows))));
+        refresh_reclaim_space_footer(&win);
+    });
+
+    // THE FOOTER'S OWN BUTTON opens ONE bulk confirmation, counting Bundles and captures across the
+    // WHOLE ticked set - not ticket 17's per-Bundle dialog run several times, which would show the
+    // Reviewer several toasts for one intention. Nothing is discarded yet; this only computes what
+    // the confirmation says.
+    let win_reclaim_discard_clicked = main_window.as_weak();
+    let ctx_reclaim_discard_clicked = ctx.clone();
+    main_window.on_reclaim_space_discard_clicked(move || {
+        let Some(win) = win_reclaim_discard_clicked.upgrade() else {
+            return;
+        };
+        let ticked: Vec<String> = win
+            .get_reclaim_space_rows()
+            .iter()
+            .filter(|r| r.selected)
+            .map(|r| r.id.to_string())
+            .collect();
+        if ticked.is_empty() {
+            return;
+        }
+        let Some(store) = ctx_reclaim_discard_clicked.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+
+        let mut capture_count = 0usize;
+        let mut all_finding_ids: Vec<String> = Vec::new();
+        for id in &ticked {
+            if let Ok(Some(detail)) = store.get_bundle(id) {
+                capture_count += detail.items.len();
+                all_finding_ids.extend(detail.items.iter().map(|i| i.finding_id.clone()));
+            }
+        }
+        let sealed_elsewhere =
+            bundles_sealed_by_bulk_discard(&ctx_reclaim_discard_clicked, &ticked, &all_finding_ids);
+
+        win.set_reclaim_space_confirm_heading(reclaim_confirm_heading(ticked.len()).into());
+        win.set_reclaim_space_confirm_body(
+            reclaim_confirm_body(
+                ticked.len(),
+                capture_count,
+                &discard_warning_text(&sealed_elsewhere),
+            )
+            .into(),
+        );
+        win.set_reclaim_space_pending_ids(ModelRc::from(Rc::new(VecModel::from(
+            ticked
+                .into_iter()
+                .map(SharedString::from)
+                .collect::<Vec<_>>(),
+        ))));
+        win.set_reclaim_space_confirm_open(true);
+    });
+
+    let win_reclaim_discard_cancel = main_window.as_weak();
+    main_window.on_reclaim_space_discard_cancelled(move || {
+        if let Some(win) = win_reclaim_discard_cancel.upgrade() {
+            win.set_reclaim_space_confirm_open(false);
+        }
+    });
+
+    // THE CONFIRMED ACT. Runs ticket 17's own `discard_originals` once per ticked Bundle - never a
+    // single call over every Finding merged together, so a refusal partway through one Bundle stops
+    // at that Bundle exactly the way a single-Bundle Discard would, rather than abandoning Findings
+    // in Bundles that had not even started yet. The screen re-reads afterwards (`open_reclaim_space`)
+    // so every discarded (now sealed) Bundle disappears from it on its own - opening the Library and
+    // its row menu already reads `bundle_is_sealed` live, so nothing further is needed to make it
+    // show them sealed too.
+    let win_reclaim_discard_confirm = main_window.as_weak();
+    let ctx_reclaim_discard_confirm = ctx.clone();
+    main_window.on_reclaim_space_discard_confirmed(move || {
+        let Some(win) = win_reclaim_discard_confirm.upgrade() else {
+            return;
+        };
+        win.set_reclaim_space_confirm_open(false);
+
+        let ticked: Vec<String> = win
+            .get_reclaim_space_pending_ids()
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+
+        let Some(store) = ctx_reclaim_discard_confirm.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+
+        let bundle_count = ticked.len();
+        let mut total_discarded = 0usize;
+        let mut total_orphaned = 0usize;
+        let mut refusal: Option<String> = None;
+        for id in &ticked {
+            let Ok(Some(detail)) = store.get_bundle(id) else {
+                continue;
+            };
+            let finding_ids: Vec<String> =
+                detail.items.iter().map(|i| i.finding_id.clone()).collect();
+            let (discarded, orphaned, refused) =
+                discard_originals(&ctx_reclaim_discard_confirm, &finding_ids);
+            total_discarded += discarded;
+            total_orphaned += orphaned;
+            if let Some((finding_id, error)) = refused {
+                refusal = Some(format!("Finding {finding_id} refused: {error}"));
+            }
+        }
+
+        open_reclaim_space(&win, &ctx_reclaim_discard_confirm);
+        load_findings_into_window(&win, &ctx_reclaim_discard_confirm, None);
+
+        let noun = if total_discarded == 1 {
+            "Finding"
+        } else {
+            "Findings"
+        };
+        let bundle_word = if bundle_count == 1 {
+            "Bundle"
+        } else {
+            "Bundles"
+        };
+        let had_failure = refusal.is_some();
+        let message = match refusal {
+            Some(reason) => format!(
+                "{total_discarded} {noun} discarded across {bundle_count} {bundle_word}. {reason}"
+            ),
+            None if total_orphaned == 0 => format!(
+                "{total_discarded} {noun} discarded across {bundle_count} {bundle_word}. Each \
+                 Bundle keeps its own copies."
+            ),
+            None => format!(
+                "{total_discarded} {noun} discarded. {total_orphaned} image file(s) could not be \
+                 removed and are now orphans."
+            ),
+        };
+        toast(&win, message, had_failure);
+    });
+
     // Bundles Drawer Toggle. Deliberately untouched by this ticket - the spec's own "Out of Scope"
     // names it as a separate, undescribed pattern nothing has asked for yet.
     main_window.on_bundles_drawer_clicked(|| {
@@ -7977,6 +8373,297 @@ mod tests {
             std::fs::read(vault_dir.path().join("bundles/b-kept/finding_2_burned.png")).unwrap(),
             image_2,
             "the Bundle's second image copy must be untouched"
+        );
+    }
+
+    // ===== ticket 18: Reclaim space =============================================================
+
+    /// "One decimal place, except an exact zero" - the exact wording `spec.md`'s own artboard uses
+    /// (`ReclaimSpace.dc.html`'s "373.1 MB reclaimable", `ReclaimEmpty.dc.html`'s "0 MB reclaimable").
+    #[test]
+    fn format_mb_formats_with_one_decimal_and_zero_bare() {
+        assert_eq!(format_mb(0), "0 MB");
+        // Exactly 1.5 MiB and exactly 2 MiB - chosen so the expected string has no floating-point
+        // rounding ambiguity of its own.
+        assert_eq!(format_mb(1_048_576 + 524_288), "1.5 MB");
+        assert_eq!(format_mb(1_048_576 * 2), "2.0 MB");
+    }
+
+    /// `spec.md`'s "Reclaim space": *"Sizes are measured from the files on disk, not estimated."*
+    /// Proven against a fixture with KNOWN file sizes that bear no relation to the images' own
+    /// dimensions - `bundle_original_bytes` must report exactly what `fs::metadata` says, not a
+    /// number derived from width/height/format.
+    #[test]
+    fn bundle_original_bytes_sums_every_original_findings_image_file_size_on_disk() {
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        finding_fixture(&finding_store, "f1");
+        finding_fixture(&finding_store, "f2");
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        // Deliberately not valid PNGs and deliberately different sizes from each other - this
+        // function must never decode an image or assume a dimension, only measure the file.
+        vault_store
+            .write_blob("findings/f1.png", &vec![7u8; 1_234])
+            .expect("writing the fixture image must succeed");
+        vault_store
+            .write_blob("findings/f2.png", &vec![9u8; 4_321])
+            .expect("writing the fixture image must succeed");
+
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b1", &["f1", "f2"]);
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let detail = ctx
+            .bundle_store
+            .as_ref()
+            .unwrap()
+            .get_bundle("b1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            bundle_original_bytes(&ctx, &detail),
+            1_234 + 4_321,
+            "the sum must equal exactly what the two files occupy on disk"
+        );
+    }
+
+    /// A Finding that no longer resolves - already gone, or its file missing - must contribute
+    /// nothing rather than aborting the whole sum. `bundle_is_sealed`'s own live read is what keeps
+    /// a fully-sealed Bundle off the Reclaim space list at all; this is the partial case, one Finding
+    /// short of that, which must still produce a number rather than a panic.
+    #[test]
+    fn bundle_original_bytes_skips_a_finding_that_does_not_resolve_rather_than_aborting() {
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        finding_fixture(&finding_store, "f1");
+        // f2's Finding row is never created - `get_finding` refuses it for real.
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        vault_store
+            .write_blob("findings/f1.png", &vec![1u8; 2_000])
+            .expect("writing the fixture image must succeed");
+
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b1", &["f1", "f2"]);
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let detail = ctx
+            .bundle_store
+            .as_ref()
+            .unwrap()
+            .get_bundle("b1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            bundle_original_bytes(&ctx, &detail),
+            2_000,
+            "only f1's own file counts - f2 contributes nothing rather than the sum refusing"
+        );
+    }
+
+    /// The acceptance criterion, straight off the store: Reclaim space lists exactly the UNSEALED
+    /// Bundles, each row's size is the sum of its own Findings' files on disk, and the header total
+    /// is their sum. `b-sealed` has both its Findings already deleted (`bundle_is_sealed` reads that
+    /// live) and must not appear at all.
+    #[test]
+    fn build_reclaim_rows_lists_only_unsealed_bundles_with_sizes_measured_from_disk() {
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        finding_fixture(&finding_store, "f1");
+        finding_fixture(&finding_store, "f2");
+        // f3/f4 back "b-sealed" below and are never created - that Bundle is sealed from the moment
+        // it exists, `BR-122`'s "computed live, no stored flag" rule.
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        vault_store
+            .write_blob("findings/f1.png", &vec![1u8; 10_000])
+            .expect("writing the fixture image must succeed");
+        vault_store
+            .write_blob("findings/f2.png", &vec![2u8; 20_000])
+            .expect("writing the fixture image must succeed");
+
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b-unsealed", &["f1", "f2"]);
+        store_bundle_fixture(&bundle_store, "b-sealed", &["f3", "f4"]);
+
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let (rows, total_bytes) =
+            build_reclaim_rows(&ctx, chrono::Utc::now()).expect("the store must be readable");
+
+        assert_eq!(rows.len(), 1, "only the unsealed Bundle may appear");
+        assert_eq!(rows[0].id, "b-unsealed");
+        assert_eq!(
+            rows[0].size_bytes as u64, 30_000,
+            "the row's size must equal the exact sum of its own Findings' files on disk"
+        );
+        assert_eq!(rows[0].size_label, "0.0 MB");
+        assert_eq!(
+            total_bytes, 30_000,
+            "the header total must equal the sum of the rows it lists - there is only one row here"
+        );
+    }
+
+    /// `FR-42`'s own proof: the total after discarding equals the previous total minus the sum of
+    /// what was discarded. Two unsealed Bundles with distinct, known sizes; discard one; rebuild;
+    /// the new total must be the exact difference, and the discarded Bundle (now sealed) must be
+    /// gone from the list.
+    #[test]
+    fn discarding_originals_reduces_the_reclaim_total_by_exactly_what_was_discarded() {
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        finding_fixture(&finding_store, "f1");
+        finding_fixture(&finding_store, "f2");
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        vault_store
+            .write_blob("findings/f1.png", &vec![1u8; 50_000])
+            .expect("writing the fixture image must succeed");
+        vault_store
+            .write_blob("findings/f2.png", &vec![2u8; 70_000])
+            .expect("writing the fixture image must succeed");
+
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b-keep", &["f1"]);
+        store_bundle_fixture(&bundle_store, "b-discard", &["f2"]);
+
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let (rows_before, total_before) =
+            build_reclaim_rows(&ctx, chrono::Utc::now()).expect("the store must be readable");
+        assert_eq!(rows_before.len(), 2);
+        assert_eq!(total_before, 50_000 + 70_000);
+        let discarded_row_bytes = rows_before
+            .iter()
+            .find(|r| r.id == "b-discard")
+            .expect("b-discard must be listed before it is discarded")
+            .size_bytes as u64;
+        assert_eq!(discarded_row_bytes, 70_000);
+
+        let (discarded_count, _orphaned, refused) = discard_originals(&ctx, &["f2".to_string()]);
+        assert_eq!(discarded_count, 1);
+        assert!(refused.is_none());
+
+        let (rows_after, total_after) =
+            build_reclaim_rows(&ctx, chrono::Utc::now()).expect("the store must be readable");
+        assert_eq!(
+            rows_after.len(),
+            1,
+            "the discarded Bundle is sealed now and must disappear from the list"
+        );
+        assert_eq!(rows_after[0].id, "b-keep");
+        assert_eq!(
+            total_after,
+            total_before - discarded_row_bytes,
+            "the total after discarding must equal the previous total minus exactly what was \
+             discarded - FR-42's own proof"
+        );
+    }
+
+    /// The bulk form of `BR-12`/`BR-122`: a Bundle NOT in the ticked set that shares a Finding with
+    /// any of them must be named, and a bundle that IS in the ticked set must never be reported
+    /// against another one also being discarded in the same batch - both are simply going, not one
+    /// "sealing" the other.
+    #[test]
+    fn bundles_sealed_by_bulk_discard_excludes_the_whole_ticked_set_and_includes_others() {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b-ticked-1", &["f1"]);
+        store_bundle_fixture(&bundle_store, "b-ticked-2", &["f2"]);
+        // Shares f1 with b-ticked-1 - must be named, since it is NOT being discarded itself.
+        store_bundle_fixture(&bundle_store, "b-other", &["f1", "f3"]);
+        // Shares nothing with the ticked set.
+        store_bundle_fixture(&bundle_store, "b-unrelated", &["f4"]);
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let ticked = vec!["b-ticked-1".to_string(), "b-ticked-2".to_string()];
+        let finding_ids = vec!["f1".to_string(), "f2".to_string()];
+        let sealed = bundles_sealed_by_bulk_discard(&ctx, &ticked, &finding_ids);
+
+        assert_eq!(
+            sealed,
+            vec!["Fixture Bundle".to_string()],
+            "only b-other qualifies: b-ticked-1/2 are excluded because they are IN the ticked set, \
+             and b-unrelated shares nothing"
+        );
+    }
+
+    /// The bulk confirmation's own wording: it counts Bundles and captures, and appends the
+    /// shared-Finding warning only when one was actually found - reusing ticket 17's own
+    /// `discard_warning_text` rather than composing a second sentence for the same fact.
+    #[test]
+    fn reclaim_confirm_body_counts_bundles_and_captures_and_includes_the_warning_when_present() {
+        let plain = reclaim_confirm_body(3, 22, "");
+        assert!(plain.contains("22 original captures across 3 Bundles"));
+        assert!(plain.contains("This cannot be undone."));
+        assert!(
+            !plain.contains("shares one of these Findings"),
+            "no warning was passed - none must appear"
+        );
+
+        let warned = reclaim_confirm_body(
+            1,
+            1,
+            "\"Q3 Report\" shares one of these Findings and will also become sealed.",
+        );
+        assert!(warned.contains("1 original capture across 1 Bundle,"));
+        assert!(warned
+            .contains("\"Q3 Report\" shares one of these Findings and will also become sealed."));
+    }
+
+    #[test]
+    fn reclaim_confirm_heading_pluralizes_bundle_count() {
+        assert_eq!(
+            reclaim_confirm_heading(1),
+            "DISCARD ORIGINALS FROM 1 BUNDLE?"
+        );
+        assert_eq!(
+            reclaim_confirm_heading(3),
+            "DISCARD ORIGINALS FROM 3 BUNDLES?"
         );
     }
 }

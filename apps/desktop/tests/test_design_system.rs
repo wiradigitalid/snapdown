@@ -44,6 +44,7 @@ fn every_modal_header_is_the_same_component() {
     let settings = ui("components/settings.slint");
     let library = ui("components/library.slint");
     let review_update = ui("components/review-update.slint");
+    let reclaim_space = ui("components/reclaim-space.slint");
 
     assert!(
         window.contains("SdModalHeader {"),
@@ -64,6 +65,11 @@ fn every_modal_header_is_the_same_component() {
         "and so must Review & Update (ticket 13) - a fourth hand-rolled header would be the same \
          drift a fourth time"
     );
+    assert!(
+        reclaim_space.contains("SdModalHeader {"),
+        "and so must Reclaim space (ticket 18) - a fifth hand-rolled header would be the same drift \
+         a fifth time"
+    );
 
     // None may hand-write one again. A 52px bar with a bottom hairline and a title is the header,
     // whatever it is called locally.
@@ -72,6 +78,7 @@ fn every_modal_header_is_the_same_component() {
         ("settings.slint", &settings),
         ("library.slint", &library),
         ("review-update.slint", &review_update),
+        ("reclaim-space.slint", &reclaim_space),
     ] {
         let hand_written = source.matches("height: 52px;").count();
         let shared = source.matches("SdModalHeader {").count();
