@@ -1,0 +1,271 @@
+import { Theme } from "../theme.slint";
+import { SdModalHeader } from "modal.slint";
+import { SdActionButton, SdDocHeading } from "action-button.slint";
+import { ScrollView } from "std-widgets.slint";
+
+// ONE BLOCK of the Bundle document, exactly as Review & Update's LOCKED mode renders it.
+//
+// Its own struct rather than a reuse of `appwindow.slint`'s `DocBlock`: that struct is declared in
+// the window file that imports THIS component, and Slint has no way to import it back the other
+// direction. `kind` mirrors `ParsedBundleDocument`'s own shape (ticket 10,
+// `crates/snapdown-core/src/domain/markdown.rs`) block for block: title · bundle-notes · finding ·
+// image · note · marker.
+export struct ReviewUpdateBlock {
+    kind: string,
+    // A Finding's position, or a Marker's ordinal.
+    ordinal: int,
+    text: string,
+    image: image,
+    // True on a Finding's first Marker, so "Marker Notes" prints once above its list.
+    starts-section: bool,
+}
+
+// REVIEW & UPDATE, LOCKED MODE. Ticket 13 of the Bundle Library spec.
+//
+// Opened over the Library (itself over the Editor) when a row is clicked. Built ENTIRELY from
+// `MarkdownSerializer::parse_bundle_document`'s read of the Bundle's own stored document -
+// `main.rs`'s `review_update_doc_blocks` never touches `FindingStore` - which is what lets a sealed
+// Bundle (its Findings already deleted, `BR-11`) open exactly like an unsealed one.
+//
+// LOCKED IS THE PREVIEW (ticket 05's resolved variant C): there is no Edit/Preview pair, and NOTHING
+// here carries a hover affordance, a border or a chip - every field is a bare `Text`/`SdDocHeading`,
+// never an `SdTextField`, because that component's own `flat` mode still lightens on hover and shows
+// a text cursor (`text-field.slint:87-102`) - exactly the affordance this mode must not offer, and
+// exactly why it is not reused here. Ticket 14 adds editing on top of this file; it does not exist
+// yet, and the footer's `Edit` button is disabled for the same reason - a control that does nothing
+// is what the map's own rule forbids rendering as if it worked.
+export component SdReviewUpdate inherits Rectangle {
+    in property <[ReviewUpdateBlock]> blocks: [];
+    // "N Findings · composed <relative time>" - composed in Rust, the same discipline
+    // `library_row_from_detail` uses for the Library's own meta line, so the pluralisation and the
+    // relative-time ladder live in exactly one place.
+    in property <string> provenance: "";
+
+    callback closed();
+
+    width: 100%;
+    height: 100%;
+    background: Theme.overlay-scrim;
+
+    // Swallows every click that misses the panel, so the Library (and the Editor beneath it) stay
+    // inert - the same reasoning Assemble & Review's own scrim TouchArea gives.
+    TouchArea { }
+
+    // Escape closes it. Declared before the panel and focused on creation, so it holds the keyboard
+    // the moment this opens.
+    review-update-keys := FocusScope {
+        init => { self.focus(); }
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                root.closed();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    // A4 portrait, the same geometry Assemble & Review uses (ticket 05: "the modal is 521px wide...
+    // either the two modals stop sharing a geometry, or [it] gets wider for a reason that has
+    // nothing to do with composing" - Review & Update has no such reason).
+    panel := Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        height: max(420px, parent.height - 64px);
+        width: min(parent.width - 64px, max(520px, self.height / 1.414));
+        background: Theme.bg-app;
+        border-radius: Theme.radius-sharp;
+        border-width: 1px;
+        border-color: Theme.border-strong;
+        drop-shadow-blur: 32px;
+        drop-shadow-color: Theme.overlay-shadow;
+
+        VerticalLayout {
+            padding: 0px;
+            spacing: 0px;
+
+            SdModalHeader {
+                icon: @image-url("../../assets/icons/package.svg");
+                title: "Review & Update";
+                closed => { root.closed(); }
+
+                Text {
+                    text: root.provenance;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: Theme.accent-primary;
+                    vertical-alignment: center;
+                    font-family: "IBM Plex Mono";
+                }
+
+                // AS COMPOSED - the one badge locked mode carries. No Edit/Preview pair: locked
+                // already IS the preview, so two controls collapsed into one (ticket 05's resolved
+                // variant C).
+                Rectangle {
+                    height: 22px;
+                    width: badge-text.preferred-width + 18px;
+                    border-radius: Theme.radius-sharp;
+                    background: Theme.bg-subtle;
+                    border-width: 1px;
+                    border-color: Theme.border-subtle;
+
+                    badge-text := Text {
+                        x: 9px;
+                        width: parent.width - 18px;
+                        height: parent.height;
+                        text: "As composed";
+                        font-size: 10px;
+                        font-weight: 700;
+                        color: Theme.text-muted;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        font-family: "IBM Plex Sans";
+                    }
+                }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                // A shade darker than the header/footer - the whole document area reads as settled,
+                // without a mark on any one element (ticket 05's prototype does the same for its
+                // locked body).
+                background: Theme.bg-subtle;
+
+                ScrollView {
+                    width: 100%;
+                    height: 100%;
+                    vertical-scrollbar-policy: as-needed;
+                    horizontal-scrollbar-policy: always-off;
+
+                    VerticalLayout {
+                        padding-left: 22px;
+                        padding-right: 30px;
+                        padding-top: 16px;
+                        padding-bottom: 22px;
+                        spacing: 10px;
+                        alignment: start;
+
+                        for block in root.blocks : VerticalLayout {
+                            spacing: 4px;
+                            alignment: start;
+
+                            // `# ` - the Bundle's title, exactly as parsed from the stored document.
+                            if block.kind == "title" : SdDocHeading {
+                                level: 1;
+                                text: block.text;
+                            }
+
+                            // `## Bundle Notes` - only when the document carried one.
+                            if block.kind == "bundle-notes" : SdDocHeading {
+                                level: 2;
+                                text: "Bundle Notes";
+                            }
+                            if block.kind == "bundle-notes" : Text {
+                                text: block.text;
+                                font-size: 12px;
+                                color: Theme.text-primary;
+                                wrap: word-wrap;
+                                font-family: "IBM Plex Sans";
+                            }
+
+                            // `## Finding N`
+                            if block.kind == "finding" : SdDocHeading {
+                                level: 2;
+                                text: "Finding " + block.ordinal;
+                            }
+
+                            // The BUNDLE's own image - resolved against the stored document's own
+                            // folder, never a Finding's `image_path`. No TouchArea, no IconButton:
+                            // ticket 05 found none on an image in the compose window either, so this
+                            // is consistency, not a new restriction.
+                            if block.kind == "image" : HorizontalLayout {
+                                alignment: start;
+                                Rectangle {
+                                    width: min((panel.width - 52px) * 0.5, block.image.width * 1px);
+                                    height: block.image.width > 0
+                                        ? self.width * (block.image.height / block.image.width)
+                                        : 0px;
+                                    Image {
+                                        width: 100%;
+                                        height: 100%;
+                                        image-fit: contain;
+                                        source: block.image;
+                                    }
+                                }
+                            }
+
+                            // `### Notes` - only when the document carried one.
+                            if block.kind == "note" : SdDocHeading {
+                                level: 3;
+                                text: "Notes";
+                            }
+                            if block.kind == "note" : Text {
+                                text: block.text;
+                                font-size: 12px;
+                                color: Theme.text-primary;
+                                wrap: word-wrap;
+                                font-family: "IBM Plex Sans";
+                            }
+
+                            // `### Marker Notes`, printed once above the list.
+                            if block.kind == "marker" && block.starts-section : SdDocHeading {
+                                level: 3;
+                                text: "Marker Notes";
+                            }
+                            if block.kind == "marker" : HorizontalLayout {
+                                spacing: 6px;
+                                Text {
+                                    text: block.ordinal + ".";
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    color: Theme.text-muted;
+                                    vertical-alignment: top;
+                                    font-family: "IBM Plex Sans";
+                                }
+                                Text {
+                                    horizontal-stretch: 1;
+                                    text: block.text == "" ? "(no annotation text)" : block.text;
+                                    font-size: 12px;
+                                    color: block.text == "" ? Theme.text-dim : Theme.text-primary;
+                                    wrap: word-wrap;
+                                    font-family: "IBM Plex Sans";
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // FOOTER - locked: primary Edit (disabled, ticket 14 wires it), secondary Close.
+            Rectangle {
+                height: 60px;
+                background: Theme.bg-card;
+                Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.border-subtle; }
+
+                HorizontalLayout {
+                    padding-left: 16px;
+                    padding-right: 16px;
+                    spacing: 10px;
+                    alignment: end;
+
+                    SdActionButton {
+                        y: (parent.height - self.height) / 2;
+                        label: "Close";
+                        primary: false;
+                        clicked => { root.closed(); }
+                    }
+
+                    // Exists so the footer already reads the way it will once ticket 14 lands -
+                    // disabled, no tooltip, no callback wired. Rendering it enabled ahead of the Save
+                    // path it has nothing to open yet is exactly what the map's own "no control that
+                    // does nothing" rule forbids.
+                    SdActionButton {
+                        y: (parent.height - self.height) / 2;
+                        label: "Edit";
+                        primary: true;
+                        enabled: false;
+                    }
+                }
+            }
+        }
+    }
+}

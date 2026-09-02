@@ -29,12 +29,13 @@ export struct LibraryBundleRow {
 // (Settings auto-saves as you go, so a stray Escape closing it would read as losing a change - the
 // Library has no editable state at all in this ticket, so that risk does not apply here).
 //
-// Rows carry NO actions yet. `ticket 12`/`ticket 16` wire Copy Markdown, Open file location, and the
-// row menu; this ticket only lays out where they go, per the map's own note (`canvas.json`,
-// "row-actions"): two icons on hover, an overflow button beside them, both drawn but neither given a
-// `TouchArea` - an icon with no click handler invites nothing, which is the point. Wiring one now
-// would either do nothing when clicked (the toolbar's fake-shortcut mistake `AGENTS.md` names
-// directly) or reach into ticket 12/16's own scope.
+// A row's CLICK opens Review & Update, locked (`ticket 13`) - `bundle-opened(id)` below. Its two
+// hover icons and its overflow button still carry NO action: `ticket 12`/`ticket 16` wire Copy
+// Markdown, Open file location, and the row menu; this ticket only lays out where they go, per the
+// map's own note (`canvas.json`, "row-actions") - both drawn but neither given a `TouchArea` - an
+// icon with no click handler invites nothing, which is the point. Wiring one now would either do
+// nothing when clicked (the toolbar's fake-shortcut mistake `AGENTS.md` names directly) or reach into
+// ticket 12/16's own scope.
 export component SdLibrary inherits Rectangle {
     // "loading" | "error" | "ready". "ready" with an empty `rows` IS the empty state - there is no
     // fourth value for it, because a value that only restates `rows.length == 0` is a second place
@@ -46,6 +47,8 @@ export component SdLibrary inherits Rectangle {
     callback closed();
     callback try-again-clicked();
     callback open-file-location-clicked();
+    // A row was clicked - the Bundle's id. Opens Review & Update, locked (ticket 13).
+    callback bundle-opened(string);
 
     width: 100%;
     height: 100%;
@@ -279,12 +282,11 @@ export component SdLibrary inherits Rectangle {
                                 border-color: Theme.border-subtle;
 
                                 row-touch := TouchArea {
-                                    // No `clicked` handler and a `default` cursor: this ticket does
-                                    // not open Review & Update (a later ticket does), so the row
-                                    // must not read as clickable yet. The TouchArea exists only to
-                                    // detect hover, for the background and the two placeholder
-                                    // affordances below.
-                                    mouse-cursor: default;
+                                    // Opens Review & Update, locked, on the Bundle exactly as
+                                    // composed (`ticket 13`). `pointer`, not `default` - this now
+                                    // reads as clickable because it is.
+                                    mouse-cursor: pointer;
+                                    clicked => { root.bundle-opened(row.id); }
                                 }
 
                                 HorizontalLayout {
