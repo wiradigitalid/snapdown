@@ -401,6 +401,57 @@ fn open_library(window: &AppWindow, ctx: &AppContext) {
     }
 }
 
+/// Whether a Bundle's originals are gone - read LIVE from whether every one of its `BundleItem`s'
+/// Findings still exists, never a stored flag (`BR-122`). No `sealed` column exists in the schema on
+/// purpose (confirmed against `migrations.rs`): a Finding deleted after the Library last opened this
+/// Bundle's menu must change the answer the very next time it opens, and a cached bit could not do
+/// that. Migration v6 is what legalises the sealed case at all - it dropped `bundle_item`'s FK on
+/// `finding_id` precisely so a Bundle can outlive its Findings.
+///
+/// An empty Bundle (no items) reads as unsealed - vacuously true by the same rule the spec states
+/// ("every one of its BundleItems' Findings still exists"), and harmless: Disassemble on one just
+/// removes an empty Bundle, the same as Delete would.
+fn bundle_is_sealed(ctx: &AppContext, detail: &BundleDetail) -> bool {
+    detail
+        .items
+        .iter()
+        .any(|item| !matches!(ctx.finding_store.get_finding(&item.finding_id), Ok(Some(_))))
+}
+
+/// Removes a Bundle's row (its `BundleItem`s cascade via the schema's own `ON DELETE CASCADE`) and
+/// only then its Vault folder - `AD-2`'s order, record first, then files. Disassemble and Delete both
+/// call this: `spec.md`'s Implementation Decisions say the two acts do exactly the same thing to
+/// persisted state, and only what happens to the Findings differs (nothing, either way - Disassemble
+/// writes no Finding, it only stops holding them; `bundle_is_sealed`'s own doc comment says why that
+/// is enough to bring them back to the filmstrip).
+///
+/// `Ok(true)` means the row went but the folder could not be removed - an orphan the Vault sweeper
+/// already owns, and never a listed Bundle whose files are gone, which is the state `AD-2`'s own
+/// "Prevents" names. `Ok(false)` means both went cleanly. `Err` means the ROW delete itself failed:
+/// nothing was touched, and the message names what refused.
+fn remove_bundle_row_and_folder(ctx: &AppContext, bundle_id: &str) -> Result<bool, String> {
+    let store = ctx
+        .bundle_store
+        .as_ref()
+        .ok_or_else(|| "The Bundle library could not be opened.".to_string())?;
+
+    store
+        .delete_bundle(bundle_id)
+        .map_err(|e| format!("Could not delete the Bundle: {e}"))?;
+
+    // The row is already gone at this point. A folder-removal failure below is reported to the
+    // caller as an orphan, never as an overall error - the Reviewer asked for the Bundle gone from
+    // the Library, and it is; retrying would not un-delete a row that already went.
+    let folder = format!("bundles/{bundle_id}");
+    match ctx.vault_store.delete_folder(&folder) {
+        Ok(()) => Ok(false),
+        Err(e) => {
+            eprintln!("Deleted Bundle {bundle_id} but left its folder behind: {e}");
+            Ok(true)
+        }
+    }
+}
+
 fn load_findings_into_window(
     window: &AppWindow,
     ctx: &AppContext,
@@ -4431,6 +4482,151 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // THE ROW MENU'S DESTRUCTIVE GROUP (ticket 16 of the Bundle Library spec). Copy Markdown and
+    // Open file location are ticket 12's rows in the SAME menu (`library.slint`'s `row-menu`); this
+    // handler only ever sees "disassemble-bundle"/"delete-bundle" because the menu resolves those
+    // two actions locally and forwards only the destructive group here. Whichever single verb the
+    // destructive entry offers is decided HERE, live, every time the menu opens: never cached on the
+    // row (`BR-122`), so a Finding deleted between two menu openings changes the verb the very next
+    // time.
+    let win_menu_req = main_window.as_weak();
+    let ctx_menu_req = ctx.clone();
+    main_window.on_library_row_menu_requested(move |id, x, y| {
+        let Some(win) = win_menu_req.upgrade() else {
+            return;
+        };
+        let Some(store) = ctx_menu_req.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+        match store.get_bundle(id.as_str()) {
+            Ok(Some(detail)) => {
+                let sealed = bundle_is_sealed(&ctx_menu_req, &detail);
+                win.set_library_menu_target(id);
+                win.set_library_menu_sealed(sealed);
+                win.set_library_menu_x(x);
+                win.set_library_menu_y(y);
+            }
+            Ok(None) => {
+                // Gone since the row was drawn - refresh rather than open a menu for a Bundle that
+                // no longer exists.
+                open_library(&win, &ctx_menu_req);
+            }
+            Err(e) => toast(&win, format!("Could not read the Bundle: {e}"), true),
+        }
+    });
+
+    let win_menu_dismissed = main_window.as_weak();
+    main_window.on_library_row_menu_dismissed(move || {
+        if let Some(win) = win_menu_dismissed.upgrade() {
+            win.set_library_menu_target(SharedString::new());
+        }
+    });
+
+    // An item was chosen. Neither destructive action fires from the menu itself - both go through
+    // their own confirmation, the same one-click-away safety `pending-delete-finding` already gives
+    // deleting a Finding.
+    let win_menu_action = main_window.as_weak();
+    let ctx_menu_action = ctx.clone();
+    main_window.on_library_row_menu_action(move |action, id| {
+        let Some(win) = win_menu_action.upgrade() else {
+            return;
+        };
+        win.set_library_menu_target(SharedString::new());
+
+        let Some(store) = ctx_menu_action.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+        let detail = match store.get_bundle(id.as_str()) {
+            Ok(Some(detail)) => detail,
+            Ok(None) => {
+                open_library(&win, &ctx_menu_action);
+                return;
+            }
+            Err(e) => {
+                toast(&win, format!("Could not read the Bundle: {e}"), true);
+                return;
+            }
+        };
+        win.set_library_pending_bundle_name(detail.bundle.name.clone().into());
+        win.set_library_pending_bundle_finding_count(detail.items.len() as i32);
+        match action.as_str() {
+            "disassemble-bundle" => win.set_library_pending_disassemble(id),
+            "delete-bundle" => win.set_library_pending_delete(id),
+            _ => {}
+        }
+    });
+
+    let win_disassemble_cancel = main_window.as_weak();
+    main_window.on_library_disassemble_cancelled(move || {
+        if let Some(win) = win_disassemble_cancel.upgrade() {
+            win.set_library_pending_disassemble(SharedString::new());
+        }
+    });
+
+    let win_delete_cancel = main_window.as_weak();
+    main_window.on_library_delete_cancelled(move || {
+        if let Some(win) = win_delete_cancel.upgrade() {
+            win.set_library_pending_delete(SharedString::new());
+        }
+    });
+
+    // DISASSEMBLE - the Bundle's row and folder go, and its Findings come back to the filmstrip
+    // untouched: `spec.md` states plainly that Disassemble writes no Finding, and
+    // `load_findings_into_window`'s own filter is what makes them reappear (they were only ever
+    // hidden because a `bundle_item` row held them).
+    let win_disassemble_confirm = main_window.as_weak();
+    let ctx_disassemble_confirm = ctx.clone();
+    main_window.on_library_disassemble_confirmed(move |id| {
+        let Some(win) = win_disassemble_confirm.upgrade() else {
+            return;
+        };
+        win.set_library_pending_disassemble(SharedString::new());
+
+        match remove_bundle_row_and_folder(&ctx_disassemble_confirm, id.as_str()) {
+            Ok(orphaned) => {
+                open_library(&win, &ctx_disassemble_confirm);
+                load_findings_into_window(&win, &ctx_disassemble_confirm, None);
+                let message = if orphaned {
+                    "Bundle disassembled. Its Findings are back in the strip. The Bundle's folder \
+                     could not be removed and is now an orphan."
+                        .to_string()
+                } else {
+                    "Bundle disassembled. Its Findings are back in the strip.".to_string()
+                };
+                toast(&win, message, false);
+            }
+            Err(e) => toast(&win, format!("Could not disassemble the Bundle: {e}"), true),
+        }
+    });
+
+    // DELETE, on an already-sealed Bundle - the row and folder go; nothing returns to the filmstrip
+    // because the originals were discarded earlier (ticket 17's Discard originals, out of this
+    // ticket's scope).
+    let win_delete_confirm = main_window.as_weak();
+    let ctx_delete_confirm = ctx.clone();
+    main_window.on_library_delete_confirmed(move |id| {
+        let Some(win) = win_delete_confirm.upgrade() else {
+            return;
+        };
+        win.set_library_pending_delete(SharedString::new());
+
+        match remove_bundle_row_and_folder(&ctx_delete_confirm, id.as_str()) {
+            Ok(orphaned) => {
+                open_library(&win, &ctx_delete_confirm);
+                let message = if orphaned {
+                    "Bundle deleted. Its folder could not be removed and is now an orphan."
+                        .to_string()
+                } else {
+                    "Bundle deleted.".to_string()
+                };
+                toast(&win, message, false);
+            }
+            Err(e) => toast(&win, format!("Could not delete the Bundle: {e}"), true),
+        }
+    });
+
     // Bundles Drawer Toggle. Deliberately untouched by this ticket - the spec's own "Out of Scope"
     // names it as a separate, undescribed pattern nothing has asked for yet.
     main_window.on_bundles_drawer_clicked(|| {
@@ -6552,5 +6748,305 @@ mod tests {
 
         let err = open_folder(&folder).expect_err("a missing folder must refuse, not do nothing");
         assert_eq!(err, "That folder no longer exists.");
+    }
+
+    // ===== ticket 16: disassemble a Bundle, or delete a sealed one ==========================
+
+    fn finding_fixture(finding_store: &SqliteFindingStore, id: &str) {
+        let finding = Finding {
+            id: id.to_string(),
+            image_path: format!("findings/{id}.png"),
+            image_width: 40,
+            image_height: 30,
+            captured_at: "2026-09-01T10:00:00Z".to_string(),
+            source_monitor: "\\\\.\\DISPLAY1".to_string(),
+            region: "0,0,40,30".to_string(),
+            resolved_long_edge: None,
+            resolved_encoder_quality: None,
+            budget_name: None,
+        };
+        let note = Note {
+            id: format!("note-{id}"),
+            finding_id: id.to_string(),
+            body: String::new(),
+            updated_at: "2026-09-01T10:00:00Z".to_string(),
+        };
+        finding_store
+            .create_finding(&finding, &note, &[])
+            .expect("creating the fixture Finding must succeed");
+    }
+
+    /// Same shape as ticket 12's `bundle_fixture` above, but writes straight into a bundle store
+    /// instead of returning an in-memory pair - named `store_bundle_fixture` rather than reusing
+    /// `bundle_fixture` because the two signatures collided when the tickets merged and this one is
+    /// the store-writing side of that collision.
+    fn store_bundle_fixture(
+        bundle_store: &SqliteBundleStore,
+        bundle_id: &str,
+        finding_ids: &[&str],
+    ) {
+        let bundle = Bundle::new(
+            bundle_id.to_string(),
+            "Fixture Bundle".to_string(),
+            "# Fixture Bundle".to_string(),
+            format!("bundles/{bundle_id}/bundle.md"),
+            "2026-09-01T12:00:00Z".to_string(),
+        )
+        .expect("a valid fixture Bundle");
+        let items: Vec<BundleItem> = finding_ids
+            .iter()
+            .enumerate()
+            .map(|(i, fid)| {
+                BundleItem::new(
+                    format!("bi-{bundle_id}-{i}"),
+                    bundle_id.to_string(),
+                    fid.to_string(),
+                    (i + 1) as u32,
+                    format!("bundles/{bundle_id}/finding_{}_burned.png", i + 1),
+                )
+                .expect("a valid fixture BundleItem")
+            })
+            .collect();
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("creating the fixture Bundle must succeed");
+    }
+
+    /// `BR-122`: which verb the menu offers must be read LIVE, never from a stored flag - proven
+    /// here by asking the SAME question twice, with a Finding deleted in between, exactly the shape
+    /// the ticket's own acceptance criterion describes ("a fixture where a Finding is deleted between
+    /// two menu openings"). No `sealed` column exists anywhere in the schema to cache the answer in,
+    /// so the only way this can pass is if the check re-reads the Finding store every time.
+    #[test]
+    fn bundle_is_sealed_reads_live_never_a_cached_answer() {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        finding_fixture(&finding_store, "f1");
+        finding_fixture(&finding_store, "f2");
+        store_bundle_fixture(&bundle_store, "b1", &["f1", "f2"]);
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        // Menu opening #1: every Finding still exists.
+        let detail = ctx
+            .bundle_store
+            .as_ref()
+            .unwrap()
+            .get_bundle("b1")
+            .unwrap()
+            .unwrap();
+        assert!(
+            !bundle_is_sealed(&ctx, &detail),
+            "a Bundle whose Findings all exist must read as unsealed"
+        );
+
+        // A Finding goes, exactly as it would through the ordinary Delete Finding flow.
+        ctx.finding_store
+            .delete_finding("f1")
+            .expect("deleting the fixture Finding must succeed");
+
+        // Menu opening #2: the SAME Bundle, re-fetched, exactly as a second `get_bundle` call would
+        // be made on a second menu open. If the answer were cached anywhere it would still read
+        // unsealed here.
+        let detail_again = ctx
+            .bundle_store
+            .as_ref()
+            .unwrap()
+            .get_bundle("b1")
+            .unwrap()
+            .unwrap();
+        assert!(
+            bundle_is_sealed(&ctx, &detail_again),
+            "the very next read must see the Finding is gone and flip to sealed"
+        );
+    }
+
+    /// The clean path: both the row and the folder go, and the folder is genuinely removed from
+    /// disk, not merely reported gone.
+    #[test]
+    fn remove_bundle_row_and_folder_removes_both_cleanly() {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b-clean", &["f1"]);
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        vault_store
+            .write_blob("bundles/b-clean/bundle.md", b"# Fixture Bundle")
+            .expect("writing the fixture Markdown must succeed");
+        vault_store
+            .write_blob("bundles/b-clean/finding_1_burned.png", &png_fixture(4, 4))
+            .expect("writing the fixture image must succeed");
+
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let orphaned = remove_bundle_row_and_folder(&ctx, "b-clean")
+            .expect("a healthy row and a healthy folder must both go without error");
+        assert!(!orphaned, "nothing should be left behind on the clean path");
+
+        assert!(
+            ctx.bundle_store
+                .as_ref()
+                .unwrap()
+                .get_bundle("b-clean")
+                .unwrap()
+                .is_none(),
+            "the row must be gone"
+        );
+        assert!(
+            !vault_dir.path().join("bundles/b-clean").exists(),
+            "the whole folder must be gone, not merely emptied"
+        );
+    }
+
+    /// A row-delete failure must leave EVERYTHING intact - the row (trivially, since it never
+    /// left) and the files, and the message must name what refused. Built on a connection that
+    /// was never migrated, the same trick `build_library_rows_refuses_out_loud_when_list_bundles_itself_fails`
+    /// already uses, so `delete_bundle` fails for real ("no such table: bundle"), not on a faked
+    /// `CoreError`.
+    #[test]
+    fn a_row_delete_failure_leaves_the_row_and_the_folder_both_untouched() {
+        let unmigrated = rusqlite::Connection::open_in_memory().expect("an in-memory connection");
+        let broken_bundle_store = SqliteBundleStore::new(Arc::new(Mutex::new(unmigrated)));
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        let md_rel = "bundles/b-broken/bundle.md";
+        vault_store
+            .write_blob(md_rel, b"# Untouched")
+            .expect("writing the fixture Markdown must succeed");
+
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(broken_bundle_store)),
+        };
+
+        let err = remove_bundle_row_and_folder(&ctx, "b-broken")
+            .expect_err("a database whose `bundle` table does not exist must refuse out loud");
+        assert!(
+            err.contains("Could not delete the Bundle"),
+            "the message must name what refused: {err}"
+        );
+        assert!(
+            vault_dir.path().join(md_rel).exists(),
+            "a row-delete failure must leave the files exactly as it found them"
+        );
+    }
+
+    /// `AD-2`'s ordering, proven under a REAL injected failure rather than a mock: the row goes
+    /// first, and when the folder removal that follows fails, the row stays gone and the files stay
+    /// put - never the reverse. Windows refuses to delete a file another handle holds open without
+    /// `FILE_SHARE_DELETE` - the same mechanism `AGENTS.md`'s own "a leftover Snapdown.exe process
+    /// locks its own file" pitfall describes - so holding the Bundle's own Markdown file open with
+    /// an EXPLICIT share mode of zero (no read, no write, no delete for anyone else) is a real,
+    /// deterministic fault injector, not a fake one.
+    ///
+    /// This is `share_mode(0)` via `OpenOptionsExt`, not a plain `File::open`, and that distinction
+    /// is exactly what the first version of this test got wrong: current Rust's `std::fs::File::open`
+    /// on Windows already requests `FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE` by
+    /// default (for POSIX rename/delete-of-open-file parity), so a plain `File::open` held here did
+    /// NOT block `remove_dir_all` at all - the first run of this test failed outright, the folder
+    /// went, and `result.unwrap()` (the orphan flag) came back `false` where the test expected `true`.
+    /// The explicit `share_mode(0)` below is what actually withholds `FILE_SHARE_DELETE`.
+    ///
+    /// **Seen red first, by hand** (not automated - the acceptance criterion asks for the order to
+    /// be swapped and watched fail): with the two calls inside `remove_bundle_row_and_folder`
+    /// swapped so the folder removal runs BEFORE `store.delete_bundle`, this test fails, because the
+    /// same held-open file that blocks the folder removal now runs before the row is ever touched -
+    /// the function returns `Err` without deleting the row at all, so
+    /// `get_bundle("b-lock").unwrap().is_none()` fails: the row is still present. Restoring the
+    /// correct order (row first, as written below) makes it pass again.
+    #[test]
+    fn folder_removal_failing_after_the_row_is_gone_never_leaves_the_row_present_with_the_files_gone(
+    ) {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b-lock", &["f1"]);
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        let md_rel = "bundles/b-lock/bundle.md";
+        vault_store
+            .write_blob(md_rel, b"# Locked Bundle")
+            .expect("writing the fixture Markdown must succeed");
+        vault_store
+            .write_blob("bundles/b-lock/finding_1_burned.png", &png_fixture(4, 4))
+            .expect("writing the fixture image must succeed");
+
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let md_path = vault_dir.path().join(md_rel);
+        // `share_mode(0)`: no `FILE_SHARE_*` flag at all, so no other handle - including the one
+        // `remove_dir_all` needs to delete this file - can even be opened while this one lives.
+        use std::os::windows::fs::OpenOptionsExt;
+        let held_open = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&md_path)
+            .expect("to open the file exclusively, holding it locked");
+
+        let result = remove_bundle_row_and_folder(&ctx, "b-lock");
+
+        assert!(
+            result.is_ok(),
+            "a folder-removal failure after a successful row delete must not bubble up as an \
+             overall Err - the Reviewer asked for the Bundle gone, and it is: {result:?}"
+        );
+        assert!(
+            result.unwrap(),
+            "the folder failed to go, so this must be reported as an orphan"
+        );
+
+        assert!(
+            ctx.bundle_store
+                .as_ref()
+                .unwrap()
+                .get_bundle("b-lock")
+                .unwrap()
+                .is_none(),
+            "the row must be gone even though the folder removal failed"
+        );
+        assert!(
+            md_path.exists(),
+            "the file must still be on disk - AD-2 forbids the reverse state (row gone, files \
+             gone too, or worse, row present with files gone), and a file surviving here is what \
+             proves the row went FIRST"
+        );
+
+        drop(held_open);
     }
 }

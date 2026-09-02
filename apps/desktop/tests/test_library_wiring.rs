@@ -54,7 +54,12 @@ fn every_library_callback_is_bound_from_slint_to_rust() {
     let at = window
         .find("if root.library-open : SdLibrary {")
         .expect("the mount site must exist");
-    let mount = flat(&window[at..(at + 900).min(window.len())]);
+    // 1800, not 900: ticket 16 landed the same mount site's `in`-property forwards
+    // (`menu-target`/`menu-sealed`/`menu-x`/`menu-y`/the four `pending-*`) ABOVE the callback
+    // forwards, pushing ticket 12's two callbacks further into the block than a 900-char window
+    // reaches - `every_row_menu_callback_is_bound_from_slint_to_rust` below already uses 1800 for
+    // the same reason, over the same block.
+    let mount = flat(&window[at..(at + 1800).min(window.len())]);
 
     for (slint_callback, root_callback, rust_handler) in [
         (
@@ -104,6 +109,230 @@ fn every_library_callback_is_bound_from_slint_to_rust() {
     assert!(
         main.contains("on_library_clicked("),
         "the ribbon's Library icon must have a real handler"
+    );
+}
+
+/// The row menu's destructive group (ticket 16): every callback `SdLibrary` declares for it is
+/// forwarded at the mount site to a root-level callback with a real handler in `main.rs`. The same
+/// shape `every_library_callback_is_bound_from_slint_to_rust` already proves for ticket 11's three -
+/// this is that shape for the seven ticket 16 adds.
+#[test]
+fn every_row_menu_callback_is_bound_from_slint_to_rust() {
+    let library = read("ui/components/library.slint");
+    let window = read("ui/appwindow.slint");
+    let main = read("src/main.rs");
+
+    let at = window
+        .find("if root.library-open : SdLibrary {")
+        .expect("the mount site must exist");
+    let mount = flat(&window[at..(at + 1800).min(window.len())]);
+
+    for (slint_callback, root_callback, rust_handler) in [
+        (
+            "callback row-menu-requested(string, length, length);",
+            "root.library-row-menu-requested(id, x, y);",
+            "on_library_row_menu_requested",
+        ),
+        (
+            "callback row-menu-dismissed();",
+            "root.library-row-menu-dismissed();",
+            "on_library_row_menu_dismissed",
+        ),
+        (
+            "callback row-menu-action(string, string);",
+            "root.library-row-menu-action(action, id);",
+            "on_library_row_menu_action",
+        ),
+        (
+            "callback disassemble-cancelled();",
+            "root.library-disassemble-cancelled();",
+            "on_library_disassemble_cancelled",
+        ),
+        (
+            "callback disassemble-confirmed(string);",
+            "root.library-disassemble-confirmed(id);",
+            "on_library_disassemble_confirmed",
+        ),
+        (
+            "callback delete-cancelled();",
+            "root.library-delete-cancelled();",
+            "on_library_delete_cancelled",
+        ),
+        (
+            "callback delete-confirmed(string);",
+            "root.library-delete-confirmed(id);",
+            "on_library_delete_confirmed",
+        ),
+    ] {
+        assert!(
+            library.contains(slint_callback),
+            "`SdLibrary` must declare `{slint_callback}`"
+        );
+        assert!(
+            mount.contains(root_callback),
+            "the mount site must forward it: `{root_callback}` not found in the `if \
+             root.library-open` block"
+        );
+        assert!(
+            main.contains(&format!("{rust_handler}(")),
+            "`{rust_handler}` must exist in main.rs, or the forwarded callback reaches nobody"
+        );
+    }
+
+    // The four in-properties Rust drives the menu and the confirmations with must also be
+    // forwarded, or Rust's live sealed/unsealed read and the confirmation copy never reach the
+    // screen.
+    for prop in [
+        "menu-target: root.library-menu-target;",
+        "menu-sealed: root.library-menu-sealed;",
+        "pending-disassemble: root.library-pending-disassemble;",
+        "pending-delete: root.library-pending-delete;",
+        "pending-bundle-name: root.library-pending-bundle-name;",
+        "pending-bundle-finding-count: root.library-pending-bundle-finding-count;",
+    ] {
+        assert!(
+            mount.contains(prop),
+            "the mount site must forward `{prop}`, or Rust's writes to it never reach `SdLibrary`"
+        );
+    }
+}
+
+/// The verb is read LIVE, in Slint's own source too: the destructive entry at the tail of
+/// `row-menu` must be a ternary keyed on `menu-sealed` - a property ONLY Rust ever writes (asserted
+/// by `bundle_is_sealed_reads_live_never_a_cached_answer` in `main.rs`) - never a value this
+/// component computes for itself from `rows` or any other client-side state. `row-menu` is one
+/// model, not two: ticket 12's Copy Markdown/Open file location rows and ticket 16's destructive
+/// group share it, in the order `spec.md`'s "Menu order and the two states" settles.
+#[test]
+fn the_destructive_menu_entry_is_keyed_on_the_rust_supplied_sealed_flag() {
+    let library = read("ui/components/library.slint");
+    let at = library
+        .find("private property <[MenuEntry]> row-menu")
+        .expect("the row-menu property must exist");
+    let body = flat(&library[at..(at + 700).min(library.len())]);
+
+    assert!(
+        body.contains("root.menu-sealed ? \"delete-bundle\" : \"disassemble-bundle\""),
+        "the action must switch on `menu-sealed`"
+    );
+    assert!(
+        body.contains("root.menu-sealed ? \"Delete…\" : \"Disassemble…\""),
+        "the label must switch on `menu-sealed` too, and read exactly \"Disassemble…\" / \
+         \"Delete…\" per spec.md's settled copy"
+    );
+}
+
+/// The overflow button and a right-click on the row both open the SAME menu - the filmstrip's own
+/// gesture, matched here rather than a second menu implementation being drawn.
+#[test]
+fn the_overflow_button_and_a_right_click_both_open_the_row_menu() {
+    let library = flat(&read("ui/components/library.slint"));
+
+    assert!(
+        library.contains("overflow-touch := TouchArea"),
+        "the overflow button must carry a TouchArea - ticket 11 deliberately left it undecorated"
+    );
+    assert!(
+        library.contains(
+            "clicked => { root.row-menu-requested(row.id, self.absolute-position.x + \
+             self.mouse-x, self.absolute-position.y + self.mouse-y); }"
+        ),
+        "the overflow button's click must fire row-menu-requested with the row's own id and a \
+         window-coordinate position"
+    );
+    assert!(
+        library.contains("PointerEventKind.down && ev.button == PointerEventButton.right"),
+        "the row itself must catch a right-click - `row-touch`'s own pointer-event handler"
+    );
+    assert!(
+        library.contains(
+            "root.row-menu-requested(row.id, self.absolute-position.x + self.mouse-x, \
+             self.absolute-position.y + self.mouse-y);"
+        ),
+        "the right-click handler must open the same menu the overflow button does"
+    );
+}
+
+/// `SdContextMenu` is reused, not redrawn: the row menu is built from the shared component, exactly
+/// as the map's exploration notes instruct (§6, "reuse this, don't draw a second menu").
+#[test]
+fn the_row_menu_reuses_the_shared_context_menu_component() {
+    let library = read("ui/components/library.slint");
+    assert!(
+        library.contains(r#"import { SdContextMenu, MenuEntry } from "context-menu.slint";"#),
+        "`SdLibrary` must import the shared context menu component"
+    );
+    assert!(
+        library.contains("if root.menu-target != \"\" : SdContextMenu {"),
+        "the row menu must be an `SdContextMenu` instance, gated by `menu-target`"
+    );
+}
+
+/// Both confirmations carry the settled copy from `spec.md`'s "The four confirmations": the Bundle
+/// named in quotes, what comes back (or that nothing does), and "This cannot be undone." - plus the
+/// house cancel/confirm verbs, "Keep it" and the act itself.
+#[test]
+fn both_confirmations_carry_the_settled_copy() {
+    let library = flat(&read("ui/components/library.slint"));
+
+    assert!(
+        library.contains("text: \"DISASSEMBLE \\\"\" + root.pending-bundle-name + \"\\\"?\";"),
+        "the Disassemble heading must name the Bundle in quotes"
+    );
+    assert!(
+        library.contains("available to assemble again, with their notes and markers intact."),
+        "the Disassemble body must say what comes back, per spec.md's settled wording"
+    );
+    assert!(
+        library.contains("text: \"DELETE \\\"\" + root.pending-bundle-name + \"\\\"?\";"),
+        "the Delete heading must name the Bundle in quotes"
+    );
+    assert!(
+        library.contains("Its original captures were discarded earlier, so nothing comes back."),
+        "the Delete body must say nothing comes back, per spec.md's settled wording"
+    );
+
+    for cannot_be_undone in [
+        "available to assemble again, with their notes and markers intact.\" + \" This cannot be undone.\"",
+        "Its original captures were discarded earlier, so nothing comes back.\" + \" This cannot be undone.\"",
+    ] {
+        assert!(
+            library.contains(cannot_be_undone),
+            "every confirmation must end \"This cannot be undone.\": {cannot_be_undone}"
+        );
+    }
+
+    assert_eq!(
+        library.matches("label: \"Keep it\";").count(),
+        2,
+        "both confirmations' cancel verb must read \"Keep it\" - the object (the Bundle, or its \
+         captures) rather than a generic \"Cancel\""
+    );
+    assert!(
+        library.contains("label: \"Disassemble\";"),
+        "the Disassemble confirmation's confirm verb must be the act itself"
+    );
+    assert!(
+        library.contains("label: \"Delete\";"),
+        "the Delete confirmation's confirm verb must be the act itself"
+    );
+}
+
+/// `Discard originals…` is ticket 17's job, not this one's - the spec is explicit that it "is not
+/// rendered yet". Asserted here so a future edit that adds it back in ahead of schedule is caught by
+/// this file rather than discovered by a Reviewer.
+///
+/// Checked as a quoted STRING LITERAL - `"Discard originals` - never the bare phrase: this file's
+/// own comments say why the row is absent yet ("ticket 17's Discard originals"), and a bare-phrase
+/// check would fail on its own explanation. A menu label or an `action:` value is what would
+/// actually render something; prose that mentions the future ticket is not that.
+#[test]
+fn discard_originals_is_not_rendered_by_this_ticket() {
+    let library = read("ui/components/library.slint");
+    assert!(
+        !library.contains("\"Discard originals") && !library.contains("\"discard-originals\""),
+        "`Discard originals…` is ticket 17's row to add, not ticket 16's - it must not appear as a \
+         rendered label or menu action yet"
     );
 }
 

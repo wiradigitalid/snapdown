@@ -31,10 +31,13 @@ export struct LibraryBundleRow {
 // Library has no editable state at all in this ticket, so that risk does not apply here).
 //
 // Rows carry two everyday actions - `ticket 12` of the Bundle Library spec: Copy Markdown and Open
-// file location, on hover and in the row's own right-click/overflow menu. `ticket 16` (Disassemble,
-// Delete) adds to the SAME `row-menu` model rather than a second menu, which is why that model is
-// built as a list here rather than two hard-coded rows: appending entries to it is the whole of what
-// a later ticket needs to do.
+// file location, on hover and in the row's own right-click/overflow menu. `ticket 16` adds the
+// destructive group (Disassemble…/Delete…) to the SAME `row-menu` model rather than a second menu:
+// the menu order matches `spec.md`'s "Menu order and the two states" - Copy Markdown, Open file
+// location, then the destructive group, whose single verb is read live from whether the Bundle's
+// Findings still exist (`BR-122`), never cached. Opening the menu (right-click or the overflow
+// button) always asks Rust via `row-menu-requested`, because that live read has to happen at open
+// time - ticket 12's two hover icons stay direct callbacks, unaffected by the menu at all.
 export component SdLibrary inherits Rectangle {
     // "loading" | "error" | "ready". "ready" with an empty `rows` IS the empty state - there is no
     // fourth value for it, because a value that only restates `rows.length == 0` is a second place
@@ -55,16 +58,43 @@ export component SdLibrary inherits Rectangle {
     // one Bundle's own folder.
     callback bundle-open-file-location-clicked(string);
 
-    // THE ROW MENU - one model, so `ticket 16` can append Disassemble/Delete to it without a second
-    // menu implementation. `menu-target` holds which row's menu is open ("" means closed), the same
-    // shape `appwindow.slint`'s own `menu-subject`/`menu-target` uses for the canvas and filmstrip.
-    private property <string> menu-target: "";
-    private property <length> menu-x;
-    private property <length> menu-y;
+    // THE ROW MENU - one model carrying both ticket 12's everyday actions and ticket 16's destructive
+    // group, in the order `spec.md`'s "Menu order and the two states" settles: Copy Markdown, Open
+    // file location, then the destructive group. `menu-target` is the id of the Bundle whose menu is
+    // open, "" when closed - an `in` property, not `private`, because opening the menu needs a LIVE
+    // read of whether the Bundle's Findings still exist (`BR-122`), which only Rust can do; this
+    // component never computes `menu-sealed` and never caches it across two openings.
+    in property <string> menu-target: "";
+    in property <bool> menu-sealed: false;
+    in property <length> menu-x;
+    in property <length> menu-y;
+    callback row-menu-requested(string, length, length);
+    callback row-menu-dismissed();
+    callback row-menu-action(string, string);
+
     private property <[MenuEntry]> row-menu: [
         { action: "copy-markdown", label: "Copy Markdown", hint: "", separator: false, enabled: true },
         { action: "reveal", label: "Open file location", hint: "", separator: false, enabled: true },
+        { action: "", label: "", hint: "", separator: true, enabled: false },
+        {
+            action: root.menu-sealed ? "delete-bundle" : "disassemble-bundle",
+            label: root.menu-sealed ? "Delete…" : "Disassemble…",
+            hint: "",
+            separator: false,
+            enabled: true,
+        },
     ];
+
+    // THE TWO CONFIRMATIONS. Bundle name and Finding count are supplied by Rust at the moment the
+    // dialog opens, fresh off the same live read that chose the verb.
+    in property <string> pending-disassemble: "";
+    in property <string> pending-delete: "";
+    in property <string> pending-bundle-name: "";
+    in property <int> pending-bundle-finding-count: 0;
+    callback disassemble-cancelled();
+    callback disassemble-confirmed(string);
+    callback delete-cancelled();
+    callback delete-confirmed(string);
 
     width: 100%;
     height: 100%;
@@ -304,14 +334,16 @@ export component SdLibrary inherits Rectangle {
                                     // exists for hover (the background and the two hover actions)
                                     // and for a right-click, which raises the same row menu the
                                     // overflow button does - the filmstrip's own gesture
-                                    // (`appwindow.slint`'s `finding-menu`), copied here.
+                                    // (`appwindow.slint`'s `finding-menu`), copied here. Both routes
+                                    // ask Rust (`row-menu-requested`), never set state locally, so the
+                                    // destructive entry's verb is read live every time the menu opens.
                                     mouse-cursor: default;
                                     pointer-event(ev) => {
                                         if (ev.kind == PointerEventKind.down
                                             && ev.button == PointerEventButton.right) {
-                                            root.menu-target = row.id;
-                                            root.menu-x = self.absolute-position.x + self.mouse-x;
-                                            root.menu-y = self.absolute-position.y + self.mouse-y;
+                                            root.row-menu-requested(row.id,
+                                                self.absolute-position.x + self.mouse-x,
+                                                self.absolute-position.y + self.mouse-y);
                                         }
                                     }
                                 }
@@ -414,7 +446,9 @@ export component SdLibrary inherits Rectangle {
                                         // Overflow - three drawn dots, not a typed "...", for the
                                         // same reason the checkbox tick and the modal close are
                                         // drawn: a glyph falls back to whatever the font has. Opens
-                                        // the same `row-menu` a right-click on the row does.
+                                        // the same `row-menu` a right-click on the row does
+                                        // (`root.row-menu-requested`) - Copy Markdown, Open file
+                                        // location, then the destructive group.
                                         Rectangle {
                                             width: 28px;
                                             height: 28px;
@@ -432,9 +466,9 @@ export component SdLibrary inherits Rectangle {
                                             overflow-touch := TouchArea {
                                                 mouse-cursor: MouseCursor.pointer;
                                                 clicked => {
-                                                    root.menu-target = row.id;
-                                                    root.menu-x = self.absolute-position.x + self.mouse-x;
-                                                    root.menu-y = self.absolute-position.y + self.mouse-y;
+                                                    root.row-menu-requested(row.id,
+                                                        self.absolute-position.x + self.mouse-x,
+                                                        self.absolute-position.y + self.mouse-y);
                                                 }
                                             }
                                         }
@@ -448,21 +482,152 @@ export component SdLibrary inherits Rectangle {
         }
     }
 
-    // THE ROW MENU - drawn last, so it sits above every row and dismisses on any outside press
-    // (`SdContextMenu`'s own scrim). Opened by the overflow button or a right-click on the row, both
-    // of which set `menu-target` to that row's Bundle id.
+    // THE ROW MENU - declared here, above the clipped list, so it is never cut off by the
+    // `clip: true` bordered box the rows scroll inside. Same reasoning `appwindow.slint`'s own
+    // canvas/filmstrip context menu gives for living outside whatever it was raised from. Opened by
+    // the overflow button or a right-click on the row, both of which ask Rust
+    // (`row-menu-requested`) for a live-read `menu-target`/`menu-sealed`, so the destructive entry's
+    // verb can never be stale. Copy Markdown and Open file location are handled locally - they carry
+    // no live state - and dismiss the menu the same way a plain dismissal does; the destructive
+    // group is forwarded to Rust, which owns its confirmation step.
     if root.menu-target != "" : SdContextMenu {
         entries: root.row-menu;
         at-x: root.menu-x;
         at-y: root.menu-y;
-        dismissed => { root.menu-target = ""; }
+        dismissed => { root.row-menu-dismissed(); }
         chosen(action) => {
             if (action == "copy-markdown") {
                 root.copy-markdown-clicked(root.menu-target);
+                root.row-menu-dismissed();
             } else if (action == "reveal") {
                 root.bundle-open-file-location-clicked(root.menu-target);
+                root.row-menu-dismissed();
+            } else {
+                root.row-menu-action(action, root.menu-target);
             }
-            root.menu-target = "";
+        }
+    }
+
+    // DISASSEMBLE - confirmed once, the same "confirmation once is the safety" rule the Delete
+    // Finding dialog already follows. Same 20px/14px/11px-800-uppercase/12px/30px-buttons shape as
+    // that dialog, per `spec.md`'s "the four confirmations".
+    if root.pending-disassemble != "" : Rectangle {
+        width: 100%;
+        height: 100%;
+        background: Theme.overlay-scrim;
+        TouchArea {
+            clicked => { root.disassemble-cancelled(); }
+        }
+
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 380px;
+            height: disassemble-body.preferred-height;
+            background: Theme.bg-card;
+            border-width: 1px;
+            border-color: Theme.border-strong;
+            border-radius: Theme.radius-sharp;
+            drop-shadow-blur: 32px;
+            drop-shadow-color: Theme.overlay-shadow;
+            TouchArea { }
+
+            disassemble-body := VerticalLayout {
+                padding: 20px;
+                spacing: 14px;
+
+                SdSectionLabel {
+                    text: "DISASSEMBLE \"" + root.pending-bundle-name + "\"?";
+                }
+
+                Text {
+                    text: "Its " + root.pending-bundle-finding-count + " Finding"
+                        + (root.pending-bundle-finding-count == 1 ? " becomes" : "s become")
+                        + " available to assemble again, with their notes and markers intact."
+                        + " This cannot be undone.";
+                    font-size: 12px;
+                    color: Theme.text-secondary;
+                    wrap: word-wrap;
+                    font-family: "IBM Plex Sans";
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+
+                    SdActionButton {
+                        label: "Keep it";
+                        primary: false;
+                        height: 30px;
+                        clicked => { root.disassemble-cancelled(); }
+                    }
+                    SdActionButton {
+                        label: "Disassemble";
+                        height: 30px;
+                        clicked => { root.disassemble-confirmed(root.pending-disassemble); }
+                    }
+                }
+            }
+        }
+    }
+
+    // DELETE, on an already-sealed Bundle - nothing comes back, because the originals were
+    // discarded earlier (ticket 17's Discard originals).
+    if root.pending-delete != "" : Rectangle {
+        width: 100%;
+        height: 100%;
+        background: Theme.overlay-scrim;
+        TouchArea {
+            clicked => { root.delete-cancelled(); }
+        }
+
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 380px;
+            height: delete-body.preferred-height;
+            background: Theme.bg-card;
+            border-width: 1px;
+            border-color: Theme.border-strong;
+            border-radius: Theme.radius-sharp;
+            drop-shadow-blur: 32px;
+            drop-shadow-color: Theme.overlay-shadow;
+            TouchArea { }
+
+            delete-body := VerticalLayout {
+                padding: 20px;
+                spacing: 14px;
+
+                SdSectionLabel {
+                    text: "DELETE \"" + root.pending-bundle-name + "\"?";
+                }
+
+                Text {
+                    text: "Its original captures were discarded earlier, so nothing comes back."
+                        + " This cannot be undone.";
+                    font-size: 12px;
+                    color: Theme.text-secondary;
+                    wrap: word-wrap;
+                    font-family: "IBM Plex Sans";
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+
+                    SdActionButton {
+                        label: "Keep it";
+                        primary: false;
+                        height: 30px;
+                        clicked => { root.delete-cancelled(); }
+                    }
+                    SdActionButton {
+                        label: "Delete";
+                        height: 30px;
+                        clicked => { root.delete-confirmed(root.pending-delete); }
+                    }
+                }
+            }
         }
     }
 }
