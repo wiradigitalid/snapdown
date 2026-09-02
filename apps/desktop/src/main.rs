@@ -386,9 +386,16 @@ fn build_library_rows(
         .bundle_store
         .as_ref()
         .ok_or_else(|| "The Bundle library could not be opened.".to_string())?;
-    let details = store
+    let mut details = store
         .list_bundles()
         .map_err(|e| format!("Could not read the Library: {e}"))?;
+    // BUG-90: a Bundle composed before BUG-86's 2026-08-31 fix still carries its broken image link -
+    // repaired here, once, the moment the Library reads it (see `repair_bundle_image_links`'s own doc
+    // comment). Read as `&mut` so a repair's corrected document is what every row below - and every
+    // later fresh `get_bundle` from Review & Update or Copy Markdown - actually sees.
+    for detail in &mut details {
+        repair_bundle_image_links(ctx, &mut detail.bundle);
+    }
     Ok(details
         .iter()
         .map(|detail| library_row_from_detail(ctx, detail, now))
@@ -493,6 +500,101 @@ fn resolve_bundle_document_image(
         Some(folder) => vault_path.join(folder).join(relative),
         None => vault_path.join(relative),
     }
+}
+
+/// Repairs a Bundle's stored document in place, if and only if it still carries `BUG-86`'s broken
+/// link shape.
+///
+/// `BUG-86`'s fix (2026-08-31) changed `serialize_bundle` for every Bundle composed from then on, but
+/// nothing ever repaired a Bundle composed BEFORE it: those documents still have a Finding's image
+/// link doubling the `bundles/<id>/` folder the document itself already sits in
+/// (`![Finding 1](./bundles/<id>/finding_1_burned.png)` where the file is really one level up, right
+/// beside `bundle.md`). Resolving that link the way `resolve_bundle_document_image` does - correctly,
+/// against the document's own folder - lands on nothing, which is why Review & Update's image never
+/// rendered for any Bundle composed before the fix: it reads the image path from the stored document
+/// alone (`BR-11`), so it faithfully reproduced the same broken resolution `BUG-86` already named.
+/// Worse, `bundle_markdown_for_clipboard` hands that same broken link to whatever reads the copied
+/// Markdown, so this was never only a display bug.
+///
+/// A Finding's link is corrected only when BOTH: (1) resolving it as stored finds no file, and (2)
+/// stripping one duplicate copy of the document's own folder from its front DOES find a file - two-
+/// sided confirmation, so a link is never rewritten onto a target that also does not exist. Runs the
+/// first time the Library reads a Bundle (`build_library_rows`) - by the time any row exists to click
+/// into Review & Update or Copy Markdown, the store already holds the corrected document, since both
+/// of those re-read the store fresh rather than reusing the Library's own list.
+///
+/// Writes the file first, atomically, then the row (`AD-2`'s order), passing `updated_at` back
+/// UNCHANGED: this is a repair, not a Reviewer's edit, and ticket 15's "edited" suffix must never
+/// appear on a Bundle nobody touched. A write failure is logged and left for the next Library open to
+/// retry - it never blocks the Library from listing the Bundle with its (still broken) links.
+fn repair_bundle_image_links(ctx: &AppContext, bundle: &mut Bundle) {
+    let Ok(mut parsed) = MarkdownSerializer::parse_bundle_document(&bundle.markdown) else {
+        return;
+    };
+    let folder = bundle
+        .markdown_path
+        .trim_start_matches('/')
+        .rsplit_once('/')
+        .map(|(folder, _)| folder.to_string());
+
+    let mut changed = false;
+    for finding in &mut parsed.findings {
+        let resolved = resolve_bundle_document_image(
+            &ctx.vault_path,
+            &bundle.markdown_path,
+            &finding.image_link,
+        );
+        if resolved.is_file() {
+            continue;
+        }
+        let Some(folder) = folder.as_deref() else {
+            continue;
+        };
+        let relative = finding.image_link.trim_start_matches("./");
+        let Some(deduped) = relative
+            .strip_prefix(folder)
+            .and_then(|rest| rest.strip_prefix('/'))
+        else {
+            continue;
+        };
+        let candidate_link = format!("./{deduped}");
+        let candidate_path =
+            resolve_bundle_document_image(&ctx.vault_path, &bundle.markdown_path, &candidate_link);
+        if candidate_path.is_file() {
+            finding.image_link = candidate_link;
+            changed = true;
+        }
+    }
+
+    if !changed {
+        return;
+    }
+
+    let repaired = MarkdownSerializer::serialize_parsed(&parsed);
+    let Some(store) = ctx.bundle_store.as_ref() else {
+        return;
+    };
+    let absolute_path = ctx.vault_path.join(&bundle.markdown_path);
+    if let Err(e) = write_file_atomically(&absolute_path, repaired.as_bytes()) {
+        eprintln!(
+            "Could not repair Bundle {}'s broken image links: {e}",
+            bundle.id
+        );
+        return;
+    }
+    if let Err(e) = store.update_bundle_name_and_markdown(
+        &bundle.id,
+        &bundle.name,
+        &repaired,
+        &bundle.updated_at,
+    ) {
+        eprintln!(
+            "Repaired Bundle {}'s file but could not update its row: {e}",
+            bundle.id
+        );
+        return;
+    }
+    bundle.markdown = repaired;
 }
 
 /// The Bundle exactly as composed, as a flat sequence of blocks - Review & Update's locked view
@@ -8058,6 +8160,248 @@ mod tests {
         assert!(
             bundle_is_sealed(&ctx, &detail_again),
             "the very next read must see the Finding is gone and flip to sealed"
+        );
+    }
+
+    /// `BUG-90`: a Bundle composed before `BUG-86`'s 2026-08-31 fix still carries the doubled-folder
+    /// link the fix was meant to stop producing. This is the loop that was RED before the fix existed
+    /// (see the commit that added this test): `resolve_bundle_document_image` on the stored link
+    /// found no file, because the link really is `./bundles/<id>/finding_1_burned.png` while the file
+    /// sits one level up. Real bytes, not a mock - the fixture writes an actual PNG at the file's real
+    /// location and never at the doubled one, so a wrong fix (writing the repaired image somewhere
+    /// convenient rather than finding where the file already is) would still fail this.
+    #[test]
+    fn repair_bundle_image_links_fixes_bug_86s_doubled_folder_segment_and_leaves_updated_at_alone()
+    {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle_id = "b-legacy";
+        let bundle_folder = vault_dir.path().join("bundles").join(bundle_id);
+        std::fs::create_dir_all(&bundle_folder).expect("create the fixture Bundle's own folder");
+        std::fs::write(
+            bundle_folder.join("finding_1_burned.png"),
+            png_fixture(4, 4),
+        )
+        .expect("write the fixture image at its REAL location, one level up from the doubled one");
+
+        // BUG-86's exact broken shape, byte for byte: the link doubles the folder the document
+        // itself is already sitting in.
+        let broken_markdown = format!(
+            "# Legacy review\n\n## Finding 1\n\n![Finding 1](./bundles/{bundle_id}/finding_1_burned.png)\n\n"
+        );
+        let bundle = Bundle::new(
+            bundle_id.to_string(),
+            "Legacy review".to_string(),
+            broken_markdown,
+            format!("bundles/{bundle_id}/bundle.md"),
+            "2026-08-27T20:28:00Z".to_string(),
+        )
+        .expect("a valid fixture Bundle");
+        let items = vec![BundleItem::new(
+            format!("bi-{bundle_id}-1"),
+            bundle_id.to_string(),
+            "f1".to_string(),
+            1,
+            format!("bundles/{bundle_id}/finding_1_burned.png"),
+        )
+        .expect("a valid fixture BundleItem")];
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("creating the fixture Bundle must succeed");
+
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        // SEEN RED: the link exactly as stored resolves to nothing, before any fix runs.
+        let parsed_before = MarkdownSerializer::parse_bundle_document(&bundle.markdown).unwrap();
+        let before_path = resolve_bundle_document_image(
+            &ctx.vault_path,
+            &bundle.markdown_path,
+            &parsed_before.findings[0].image_link,
+        );
+        assert!(
+            !before_path.is_file(),
+            "the loop must be red before the fix runs: {before_path:?} must not exist"
+        );
+
+        let mut repaired = bundle.clone();
+        repair_bundle_image_links(&ctx, &mut repaired);
+
+        // The link is corrected, and now resolves to the real file.
+        let parsed_after = MarkdownSerializer::parse_bundle_document(&repaired.markdown).unwrap();
+        assert_eq!(
+            parsed_after.findings[0].image_link,
+            "./finding_1_burned.png"
+        );
+        let after_path = resolve_bundle_document_image(
+            &ctx.vault_path,
+            &repaired.markdown_path,
+            &parsed_after.findings[0].image_link,
+        );
+        assert!(
+            after_path.is_file(),
+            "the repaired link must resolve to the file that was there all along"
+        );
+
+        // A repair is not an edit: ticket 15's `updated_at` must not move, or every legacy Bundle
+        // would read as "edited just now" the first time this ships.
+        assert_eq!(
+            repaired.updated_at, bundle.updated_at,
+            "repairing a broken link must never look like a Reviewer's Save"
+        );
+
+        // Persisted, not just fixed in memory: a fresh `get_bundle` - exactly what Review & Update
+        // and Copy Markdown both do - sees the corrected document.
+        let refetched = ctx
+            .bundle_store
+            .as_ref()
+            .unwrap()
+            .get_bundle(bundle_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(refetched.bundle.markdown, repaired.markdown);
+        assert_eq!(refetched.bundle.updated_at, bundle.updated_at);
+
+        // The file on disk was rewritten too - not just the row - so Copy Markdown's own read of the
+        // stored file (`bundle_markdown_for_clipboard`) sees the same corrected document.
+        let file_contents =
+            std::fs::read_to_string(ctx.vault_path.join(&bundle.markdown_path)).unwrap();
+        assert_eq!(file_contents, repaired.markdown);
+    }
+
+    /// A document composed AFTER `BUG-86`'s fix already resolves - repairing it must be a no-op, not
+    /// just "produces the same text": the row and the file must never even be written to, which the
+    /// GetLastError-of-diffing-files check below (an mtime read) is a weak proxy for, so this also
+    /// exercises the store to see if a repeat call ever touches `updated_at`.
+    #[test]
+    fn repair_bundle_image_links_leaves_an_already_correct_document_untouched() {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle_id = "b-current";
+        let bundle_folder = vault_dir.path().join("bundles").join(bundle_id);
+        std::fs::create_dir_all(&bundle_folder).expect("create the fixture Bundle's own folder");
+        std::fs::write(
+            bundle_folder.join("finding_1_burned.png"),
+            png_fixture(4, 4),
+        )
+        .expect("write the fixture image");
+
+        let correct_markdown =
+            "# Current review\n\n## Finding 1\n\n![Finding 1](./finding_1_burned.png)\n\n"
+                .to_string();
+        let bundle = Bundle::new(
+            bundle_id.to_string(),
+            "Current review".to_string(),
+            correct_markdown.clone(),
+            format!("bundles/{bundle_id}/bundle.md"),
+            "2026-09-01T12:00:00Z".to_string(),
+        )
+        .expect("a valid fixture Bundle");
+        let items = vec![BundleItem::new(
+            format!("bi-{bundle_id}-1"),
+            bundle_id.to_string(),
+            "f1".to_string(),
+            1,
+            format!("bundles/{bundle_id}/finding_1_burned.png"),
+        )
+        .expect("a valid fixture BundleItem")];
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("creating the fixture Bundle must succeed");
+
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let mut unchanged = bundle.clone();
+        repair_bundle_image_links(&ctx, &mut unchanged);
+
+        assert_eq!(
+            unchanged.markdown, correct_markdown,
+            "an already-correct document must not change"
+        );
+        let refetched = ctx
+            .bundle_store
+            .as_ref()
+            .unwrap()
+            .get_bundle(bundle_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            refetched.bundle.markdown, correct_markdown,
+            "the row must never be written to when nothing needed repairing"
+        );
+    }
+
+    /// Belt and braces: when NEITHER the stored link NOR the de-duplicated candidate resolves to a
+    /// real file, the document must be left alone rather than "fixed" onto a target that also does
+    /// not exist - the two-sided confirmation `repair_bundle_image_links` describes in its own doc
+    /// comment, proven by removing the one thing that would let either resolution succeed.
+    #[test]
+    fn repair_bundle_image_links_refuses_to_guess_when_no_candidate_resolves() {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle_id = "b-orphaned";
+        // Deliberately no file written anywhere - the Bundle's own folder is not even created.
+
+        let broken_markdown = format!(
+            "# Orphaned review\n\n## Finding 1\n\n![Finding 1](./bundles/{bundle_id}/finding_1_burned.png)\n\n"
+        );
+        let bundle = Bundle::new(
+            bundle_id.to_string(),
+            "Orphaned review".to_string(),
+            broken_markdown.clone(),
+            format!("bundles/{bundle_id}/bundle.md"),
+            "2026-08-27T20:28:00Z".to_string(),
+        )
+        .expect("a valid fixture Bundle");
+        let items = vec![BundleItem::new(
+            format!("bi-{bundle_id}-1"),
+            bundle_id.to_string(),
+            "f1".to_string(),
+            1,
+            format!("bundles/{bundle_id}/finding_1_burned.png"),
+        )
+        .expect("a valid fixture BundleItem")];
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("creating the fixture Bundle must succeed");
+
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let mut unrepaired = bundle.clone();
+        repair_bundle_image_links(&ctx, &mut unrepaired);
+
+        assert_eq!(
+            unrepaired.markdown, broken_markdown,
+            "a link that resolves nowhere either way must be left exactly as stored, not guessed at"
         );
     }
 

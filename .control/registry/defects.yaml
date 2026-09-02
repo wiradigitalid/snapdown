@@ -5482,3 +5482,64 @@ defects:
       four pass; `cargo fmt`, `clippy -D warnings` and `cargo test --workspace --no-fail-fast`
       all exit 0 with 41 `test result: ok` lines.
     status: fixed
+
+  - id: BUG-90
+    title: "BUG-86's fix never repaired a Bundle composed before it - every pre-fix Bundle's image link still resolves to nothing"
+    found: "2026-09-03"
+    found_by: kodesh87, manually testing the just-merged Bundle Library feature (tickets 10-19) - "kenapa gak ada gambar yang dirender ketika: view bundle, edit bundle?"
+    component: bundle
+    severity: high
+    contradicts: [NFR-8, FR-12]
+    root_cause: code
+    evidence: |
+      `BUG-86` (2026-08-31) fixed `MarkdownSerializer::serialize_bundle` for every Bundle composed
+      FROM THEN ON. Nothing repaired a Bundle's stored document that had already been written with
+      the old broken form - `serialize_bundle` only ever runs once, at compose time, so a Bundle's
+      `bundle.md` (and its `bundle.markdown` DB column, the same text) keeps whatever the serializer
+      produced the day it was composed, forever, unless something else rewrites it later.
+
+      Confirmed against real data: every one of the 10 Bundles in a real Vault, all composed
+      2026-08-27/28 (four days before the fix), still carries
+      `![Finding 1](./bundles/<id>/finding_1_burned.png)` - the exact doubled-`bundles/<id>/`-segment
+      shape `BUG-86`'s own evidence names - while the file actually sits one level up, beside
+      `bundle.md`. `resolve_bundle_document_image` (ticket 13, correct per `NFR-8`: resolve against
+      the document's own folder) faithfully reproduces `BUG-86`'s exact broken resolution for these
+      Bundles, landing on a path that has never existed.
+
+      This was invisible before ticket 13/14 (Review & Update) and ticket 12 (Copy Markdown) existed,
+      because nothing previously read a Bundle's OWN stored image link back out - Review & Assemble
+      only ever re-derives from live Findings when composing. Ticket 13 is the first consumer that
+      reads a Bundle's image the way `BR-11` requires (from the stored document alone, never a
+      Finding), which is what finally exposed a defect four days older than the ticket that found it.
+      Two symptoms, one cause: Review & Update shows no image for any pre-fix Bundle (view AND edit
+      mode - both build the same blocks), and Copy Markdown (`bundle_markdown_for_clipboard`) hands
+      an agent or a Markdown reader the identical broken link, since it rebases the SAME stored,
+      still-broken document.
+    fix: |
+      A self-healing repair, `repair_bundle_image_links` (`apps/desktop/src/main.rs`), run once per
+      Bundle the first time the Library reads it (`build_library_rows`). For each Finding: if its
+      image link as stored resolves to a real file, it is left untouched; only when that resolution
+      finds nothing AND stripping one duplicate copy of the document's own folder from the link's
+      front DOES resolve to a real file is the link corrected - two-sided confirmation, so a link is
+      never rewritten onto a target that also does not exist (a document with no repairable pattern,
+      or a genuinely orphaned Bundle, is left exactly as stored rather than guessed at).
+
+      Writes the file first, atomically, then the row (`AD-2`'s order), reusing ticket 14's
+      `update_bundle_name_and_markdown` with `updated_at` passed back UNCHANGED - this is a repair,
+      not a Reviewer's edit, and ticket 15's "edited" suffix must never appear on a Bundle nobody
+      touched. Runs once per Library open; by the time any row is clickable, both Review & Update
+      (`open_review_update`) and Copy Markdown (`bundle_markdown_for_clipboard`) already re-read the
+      store fresh rather than reusing the Library's own list, so both see the corrected document with
+      no separate fix needed at either seam.
+
+      SEEN RED FIRST: a real PNG was written at a Bundle's true image location, never at the doubled
+      one, with a hand-built document carrying `BUG-86`'s exact broken link. Before any fix,
+      `resolve_bundle_document_image` on the stored link finds no file - asserted directly in the
+      test. `repair_bundle_image_links` was then stubbed to an immediate `return` and the full
+      regression test re-run: it failed exactly as expected
+      (`left: "./bundles/b-legacy/finding_1_burned.png"` / `right: "./finding_1_burned.png"`). Restored,
+      re-ran, green. Two further tests prove the two-sided guard: an already-correct document is left
+      byte-for-byte alone (no row write), and a link that resolves nowhere either way is left exactly
+      as stored rather than corrected onto a guess. `cargo fmt`, `clippy -D warnings` and
+      `cargo test --workspace --no-fail-fast` all exit 0.
+    status: fixed
