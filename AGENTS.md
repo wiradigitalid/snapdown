@@ -347,11 +347,31 @@ it meant was `shared-ui-check`. Read the workflow, not this sentence, if the two
 A green `korpus.yml` is **not** proof the code compiles — it validates the corpus, and they answer
 different questions.
 
-**`cargo build` does NOT build this application.** A Tauri app needs the Tauri CLI; without it the
-release binary requests `devUrl` from `tauri.conf.json` and shows `ERR_CONNECTION_REFUSED` instead of
-the frontend. The CLI is currently absent from this repository entirely — see `BUG-11`. Until that is
-fixed, **a locally built `Snapdown.exe` is not the application**, and any UI finding taken from one is
-a finding about the build.
+**`cargo build --release -p snapdown-desktop` IS how this application is built, and the binary it
+produces is the only thing there is to run.** There is no `tauri.conf.json` anywhere in the tree, no
+webview and no dev server: `apps/desktop` is a plain Rust binary crate — `[[bin]] name = "Snapdown"`,
+built by `slint-build`.
+
+**This paragraph said the exact opposite until 2026-09-02, and it is the load-bearing kind of stale.**
+It read: *"`cargo build` does NOT build this application. A Tauri app needs the Tauri CLI; without it
+the release binary requests `devUrl` from `tauri.conf.json` and shows `ERR_CONNECTION_REFUSED` … The
+CLI is currently absent from this repository entirely — see `BUG-11`. Until that is fixed, a locally
+built `Snapdown.exe` is not the application, and any UI finding taken from one is a finding about the
+build."* Every clause of that was true in August and not one of it survived `DEC-007`. `BUG-11` has
+read `status: fixed` since, and its own `verified:` block says so outright: *"`DEC-007` retired the
+premise entirely: there is no webview and no dev server, and the release binary is the only thing
+there is to run."* A reader trusting this paragraph would have thrown away every UI finding taken
+from a perfectly good build — the precise opposite of what the defect row it cited already said.
+
+Two neighbouring facts are still true, and they are why the paragraph is corrected rather than
+deleted:
+
+- Check `Get-Process -Name Snapdown` before rebuilding. A running instance locks its own exe, and the
+  failure reads as a permissions error — see the pitfall below.
+- **Run `target/release/Snapdown.exe`, and only that.** `target/debug/` still holds `SnapdownSlint.exe`
+  and `snapdown-desktop-slint.exe`, left over from renames on 2026-08-26. Neither is in the `[[bin]]`
+  table, neither is the product, and `FR-27`'s one-executable guard covers `target/release` only — so
+  a debug leftover can still mislead exactly the way *"Stale binaries mislead"* below describes.
 
 **Four ways a verification run lies, all hit on 2026-08-23:**
 
