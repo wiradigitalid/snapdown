@@ -54,12 +54,13 @@ fn every_library_callback_is_bound_from_slint_to_rust() {
     let at = window
         .find("if root.library-open : SdLibrary {")
         .expect("the mount site must exist");
-    // 1800, not 900: ticket 16 landed the same mount site's `in`-property forwards
+    // 2400, not 900, not 1800: ticket 16 landed the same mount site's `in`-property forwards
     // (`menu-target`/`menu-sealed`/`menu-x`/`menu-y`/the four `pending-*`) ABOVE the callback
     // forwards, pushing ticket 12's two callbacks further into the block than a 900-char window
-    // reaches - `every_row_menu_callback_is_bound_from_slint_to_rust` below already uses 1800 for
-    // the same reason, over the same block.
-    let mount = flat(&window[at..(at + 1800).min(window.len())]);
+    // reaches, and ticket 17 then added three more `in`-property forwards and five more callback
+    // forwards on top of that, past 1800 - `every_row_menu_callback_is_bound_from_slint_to_rust`
+    // below already uses 2400 for the same reason, over the same block.
+    let mount = flat(&window[at..(at + 2400).min(window.len())]);
 
     for (slint_callback, root_callback, rust_handler) in [
         (
@@ -112,10 +113,11 @@ fn every_library_callback_is_bound_from_slint_to_rust() {
     );
 }
 
-/// The row menu's destructive group (ticket 16): every callback `SdLibrary` declares for it is
-/// forwarded at the mount site to a root-level callback with a real handler in `main.rs`. The same
-/// shape `every_library_callback_is_bound_from_slint_to_rust` already proves for ticket 11's three -
-/// this is that shape for the seven ticket 16 adds.
+/// The row menu's destructive group (ticket 16, and ticket 17's Discard originals/Delete both on
+/// top of it): every callback `SdLibrary` declares for it is forwarded at the mount site to a
+/// root-level callback with a real handler in `main.rs`. The same shape
+/// `every_library_callback_is_bound_from_slint_to_rust` already proves for ticket 11's three - this
+/// is that shape for the twelve ticket 16 and ticket 17 add between them.
 #[test]
 fn every_row_menu_callback_is_bound_from_slint_to_rust() {
     let library = read("ui/components/library.slint");
@@ -125,7 +127,7 @@ fn every_row_menu_callback_is_bound_from_slint_to_rust() {
     let at = window
         .find("if root.library-open : SdLibrary {")
         .expect("the mount site must exist");
-    let mount = flat(&window[at..(at + 1800).min(window.len())]);
+    let mount = flat(&window[at..(at + 2400).min(window.len())]);
 
     for (slint_callback, root_callback, rust_handler) in [
         (
@@ -163,6 +165,31 @@ fn every_row_menu_callback_is_bound_from_slint_to_rust() {
             "root.library-delete-confirmed(id);",
             "on_library_delete_confirmed",
         ),
+        (
+            "callback discard-cancelled();",
+            "root.library-discard-cancelled();",
+            "on_library_discard_cancelled",
+        ),
+        (
+            "callback discard-confirmed(string);",
+            "root.library-discard-confirmed(id);",
+            "on_library_discard_confirmed",
+        ),
+        (
+            "callback delete-both-requested(string);",
+            "root.library-delete-both-requested(id);",
+            "on_library_delete_both_requested",
+        ),
+        (
+            "callback delete-both-cancelled();",
+            "root.library-delete-both-cancelled();",
+            "on_library_delete_both_cancelled",
+        ),
+        (
+            "callback delete-both-confirmed(string);",
+            "root.library-delete-both-confirmed(id);",
+            "on_library_delete_both_confirmed",
+        ),
     ] {
         assert!(
             library.contains(slint_callback),
@@ -179,7 +206,7 @@ fn every_row_menu_callback_is_bound_from_slint_to_rust() {
         );
     }
 
-    // The four in-properties Rust drives the menu and the confirmations with must also be
+    // The seven in-properties Rust drives the menu and the confirmations with must also be
     // forwarded, or Rust's live sealed/unsealed read and the confirmation copy never reach the
     // screen.
     for prop in [
@@ -189,6 +216,9 @@ fn every_row_menu_callback_is_bound_from_slint_to_rust() {
         "pending-delete: root.library-pending-delete;",
         "pending-bundle-name: root.library-pending-bundle-name;",
         "pending-bundle-finding-count: root.library-pending-bundle-finding-count;",
+        "pending-discard: root.library-pending-discard;",
+        "pending-discard-warning: root.library-pending-discard-warning;",
+        "pending-delete-both: root.library-pending-delete-both;",
     ] {
         assert!(
             mount.contains(prop),
@@ -197,28 +227,76 @@ fn every_row_menu_callback_is_bound_from_slint_to_rust() {
     }
 }
 
-/// The verb is read LIVE, in Slint's own source too: the destructive entry at the tail of
-/// `row-menu` must be a ternary keyed on `menu-sealed` - a property ONLY Rust ever writes (asserted
-/// by `bundle_is_sealed_reads_live_never_a_cached_answer` in `main.rs`) - never a value this
-/// component computes for itself from `rows` or any other client-side state. `row-menu` is one
-/// model, not two: ticket 12's Copy Markdown/Open file location rows and ticket 16's destructive
-/// group share it, in the order `spec.md`'s "Menu order and the two states" settles.
+/// The verb is read LIVE, in Slint's own source too: `row-menu` must be a ternary keyed on
+/// `menu-sealed` - a property ONLY Rust ever writes (asserted by
+/// `bundle_is_sealed_reads_live_never_a_cached_answer` in `main.rs`) - never a value this component
+/// computes for itself from `rows` or any other client-side state.
+///
+/// `ticket 17` moved the sealed/unsealed choice from a per-field ternary on one shared array to two
+/// named `[MenuEntry]` models (`sealed-row-menu` / `unsealed-row-menu`), because Slint cannot infer
+/// `[MenuEntry]` for an inline `cond ? [...] : [...]` literal - `row-menu` itself is still the one
+/// ternary this comment's title promises, just over the two named models rather than two inline
+/// arrays. `row-menu` stays one property, not two: ticket 12's Copy Markdown/Open file location rows
+/// and the destructive group both live inside each model, in the order `spec.md`'s "Menu order and
+/// the two states" settles.
 #[test]
 fn the_destructive_menu_entry_is_keyed_on_the_rust_supplied_sealed_flag() {
-    let library = read("ui/components/library.slint");
-    let at = library
-        .find("private property <[MenuEntry]> row-menu")
-        .expect("the row-menu property must exist");
-    let body = flat(&library[at..(at + 700).min(library.len())]);
+    let library = flat(&read("ui/components/library.slint"));
 
     assert!(
-        body.contains("root.menu-sealed ? \"delete-bundle\" : \"disassemble-bundle\""),
-        "the action must switch on `menu-sealed`"
+        library.contains(
+            "private property <[MenuEntry]> row-menu: root.menu-sealed ? root.sealed-row-menu : \
+             root.unsealed-row-menu;"
+        ),
+        "`row-menu` must switch on `menu-sealed` between the two named models"
+    );
+
+    let at = library
+        .find("private property <[MenuEntry]> sealed-row-menu")
+        .expect("the sealed-row-menu property must exist");
+    let sealed_body = &library[at..(at + 400).min(library.len())];
+    assert!(
+        sealed_body.contains(r#"{ action: "delete-bundle", label: "Delete…","#),
+        "the sealed model must offer Delete… and only the destructive act - no Disassemble…, no \
+         Discard originals…: {sealed_body}"
     );
     assert!(
-        body.contains("root.menu-sealed ? \"Delete…\" : \"Disassemble…\""),
-        "the label must switch on `menu-sealed` too, and read exactly \"Disassemble…\" / \
-         \"Delete…\" per spec.md's settled copy"
+        !sealed_body.contains("disassemble-bundle") && !sealed_body.contains("discard-originals"),
+        "a sealed Bundle must never offer Disassemble… or Discard originals…"
+    );
+
+    let at = library
+        .find("private property <[MenuEntry]> unsealed-row-menu")
+        .expect("the unsealed-row-menu property must exist");
+    let unsealed_body = &library[at..(at + 700).min(library.len())];
+    assert!(
+        unsealed_body.contains(r#"{ action: "disassemble-bundle", label: "Disassemble…","#),
+        "the unsealed model must offer Disassemble…: {unsealed_body}"
+    );
+    assert!(
+        unsealed_body.contains(r#"action: "discard-originals-bundle","#)
+            && unsealed_body.contains(r#"label: "Discard originals…","#),
+        "and Discard originals…, per ticket 17: {unsealed_body}"
+    );
+    assert!(
+        !unsealed_body.contains("delete-bundle") && !unsealed_body.contains("\"delete-both\""),
+        "an unsealed Bundle must never offer Delete… (that is the sealed-only verb) and \"delete-both\" \
+         must never appear as a menu action anywhere - Delete both is reachable only from inside the \
+         Disassemble confirmation, asserted structurally by `delete_both_never_appears_as_a_menu_row`"
+    );
+}
+
+/// `Delete both` is the single most destructive act in the product and `spec.md` is explicit it must
+/// never be a menu row - this is the structural half of that acceptance criterion, over the WHOLE
+/// file rather than just the two menu models above, so a future edit that adds a third model or moves
+/// the entry cannot slip a `"delete-both"` menu action past the two checks above.
+#[test]
+fn delete_both_never_appears_as_a_menu_row() {
+    let library = read("ui/components/library.slint");
+    assert!(
+        !library.contains("action: \"delete-both\""),
+        "\"delete-both\" must never be a `MenuEntry` action - Delete both is reachable only via the \
+         `delete-both-requested` callback fired from the link inside the Disassemble confirmation"
     );
 }
 
@@ -268,11 +346,12 @@ fn the_row_menu_reuses_the_shared_context_menu_component() {
     );
 }
 
-/// Both confirmations carry the settled copy from `spec.md`'s "The four confirmations": the Bundle
-/// named in quotes, what comes back (or that nothing does), and "This cannot be undone." - plus the
-/// house cancel/confirm verbs, "Keep it" and the act itself.
+/// All four confirmations carry the settled copy from `spec.md`'s "The four confirmations": the
+/// Bundle named in quotes, what comes back (or that nothing does), and "This cannot be undone." -
+/// plus the house cancel/confirm verbs, "Keep it" and the act itself. Ticket 16 built Disassemble and
+/// Delete; ticket 17 adds Discard originals and Delete both to the same standard.
 #[test]
-fn both_confirmations_carry_the_settled_copy() {
+fn all_four_confirmations_carry_the_settled_copy() {
     let library = flat(&read("ui/components/library.slint"));
 
     assert!(
@@ -291,10 +370,33 @@ fn both_confirmations_carry_the_settled_copy() {
         library.contains("Its original captures were discarded earlier, so nothing comes back."),
         "the Delete body must say nothing comes back, per spec.md's settled wording"
     );
+    assert!(
+        library.contains(
+            "text: \"DISCARD ORIGINALS FROM \\\"\" + root.pending-bundle-name + \"\\\"?\";"
+        ),
+        "the Discard originals heading must name the Bundle in quotes"
+    );
+    assert!(
+        library.contains(
+            "This Bundle keeps its own copies and stays readable, but it can no longer be \
+             disassembled."
+        ),
+        "the Discard originals body must say the Bundle stays readable, per spec.md's settled \
+         wording"
+    );
+    assert!(
+        library.contains("text: \"DELETE BOTH \\\"\" + root.pending-bundle-name + \"\\\"?\";"),
+        "the Delete both heading must name the Bundle in quotes"
+    );
+    assert!(
+        library.contains("Nothing comes back to the filmstrip."),
+        "the Delete both body must say nothing comes back, per spec.md's settled wording"
+    );
 
     for cannot_be_undone in [
         "available to assemble again, with their notes and markers intact.\" + \" This cannot be undone.\"",
         "Its original captures were discarded earlier, so nothing comes back.\" + \" This cannot be undone.\"",
+        "This cannot be undone.\";",
     ] {
         assert!(
             library.contains(cannot_be_undone),
@@ -304,8 +406,8 @@ fn both_confirmations_carry_the_settled_copy() {
 
     assert_eq!(
         library.matches("label: \"Keep it\";").count(),
-        2,
-        "both confirmations' cancel verb must read \"Keep it\" - the object (the Bundle, or its \
+        4,
+        "all four confirmations' cancel verb must read \"Keep it\" - the object (the Bundle, or its \
          captures) rather than a generic \"Cancel\""
     );
     assert!(
@@ -316,23 +418,67 @@ fn both_confirmations_carry_the_settled_copy() {
         library.contains("label: \"Delete\";"),
         "the Delete confirmation's confirm verb must be the act itself"
     );
+    assert!(
+        library.contains("label: \"Discard\";"),
+        "the Discard originals confirmation's confirm verb must be the act itself"
+    );
+    assert!(
+        library.contains("label: \"Delete both\";"),
+        "the Delete both confirmation's confirm verb must be the act itself"
+    );
 }
 
-/// `Discard originals…` is ticket 17's job, not this one's - the spec is explicit that it "is not
-/// rendered yet". Asserted here so a future edit that adds it back in ahead of schedule is caught by
-/// this file rather than discovered by a Reviewer.
-///
-/// Checked as a quoted STRING LITERAL - `"Discard originals` - never the bare phrase: this file's
-/// own comments say why the row is absent yet ("ticket 17's Discard originals"), and a bare-phrase
-/// check would fail on its own explanation. A menu label or an `action:` value is what would
-/// actually render something; prose that mentions the future ticket is not that.
+/// The Discard originals confirmation names any other Bundle that shares one of the Findings about
+/// to be discarded (`BR-12`/`BR-122`) - the ONLY place that consequence is said, per `spec.md`. The
+/// warning sentence is Rust's own live computation (`pending-discard-warning`), inserted only when
+/// non-empty; this component never derives it.
 #[test]
-fn discard_originals_is_not_rendered_by_this_ticket() {
-    let library = read("ui/components/library.slint");
+fn the_discard_confirmation_makes_room_for_the_other_bundle_warning() {
+    let library = flat(&read("ui/components/library.slint"));
     assert!(
-        !library.contains("\"Discard originals") && !library.contains("\"discard-originals\""),
-        "`Discard originals…` is ticket 17's row to add, not ticket 16's - it must not appear as a \
-         rendered label or menu action yet"
+        library.contains("in property <string> pending-discard-warning: \"\";"),
+        "`pending-discard-warning` must be an `in` property Rust alone writes"
+    );
+    assert!(
+        library.contains(
+            "(root.pending-discard-warning == \"\" ? \"\" : \" \" + root.pending-discard-warning)"
+        ),
+        "the Discard originals body must splice in the warning only when Rust supplied one"
+    );
+}
+
+/// `Delete both` is reachable ONLY from the link inside the Disassemble confirmation - never a menu
+/// row (`delete_both_never_appears_as_a_menu_row` proves the menu half); this is the link's own
+/// wiring, one deliberate extra click from "Disassemble" and "Discard originals" both, per spec.md's
+/// "the most destructive act in the product is never one click away".
+#[test]
+fn delete_both_is_reached_only_through_a_link_inside_the_disassemble_dialog() {
+    let library = flat(&read("ui/components/library.slint"));
+    let disassemble_at = library
+        .find("if root.pending-disassemble != \"\" : Rectangle {")
+        .expect("the Disassemble confirmation must exist");
+    let delete_both_at = library
+        .find("if root.pending-delete-both != \"\" : Rectangle {")
+        .expect("the Delete both confirmation must exist");
+
+    // The link that starts the second step lives INSIDE the Disassemble dialog's own block, i.e.
+    // between its opening and the Delete both dialog that follows it.
+    let disassemble_block = &library[disassemble_at..delete_both_at];
+    assert!(
+        disassemble_block.contains("delete-both-link := TouchArea {"),
+        "the Disassemble confirmation must contain the link that starts the second step"
+    );
+    assert!(
+        disassemble_block
+            .contains("clicked => { root.delete-both-requested(root.pending-disassemble); }"),
+        "the link must fire `delete-both-requested` with the Bundle currently being disassembled"
+    );
+
+    let delete_both_block = &library[delete_both_at..(delete_both_at + 1400).min(library.len())];
+    assert!(
+        delete_both_block
+            .contains("clicked => { root.delete-both-confirmed(root.pending-delete-both); }"),
+        "the Delete both dialog's own confirm button must fire `delete-both-confirmed`"
     );
 }
 

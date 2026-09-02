@@ -1381,6 +1381,17 @@ export component AppWindow inherits Window {
     callback library-delete-cancelled();
     callback library-delete-confirmed(string);
 
+    // DISCARD ORIGINALS and DELETE BOTH (`ticket 17`). `library-pending-discard-warning` names any
+    // other Bundle that will also be sealed - Rust's own live read, forwarded straight through.
+    in property <string> library-pending-discard: "";
+    in property <string> library-pending-discard-warning: "";
+    callback library-discard-cancelled();
+    callback library-discard-confirmed(string);
+    in property <string> library-pending-delete-both: "";
+    callback library-delete-both-requested(string);
+    callback library-delete-both-cancelled();
+    callback library-delete-both-confirmed(string);
+
     // id, ctrl held, shift held. One callback rather than two, because a click on a card is one
     // gesture whose MEANING depends on the modifiers - splitting it into "selected" and "toggled"
     // put the interpretation in the UI, where the anchor for a Shift range does not live.
@@ -3119,6 +3130,9 @@ export component AppWindow inherits Window {
             pending-delete: root.library-pending-delete;
             pending-bundle-name: root.library-pending-bundle-name;
             pending-bundle-finding-count: root.library-pending-bundle-finding-count;
+            pending-discard: root.library-pending-discard;
+            pending-discard-warning: root.library-pending-discard-warning;
+            pending-delete-both: root.library-pending-delete-both;
 
             closed => { root.library-closed(); }
             try-again-clicked => { root.library-try-again-clicked(); }
@@ -3132,6 +3146,11 @@ export component AppWindow inherits Window {
             disassemble-confirmed(id) => { root.library-disassemble-confirmed(id); }
             delete-cancelled => { root.library-delete-cancelled(); }
             delete-confirmed(id) => { root.library-delete-confirmed(id); }
+            discard-cancelled => { root.library-discard-cancelled(); }
+            discard-confirmed(id) => { root.library-discard-confirmed(id); }
+            delete-both-requested(id) => { root.library-delete-both-requested(id); }
+            delete-both-cancelled => { root.library-delete-both-cancelled(); }
+            delete-both-confirmed(id) => { root.library-delete-both-confirmed(id); }
         }
 
         // SETTINGS - above the Editor, below the context menu and the confirmations, because those
