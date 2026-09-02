@@ -10,7 +10,76 @@ fn migrations_apply_cleanly_and_create_bundle_tables() {
     let temp = NamedTempFile::new().unwrap();
     let bundle_store = SqliteBundleStore::open(temp.path()).expect("open bundle store");
 
-    assert_eq!(bundle_store.get_schema_version().unwrap(), 8);
+    assert_eq!(bundle_store.get_schema_version().unwrap(), 9);
+}
+
+/// Ticket 15 ("An edited Bundle says so", ticket 09's option B): a database written before
+/// `updated_at` existed opens, migrates to v9, and every Bundle already in it reads `updated_at`
+/// equal to its own `composed_at` - "never edited", which is true of a row nothing has touched since
+/// migration v8 left it.
+///
+/// The backfill this proves was SEEN RED FIRST: with the version-9 `Migration` entry commented out
+/// of `MIGRATIONS`, `run_migrations` had nothing whose `version > 8` to apply, so
+/// `get_schema_version()` stayed at 8 and this test's own `assert_eq!(..., 9)` failed for real
+/// (`left: 8, right: 9`, not a panic from the column read further down) - then the entry was
+/// restored and this test went green. See this ticket's final report for the exact command run.
+#[test]
+fn opening_a_pre_migration_database_backfills_updated_at_from_composed_at() {
+    let temp = NamedTempFile::new().unwrap();
+
+    // The OLD schema, built by hand exactly as migration v3/v6/v8 left it - no `updated_at` column
+    // at all - stamped at schema_version 8. `bundle_item` must exist too (migration v6's shape, no
+    // `finding_id` foreign key): stamping `schema_version` straight to 8 skips migrations 1-8
+    // entirely (`run_migrations` only applies a migration whose `version > current_version`), so
+    // this fixture must build every table `get_bundle` reads, not just `bundle`, or the read below
+    // fails on a table that was never created rather than on the thing this test means to prove.
+    // Two Bundle rows, so the backfill is proven for more than one.
+    {
+        let conn = rusqlite::Connection::open(temp.path()).unwrap();
+        conn.execute_batch(
+            r#"
+            CREATE TABLE schema_version (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+            CREATE TABLE bundle (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                markdown TEXT NOT NULL,
+                markdown_path TEXT NOT NULL,
+                composed_at TEXT NOT NULL
+            );
+            CREATE TABLE bundle_item (
+                id TEXT PRIMARY KEY,
+                bundle_id TEXT NOT NULL,
+                finding_id TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                image_path TEXT NOT NULL,
+                UNIQUE(bundle_id, finding_id)
+            );
+            INSERT INTO bundle (id, name, markdown, markdown_path, composed_at)
+            VALUES ('b-old-1', 'Old Bundle One', '# Old One', 'bundles/old1.md', '2026-01-01T00:00:00Z');
+            INSERT INTO bundle (id, name, markdown, markdown_path, composed_at)
+            VALUES ('b-old-2', 'Old Bundle Two', '# Old Two', 'bundles/old2.md', '2026-02-02T00:00:00Z');
+            INSERT INTO schema_version (version, applied_at) VALUES (8, '2026-01-01T00:00:00Z');
+            "#,
+        )
+        .expect("build the pre-migration fixture");
+    }
+
+    let bundle_store = SqliteBundleStore::open(temp.path()).expect("open must migrate cleanly");
+    assert_eq!(bundle_store.get_schema_version().unwrap(), 9);
+
+    let one = bundle_store
+        .get_bundle("b-old-1")
+        .unwrap()
+        .expect("the first pre-migration Bundle must still be there");
+    assert_eq!(one.bundle.updated_at, one.bundle.composed_at);
+    assert_eq!(one.bundle.updated_at, "2026-01-01T00:00:00Z");
+
+    let two = bundle_store
+        .get_bundle("b-old-2")
+        .unwrap()
+        .expect("the second pre-migration Bundle must still be there");
+    assert_eq!(two.bundle.updated_at, two.bundle.composed_at);
+    assert_eq!(two.bundle.updated_at, "2026-02-02T00:00:00Z");
 }
 
 #[test]
@@ -78,13 +147,28 @@ fn bundle_store_crud_and_cascade_operations() {
     assert_eq!(detail.items[0].finding_id, fid);
     assert_eq!(detail.items[0].position, 1);
 
-    // 4. Update name and Markdown together (ticket 14, BR-5: the two never make sense apart)
+    // 4. Update name and Markdown together (ticket 14, BR-5: the two never make sense apart), moving
+    //    the last-edited time (ticket 15) to exactly the instant named.
+    assert_eq!(
+        detail.bundle.updated_at, detail.bundle.composed_at,
+        "a freshly created Bundle must read as never edited"
+    );
     bundle_store
-        .update_bundle_name_and_markdown(bundle_id, "Renamed Bundle", "# Updated Markdown content")
+        .update_bundle_name_and_markdown(
+            bundle_id,
+            "Renamed Bundle",
+            "# Updated Markdown content",
+            "2026-08-24T09:00:00Z",
+        )
         .expect("update name and markdown");
     let detail2 = bundle_store.get_bundle(bundle_id).unwrap().unwrap();
     assert_eq!(detail2.bundle.name, "Renamed Bundle");
     assert_eq!(detail2.bundle.markdown, "# Updated Markdown content");
+    assert_eq!(detail2.bundle.updated_at, "2026-08-24T09:00:00Z");
+    assert_eq!(
+        detail2.bundle.composed_at, detail.bundle.composed_at,
+        "composed_at must never move"
+    );
 
     // 5. List Bundles
     let list = bundle_store.list_bundles().expect("list bundles");
