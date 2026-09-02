@@ -5580,6 +5580,7 @@ dependencies = [
  "i-slint-backend-winit",
  "image",
  "rfd",
+ "rusqlite",
  "serde",
  "serde_json",
  "slint",

@@ -14,7 +14,7 @@ use global_hotkey::hotkey::HotKey;
 use global_hotkey::{GlobalHotKeyEvent, HotKeyState};
 use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, SharedString, VecModel};
 use snapdown_capture::{CaptureTarget, RegionCapturer};
-use snapdown_core::domain::bundle::{Bundle, BundleItem};
+use snapdown_core::domain::bundle::{Bundle, BundleDetail, BundleItem};
 use snapdown_core::domain::finding::{
     AnnotationShape, Finding, FindingDetail, Note, Region, VisualAnnotation,
 };
@@ -254,6 +254,151 @@ fn rgba_to_slint_image(img: &image::RgbaImage) -> slint::Image {
     let (w, h) = (img.width(), img.height());
     let pixel_buffer = SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(img.as_raw(), w, h);
     slint::Image::from_rgba8(pixel_buffer)
+}
+
+/// The largest a Library row's thumbnail is ever decoded: the artboard's 44x30 row art at 2x for a
+/// HiDPI display - the same reasoning `THUMB_MAX_W`/`THUMB_MAX_H` give for the filmstrip, at the
+/// Library row's own much smaller size.
+const LIBRARY_THUMB_MAX_W: u32 = 88;
+const LIBRARY_THUMB_MAX_H: u32 = 60;
+
+/// "just now" / "N minutes ago" / "yesterday" / "last week" / ... from an RFC3339 instant to `now`.
+///
+/// No crate in `Cargo.toml` offers this - checked before writing it, because a hand-rolled ladder is
+/// exactly the kind of thing that already exists somewhere and should not be reinvented twice.
+/// `chrono` itself only formats an ABSOLUTE instant; the relative wording is ours to write. `now` is
+/// a parameter rather than `Utc::now()` read inside, so the ladder itself can be tested against fixed
+/// instants instead of a clock that moves while the test runs.
+fn relative_time(rfc3339: &str, now: chrono::DateTime<chrono::Utc>) -> String {
+    let Ok(then) = chrono::DateTime::parse_from_rfc3339(rfc3339) else {
+        return "an unknown time ago".to_string();
+    };
+    let then = then.with_timezone(&chrono::Utc);
+    let seconds = (now - then).num_seconds().max(0);
+
+    match seconds {
+        0..=44 => "just now".to_string(),
+        45..=89 => "a minute ago".to_string(),
+        90..=2699 => format!("{} minutes ago", (seconds + 30) / 60),
+        2700..=5399 => "an hour ago".to_string(),
+        5400..=86399 => format!("{} hours ago", (seconds + 1800) / 3600),
+        86400..=151199 => "yesterday".to_string(),
+        151200..=603799 => format!("{} days ago", (seconds + 43200) / 86400),
+        603800..=1209599 => "last week".to_string(),
+        _ => {
+            let weeks = (seconds + 302400) / 604800;
+            if weeks < 5 {
+                format!("{weeks} weeks ago")
+            } else {
+                let months = ((seconds as f64) / (86400.0 * 30.44)).round() as i64;
+                if months < 12 {
+                    format!("{months} month{} ago", if months == 1 { "" } else { "s" })
+                } else {
+                    let years = ((seconds as f64) / (86400.0 * 365.25)).round() as i64;
+                    format!("{years} year{} ago", if years == 1 { "" } else { "s" })
+                }
+            }
+        }
+    }
+}
+
+/// Decodes and thumbnails the Bundle's own copy of an image - never a Finding's. Assembling copies
+/// (`Further Notes` in the spec: "Assembling copies, it never moves"), so a Bundle's `BundleItem`
+/// image survives Discard originals and even a fully sealed Bundle, which is exactly why the Library
+/// resolves this path rather than a Finding's `image_path`.
+fn load_bundle_thumbnail(ctx: &AppContext, image_path: &str) -> slint::Image {
+    let path = if PathBuf::from(image_path).is_absolute() {
+        PathBuf::from(image_path)
+    } else {
+        ctx.vault_path.join(image_path)
+    };
+    if !path.exists() {
+        return slint::Image::default();
+    }
+    match image::open(&path) {
+        Ok(dyn_img) => rgba_to_slint_image(
+            &dyn_img
+                .thumbnail(LIBRARY_THUMB_MAX_W, LIBRARY_THUMB_MAX_H)
+                .to_rgba8(),
+        ),
+        Err(_) => slint::Image::default(),
+    }
+}
+
+/// One `BundleDetail` from the store, as one Library row. The meta line is composed here - "N
+/// Findings · composed <relative time>", the exact wording `spec.md`'s Implementation Decisions
+/// section gives three times over - rather than in Slint, so the pluralisation and the relative-time
+/// ladder live in exactly one place.
+fn library_row_from_detail(
+    ctx: &AppContext,
+    detail: &BundleDetail,
+    now: chrono::DateTime<chrono::Utc>,
+) -> LibraryBundleRow {
+    let thumbnail = detail
+        .items
+        .first()
+        .map(|item| load_bundle_thumbnail(ctx, &item.image_path))
+        .unwrap_or_default();
+    let count = detail.items.len();
+    LibraryBundleRow {
+        id: detail.bundle.id.clone().into(),
+        name: detail.bundle.name.clone().into(),
+        thumbnail,
+        meta_line: format!(
+            "{count} Finding{} · composed {}",
+            if count == 1 { "" } else { "s" },
+            relative_time(&detail.bundle.composed_at, now)
+        )
+        .into(),
+    }
+}
+
+/// Every Bundle, as the Library will show it. `list_bundles` already orders newest-composed first
+/// (`bundle_store.rs`'s own `ORDER BY composed_at DESC`); nothing here re-sorts it, per the ticket's
+/// own instruction not to.
+///
+/// Two distinct refusals collapse into the same `Err`, because both read as "the Library could not
+/// be read" to the Reviewer and both get the same Try again: `bundle_store` being `None` (the tables
+/// never opened, `AppContext::init`'s own comment explains why that is not an in-memory fallback),
+/// and `list_bundles` itself failing (a locked or corrupt `library.db`).
+fn build_library_rows(
+    ctx: &AppContext,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<Vec<LibraryBundleRow>, String> {
+    let store = ctx
+        .bundle_store
+        .as_ref()
+        .ok_or_else(|| "The Bundle library could not be opened.".to_string())?;
+    let details = store
+        .list_bundles()
+        .map_err(|e| format!("Could not read the Library: {e}"))?;
+    Ok(details
+        .iter()
+        .map(|detail| library_row_from_detail(ctx, detail, now))
+        .collect())
+}
+
+/// Opens the Library and (re-)reads the store into it. The same function serves the initial open and
+/// Try again, which is what makes "Try again re-reads the store" true by construction rather than by
+/// two call sites agreeing to do the same thing.
+fn open_library(window: &AppWindow, ctx: &AppContext) {
+    window.set_library_state("loading".into());
+    window.set_library_open(true);
+
+    match build_library_rows(ctx, chrono::Utc::now()) {
+        Ok(rows) => {
+            window.set_library_rows(ModelRc::from(Rc::new(VecModel::from(rows))));
+            window.set_library_error_message(SharedString::new());
+            window.set_library_state("ready".into());
+        }
+        Err(message) => {
+            window.set_library_rows(ModelRc::from(Rc::new(VecModel::from(Vec::<
+                LibraryBundleRow,
+            >::new()))));
+            window.set_library_error_message(message.into());
+            window.set_library_state("error".into());
+        }
+    }
 }
 
 fn load_findings_into_window(
@@ -4128,10 +4273,51 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // Bundles Drawer / Library Toggle
-    main_window.on_library_clicked(|| {
-        println!("Open Snapdown Library / Bundle History clicked");
+    // THE LIBRARY (ticket 11 of the Bundle Library spec). Opens over the Editor, lists every
+    // composed Bundle, and closes back to it - the Editor's own canvas/selection/scroll are never
+    // touched by any of this, which is what makes the round trip free.
+    let win_library = main_window.as_weak();
+    let ctx_library = ctx.clone();
+    main_window.on_library_clicked(move || {
+        let Some(win) = win_library.upgrade() else {
+            return;
+        };
+        open_library(&win, &ctx_library);
     });
+
+    let win_library_closed = main_window.as_weak();
+    main_window.on_library_closed(move || {
+        if let Some(win) = win_library_closed.upgrade() {
+            win.set_library_open(false);
+        }
+    });
+
+    let win_library_retry = main_window.as_weak();
+    let ctx_library_retry = ctx.clone();
+    main_window.on_library_try_again_clicked(move || {
+        let Some(win) = win_library_retry.upgrade() else {
+            return;
+        };
+        open_library(&win, &ctx_library_retry);
+    });
+
+    // The Library's own "cannot be read" state has no Bundle to point at - what refused was
+    // `library.db` itself - so this reveals the database file, not a Bundle's folder the way
+    // ticket 12's row-level Open file location will.
+    let win_library_reveal = main_window.as_weak();
+    let ctx_library_reveal = ctx.clone();
+    main_window.on_library_open_file_location_clicked(move || {
+        let Some(win) = win_library_reveal.upgrade() else {
+            return;
+        };
+        let db_path = app_database_path();
+        if let Err(e) = open_file_location(&ctx_library_reveal, &db_path.to_string_lossy()) {
+            toast(&win, e, true);
+        }
+    });
+
+    // Bundles Drawer Toggle. Deliberately untouched by this ticket - the spec's own "Out of Scope"
+    // names it as a separate, undescribed pattern nothing has asked for yet.
     main_window.on_bundles_drawer_clicked(|| {
         println!("Toggle Bundles Drawer clicked");
     });
@@ -5820,5 +6006,204 @@ mod tests {
         } else {
             png_fixture(40, 30)
         }
+    }
+
+    // ===== ticket 11: the Library opens and lists every Bundle =============================
+
+    /// The ladder the spec's own wording implies: "just now / N minutes ago / yesterday / last
+    /// week". Fixed instants on both sides, not `Utc::now()`, so this cannot flake on a slow CI
+    /// runner the way a real-clock comparison would.
+    #[test]
+    fn relative_time_reads_a_ladder_of_plain_words() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-09-02T12:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let ago = |seconds: i64| (now - chrono::Duration::seconds(seconds)).to_rfc3339();
+
+        assert_eq!(relative_time(&ago(10), now), "just now");
+        assert_eq!(relative_time(&ago(60), now), "a minute ago");
+        assert_eq!(relative_time(&ago(60 * 5), now), "5 minutes ago");
+        assert_eq!(relative_time(&ago(60 * 60), now), "an hour ago");
+        assert_eq!(relative_time(&ago(60 * 60 * 3), now), "3 hours ago");
+        assert_eq!(relative_time(&ago(60 * 60 * 30), now), "yesterday");
+        assert_eq!(relative_time(&ago(60 * 60 * 24 * 3), now), "3 days ago");
+        assert_eq!(relative_time(&ago(60 * 60 * 24 * 8), now), "last week");
+        assert_eq!(relative_time(&ago(60 * 60 * 24 * 21), now), "3 weeks ago");
+        assert_eq!(relative_time(&ago(60 * 60 * 24 * 90), now), "3 months ago");
+        assert_eq!(relative_time(&ago(60 * 60 * 24 * 400), now), "1 year ago");
+    }
+
+    /// A composed time this build cannot parse must not panic the Library open - it must read as
+    /// "an unknown time ago" rather than crash the whole overlay over one bad row.
+    #[test]
+    fn relative_time_refuses_gracefully_on_unparseable_input() {
+        let now = chrono::Utc::now();
+        assert_eq!(relative_time("not a timestamp", now), "an unknown time ago");
+    }
+
+    /// `bundle_store: None` is one of the two "cannot be read" triggers `AppContext` documents on
+    /// its own field - the tables never opened. `build_library_rows` must refuse out loud with a
+    /// message that names what refused, the same shape `prepare_bundle` already uses for the same
+    /// condition, rather than silently reporting an empty Library.
+    #[test]
+    fn build_library_rows_refuses_out_loud_when_the_bundle_store_is_none() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+
+        let err = build_library_rows(&ctx, chrono::Utc::now())
+            .expect_err("a None store must refuse, not read empty");
+        assert!(
+            err.contains("could not be opened"),
+            "the message must name what refused: {err}"
+        );
+    }
+
+    /// A `list_bundles` failure - a locked or corrupt `library.db` - is the other trigger
+    /// `AppContext.bundle_store`'s own doc comment names, and it must surface the underlying
+    /// reason rather than a generic sentence, so the Reviewer sees what actually refused.
+    ///
+    /// Built on a connection that was never migrated, so `list_bundles`'s own query fails for
+    /// real - "no such table: bundle" - rather than a `CoreError` faked to look like one.
+    #[test]
+    fn build_library_rows_refuses_out_loud_when_list_bundles_itself_fails() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let unmigrated = rusqlite::Connection::open_in_memory().expect("an in-memory connection");
+        let bundle_store = SqliteBundleStore::new(Arc::new(Mutex::new(unmigrated)));
+
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let err = build_library_rows(&ctx, chrono::Utc::now())
+            .expect_err("an unmigrated connection must refuse");
+        assert!(
+            err.contains("Could not read the Library"),
+            "the message must name what refused: {err}"
+        );
+    }
+
+    /// The row-building path end to end, against a real in-memory store and real files on a temp
+    /// Vault: every Bundle appears once, newest-composed first (the store's own `ORDER BY
+    /// composed_at DESC`, not re-sorted here), the thumbnail is the BundleItem at position 1 and
+    /// actually DECODES (not merely a signature-and-dimensions fake - `AGENTS.md`'s own rule), and
+    /// the meta line reads "N Findings · composed <relative time>" exactly as `spec.md`'s
+    /// Implementation Decisions section states it three times over.
+    #[test]
+    fn build_library_rows_lists_every_bundle_newest_composed_first_with_a_decoded_thumbnail() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+
+        let older = Bundle::new(
+            "b-older".into(),
+            "Older review".into(),
+            "# Older review".into(),
+            "bundles/b-older/bundle.md".into(),
+            "2026-08-28T10:00:00Z".into(),
+        )
+        .unwrap();
+        let older_items = vec![BundleItem::new(
+            "bi-older-1".into(),
+            "b-older".into(),
+            "f-older-1".into(),
+            1,
+            "bundles/b-older/finding_1_burned.png".into(),
+        )
+        .unwrap()];
+
+        let newer = Bundle::new(
+            "b-newer".into(),
+            "Newer review".into(),
+            "# Newer review".into(),
+            "bundles/b-newer/bundle.md".into(),
+            "2026-09-01T10:00:00Z".into(),
+        )
+        .unwrap();
+        let newer_items = vec![
+            BundleItem::new(
+                "bi-newer-1".into(),
+                "b-newer".into(),
+                "f-newer-1".into(),
+                1,
+                "bundles/b-newer/finding_1_burned.png".into(),
+            )
+            .unwrap(),
+            BundleItem::new(
+                "bi-newer-2".into(),
+                "b-newer".into(),
+                "f-newer-2".into(),
+                2,
+                "bundles/b-newer/finding_2_burned.png".into(),
+            )
+            .unwrap(),
+        ];
+
+        bundle_store
+            .create_bundle(&older, &older_items)
+            .expect("creating the older Bundle must succeed");
+        bundle_store
+            .create_bundle(&newer, &newer_items)
+            .expect("creating the newer Bundle must succeed");
+
+        for item in older_items.iter().chain(newer_items.iter()) {
+            let path = vault_dir.path().join(&item.image_path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, png_fixture(12, 8)).unwrap();
+        }
+
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        // A fixed "now", not `Utc::now()`: `composed_at` above is fixed too, so the relative-time
+        // wording below is deterministic whatever day this test actually runs.
+        let now = chrono::DateTime::parse_from_rfc3339("2026-09-02T10:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        let rows = build_library_rows(&ctx, now).expect("a healthy store must list its Bundles");
+        assert_eq!(rows.len(), 2, "every Bundle must appear once");
+
+        // Newest-composed first - the store's own order, preserved rather than re-sorted.
+        assert_eq!(rows[0].id, "b-newer");
+        assert_eq!(rows[1].id, "b-older");
+
+        assert_eq!(
+            rows[0].meta_line, "2 Findings · composed yesterday",
+            "the meta line must read exactly \"N Findings · composed <relative time>\""
+        );
+        assert_eq!(rows[1].meta_line, "1 Finding · composed 5 days ago");
+
+        // The thumbnail must actually DECODE, not merely carry a plausible signature and
+        // dimensions - the fabrication this repository has been burned by before.
+        assert!(
+            rows[0].thumbnail.size().width > 0,
+            "the thumbnail must be a real decoded image, not the empty default"
+        );
     }
 }

@@ -76,16 +76,10 @@ const DELIBERATELY_UNHANDLED: &[(&str, &str)] = &[
 ///
 /// These are worse than an absent handler and that is why they are listed separately: the button
 /// looks live, the click is accepted, and the Reviewer is told nothing.
-const KNOWN_STUBS: &[(&str, &str)] = &[
-    (
-        "library-clicked",
-        "there is no Library screen in Slint yet — only the filmstrip",
-    ),
-    (
-        "bundles-drawer-clicked",
-        "the drawer is always open; nothing toggles it",
-    ),
-];
+const KNOWN_STUBS: &[(&str, &str)] = &[(
+    "bundles-drawer-clicked",
+    "the drawer is always open; nothing toggles it",
+)];
 
 fn snake(name: &str) -> String {
     format!("on_{}", name.replace('-', "_"))

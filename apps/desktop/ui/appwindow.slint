@@ -20,6 +20,7 @@ import { SdSegmented, SegmentOption } from "components/form-controls.slint";
 import { SdModalHeader } from "components/modal.slint";
 import { SdActionButton, SdSectionLabel, SdCaption, SdDocHeading } from "components/action-button.slint";
 import { AnnotationItem, AnnotationData } from "components/annotation.slint";
+import { SdLibrary, LibraryBundleRow } from "components/library.slint";
 
 import "../assets/fonts/IBMPlexSans-Medium.ttf";
 import "../assets/fonts/IBMPlexSans-SemiBold.ttf";
@@ -1347,12 +1348,24 @@ export component AppWindow inherits Window {
     // and this cannot know how much, so it does not pretend to.
     in-out property <int> bundle-preview-text-tokens: 0;
 
+    // THE LIBRARY (ticket 11 of the Bundle Library spec). Gated the same way `bundle-preview-open`
+    // is: Rust sets it, Slint never flips it itself. `library-state` is "loading" | "error" |
+    // "ready" - "ready" with an empty `library-rows` IS the empty state, so there is no fourth
+    // value that would just restate `rows.length == 0` in a second place.
+    in-out property <bool> library-open: false;
+    in property <string> library-state: "loading";
+    in property <string> library-error-message: "";
+    in property <[LibraryBundleRow]> library-rows: [];
+
     // id, ctrl held, shift held. One callback rather than two, because a click on a card is one
     // gesture whose MEANING depends on the modifiers - splitting it into "selected" and "toggled"
     // put the interpretation in the UI, where the anchor for a Shift range does not live.
     callback finding-clicked(string, bool, bool);
     callback finding-note-edited(string);
     callback library-clicked();
+    callback library-closed();
+    callback library-try-again-clicked();
+    callback library-open-file-location-clicked();
     callback capture-clicked();
     callback open-file-clicked();
     callback paste-clicked();
@@ -3103,6 +3116,17 @@ export component AppWindow inherits Window {
             interval: 7s;
             running: root.toast-text != "";
             triggered => { root.toast-text = ""; }
+        }
+
+        // THE LIBRARY - above the Editor, the same layer Assemble & Review and Settings sit at.
+        if root.library-open : SdLibrary {
+            state: root.library-state;
+            error-message: root.library-error-message;
+            rows: root.library-rows;
+
+            closed => { root.library-closed(); }
+            try-again-clicked => { root.library-try-again-clicked(); }
+            open-file-location-clicked => { root.library-open-file-location-clicked(); }
         }
 
         // SETTINGS - above the Editor, below the context menu and the confirmations, because those
