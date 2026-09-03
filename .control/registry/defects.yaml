@@ -6052,3 +6052,45 @@ defects:
       again in place, dated, explaining this second reversal on top of the first.
       cargo fmt, clippy -D warnings and cargo test --workspace --no-fail-fast all exit 0.
     status: fixed
+
+  - id: BUG-105
+    title: "Paste does nothing when clicked"
+    found: "2026-09-03"
+    found_by: "kodesh87, manually testing: 'Tombol paste belum bekerja'"
+    component: finding
+    severity: medium
+    contradicts: []
+    root_cause: code
+    evidence: |
+      `appwindow.slint` declares `callback paste-clicked();` and wires the ribbon's Paste button to
+      it. `test_ui_callbacks_reach_rust.rs`'s own `DELIBERATELY_UNHANDLED` list already carries it,
+      with the reason on record: *"clipboard-in is not built: nothing reads an image out of the
+      Windows clipboard yet"* - so this is a documented gap, not a silent regression, but it is still
+      a live button that does nothing when the Reviewer clicks it.
+    fix: |
+      Not fixed. Recorded on the owner's request; no code changed. Fixing this means building
+      clipboard-in (reading an image out of the Windows clipboard) and removing the
+      `DELIBERATELY_UNHANDLED` entry alongside wiring a real handler - out of scope for this entry.
+    status: open
+
+  - id: BUG-106
+    title: "Crop tool has no effect - it only changes the cursor and which tool icon is highlighted"
+    found: "2026-09-03"
+    found_by: "kodesh87, manually testing: 'Crop belum bekerja'"
+    component: finding
+    severity: medium
+    contradicts: []
+    root_cause: code
+    evidence: |
+      The Crop `IconButton` in `appwindow.slint`'s tool strip only sets `root.active-tool-index = 6`,
+      the same mechanism every other tool (Marker, Shape, Callout, Blur, Arrow, Text) uses to mark
+      itself the active tool and swap its cursor (`appwindow.slint:2125`). Unlike those, nothing in
+      `apps/desktop/src/` or `appwindow.slint`'s canvas reads `active-tool-index == 6` to actually
+      draw or apply a crop - selecting the tool changes the icon and the mouse cursor and nothing
+      else happens on the canvas.
+    fix: |
+      Not fixed. Recorded on the owner's request; no code changed. Fixing this means giving the Crop
+      tool its own canvas interaction (drag-to-select a region, then apply it) the way `region-capturer`
+      already does for the capture overlay, and a store-level operation to actually crop the Finding's
+      image - out of scope for this entry.
+    status: open
