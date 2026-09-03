@@ -1412,8 +1412,9 @@ export component AppWindow inherits Window {
     in property <string> library-pending-discard-warning: "";
     callback library-discard-cancelled();
     callback library-discard-confirmed(string);
+    // `BUG-104`: reached directly from the row menu now (`"delete-both-bundle"`), not from a
+    // request forwarded out of the Disassemble dialog - so there is no `-requested` callback here.
     in property <string> library-pending-delete-both: "";
-    callback library-delete-both-requested(string);
     callback library-delete-both-cancelled();
     callback library-delete-both-confirmed(string);
 
@@ -3229,7 +3230,6 @@ export component AppWindow inherits Window {
             bundle-opened(id) => { root.library-bundle-clicked(id); }
             discard-cancelled => { root.library-discard-cancelled(); }
             discard-confirmed(id) => { root.library-discard-confirmed(id); }
-            delete-both-requested(id) => { root.library-delete-both-requested(id); }
             delete-both-cancelled => { root.library-delete-both-cancelled(); }
             delete-both-confirmed(id) => { root.library-delete-both-confirmed(id); }
             reclaim-space-clicked => { root.reclaim-space-clicked(); }

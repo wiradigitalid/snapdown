@@ -21,6 +21,13 @@ export component SdActionButton inherits Rectangle {
     in property <string> label;
     in property <image> icon;
     in property <bool> primary: true;
+    // `BUG-103`: a genuinely irreversible action (Delete, Discard originals, Delete both) read
+    // identically to Disassemble - the one confirm verb among the four that is NOT final, since it
+    // gives the Findings back. `danger` swaps the primary background/glow for `semantic-error`
+    // instead of the accent colour, so the one button in a dialog that cannot be undone reads that
+    // way at a glance. Only meaningful when `primary` is also true - a non-primary danger button
+    // would be a contradiction (an outlined button already reads as the SAFER of two choices).
+    in property <bool> danger: false;
     in property <bool> enabled: true;
     in property <length> label-size: 11px;
 
@@ -34,12 +41,14 @@ export component SdActionButton inherits Rectangle {
     background: !root.enabled
         ? Theme.bg-hover
         : (root.primary
-            ? (touch.pressed ? Theme.accent-pressed : (touch.has-hover ? Theme.accent-hover : Theme.accent-primary))
+            ? (root.danger
+                ? (touch.pressed ? Theme.semantic-error.darker(20%) : (touch.has-hover ? Theme.semantic-error.brighter(10%) : Theme.semantic-error))
+                : (touch.pressed ? Theme.accent-pressed : (touch.has-hover ? Theme.accent-hover : Theme.accent-primary)))
             : (touch.has-hover ? Theme.bg-hover : Theme.bg-card));
     border-width: root.primary ? 0px : 1px;
     border-color: Theme.border-strong;
     drop-shadow-blur: (root.primary && root.enabled) ? (touch.has-hover ? 6px : 2px) : 0px;
-    drop-shadow-color: Theme.accent-primary.with-alpha(0.35);
+    drop-shadow-color: root.danger ? Theme.semantic-error.with-alpha(0.35) : Theme.accent-primary.with-alpha(0.35);
 
     body := HorizontalLayout {
         padding-left: 12px;

@@ -22,9 +22,12 @@ fn read(relative: &str) -> String {
 fn the_toast_is_declared_after_every_full_window_overlay_so_it_paints_on_top_of_all_of_them() {
     let window = read("ui/appwindow.slint");
 
-    let toast_at = window
-        .find(r#"if root.toast-text != "" : Rectangle {"#)
-        .expect("the toast Rectangle must exist");
+    // `BUG-100` changed the root toast from an unconditional `Rectangle` to an `SdToast` that is
+    // suppressed while the Library, Review & Update or Reclaim space is open (each of those now
+    // docks its own copy inside its own panel instead) - anchored on `SdToast {` itself, which
+    // appears exactly once in this file, rather than the exact boolean condition guarding it, so a
+    // future change to WHICH overlays suppress the root copy does not also have to touch this test.
+    let toast_at = window.find("SdToast {").expect("the root toast must exist");
 
     for (overlay_name, needle) in [
         ("the Library", "if root.library-open : SdLibrary {"),

@@ -5520,6 +5520,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 win.set_library_pending_discard_warning(discard_warning_text(&others).into());
                 win.set_library_pending_discard(id);
             }
+            // `BUG-104`: a dedicated row now, not a second-step link inside the Disassemble
+            // dialog - reached through this same live-read path every other row action uses.
+            "delete-both-bundle" => win.set_library_pending_delete_both(id),
             _ => {}
         }
     });
@@ -5839,33 +5842,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ),
         };
         toast(&win, message, had_failure);
-    });
-
-    // DELETE BOTH's second-step request (ticket 17): swaps the Disassemble confirmation for the
-    // Delete both one, with a fresh live read of the Bundle's own name and Finding count - the same
-    // read every other confirmation opens with, never a value carried over from the dialog it
-    // replaces.
-    let win_delete_both_req = main_window.as_weak();
-    let ctx_delete_both_req = ctx.clone();
-    main_window.on_library_delete_both_requested(move |id| {
-        let Some(win) = win_delete_both_req.upgrade() else {
-            return;
-        };
-        win.set_library_pending_disassemble(SharedString::new());
-
-        let Some(store) = ctx_delete_both_req.bundle_store.as_ref() else {
-            toast(&win, "The Bundle library could not be opened.", true);
-            return;
-        };
-        match store.get_bundle(id.as_str()) {
-            Ok(Some(detail)) => {
-                win.set_library_pending_bundle_name(detail.bundle.name.clone().into());
-                win.set_library_pending_bundle_finding_count(detail.items.len() as i32);
-                win.set_library_pending_delete_both(id);
-            }
-            Ok(None) => open_library(&win, &ctx_delete_both_req),
-            Err(e) => toast(&win, format!("Could not read the Bundle: {e}"), true),
-        }
     });
 
     let win_delete_both_cancel = main_window.as_weak();
@@ -10136,7 +10112,11 @@ mod tests {
             rows[0].size_bytes as u64, 30_000,
             "the row's size must equal the exact sum of its own Findings' files on disk"
         );
-        assert_eq!(rows[0].size_label, "0.0 MB");
+        // `BUG-98`: this fixture's 30,000 bytes (~29.3 KiB) is well under 0.1 MB, so `format_mb`
+        // now renders it in kilobytes - this test itself asserted the pre-fix "0.0 MB" as if it
+        // were correct until this line was corrected, exactly the "asserts a copy of the bug"
+        // shape `BUG-86`'s own writeup warns about.
+        assert_eq!(rows[0].size_label, "29 KB");
         assert_eq!(
             total_bytes, 30_000,
             "the header total must equal the sum of the rows it lists - there is only one row here"

@@ -114,7 +114,10 @@ fn every_review_update_callback_is_bound_from_slint_to_rust() {
     let at = window
         .find("if root.review-update-open : SdReviewUpdate {")
         .expect("the mount site must exist");
-    let mount = flat(&window[at..(at + 400).min(window.len())]);
+    // 600, not 400: `BUG-100` added `toast-text`/`toast-is-error` bindings before `closed =>`,
+    // pushing it past a window sized for ticket 13/14 alone - widened rather than re-anchored, the
+    // same fix `test_library_wiring.rs`'s own mount-site window needed once before.
+    let mount = flat(&window[at..(at + 600).min(window.len())]);
     assert!(
         mount.contains("root.review-update-closed();"),
         "the mount site must forward `closed()` to `root.review-update-closed()`"
@@ -636,7 +639,12 @@ fn cancel_decides_in_rust_and_a_failed_save_keeps_the_buffer_alive() {
     let save_at = main.find("on_review_update_save_clicked(").unwrap();
     // Scanned as flat text rather than `rust_fn_body`, which matches braces from a top-level `fn` -
     // this is a closure passed to `on_review_update_save_clicked(`, not a `fn` of that name.
-    let save_handler = flat(&main[save_at..(save_at + 1800).min(main.len())]);
+    //
+    // 3000, not 1800: `BUG-97` added a library-refresh check inside the Saved arm, which comes
+    // BEFORE the Err arm this test needs - the same window this file's own
+    // `a_successful_save_refreshes_the_library_still_open_underneath` test needed widened to for
+    // the identical reason, missed here when that fix landed.
+    let save_handler = flat(&main[save_at..(save_at + 3000).min(main.len())]);
     let err_arm_at = save_handler
         .find("Err(message) =>")
         .expect("the Save handler must have an Err arm");

@@ -230,9 +230,10 @@ file location · [Export PDF] — [Publish] — then the destructive group, whic
 **Whether a Bundle still holds its
 Findings is read live from whether those Findings exist, never from a stored flag** (`BR-122`): a
 Bundle is *unsealed* when every one of its BundleItems' Findings still exists and *sealed* otherwise.
-Unsealed: **Disassemble…**, **Discard originals…**. Sealed: **Delete…** only. The **Delete both**
-outcome (Bundle and originals, "nothing comes back to the filmstrip") is offered as a second-step
-choice from within the Disassemble confirmation, never as a menu row.
+Unsealed: **Disassemble…**, **Discard originals…**, **Delete both…**. Sealed: **Delete…** only. The
+**Delete both** outcome (Bundle and originals, "nothing comes back to the filmstrip") is its own
+dedicated menu row as of `BUG-104` — see the correction below; it was originally a second-step choice
+reached only from within the Disassemble confirmation.
 
 **The four confirmations** carry the copy the artboards settled: each names the Bundle in quotes,
 counts what goes, states what comes back or that nothing does, and ends "This cannot be undone." The
@@ -252,6 +253,17 @@ which defeats a safety device that has to be found to work: every cancel button 
 and "Delete both instead" is a real, visibly clickable `SdActionButton` — still on its own row below
 Cancel/Disassemble, so it is not a third button LEVEL with the other two and the extra deliberate step
 survives, just discoverable now rather than invisible.
+
+**Corrected again, 2026-09-03, on the owner's decision (`BUG-104`), reversing the paragraph directly
+above it.** Having just asked for that button to be made discoverable, the owner reconsidered the
+indirection itself: *"saya berubah pikiran, buatkan aja Delete di context menu... sehingga dedicated"*
+(changed my mind — just put Delete in the context menu, so it's dedicated). The button inside the
+Disassemble confirmation is gone; **Delete both…** is now a third row in the unsealed context menu,
+reached the same direct way Disassemble…/Discard originals… already are, with no extra deliberate
+step below another dialog. The four confirmations, their copy and their `AD-2` write ordering are
+unchanged — only how Delete both is REACHED changed. Buttons across all four confirmations also
+carry a matched height and, on the three genuinely irreversible ones (Delete, Discard, Delete both —
+never Disassemble, which returns the Findings), a red `danger` variant (`BUG-103`).
 
 **Write ordering on delete follows `AD-2`: the record first, then its files.** Disassemble and Delete
 remove the Bundle's row (its BundleItems cascade) and only then the Bundle's folder. A crash between

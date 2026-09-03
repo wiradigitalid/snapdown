@@ -117,7 +117,10 @@ fn every_library_callback_is_bound_from_slint_to_rust() {
 /// top of it): every callback `SdLibrary` declares for it is forwarded at the mount site to a
 /// root-level callback with a real handler in `main.rs`. The same shape
 /// `every_library_callback_is_bound_from_slint_to_rust` already proves for ticket 11's three - this
-/// is that shape for the twelve ticket 16 and ticket 17 add between them.
+/// is that shape for the eleven ticket 16 and ticket 17 add between them. `BUG-104` retired
+/// `delete-both-requested` (Delete both is a direct row-menu action now, answered by
+/// `on_library_row_menu_action` itself, not a separate callback), which is why this is eleven
+/// and not twelve.
 #[test]
 fn every_row_menu_callback_is_bound_from_slint_to_rust() {
     let library = read("ui/components/library.slint");
@@ -174,11 +177,6 @@ fn every_row_menu_callback_is_bound_from_slint_to_rust() {
             "callback discard-confirmed(string);",
             "root.library-discard-confirmed(id);",
             "on_library_discard_confirmed",
-        ),
-        (
-            "callback delete-both-requested(string);",
-            "root.library-delete-both-requested(id);",
-            "on_library_delete_both_requested",
         ),
         (
             "callback delete-both-cancelled();",
@@ -268,7 +266,9 @@ fn the_destructive_menu_entry_is_keyed_on_the_rust_supplied_sealed_flag() {
     let at = library
         .find("private property <[MenuEntry]> unsealed-row-menu")
         .expect("the unsealed-row-menu property must exist");
-    let unsealed_body = &library[at..(at + 700).min(library.len())];
+    // Widened from 700 to 1000 for `BUG-104`'s third entry (`delete-both-bundle`) - see this
+    // file's own note on why these windows are fixed-character rather than to-the-brace.
+    let unsealed_body = &library[at..(at + 1000).min(library.len())];
     assert!(
         unsealed_body.contains(r#"{ action: "disassemble-bundle", label: "Disassemble…","#),
         "the unsealed model must offer Disassemble…: {unsealed_body}"
@@ -279,24 +279,28 @@ fn the_destructive_menu_entry_is_keyed_on_the_rust_supplied_sealed_flag() {
         "and Discard originals…, per ticket 17: {unsealed_body}"
     );
     assert!(
-        !unsealed_body.contains("delete-bundle") && !unsealed_body.contains("\"delete-both\""),
-        "an unsealed Bundle must never offer Delete… (that is the sealed-only verb) and \"delete-both\" \
-         must never appear as a menu action anywhere - Delete both is reachable only from inside the \
-         Disassemble confirmation, asserted structurally by `delete_both_never_appears_as_a_menu_row`"
+        unsealed_body.contains(r#"action: "delete-both-bundle","#)
+            && unsealed_body.contains(r#"label: "Delete both…","#),
+        "and Delete both…, per `BUG-104`'s reversal - a dedicated row now, not a link inside the \
+         Disassemble confirmation: {unsealed_body}"
+    );
+    assert!(
+        !unsealed_body.contains("\"delete-bundle\""),
+        "an unsealed Bundle must never offer Delete… - that is the sealed-only verb: {unsealed_body}"
     );
 }
 
-/// `Delete both` is the single most destructive act in the product and `spec.md` is explicit it must
-/// never be a menu row - this is the structural half of that acceptance criterion, over the WHOLE
-/// file rather than just the two menu models above, so a future edit that adds a third model or moves
-/// the entry cannot slip a `"delete-both"` menu action past the two checks above.
+/// `BUG-104` reversed `spec.md`'s original "never a menu row" rule on the owner's explicit request -
+/// this is the structural half of that reversal, over the WHOLE file rather than just the unsealed
+/// model above, so a future edit that adds a third model or moves the entry cannot silently drop
+/// the one row this act depends on for reachability.
 #[test]
-fn delete_both_never_appears_as_a_menu_row() {
+fn delete_both_appears_as_a_dedicated_menu_row() {
     let library = read("ui/components/library.slint");
     assert!(
-        !library.contains("action: \"delete-both\""),
-        "\"delete-both\" must never be a `MenuEntry` action - Delete both is reachable only via the \
-         `delete-both-requested` callback fired from the link inside the Disassemble confirmation"
+        library.contains("action: \"delete-both-bundle\""),
+        "\"delete-both-bundle\" must be a `MenuEntry` action - `BUG-104` made Delete both reachable \
+         directly from the row menu, not only from inside the Disassemble confirmation"
     );
 }
 
@@ -452,44 +456,93 @@ fn the_discard_confirmation_makes_room_for_the_other_bundle_warning() {
     );
 }
 
-/// `Delete both` is reachable ONLY from the button inside the Disassemble confirmation - never a
-/// menu row (`delete_both_never_appears_as_a_menu_row` proves the menu half); this is that button's
-/// own wiring, one deliberate extra click from "Disassemble" and "Discard originals" both, per
-/// spec.md's "the most destructive act in the product is never one click away".
-///
-/// `BUG-101` changed this from a bare `Text` + a separate `TouchArea` (invisible as a control - a
-/// Reviewer testing the feature could not tell it was pressable) to a real `SdActionButton`, still
-/// on its own row below Cancel/Disassemble rather than a third button level with them, so the extra
-/// deliberate step survives while the control is now discoverable.
+/// `BUG-104`: Delete both is reachable directly from the row menu now, through the exact same
+/// `row-menu-action` path Disassemble and Discard originals already use - not through a button
+/// nested inside the Disassemble confirmation (that button is gone; `delete_both_appears_as_a_dedicated_menu_row`
+/// proves the menu half). This proves the Rust-side reachability: the "delete-both-bundle" action
+/// reaching `on_library_row_menu_action` sets `library_pending_delete_both`, the same property that
+/// opens the Delete both dialog, and the dialog's own confirm button still fires
+/// `delete-both-confirmed`.
 #[test]
-fn delete_both_is_reached_only_through_a_button_inside_the_disassemble_dialog() {
+fn delete_both_is_reached_directly_from_the_row_menu() {
     let library = flat(&read("ui/components/library.slint"));
-    let disassemble_at = library
-        .find("if root.pending-disassemble != \"\" : Rectangle {")
-        .expect("the Disassemble confirmation must exist");
-    let delete_both_at = library
+    let main = read("src/main.rs");
+
+    assert!(
+        !library.contains("delete-both-button := SdActionButton"),
+        "the old second-step button inside the Disassemble confirmation must be gone - `BUG-104` \
+         replaced it with a direct row-menu entry"
+    );
+    assert!(
+        !main.contains("on_library_delete_both_requested"),
+        "the retired `delete-both-requested` handler must not still exist in main.rs"
+    );
+
+    let at = main
+        .find("main_window.on_library_row_menu_action(")
+        .expect("the row-menu-action handler must exist");
+    let handler = &main[at..(at + 2000).min(main.len())];
+    assert!(
+        handler.contains("\"delete-both-bundle\" => win.set_library_pending_delete_both(id)"),
+        "the row-menu-action handler must answer \"delete-both-bundle\" by opening the Delete both \
+         confirmation, the same way it answers disassemble-bundle/discard-originals-bundle: {handler}"
+    );
+
+    let library_src = read("ui/components/library.slint");
+    let delete_both_at = library_src
         .find("if root.pending-delete-both != \"\" : Rectangle {")
         .expect("the Delete both confirmation must exist");
-
-    // The button that starts the second step lives INSIDE the Disassemble dialog's own block, i.e.
-    // between its opening and the Delete both dialog that follows it.
-    let disassemble_block = &library[disassemble_at..delete_both_at];
-    assert!(
-        disassemble_block.contains("delete-both-button := SdActionButton {"),
-        "the Disassemble confirmation must contain a REAL button that starts the second step, not \
-         a bare Text/TouchArea pair"
-    );
-    assert!(
-        disassemble_block
-            .contains("clicked => { root.delete-both-requested(root.pending-disassemble); }"),
-        "the button must fire `delete-both-requested` with the Bundle currently being disassembled"
-    );
-
-    let delete_both_block = &library[delete_both_at..(delete_both_at + 1400).min(library.len())];
+    let delete_both_block =
+        &library_src[delete_both_at..(delete_both_at + 2200).min(library_src.len())];
     assert!(
         delete_both_block
             .contains("clicked => { root.delete-both-confirmed(root.pending-delete-both); }"),
         "the Delete both dialog's own confirm button must fire `delete-both-confirmed`"
+    );
+}
+
+/// `BUG-103`: a genuinely irreversible confirm (Delete, Discard, Delete both) read identically to
+/// Disassemble - the one confirm among the four that is NOT final, since it gives the Findings back.
+/// `danger: true` must be on exactly the three final ones, and on no others, or the colour stops
+/// meaning "cannot be undone" and starts meaning nothing.
+#[test]
+fn only_the_three_irreversible_confirmations_carry_the_danger_flag() {
+    let library = read("ui/components/library.slint");
+
+    for (label, needle) in [
+        (
+            "Delete",
+            "label: \"Delete\";\n                        height: 30px;\n                        danger: true;",
+        ),
+        (
+            "Discard",
+            "label: \"Discard\";\n                        height: 30px;\n                        danger: true;",
+        ),
+        (
+            "Delete both",
+            "label: \"Delete both\";\n                        height: 30px;\n                        danger: true;",
+        ),
+    ] {
+        assert!(
+            library.contains(needle),
+            "the {label} confirm button must carry `danger: true` right after its `height`, per \
+             `BUG-103`"
+        );
+    }
+
+    // Disassemble gives the Findings back - the one confirm among the four that is not final -
+    // and Cancel is never destructive at all. Neither may carry the flag.
+    let disassemble_at = library
+        .find("if root.pending-disassemble != \"\" : Rectangle {")
+        .expect("the Disassemble confirmation must exist");
+    let delete_at = library
+        .find("if root.pending-delete != \"\" : Rectangle {")
+        .expect("the Delete confirmation must exist");
+    let disassemble_block = &library[disassemble_at..delete_at];
+    assert!(
+        !disassemble_block.contains("danger: true"),
+        "Disassemble is reversible-ish (the Findings come back) and must stay the plain primary \
+         colour, not the danger one"
     );
 }
 

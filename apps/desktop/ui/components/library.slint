@@ -99,10 +99,15 @@ export component SdLibrary inherits Rectangle {
     // compiler reports "Cannot convert [...] to [MenuEntry]" because an inline ternary's branches are
     // typed before the property they are assigned to). Naming each branch as its own
     // `[MenuEntry]`-typed property fixes the inference and reads better besides. The sealed model
-    // stays the one entry ticket 16 built. "delete-both" never appears in either model on purpose -
-    // `ticket 17`'s acceptance criteria asks that to be checked structurally, and this is what makes
-    // it true: the Delete both act only ever reaches Slint through `delete-both-requested`, fired
-    // from a link inside the Disassemble confirmation below, never from this model.
+    // stays the one entry ticket 16 built.
+    //
+    // `BUG-104`, on the owner's decision, reversing `ticket 17`'s own original design: "delete-both"
+    // used to never appear in either model on purpose - the act was reachable only via
+    // `delete-both-requested`, fired from a link inside the Disassemble confirmation, one deliberate
+    // extra click below it. In practice the owner found that indirection unnecessary friction rather
+    // than useful safety, and asked for a THIRD, dedicated row instead - so `unsealed-row-menu` now
+    // carries "Delete both…" directly, alongside Disassemble…/Discard originals…, and the link
+    // inside the Disassemble dialog is gone (see that dialog's own comment for what replaced it).
     private property <[MenuEntry]> sealed-row-menu: [
         { action: "copy-markdown", label: "Copy Markdown", hint: "", separator: false, enabled: true },
         { action: "reveal", label: "Open file location", hint: "", separator: false, enabled: true },
@@ -117,6 +122,13 @@ export component SdLibrary inherits Rectangle {
         {
             action: "discard-originals-bundle",
             label: "Discard originals…",
+            hint: "",
+            separator: false,
+            enabled: true,
+        },
+        {
+            action: "delete-both-bundle",
+            label: "Delete both…",
             hint: "",
             separator: false,
             enabled: true,
@@ -144,13 +156,11 @@ export component SdLibrary inherits Rectangle {
     callback discard-cancelled();
     callback discard-confirmed(string);
 
-    // DELETE BOTH - reachable ONLY as a second-step choice from inside the Disassemble confirmation
-    // (the link at the foot of that dialog below), never as its own menu row: `row-menu` above never
-    // carries a "delete-both" action. `delete-both-requested` asks Rust to swap the Disassemble
-    // dialog for this one; Rust owns that swap because the Bundle name and Finding count it fills in
-    // are its own live read, not something this component may cache across the transition.
+    // DELETE BOTH - reachable directly from the row menu now (`BUG-104`, `unsealed-row-menu`'s own
+    // "delete-both-bundle" entry), which forwards through the same `row-menu-action` path
+    // Disassemble/Discard originals already use. Rust fills in the Bundle name and Finding count
+    // from its own live read, the same discipline every other confirmation here follows.
     in property <string> pending-delete-both: "";
-    callback delete-both-requested(string);
     callback delete-both-cancelled();
     callback delete-both-confirmed(string);
 
@@ -715,25 +725,6 @@ export component SdLibrary inherits Rectangle {
                     }
                 }
 
-                // THE SECOND STEP (`ticket 17`). `BUG-101`: this was a bare `Text` + a separate
-                // `TouchArea` over it - visually indistinguishable from a caption, so a Reviewer had
-                // no way to tell it was pressable at all. Now a real, clickable
-                // `SdActionButton` - still never a THIRD equal button beside Cancel/Disassemble
-                // (it sits on its own row below them, so the most destructive act in the product is
-                // still one deliberate extra click away, not level with the other two) - but
-                // discoverable as a control rather than looking like a footnote. Fires
-                // `delete-both-requested`, which Rust answers by swapping this dialog for the
-                // Delete both one below.
-                HorizontalLayout {
-                    alignment: end;
-                    delete-both-button := SdActionButton {
-                        label: "Delete both instead";
-                        primary: false;
-                        height: 26px;
-                        label-size: 10px;
-                        clicked => { root.delete-both-requested(root.pending-disassemble); }
-                    }
-                }
             }
         }
     }
@@ -791,6 +782,7 @@ export component SdLibrary inherits Rectangle {
                     SdActionButton {
                         label: "Delete";
                         height: 30px;
+                        danger: true;
                         clicked => { root.delete-confirmed(root.pending-delete); }
                     }
                 }
@@ -859,6 +851,7 @@ export component SdLibrary inherits Rectangle {
                     SdActionButton {
                         label: "Discard";
                         height: 30px;
+                        danger: true;
                         clicked => { root.discard-confirmed(root.pending-discard); }
                     }
                 }
@@ -866,10 +859,11 @@ export component SdLibrary inherits Rectangle {
         }
     }
 
-    // DELETE BOTH (`ticket 17`) - the Bundle AND its originals. Reached only from the link inside
-    // the Disassemble confirmation above; never a menu row (`row-menu`'s own model never carries a
-    // "delete-both" action - see the comment beside it). Removes the Bundle (row, then folder) and
-    // then each source Finding (record, then files) - `AD-2`'s ordering, combined over both acts.
+    // DELETE BOTH (`ticket 17`) - the Bundle AND its originals. `BUG-104` moved this to its own
+    // dedicated row in `unsealed-row-menu` ("delete-both-bundle"), reached the same way
+    // Disassemble/Discard originals are - never nested inside another dialog. Removes the Bundle
+    // (row, then folder) and then each source Finding (record, then files) - `AD-2`'s ordering,
+    // combined over both acts.
     if root.pending-delete-both != "" : Rectangle {
         width: 100%;
         height: 100%;
@@ -924,6 +918,7 @@ export component SdLibrary inherits Rectangle {
                     SdActionButton {
                         label: "Delete both";
                         height: 30px;
+                        danger: true;
                         clicked => { root.delete-both-confirmed(root.pending-delete-both); }
                     }
                 }

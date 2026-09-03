@@ -137,19 +137,20 @@ export component SdReviewUpdate inherits Rectangle {
             padding: 0px;
             spacing: 0px;
 
+            // `BUG-102`: the provenance line ("N Findings · composed <when>", now also "· edited
+            // <when>" since ticket 15) used to sit in the header's OWN `@children` slot, right
+            // beside the badge, both packed into the same 52px row as the title and the Close
+            // button. Neither the header nor its panel clips overflow, so once the provenance text
+            // grew too long for what was left after the title, the badge and Close all claimed
+            // their own space, the excess did not truncate or wrap - it spilled OUTSIDE the panel's
+            // own rounded rectangle entirely, visible over the Editor behind it. Moved to its own
+            // row below the header, in the one place with room to actually hold a variable-length
+            // line: the badge alone stays in the header's `@children` slot, short and fixed-width
+            // enough to never risk this again.
             SdModalHeader {
                 icon: @image-url("../../assets/icons/package.svg");
                 title: "Review & Update";
                 closed => { root.closed(); }
-
-                Text {
-                    text: root.provenance;
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: Theme.accent-primary;
-                    vertical-alignment: center;
-                    font-family: "IBM Plex Mono";
-                }
 
                 // AS COMPOSED / EDITING - the one badge this window carries. No Edit/Preview pair:
                 // locked already IS the preview, so two controls collapsed into one (ticket 05's
@@ -195,6 +196,29 @@ export component SdReviewUpdate inherits Rectangle {
                         vertical-alignment: center;
                         font-family: "IBM Plex Sans";
                     }
+                }
+            }
+
+            // THE PROVENANCE ROW (`BUG-102`) - its own full-width row, so a line that grows (ticket
+            // 15's "· edited <when>" made this longer than it used to be) has somewhere to actually
+            // fit: `overflow: elide` truncates gracefully with "…" in the one case even this row
+            // cannot hold it all, rather than spilling outside the panel the way sharing the title
+            // row with the badge and Close did.
+            Rectangle {
+                height: 24px;
+                background: Theme.bg-card;
+                Rectangle { y: parent.height - 1px; width: 100%; height: 1px; background: Theme.border-subtle; }
+                Text {
+                    x: 16px;
+                    width: parent.width - 32px;
+                    height: parent.height;
+                    text: root.provenance;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: Theme.accent-primary;
+                    vertical-alignment: center;
+                    overflow: elide;
+                    font-family: "IBM Plex Mono";
                 }
             }
 

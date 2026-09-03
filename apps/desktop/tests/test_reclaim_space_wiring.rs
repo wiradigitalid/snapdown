@@ -183,7 +183,9 @@ fn every_reclaim_space_callback_is_bound_from_slint_to_rust() {
     let at = window
         .find("if root.reclaim-space-open : SdReclaimSpace {")
         .expect("the mount site must exist");
-    let mount = flat(&window[at..(at + 900).min(window.len())]);
+    // 1200, not 900: `BUG-100` added `toast-text`/`toast-is-error` bindings at this mount site,
+    // pushing the callback forwards below past a window sized before that landed.
+    let mount = flat(&window[at..(at + 1200).min(window.len())]);
 
     let forwards = [
         (

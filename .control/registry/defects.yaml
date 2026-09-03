@@ -5949,3 +5949,98 @@ defects:
       seen-red cycle was needed beyond building and running them against the new code.
       cargo fmt, clippy -D warnings and cargo test --workspace --no-fail-fast all exit 0.
     status: fixed
+
+  - id: BUG-102
+    title: "Review & Update's header packed title, badge and Close into one row, and the provenance line pushed the badge and Close outside the panel"
+    found: "2026-09-03"
+    found_by: "kodesh87, manually testing: reported the top navbar of Bundle view/Edit view as cramped, with 'As Composed' and the Close button shifting - present in both locked and editing modes"
+    component: bundle
+    severity: medium
+    contradicts: []
+    root_cause: layout
+    evidence: |
+      `SdModalHeader`'s `@children` slot held BOTH the provenance line ("N Findings · composed <when>",
+      lengthened further by ticket 15's "· edited <when>") and the AS COMPOSED/EDITING badge, packed
+      into the header's own 52px row alongside the title and the Close button. Neither the header nor
+      its panel clips overflow, so once the provenance text grew past what was left after the title,
+      the excess did not truncate or wrap - it spilled outside the panel's own rounded rectangle,
+      visibly shoving the badge and Close button off their fixed positions. `BUG-99` had already fixed
+      the badge's OWN width instability; this is a second, layout-level cause of the same visual
+      symptom the owner was still seeing.
+    fix: |
+      Moved the provenance line out of the header's `@children` slot into its own dedicated
+      full-width row directly below `SdModalHeader`, with `overflow: elide` so even a line too long
+      for that row truncates gracefully with "…" instead of spilling outside the panel. Only the
+      short, fixed-width badge remains in the header's own row beside the title and Close, which
+      never risks pushing them again. `cargo build -p snapdown-desktop` confirmed the change compiles;
+      the fix applies to both locked and editing modes since both read the same `root.editing`-keyed
+      badge inside the one shared header.
+    status: fixed
+
+  - id: BUG-103
+    title: "Every confirm button read identically regardless of whether the act was reversible, and the four buttons across the Library's dialogs did not share one height"
+    found: "2026-09-03"
+    found_by: "kodesh87, manually testing: asked for matching button heights and for delete actions to read red"
+    component: bundle
+    severity: low
+    contradicts: []
+    root_cause: design
+    evidence: |
+      `SdActionButton` had one visual language for every `primary` button - Delete, Discard originals,
+      Delete both and Disassemble all painted the same accent-blue regardless of Disassemble being the
+      one confirm among the four that is NOT final (it returns the Findings to the filmstrip rather
+      than destroying anything). A Reviewer had no visual signal distinguishing the three genuinely
+      irreversible acts from the one that is not.
+    fix: |
+      Added `in property <bool> danger: false;` to `SdActionButton` (`action-button.slint`); when set,
+      the button's background/hover/pressed states and drop-shadow colour swap to `Theme.semantic-error`
+      instead of the accent triple. Applied `danger: true` to the Delete, Discard and Delete both
+      confirm buttons only - Disassemble stays the plain primary colour, deliberately, since it is
+      reversible. Every one of the four dialogs' Cancel/confirm pair already shared `height: 30px`, so
+      no further change was needed there. Proven seen-red: a new test,
+      `only_the_three_irreversible_confirmations_carry_the_danger_flag` in
+      `test_library_wiring.rs`, was watched failing with `danger: true` removed from the Delete
+      button, then restored and watched pass. cargo fmt, clippy -D warnings and
+      cargo test --workspace --no-fail-fast all exit 0.
+    status: fixed
+
+  - id: BUG-104
+    title: "Delete both, reversing ticket 17's own design: the owner asked for a dedicated context-menu row instead of a second step hidden inside the Disassemble confirmation"
+    found: "2026-09-03"
+    found_by: "kodesh87, manually testing, changing their mind mid-feedback on BUG-101's own fix: 'saya berubah pikiran, buatkan aja Delete di context menu... sehingga dedicated'"
+    component: bundle
+    severity: medium
+    contradicts: ["ticket 17's own recorded design, and BUG-101's fix built on top of it"]
+    root_cause: design
+    evidence: |
+      `ticket 17` deliberately kept "delete-both" out of both row-menu models, reachable only through
+      a link (later a button, after `BUG-101`) nested inside the Disassemble confirmation - one
+      deliberate extra click below Disassemble/Cancel, on the reasoning that indirection was useful
+      safety for the product's single most destructive act. The owner, having just asked for that
+      button to be made visually discoverable under `BUG-101`, reconsidered the indirection itself:
+      wanted Delete both reachable the same direct way Disassemble and Discard originals already are -
+      a dedicated row in the context menu - rather than nested inside another dialog.
+    fix: |
+      `unsealed-row-menu` (`library.slint`) gained a third entry, `"delete-both-bundle"` / "Delete
+      both…", alongside Disassemble…/Discard originals…. It forwards through the exact same
+      `row-menu-action` path those two already use: `main.rs`'s `on_library_row_menu_action` now
+      answers `"delete-both-bundle"` by calling `set_library_pending_delete_both(id)`, using the same
+      `detail` (Bundle name, Finding count) that handler already reads live for every other row
+      action. The old second-step button inside the Disassemble confirmation, and the
+      `delete-both-requested` callback that fired it (declared in both `library.slint` and
+      `appwindow.slint`, handled by `main.rs`'s `on_library_delete_both_requested`), are removed
+      entirely - `delete-both-cancelled`/`delete-both-confirmed` and the Delete both dialog itself are
+      unchanged, since the dialog is still how the act is confirmed, only how it is REACHED changed.
+
+      Four tests in `test_library_wiring.rs` were updated for the reversal: the callback-wiring table
+      lost its `delete-both-requested` tuple; `the_destructive_menu_entry_is_keyed_on_the_rust_supplied_sealed_flag`
+      now asserts the unsealed model DOES carry `"delete-both-bundle"`; the old
+      `delete_both_never_appears_as_a_menu_row` test was replaced by
+      `delete_both_appears_as_a_dedicated_menu_row`, asserting the opposite; and the old
+      `delete_both_is_reached_only_through_a_button_inside_the_disassemble_dialog` test was replaced
+      by `delete_both_is_reached_directly_from_the_row_menu`, proving the button is gone and the
+      `on_library_row_menu_action` handler answers the new action.
+      spec.md's own "The four confirmations" note (already corrected once, for BUG-101) is corrected
+      again in place, dated, explaining this second reversal on top of the first.
+      cargo fmt, clippy -D warnings and cargo test --workspace --no-fail-fast all exit 0.
+    status: fixed
