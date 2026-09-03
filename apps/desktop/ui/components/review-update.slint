@@ -85,7 +85,14 @@ export component SdReviewUpdate inherits Rectangle {
 
     // Swallows every click that misses the panel, so the Library (and the Editor beneath it) stay
     // inert - the same reasoning Assemble & Review's own scrim TouchArea gives.
-    TouchArea { }
+    //
+    // `scroll-event` too (`BUG-94`): a bare `TouchArea` rejects wheel input by default, and a
+    // rejected event keeps walking backward to whatever is behind it - the Library, then the
+    // Editor's canvas - so scrolling over any non-scrolling part of this window (the header, the
+    // gaps between blocks) reached straight through both.
+    TouchArea {
+        scroll-event(event) => { accept }
+    }
 
     // Escape closes it - or, while editing, behaves exactly like Cancel: leaving must ask first when
     // there is something to lose, and Escape is simply another way to try to leave. Declared before

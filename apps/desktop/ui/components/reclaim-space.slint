@@ -70,7 +70,12 @@ export component SdReclaimSpace inherits Rectangle {
 
     // Swallows any click that misses the panel, so whatever is underneath (Library or Settings)
     // stays inert - `SdLibrary`'s own reasoning, now that this IS a scrim.
-    TouchArea { }
+    //
+    // `scroll-event` too (`BUG-94`): a bare `TouchArea` rejects wheel input by default, and a
+    // rejected event keeps walking backward to whatever is behind it.
+    TouchArea {
+        scroll-event(event) => { accept }
+    }
 
     // Escape closes it - the Library's own pattern, borrowed rather than reinvented.
     reclaim-space-keys := FocusScope {

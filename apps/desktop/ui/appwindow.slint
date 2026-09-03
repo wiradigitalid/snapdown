@@ -3533,7 +3533,12 @@ export component AppWindow inherits Window {
             background: Theme.overlay-scrim;
 
             // Swallows every click that misses the panel, so the Editor behind is inert.
-            TouchArea { }
+            //
+            // `scroll-event` too (`BUG-94`): a bare `TouchArea` rejects wheel input by default, and
+            // a rejected event keeps walking backward to whatever is behind it - the canvas.
+            TouchArea {
+                scroll-event(event) => { accept }
+            }
 
             // Escape closes it. Declared before the panel and focused on creation, so it holds the
             // keyboard until the Reviewer clicks into a field.

@@ -5680,3 +5680,50 @@ defects:
       exactly the defect; the fix was restored and it passed. `cargo fmt`, `clippy -D warnings` and
       `cargo test --workspace --no-fail-fast` all exit 0.
     status: fixed
+
+  - id: BUG-94
+    title: "Scrolling over a modal (the Library, Review & Update, Reclaim space, Assemble & Review) could still pan or zoom the Editor's canvas underneath"
+    found: "2026-09-03"
+    found_by: kodesh87, manually testing the just-merged Bundle Library feature - "ketika saya di library (modal window), kenapa scrolling malah menyentuh/mentrigger scroll canvas? bukankah kalau sudah modal dialog/window, seluruh aktifitas terhenti di window dialog?"
+    component: bundle
+    severity: medium
+    contradicts: []
+    root_cause: code
+    evidence: |
+      Every full-window modal in this app (`SdLibrary`, `SdReviewUpdate`, `SdReclaimSpace`, and
+      Assemble & Review's own overlay in `appwindow.slint`) is a `Rectangle` covering the whole
+      window, with a `TouchArea` immediately inside it whose only documented job was "swallows every
+      click that misses the panel." None of the four gave that `TouchArea` its own `scroll-event`
+      handler.
+
+      Confirmed empirically, not by reading Slint's default-callback semantics and guessing: a
+      minimal reproduction (a "canvas" `TouchArea` behind a full-window "scrim" `Rectangle` holding
+      its own plain `TouchArea`, with a non-scrolling "panel" area inside the scrim, matching the
+      header/padding shape of the real modals) was driven headless with
+      `slint::platform::WindowEvent::PointerScrolled` over the panel area. Without a `scroll-event`
+      handler on the scrim's `TouchArea`, the canvas behind it received the event (count: 1) - a bare
+      `TouchArea` rejects wheel input by default, and Slint's own input handling walks a REJECTED
+      wheel event backward through the hit-test to whatever is behind it, exactly the way it already
+      does for a `Flickable` that has reached the end of its own scroll range (documented in
+      `i-slint-core`'s own `input_items.rs`: "we must remove the has_hover flag as there might be a
+      scroll under us. It will be put back later").
+
+      In the real app this meant: scrolling over any part of one of these modals that has nothing of
+      its own to consume the wheel - the header, the padding around a list, or a `ScrollView` once it
+      has reached either end - reached straight through the modal to the Editor's canvas and
+      panned/zoomed it, which is precisely the opposite of what a modal promises.
+    fix: |
+      Each of the four scrim `TouchArea`s gained an explicit `scroll-event(event) => { accept }`.
+      Since Slint only keeps walking a wheel event backward when the current item REJECTS it, an
+      explicit accept at the scrim - which spans the entire modal window - terminates that walk for
+      any position not already claimed by something more specific in front of it (a `ScrollView`
+      that still has room to scroll, for instance, which continues to work exactly as before).
+
+      SEEN RED FIRST, twice over: the same headless probe with the fix applied to its own scrim
+      showed the canvas receiving zero events (down from one). Then the real regression test,
+      `every_modal_scrims_touch_area_explicitly_accepts_scroll_events`
+      (`test_modal_scrims_block_scroll_passthrough.rs`), was run against all four files restored to
+      their pre-fix state (`git show HEAD:...`, since the fix was not yet committed): it failed on
+      the first modal checked, naming exactly the defect. Restored, re-ran, green. `cargo fmt`,
+      `clippy -D warnings` and `cargo test --workspace --no-fail-fast` all exit 0.
+    status: fixed

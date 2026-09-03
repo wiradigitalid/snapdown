@@ -154,7 +154,16 @@ export component SdLibrary inherits Rectangle {
 
     // Swallows any click that misses the panel, so the Editor beneath stays inert - Assemble &
     // Review's own scrim-covering TouchArea, now that this IS a scrim rather than an opaque screen.
-    TouchArea { }
+    //
+    // `scroll-event` ALSO needs an explicit accept (`BUG-94`): a bare `TouchArea` rejects wheel
+    // input by default, and a rejected event keeps walking backward through whatever the hit-test
+    // finds behind it - which, for a modal, is the Editor's own canvas underneath, so scrolling
+    // anywhere over an area of the Library that has nothing of its own to scroll (the header, the
+    // padding around the list, or the row list once it has reached either end) reached through and
+    // zoomed/panned the canvas instead. A real modal window admits no such thing happens.
+    TouchArea {
+        scroll-event(event) => { accept }
+    }
 
     // Escape closes it - Assemble & Review's own pattern. Declared before the panel and focused on
     // creation, so it holds the keyboard until the Reviewer clicks into something else.
