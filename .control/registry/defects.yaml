@@ -5615,3 +5615,31 @@ defects:
       not a shipped test. `cargo fmt`, `clippy -D warnings` and `cargo test --workspace --no-fail-fast`
       all exit 0.
     status: fixed
+
+  - id: BUG-92
+    title: "The Library row's overflow-button dots sat pinned to the top of their button, not centred"
+    found: "2026-09-03"
+    found_by: kodesh87, manually testing the just-merged Bundle Library feature - "di kotak paling kanan, ada titik 3 yang terlalu ke atas, keluar dari layout persegi"
+    component: bundle
+    severity: low
+    contradicts: []
+    root_cause: code
+    evidence: |
+      `library.slint`'s overflow button draws its three dots inside a `HorizontalLayout` with
+      `alignment: center` and no explicit height. `alignment` on a `HorizontalLayout` sets only the
+      MAIN (horizontal) axis, per its own doc comment in Slint's builtins
+      (`in property <LayoutAlignment> alignment;` - "Set the alignment along the main (horizontal)
+      axis"); the CROSS (vertical) axis has its own separate property, `cross-axis-alignment`, which
+      was never set. Left at its default, three fixed-size 2.3px dots inside the button's full 28px
+      height sat at the top rather than centred.
+
+      Easy to miss until now: `BUG-91`'s hover flicker made the whole icon group - dots included -
+      hard to look at for more than a fraction of a second at a time, so a static misalignment inside
+      it went unnoticed until that flicker was fixed and the button finally held still.
+    fix: |
+      Added `cross-axis-alignment: center;` beside the existing `alignment: center;` on the dots'
+      `HorizontalLayout`. Regression test `the_overflow_buttons_dots_are_centred_on_both_axes`
+      (`test_library_wiring.rs`) added and SEEN RED FIRST: run against the file with the new line
+      removed, it failed naming exactly this; restored, re-ran, green. `cargo fmt`, `clippy -D
+      warnings` and `cargo test --workspace --no-fail-fast` all exit 0.
+    status: fixed
