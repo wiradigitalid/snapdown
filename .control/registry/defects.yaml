@@ -5643,3 +5643,40 @@ defects:
       removed, it failed naming exactly this; restored, re-ran, green. `cargo fmt`, `clippy -D
       warnings` and `cargo test --workspace --no-fail-fast` all exit 0.
     status: fixed
+
+  - id: BUG-93
+    title: "A toast fired while any full-window overlay was open painted behind it, not over it"
+    found: "2026-09-03"
+    found_by: kodesh87, manually testing the just-merged Bundle Library feature - "ketika library sedang hidup, notifikasinya malah di jendela snapdown editor (misal soal copied markdown)"
+    component: settings
+    severity: medium
+    contradicts: []
+    root_cause: code
+    evidence: |
+      `appwindow.slint`'s toast `Rectangle` carried its own comment: "RESULT LINE - last declared, so
+      it draws over everything." True the day it was written - false the moment the first overlay was
+      added below it in the file. By the time this was found, FIVE more had landed after the toast,
+      each one now painting on top of a toast that believed it was on top of everything: the Library,
+      Review & Update, Settings, Reclaim space, the Vault-move confirmation, the delete-Finding
+      confirmation, the canvas/filmstrip context menu, and Assemble & Review. Since Slint paints later
+      siblings over earlier ones, a toast fired while ANY of those was open (Copy Markdown's, for
+      instance, fired from inside the Library) rendered behind that overlay's own backdrop instead of
+      over whatever the Reviewer was actually looking at - functionally invisible in every case where
+      the overlay is opaque or has its own scrim.
+    fix: |
+      The toast `Rectangle` moved to the true end of the component - after every overlay's own mount
+      point - so it is genuinely the last thing declared, and its comment corrected to explain why it
+      moved rather than merely re-asserting the same claim in a new place (the load-bearing kind of
+      staleness `AGENTS.md` itself warns about: a claim that would steer the next reader wrong). Only
+      the Rectangle moved; its two clearing `Timer`s stayed where they were, since a `Timer` is not a
+      rendered element and its position has no effect on paint order.
+
+      A new regression test, `the_toast_is_declared_after_every_full_window_overlay_so_it_paints_on_top_of_all_of_them`
+      (`test_toast_paints_over_every_overlay.rs`), asserts the ORDERING property directly - the toast
+      must be declared after every named overlay - rather than re-checking a fixed list that would
+      silently stop meaning anything the next time a ninth overlay lands below the eight named here
+      instead of below the toast. SEEN RED FIRST: run against the pre-fix file (`git show HEAD:...`,
+      since the fix was not yet committed), it failed on the very first overlay checked, naming
+      exactly the defect; the fix was restored and it passed. `cargo fmt`, `clippy -D warnings` and
+      `cargo test --workspace --no-fail-fast` all exit 0.
+    status: fixed

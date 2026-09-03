@@ -3155,50 +3155,25 @@ export component AppWindow inherits Window {
                 }
             }
         }
-        // RESULT LINE - last declared, so it draws over everything.
+        // RESULT LINE (`BUG-93`). The Rectangle itself now sits at the very end of this component
+        // (search "RESULT LINE - moved" below) - only its clearing Timer stays here, since a Timer
+        // is not a rendered element and its position has no effect on paint order.
+        //
+        // This USED to say "last declared, so it draws over everything," and that was true the day
+        // it was written. It stopped being true the moment the first overlay was added after it -
+        // the Library, Review & Update, Settings, Reclaim space, the Vault-move and delete-Finding
+        // confirmations, the context menu, and Assemble & Review all landed below this point over
+        // several waves, each one now painting on top of a toast that believed it was on top of
+        // everything. A Reviewer who fired a toast (Copy Markdown's, for instance) while any one of
+        // those was open watched it appear behind the Editor's own dimmed backdrop instead of over
+        // whatever they were actually looking at - found and reported the same day this comment is
+        // being corrected.
         //
         // Assembling a Bundle writes image files, a Markdown file and a database row, and changes
         // nothing at all on screen. Without a line that says so, a success and a silent failure look
         // identical from the Editor - and a silent failure on exactly this path is what BUG-19 and
         // BUG-23 both are. The semantic colour is carried by the border and the dot rather than by
         // the text, because a red or green body on a tinted plate does not clear AA in both themes.
-        if root.toast-text != "" : Rectangle {
-            x: (parent.width - self.width) / 2;
-            y: parent.height - self.height - 28px;
-            width: min(560px, parent.width - 64px);
-            height: 42px;
-            border-radius: Theme.radius-sharp;
-            background: root.bg-card;
-            border-width: 1px;
-            border-color: root.toast-is-error ? Theme.semantic-error : Theme.semantic-success;
-            drop-shadow-blur: 18px;
-            drop-shadow-color: Theme.overlay-shadow;
-
-            HorizontalLayout {
-                padding-left: 14px;
-                padding-right: 14px;
-                spacing: 10px;
-                alignment: start;
-
-                Rectangle {
-                    width: 8px;
-                    height: 8px;
-                    y: (parent.height - self.height) / 2;
-                    border-radius: Theme.radius-pill;
-                    background: root.toast-is-error ? Theme.semantic-error : Theme.semantic-success;
-                }
-
-                Text {
-                    text: root.toast-text;
-                    font-size: 12px;
-                    font-weight: 600;
-                    color: root.text-primary;
-                    vertical-alignment: center;
-                    wrap: word-wrap;
-                    font-family: "IBM Plex Sans";
-                }
-            }
-        }
 
         // The hotkey arrival clears itself for the same reason the result line does: a confirmation
         // that stays forever stops being a confirmation of anything in particular.
@@ -3869,6 +3844,49 @@ export component AppWindow inherits Window {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // RESULT LINE - moved here, `BUG-93`. Genuinely the last thing declared in this component
+        // now, so it draws over the Library, Review & Update, Settings, Reclaim space, the Vault-move
+        // and delete-Finding confirmations, the context menu, and Assemble & Review - every one of
+        // which used to paint over it. See the corrected comment beside the clearing Timer, above,
+        // for why this moved rather than merely being re-explained in place.
+        if root.toast-text != "" : Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: parent.height - self.height - 28px;
+            width: min(560px, parent.width - 64px);
+            height: 42px;
+            border-radius: Theme.radius-sharp;
+            background: root.bg-card;
+            border-width: 1px;
+            border-color: root.toast-is-error ? Theme.semantic-error : Theme.semantic-success;
+            drop-shadow-blur: 18px;
+            drop-shadow-color: Theme.overlay-shadow;
+
+            HorizontalLayout {
+                padding-left: 14px;
+                padding-right: 14px;
+                spacing: 10px;
+                alignment: start;
+
+                Rectangle {
+                    width: 8px;
+                    height: 8px;
+                    y: (parent.height - self.height) / 2;
+                    border-radius: Theme.radius-pill;
+                    background: root.toast-is-error ? Theme.semantic-error : Theme.semantic-success;
+                }
+
+                Text {
+                    text: root.toast-text;
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: root.text-primary;
+                    vertical-alignment: center;
+                    wrap: word-wrap;
+                    font-family: "IBM Plex Sans";
                 }
             }
         }
