@@ -236,12 +236,22 @@ choice from within the Disassemble confirmation, never as a menu row.
 
 **The four confirmations** carry the copy the artboards settled: each names the Bundle in quotes,
 counts what goes, states what comes back or that nothing does, and ends "This cannot be undone." The
-cancel verb keeps what the act would destroy ("Keep it", "Keep them"); the confirm verb is the act
-("Disassemble", "Discard", "Delete both", "Delete"). The Discard originals confirmation additionally
-names any other Bundle that shares one of those Findings and will therefore be sealed by the act —
-that consequence is real today (`BR-12` + `BR-122`) and the confirmation is the only place to say it.
-The `FR-41` wording in the corpus will be brought into line afterwards; the safer behaviour is built
-first.
+confirm verb is the act ("Disassemble", "Discard", "Delete both", "Delete"). The Discard originals
+confirmation additionally names any other Bundle that shares one of those Findings and will therefore
+be sealed by the act — that consequence is real today (`BR-12` + `BR-122`) and the confirmation is
+the only place to say it. The `FR-41` wording in the corpus will be brought into line afterwards; the
+safer behaviour is built first.
+
+**Corrected 2026-09-03, on the owner's decision (`BUG-101`).** This paragraph used to say the cancel
+verb keeps what the act would destroy ("Keep it", "Keep them") rather than a plain "Cancel", and that
+"Delete both" is reached through a text LINK below the Disassemble confirmation's two buttons, never
+a third button — both deliberate, on the reasoning that a link forces one more deliberate motion
+before the product's single most destructive act. In practice a Reviewer testing the feature could
+not tell the link was pressable at all ("orang gak tahu itu button" — nobody can tell it's a button),
+which defeats a safety device that has to be found to work: every cancel button now reads "Cancel",
+and "Delete both instead" is a real, visibly clickable `SdActionButton` — still on its own row below
+Cancel/Disassemble, so it is not a third button LEVEL with the other two and the extra deliberate step
+survives, just discoverable now rather than invisible.
 
 **Write ordering on delete follows `AD-2`: the record first, then its files.** Disassemble and Delete
 remove the Bundle's row (its BundleItems cascade) and only then the Bundle's folder. A crash between

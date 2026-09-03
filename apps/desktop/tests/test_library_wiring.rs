@@ -348,8 +348,14 @@ fn the_row_menu_reuses_the_shared_context_menu_component() {
 
 /// All four confirmations carry the settled copy from `spec.md`'s "The four confirmations": the
 /// Bundle named in quotes, what comes back (or that nothing does), and "This cannot be undone." -
-/// plus the house cancel/confirm verbs, "Keep it" and the act itself. Ticket 16 built Disassemble and
+/// plus the house cancel/confirm verbs, "Cancel" and the act itself. Ticket 16 built Disassemble and
 /// Delete; ticket 17 adds Discard originals and Delete both to the same standard.
+///
+/// `BUG-101` corrected the cancel verb from "Keep it"/"Keep them" (naming what the act would
+/// destroy) to a plain "Cancel", on the owner's decision recorded in `spec.md`'s own "Corrected
+/// 2026-09-03" note beside "The four confirmations" - a Reviewer testing the feature found the
+/// object-naming verb less immediately recognisable as a cancel action than a proper reading of
+/// the (deliberately non-generic) original intended.
 #[test]
 fn all_four_confirmations_carry_the_settled_copy() {
     let library = flat(&read("ui/components/library.slint"));
@@ -405,10 +411,9 @@ fn all_four_confirmations_carry_the_settled_copy() {
     }
 
     assert_eq!(
-        library.matches("label: \"Keep it\";").count(),
+        library.matches("label: \"Cancel\";").count(),
         4,
-        "all four confirmations' cancel verb must read \"Keep it\" - the object (the Bundle, or its \
-         captures) rather than a generic \"Cancel\""
+        "all four confirmations' cancel verb must read \"Cancel\" (`BUG-101`)"
     );
     assert!(
         library.contains("label: \"Disassemble\";"),
@@ -447,12 +452,17 @@ fn the_discard_confirmation_makes_room_for_the_other_bundle_warning() {
     );
 }
 
-/// `Delete both` is reachable ONLY from the link inside the Disassemble confirmation - never a menu
-/// row (`delete_both_never_appears_as_a_menu_row` proves the menu half); this is the link's own
-/// wiring, one deliberate extra click from "Disassemble" and "Discard originals" both, per spec.md's
-/// "the most destructive act in the product is never one click away".
+/// `Delete both` is reachable ONLY from the button inside the Disassemble confirmation - never a
+/// menu row (`delete_both_never_appears_as_a_menu_row` proves the menu half); this is that button's
+/// own wiring, one deliberate extra click from "Disassemble" and "Discard originals" both, per
+/// spec.md's "the most destructive act in the product is never one click away".
+///
+/// `BUG-101` changed this from a bare `Text` + a separate `TouchArea` (invisible as a control - a
+/// Reviewer testing the feature could not tell it was pressable) to a real `SdActionButton`, still
+/// on its own row below Cancel/Disassemble rather than a third button level with them, so the extra
+/// deliberate step survives while the control is now discoverable.
 #[test]
-fn delete_both_is_reached_only_through_a_link_inside_the_disassemble_dialog() {
+fn delete_both_is_reached_only_through_a_button_inside_the_disassemble_dialog() {
     let library = flat(&read("ui/components/library.slint"));
     let disassemble_at = library
         .find("if root.pending-disassemble != \"\" : Rectangle {")
@@ -461,17 +471,18 @@ fn delete_both_is_reached_only_through_a_link_inside_the_disassemble_dialog() {
         .find("if root.pending-delete-both != \"\" : Rectangle {")
         .expect("the Delete both confirmation must exist");
 
-    // The link that starts the second step lives INSIDE the Disassemble dialog's own block, i.e.
+    // The button that starts the second step lives INSIDE the Disassemble dialog's own block, i.e.
     // between its opening and the Delete both dialog that follows it.
     let disassemble_block = &library[disassemble_at..delete_both_at];
     assert!(
-        disassemble_block.contains("delete-both-link := TouchArea {"),
-        "the Disassemble confirmation must contain the link that starts the second step"
+        disassemble_block.contains("delete-both-button := SdActionButton {"),
+        "the Disassemble confirmation must contain a REAL button that starts the second step, not \
+         a bare Text/TouchArea pair"
     );
     assert!(
         disassemble_block
             .contains("clicked => { root.delete-both-requested(root.pending-disassemble); }"),
-        "the link must fire `delete-both-requested` with the Bundle currently being disassembled"
+        "the button must fire `delete-both-requested` with the Bundle currently being disassembled"
     );
 
     let delete_both_block = &library[delete_both_at..(delete_both_at + 1400).min(library.len())];

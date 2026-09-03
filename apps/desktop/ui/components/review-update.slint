@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { SdModalHeader } from "modal.slint";
+import { SdModalHeader, SdToast } from "modal.slint";
 import { SdActionButton, SdDocHeading } from "action-button.slint";
 import { SdTextField } from "text-field.slint";
 import { ScrollView } from "std-widgets.slint";
@@ -56,6 +56,12 @@ export component SdReviewUpdate inherits Rectangle {
     // `cancel-clicked`'s handler, after checking whether the buffer actually differs from what is
     // stored.
     in-out property <bool> cancel-pending: false;
+
+    // `BUG-100`: docked inside THIS panel rather than shown at the window root, so a toast fired
+    // by Save/Cancel/Discard renders where the Reviewer is actually looking, not behind this
+    // window's own panel.
+    in property <string> toast-text: "";
+    in property <bool> toast-is-error: false;
 
     callback closed();
     // Footer's Edit, locked mode only. Rust builds the in-memory edit buffer from the Bundle's own
@@ -149,13 +155,33 @@ export component SdReviewUpdate inherits Rectangle {
                 // locked already IS the preview, so two controls collapsed into one (ticket 05's
                 // resolved variant C); ticket 14 gives the same badge a second state rather than
                 // adding a second control.
+                //
+                // `BUG-99`: the badge's width used to be `badge-text.preferred-width + 18px` -
+                // measured off whichever of the two strings was CURRENTLY showing. "As composed" is
+                // longer than "Editing", so switching modes changed the badge's own width, which
+                // shifted the provenance `Text` beside it (this header's `alignment: end` group
+                // packs both together, right-aligned) - visibly right next to the header's own
+                // Close button, easy to read as "the Close button moved" even though the button
+                // itself, a fixed-width sibling outside this group, never does. Fixed width now,
+                // measured off `badge-reference` (the longer string, always) rather than whichever
+                // text happens to be showing - confirmed with a headless probe that neither the
+                // badge nor the provenance Text move a pixel between the two states any more.
                 Rectangle {
                     height: 22px;
-                    width: badge-text.preferred-width + 18px;
+                    width: badge-reference.preferred-width + 18px;
                     border-radius: Theme.radius-sharp;
                     background: root.editing ? Theme.semantic-success-bg : Theme.bg-subtle;
                     border-width: 1px;
                     border-color: root.editing ? Theme.semantic-success : Theme.border-subtle;
+
+                    // Invisible - exists only so its `preferred-width` gives this badge a size that
+                    // never changes regardless of which of the two real strings is showing.
+                    badge-reference := Text {
+                        text: "As composed";
+                        font-size: 10px;
+                        font-weight: 700;
+                        visible: false;
+                    }
 
                     badge-text := Text {
                         x: 9px;
@@ -365,10 +391,41 @@ export component SdReviewUpdate inherits Rectangle {
 
             // FOOTER - locked: primary Edit, secondary Close. Editing: primary Save (always
             // enabled - the map's own amendment), secondary Cancel.
+            //
+            // `BUG-99`: neither button had an explicit width, so each sized itself from its OWN
+            // label alone - "Close" and "Cancel" are different lengths, so the secondary button
+            // (and the whole footer, since it is right-aligned) visibly resized between locked and
+            // editing. Fixed here to one shared width per role, each measured off the wider of its
+            // own two candidate labels via a hidden reference `Text` - the same pattern the header
+            // badge above uses, for the identical reason.
             Rectangle {
                 height: 60px;
                 background: Theme.bg-card;
                 Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.border-subtle; }
+
+                // Invisible - exist only so their `preferred-width` gives both footer buttons in a
+                // role a size that never changes regardless of which mode is showing.
+                secondary-reference := Text {
+                    text: "Cancel";
+                    font-size: 11px;
+                    font-weight: 700;
+                    font-family: "IBM Plex Sans";
+                    visible: false;
+                }
+                primary-reference-edit := Text {
+                    text: "Edit";
+                    font-size: 11px;
+                    font-weight: 700;
+                    font-family: "IBM Plex Sans";
+                    visible: false;
+                }
+                primary-reference-save := Text {
+                    text: "Save";
+                    font-size: 11px;
+                    font-weight: 700;
+                    font-family: "IBM Plex Sans";
+                    visible: false;
+                }
 
                 HorizontalLayout {
                     padding-left: 16px;
@@ -378,12 +435,14 @@ export component SdReviewUpdate inherits Rectangle {
 
                     if !root.editing : SdActionButton {
                         y: (parent.height - self.height) / 2;
+                        width: secondary-reference.preferred-width + 24px;
                         label: "Close";
                         primary: false;
                         clicked => { root.closed(); }
                     }
                     if !root.editing : SdActionButton {
                         y: (parent.height - self.height) / 2;
+                        width: max(primary-reference-edit.preferred-width, primary-reference-save.preferred-width) + 24px;
                         label: "Edit";
                         primary: true;
                         clicked => { root.edit-clicked(); }
@@ -391,18 +450,30 @@ export component SdReviewUpdate inherits Rectangle {
 
                     if root.editing : SdActionButton {
                         y: (parent.height - self.height) / 2;
+                        width: secondary-reference.preferred-width + 24px;
                         label: "Cancel";
                         primary: false;
                         clicked => { root.cancel-clicked(); }
                     }
                     if root.editing : SdActionButton {
                         y: (parent.height - self.height) / 2;
+                        width: max(primary-reference-edit.preferred-width, primary-reference-save.preferred-width) + 24px;
                         label: "Save";
                         primary: true;
                         clicked => { root.save-clicked(); }
                     }
                 }
             }
+        }
+
+        // `BUG-100` - docked to THIS panel, not the window. 60px clears the footer's own height
+        // (see the footer `Rectangle`'s `height: 60px` above) plus a small gap above it.
+        SdToast {
+            text: root.toast-text;
+            is-error: root.toast-is-error;
+            x: (parent.width - self.width) / 2;
+            y: parent.height - self.height - 72px;
+            width: min(560px, parent.width - 64px);
         }
     }
 

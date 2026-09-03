@@ -1051,11 +1051,22 @@ fn bundle_original_bytes(ctx: &AppContext, detail: &BundleDetail) -> u64 {
 
 /// "373.1 MB" - one decimal place, the exact wording `spec.md`'s own artboard uses
 /// (`ReclaimSpace.dc.html`). An exact zero prints bare ("0 MB"), matching `ReclaimEmpty.dc.html`.
+///
+/// `BUG-98`: anything under roughly 50 KB (a single small screenshot, easily) rounded to "0.0 MB" -
+/// a real, non-zero size reading as indistinguishable from nothing to reclaim. Below 0.1 MB this
+/// switches to whole kilobytes instead, which is precise at the sizes screenshots actually are; MB
+/// with one decimal stays exactly as it was for everything at or above that.
 fn format_mb(bytes: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
     if bytes == 0 {
         "0 MB".to_string()
+    } else if (bytes as f64) < 0.1 * MB {
+        // `.max(1)`: a non-zero byte count must never round down to a bare "0 KB", which would
+        // repeat the exact complaint this fix exists to solve, one unit smaller.
+        format!("{} KB", ((bytes as f64 / KB).round() as u64).max(1))
     } else {
-        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+        format!("{:.1} MB", bytes as f64 / MB)
     }
 }
 
@@ -2367,13 +2378,31 @@ fn open_file_location(_ctx: &AppContext, _image_path: &str) -> Result<(), String
 /// `/select,<path>` opens the PARENT of whatever path it is given with that path merely
 /// highlighted. Given the Vault root itself, `/select` would open the Vault's parent folder with
 /// the Vault highlighted, not what "Show in Explorer" on a Vault means.
+///
+/// `BUG-96`: this used to pass `path` straight through as a Rust `PathBuf` argument. That silently
+/// failed to open a Bundle's folder specifically, because `bundle_folder_path` builds it as
+/// `vault_path.join(markdown_path's parent)` - the Vault root in native `\` form joined to
+/// `markdown_path`'s own forward-slash Vault-relative form (`"bundles/<id>"`, never rewritten,
+/// since it is a storage key, not a Windows path) - producing a MIXED-separator string like
+/// `C:\Vault\bundles/01a0...`. `open_file_location`, right above, already found and documented
+/// this exact failure mode for the select-a-file case ("Explorer also rejects" mixed separators);
+/// this function needed the identical treatment for the open-a-folder case and never got it.
+/// A path exactly as Explorer's command line needs it: backslashes throughout, never a mix.
+/// `Path`/`PathBuf` equality is component-wise and does not care which separator a path was built
+/// with, so a test comparing `PathBuf`s cannot catch a mixed-separator string - only a test against
+/// this function's own string output can. Shared by `open_folder`; `open_file_location` above needs
+/// the identical conversion and already applies it inline (found first, on the select-a-file path).
+fn native_path_string(path: &Path) -> String {
+    path.to_string_lossy().replace('/', "\\")
+}
+
 #[cfg(windows)]
 fn open_folder(path: &Path) -> Result<(), String> {
     if !path.is_dir() {
         return Err("That folder no longer exists.".to_string());
     }
     std::process::Command::new("explorer.exe")
-        .arg(path)
+        .arg(native_path_string(path))
         .spawn()
         .map_err(|e| format!("Could not open the file manager: {e}"))?;
     Ok(())
@@ -5729,6 +5758,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 *edit_slot = None;
                 win.set_review_update_editing(false);
+                // `BUG-97`: the Library stays open the whole time Review & Update is (ticket 13's
+                // own design - it stacks on top, `library-open` is never touched by opening or
+                // closing this window), so its row list is whatever `build_library_rows` last
+                // built, before this Save. Without refreshing it here, ticket 15's "edited" suffix
+                // did not appear until the Reviewer closed and reopened the Library by hand.
+                if win.get_library_open() {
+                    open_library(&win, &ctx_review_update_save);
+                }
             }
             Err(message) => {
                 // `editing` stays true and `edit_slot` stays `Some` - BR-5's "an unsaved edit
@@ -8344,6 +8381,42 @@ mod tests {
         assert_eq!(err, "That folder no longer exists.");
     }
 
+    /// `BUG-96`: `bundle_folder_path` joins the Vault root (native `\`) to `markdown_path`'s own
+    /// forward-slash Vault-relative parent, producing a MIXED-separator path. `PathBuf` equality is
+    /// component-wise and does not notice this - `bundle_folder_path_is_the_markdown_files_own_folder`
+    /// above passes regardless - so this asserts the actual STRING `open_folder` hands to Explorer's
+    /// command line instead, which is where the real failure lived: Explorer silently did nothing
+    /// with a path like `C:\Vault\bundles/b-1`.
+    #[test]
+    fn native_path_string_has_no_forward_slashes_even_when_the_input_path_mixes_them() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (bundle, _items) = bundle_fixture("b-1");
+        let ctx = library_test_ctx(
+            vault_dir.path(),
+            SqliteBundleStore::open_in_memory().expect("a bundle store"),
+        );
+
+        let folder = bundle_folder_path(&ctx, &bundle);
+        // Reproduce the exact mixed shape a real Bundle's `markdown_path` produces, rather than
+        // trusting that `bundle_folder_path`'s current implementation still mixes separators -
+        // `bundle.markdown_path` in the fixture is already `"bundles/b-1/bundle.md"` (forward
+        // slashes, a storage key), so `folder`'s own string form is the thing under test.
+        assert!(
+            folder.to_string_lossy().contains('/'),
+            "the fixture must reproduce the mixed-separator shape this guards against: {folder:?}"
+        );
+
+        let native = native_path_string(&folder);
+        assert!(
+            !native.contains('/'),
+            "the string handed to Explorer's command line must be all-backslash: {native:?}"
+        );
+        assert!(
+            native.contains('\\'),
+            "must still be a real Windows path: {native:?}"
+        );
+    }
+
     // ===== ticket 16: disassemble a Bundle, or delete a sealed one ==========================
 
     fn finding_fixture(finding_store: &SqliteFindingStore, id: &str) {
@@ -9901,6 +9974,33 @@ mod tests {
         // rounding ambiguity of its own.
         assert_eq!(format_mb(1_048_576 + 524_288), "1.5 MB");
         assert_eq!(format_mb(1_048_576 * 2), "2.0 MB");
+    }
+
+    /// `BUG-98`: a real screenshot's original capture is routinely well under 0.1 MB, and
+    /// `"{:.1} MB"` rounds every one of those down to "0.0 MB" - a genuine, non-zero size reading as
+    /// indistinguishable from the true-zero "0 MB" `format_mb(0)` already prints. Below 0.1 MB this
+    /// must switch to whole kilobytes, precise at the sizes that actually occur.
+    #[test]
+    fn format_mb_switches_to_kilobytes_under_one_tenth_of_a_megabyte() {
+        assert_eq!(format_mb(51_200), "50 KB", "exactly 50 KiB");
+        assert_eq!(format_mb(1_024), "1 KB", "exactly 1 KiB");
+        assert_eq!(
+            format_mb(10),
+            "1 KB",
+            "a non-zero byte count must never round down to a bare 0 KB - the same complaint one \
+             unit smaller"
+        );
+        // Just under and just at the 0.1 MB boundary - the switch itself, not just each side.
+        assert_eq!(
+            format_mb(104_857),
+            "102 KB",
+            "just under 0.1 MB - still kilobytes"
+        );
+        assert_eq!(
+            format_mb(104_858),
+            "0.1 MB",
+            "at or above 0.1 MB - back to megabytes"
+        );
     }
 
     /// `spec.md`'s "Reclaim space": *"Sizes are measured from the files on disk, not estimated."*

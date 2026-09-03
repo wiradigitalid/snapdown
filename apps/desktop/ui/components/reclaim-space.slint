@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { SdModalHeader } from "modal.slint";
+import { SdModalHeader, SdToast } from "modal.slint";
 import { SdActionButton, SdSectionLabel } from "action-button.slint";
 import { SdCheckbox } from "form-controls.slint";
 import { ScrollView } from "std-widgets.slint";
@@ -46,6 +46,12 @@ export component SdReclaimSpace inherits Rectangle {
     // "3 of 6 selected · 295.2 MB will be freed" - composed in Rust, recomputed after every tick.
     in property <string> footer-label: "";
     in property <int> selected-count: 0;
+
+    // `BUG-100`: docked inside THIS panel rather than shown at the window root, so a toast fired
+    // by Discard originals renders where the Reviewer is actually looking, not behind this
+    // window's own panel.
+    in property <string> toast-text: "";
+    in property <bool> toast-is-error: false;
 
     callback closed();
     // Bundle id. A tick or an untick - Rust owns flipping the bit and recomputing the footer, the
@@ -308,6 +314,18 @@ export component SdReclaimSpace inherits Rectangle {
             }
         }
         }
+
+        // `BUG-100` - docked to THIS panel, not the window: a direct sibling of the VerticalLayout
+        // above (like the panel's own `TouchArea` is), so it floats as an overlay rather than
+        // becoming another item that VerticalLayout arranges and pushes the panel's height around
+        // for. 60px clears the footer's own 32px button height plus its surrounding padding.
+        SdToast {
+            text: root.toast-text;
+            is-error: root.toast-is-error;
+            x: (parent.width - self.width) / 2;
+            y: parent.height - self.height - 60px;
+            width: min(560px, parent.width - 64px);
+        }
     }
 
     // THE BULK CONFIRMATION. Same 380px/20px/14px/12px/30px-buttons shape `SdLibrary`'s own four
@@ -355,7 +373,7 @@ export component SdReclaimSpace inherits Rectangle {
                     alignment: end;
 
                     SdActionButton {
-                        label: "Keep them";
+                        label: "Cancel";
                         primary: false;
                         height: 30px;
                         clicked => { root.discard-cancelled(); }

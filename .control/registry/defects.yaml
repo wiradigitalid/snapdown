@@ -5727,3 +5727,225 @@ defects:
       the first modal checked, naming exactly the defect. Restored, re-ran, green. `cargo fmt`,
       `clippy -D warnings` and `cargo test --workspace --no-fail-fast` all exit 0.
     status: fixed
+
+  - id: BUG-95
+    title: "A Bundle composed before the per-Finding capture metadata was removed failed to parse at all - Copy Markdown refused it outright"
+    found: "2026-09-03"
+    found_by: "kodesh87, manually testing the just-merged Bundle Library feature: Copy Markdown on an older Bundle produced Could not prepare the Markdown for copying: Validation error: expected ## Finding 2 next, found a metadata line instead"
+    component: bundle
+    severity: high
+    contradicts: []
+    root_cause: code
+    evidence: |
+      serialize_bundle stopped emitting "- **Captured:** ...", "- **Resolution:** ..." and
+      "- **Monitor:** ..." after every Finding's image line at some point before this ticket (BG-3's
+      own comment in the source explains why: those three facts describe the CAPTURE, not the
+      Finding, and were removed at the owner's direction). parse_bundle_document (ticket 10, new this
+      spec) was written against the CURRENT shape only and had no tolerance for that legacy block -
+      nor for the fact that in that era a Finding's note had no "### Notes" heading of its own either,
+      it sat directly after the metadata as bare prose.
+
+      Confirmed against real Vault data: a Bundle composed the same day as several other test
+      Bundles carried exactly this shape - the metadata bullets followed directly by a bare note with
+      no heading. parse_bundle_document rejected it at the first Finding, which is why Copy Markdown
+      (ticket 12) and, though not separately reported, Review & Update (ticket 13) would have refused
+      every Bundle old enough to predate the metadata removal.
+    fix: |
+      parse_bundle_document now recognises the legacy metadata block (detected by its own distinctive
+      opening bullet, skipped up to and including the next blank line) as optional, and - only when
+      that block was actually seen - reads whatever text follows, up to the next boundary, as the
+      Finding's note even with no heading of its own. A current-format document with no metadata and
+      no heading still correctly parses as having no note; only documents that carried the legacy
+      shape get the fallback. Re-serialising a parsed legacy document normalises it to the current
+      shape (metadata dropped, a real heading added) - a deliberate migration, not a round-trip
+      violation, since round-trip guarantees are over current-format documents only.
+
+      SEEN RED FIRST: a new test built the exact real document shape found in the Vault, byte for
+      byte. With the legacy-detection branch stubbed out, it failed with the identical error message
+      the Reviewer saw. Restored, re-ran, green. cargo fmt, clippy -D warnings and
+      cargo test --workspace --no-fail-fast all exit 0.
+    status: fixed
+
+  - id: BUG-96
+    title: "Open file location on a Bundle row silently did nothing"
+    found: "2026-09-03"
+    found_by: "kodesh87, manually testing the just-merged Bundle Library feature: Open file location did not open the related folder"
+    component: bundle
+    severity: medium
+    contradicts: []
+    root_cause: code
+    evidence: |
+      bundle_folder_path joins the Vault root (native backslash form on Windows) to markdown_path's
+      own parent, which is a Vault-relative storage key using forward slashes - never rewritten,
+      since a Path's own .parent() returns a slice of the original string rather than a re-serialised
+      one. The result is a mixed-separator PathBuf. PathBuf equality is component-wise and does not
+      care which separator was used, which is why the existing test comparing bundle_folder_path's
+      return value against a PathBuf built from separate .join() calls passed regardless - but
+      open_folder passed this PathBuf's STRING form straight to explorer.exe's command line, which
+      does not do component-wise parsing and silently failed to navigate anywhere useful.
+
+      open_file_location, right beside open_folder in the same file, had already found and fixed the
+      identical failure mode for the select-a-file case, with its own doc comment naming it exactly:
+      mixed separators are rejected. open_folder needed the same treatment and never got it.
+    fix: |
+      Extracted the conversion into native_path_string (replacing every forward slash with a
+      backslash), shared by open_folder; open_file_location keeps its own inline version since it
+      was already correct. A new test asserts the STRING open_folder hands to Explorer directly, not
+      a PathBuf comparison, since that is the seam where the real defect lived and PathBuf equality
+      cannot see it.
+
+      SEEN RED FIRST: native_path_string stubbed to skip the replacement, re-ran the new test - it
+      failed with the exact mixed-separator string a real Bundle produces. Restored, re-ran, green.
+      cargo fmt, clippy -D warnings and cargo test --workspace --no-fail-fast all exit 0.
+    status: fixed
+
+  - id: BUG-97
+    title: "Saving an edit in Review & Update did not refresh the Library's own row list underneath"
+    found: "2026-09-03"
+    found_by: "kodesh87, manually testing the just-merged Bundle Library feature: after edit then save, the edited-just-now label did not appear until closing and reopening the Library"
+    component: bundle
+    severity: low
+    contradicts: []
+    root_cause: code
+    evidence: |
+      Ticket 13 keeps the Library open the whole time Review & Update is on top of it - library-open
+      is never touched by opening or closing that window. The Save handler's success branch updated
+      the in-memory Bundle and refreshed Review & Update's OWN view, but never re-ran
+      build_library_rows, so the Library's row model stayed exactly as it was before the Save -
+      ticket 15's edited-time suffix (and anything else that changed) was invisible until the
+      Reviewer closed and reopened the Library by hand.
+    fix: |
+      The Save handler's success branch now re-opens the Library when it is already open, re-reading
+      the store the same way Try again already does. A source-reading regression test asserts the
+      success branch contains both the open-check and the re-read call.
+
+      SEEN RED FIRST: the two added lines removed, re-ran the new test - failed, quoting the
+      unmodified success branch. Restored, re-ran, green. cargo fmt, clippy -D warnings and
+      cargo test --workspace --no-fail-fast all exit 0.
+    status: fixed
+
+  - id: BUG-98
+    title: "Reclaim space showed 0.0 MB for every Bundle under roughly 50 KB - indistinguishable from truly nothing to reclaim"
+    found: "2026-09-03"
+    found_by: "kodesh87, manually testing the just-merged Bundle Library feature: asked why small Bundles read 0.0 MB and suggested switching to KB below 0.1 MB"
+    component: bundle
+    severity: low
+    contradicts: []
+    root_cause: code
+    evidence: |
+      The MB formatter rendered every non-zero byte count with one decimal place. A single
+      screenshot is routinely well under 0.1 MB, and one-decimal rounding takes every value below
+      50 KB down to 0.0 MB - a real, non-zero size reading as identical to the genuine-zero case,
+      which already prints as a bare "0 MB". Confirmed against the real Reclaim space list: most rows
+      read 0.0 MB while the header total, correctly summing the same underlying bytes, read a
+      sensible non-zero figure.
+    fix: |
+      Below 0.1 MB, the formatter now renders whole kilobytes instead, with a floor of 1 so a
+      genuinely tiny non-zero count never rounds down to the same 0 KB complaint one unit smaller. At
+      or above 0.1 MB, formatting is unchanged.
+
+      SEEN RED FIRST: the kilobyte branch removed, re-ran the new boundary test - failed, showing
+      0.0 MB for a fixture of exactly 50 KiB. Restored, re-ran, green. cargo fmt, clippy -D warnings
+      and cargo test --workspace --no-fail-fast all exit 0.
+    status: fixed
+
+  - id: BUG-99
+    title: "Review & Update's header badge and footer buttons resized between locked and editing, reading as the Close button moving"
+    found: "2026-09-03"
+    found_by: "kodesh87, manually testing the just-merged Bundle Library feature: the As composed text at the top right shifted when editing/saving, and the Editing badge appeared to push the Close button rightward; also asked what As composed means, and asked for Edit and Save to be the same size"
+    component: bundle
+    severity: low
+    contradicts: []
+    root_cause: code
+    evidence: |
+      The header badge's own width was measured off whichever of its two strings was CURRENTLY
+      showing ("As composed" or "Editing" - different lengths). The header's provenance text sits
+      beside it in a right-aligned group, so the badge's width change shifted the provenance text's
+      own position every time the mode toggled - visible right next to the header's own Close button,
+      easy to read as the Close button itself moving even though that button is a separate, fixed-
+      width sibling outside the group and never actually moves. Confirmed empirically with a headless
+      probe reproducing the exact structure: the provenance text's on-screen position measurably
+      changed between the two states.
+
+      Separately, the footer's Close/Cancel and Edit/Save buttons had no explicit width either, so
+      each sized itself from its own label alone; "Close" and "Cancel" are different lengths, and
+      the whole right-aligned footer visibly resized between locked and editing as a result.
+    fix: |
+      Both the badge and the footer buttons now use a hidden reference Text (or two, for the footer's
+      primary role) holding the LONGER of their own candidate strings, and size themselves off that
+      reference's own preferred width rather than whichever string currently shows - so the box never
+      changes size regardless of which mode is active. Confirmed with the same headless probe: with
+      the fix, neither the badge nor the provenance text moves a pixel between the two states.
+
+      SEEN RED FIRST, twice: the probe against the ORIGINAL structure showed the shift directly; the
+      real regression test was then run against the file restored to its pre-fix state and failed
+      naming exactly the defect. Restored, re-ran, green. cargo fmt, clippy -D warnings and
+      cargo test --workspace --no-fail-fast all exit 0.
+
+      "As composed" means: this is a faithful, read-only view of the Bundle exactly as it was
+      originally assembled - nothing has been edited since. The badge flips to "Editing" the moment
+      Edit is pressed.
+    status: fixed
+
+  - id: BUG-100
+    title: "A toast fired from inside a modal (Copy Markdown, Save, Discard originals) rendered behind that modal instead of over it"
+    found: "2026-09-03"
+    found_by: "kodesh87, manually testing the just-merged Bundle Library feature: while the Library was open, the notification for an action taken inside it appeared over the Editor window instead"
+    component: bundle
+    severity: medium
+    contradicts: []
+    root_cause: code
+    evidence: |
+      BUG-93 made the toast paint over every full-window overlay by moving it to the very end of the
+      window component - correct for z-order, but the toast was still positioned relative to the
+      WHOLE WINDOW. Once the Library (or Review & Update, or Reclaim space) became a capped floating
+      panel over a dimmed backdrop rather than an opaque full-screen surface, a toast positioned
+      relative to the window rendered over the dimmed backdrop AROUND the panel, not inside it - which
+      reads as "the notification is behind the Library," since the panel the Reviewer is actually
+      looking at does not contain it.
+    fix: |
+      A shared SdToast component (matching the same "one component, not matching numbers" principle
+      the modal header already established) is now docked inside EACH modal's own panel - the
+      Library, Review & Update and Reclaim space - positioned relative to that panel rather than the
+      window, with clearance tuned to each modal's own footer height. The toast's underlying STATE is
+      unchanged (the same single toast-text/toast-is-error pair every call site already used); only
+      where it renders changed, so no caller in main.rs needed to change at all. The window-level
+      copy still renders, but only when none of those three modals is open.
+
+      A real Slint limitation surfaced while building this: a reusable exported component's own root
+      cannot read `parent` (the compiler rejects it outright), so each of the four call sites - unlike
+      the shared component itself - computes its own x/y/width from its own local parent, which
+      differs per caller by design (the window root in one case, one modal's own panel in the others).
+      cargo fmt, clippy -D warnings and cargo test --workspace --no-fail-fast all exit 0.
+    status: fixed
+
+  - id: BUG-101
+    title: "The Disassemble confirmation's destructive second step was invisible as a control, and its cancel wording was reconsidered"
+    found: "2026-09-03"
+    found_by: "kodesh87, manually testing the just-merged Bundle Library feature: asked whether Keep it should just be Cancel, and said the Delete the Bundle and its originals instead text was not recognisable as a button"
+    component: bundle
+    severity: medium
+    contradicts: []
+    root_cause: design
+    evidence: |
+      Both the cancel wording ("Keep it"/"Keep them", naming what the act would preserve rather than
+      a plain "Cancel") and the destructive second step being a bare Text plus a separate TouchArea
+      rather than a real button were deliberate choices recorded in spec.md, on the reasoning that a
+      link forces one more deliberate motion before the product's single most destructive act. In
+      practice, a Reviewer testing the feature could not tell the link was pressable at all - a safety
+      device that has to be found to work, and this one was not being found.
+    fix: |
+      On the owner's explicit decision (asked and confirmed, overriding the recorded rationale):
+      every confirmation's cancel verb now reads "Cancel"; "Delete both instead" is now a real,
+      visibly clickable SdActionButton rather than a bare Text/TouchArea pair - still on its own row
+      below Cancel/Disassemble rather than a third button level with them, so the deliberate extra
+      step to the most destructive act survives even though the control is now discoverable.
+      spec.md's own "The four confirmations" paragraph is corrected in place with a dated note
+      explaining what changed and why, rather than silently rewritten.
+
+      Existing tests asserting the old "Keep it" wording and the old link/TouchArea structure were
+      updated to assert the new wording and the new button structure - each already proves its half
+      by construction (a `label:` string count, and a component-name substring match), so no separate
+      seen-red cycle was needed beyond building and running them against the new code.
+      cargo fmt, clippy -D warnings and cargo test --workspace --no-fail-fast all exit 0.
+    status: fixed

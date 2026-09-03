@@ -17,7 +17,7 @@ import { SdContextMenu, MenuEntry } from "components/context-menu.slint";
 import { SdIconLabel } from "components/icon-label.slint";
 import { SdSettings, HotkeyRow } from "components/settings.slint";
 import { SdSegmented, SegmentOption } from "components/form-controls.slint";
-import { SdModalHeader } from "components/modal.slint";
+import { SdModalHeader, SdToast } from "components/modal.slint";
 import { SdActionButton, SdSectionLabel, SdCaption, SdDocHeading } from "components/action-button.slint";
 import { AnnotationItem, AnnotationData } from "components/annotation.slint";
 import { SdLibrary, LibraryBundleRow } from "components/library.slint";
@@ -3199,6 +3199,8 @@ export component AppWindow inherits Window {
             state: root.library-state;
             error-message: root.library-error-message;
             rows: root.library-rows;
+            toast-text: root.toast-text;
+            toast-is-error: root.toast-is-error;
 
             menu-target: root.library-menu-target;
             menu-sealed: root.library-menu-sealed;
@@ -3241,6 +3243,8 @@ export component AppWindow inherits Window {
             provenance: root.review-update-provenance;
             editing: root.review-update-editing;
             cancel-pending <=> root.review-update-cancel-pending;
+            toast-text: root.toast-text;
+            toast-is-error: root.toast-is-error;
 
             closed => { root.review-update-closed(); }
             edit-clicked => { root.review-update-edit-clicked(); }
@@ -3302,6 +3306,8 @@ export component AppWindow inherits Window {
             total-label: root.reclaim-space-total-label;
             footer-label: root.reclaim-space-footer-label;
             selected-count: root.reclaim-space-selected-count;
+            toast-text: root.toast-text;
+            toast-is-error: root.toast-is-error;
             confirm-open: root.reclaim-space-confirm-open;
             confirm-heading: root.reclaim-space-confirm-heading;
             confirm-body: root.reclaim-space-confirm-body;
@@ -3854,46 +3860,23 @@ export component AppWindow inherits Window {
         }
 
         // RESULT LINE - moved here, `BUG-93`. Genuinely the last thing declared in this component
-        // now, so it draws over the Library, Review & Update, Settings, Reclaim space, the Vault-move
-        // and delete-Finding confirmations, the context menu, and Assemble & Review - every one of
-        // which used to paint over it. See the corrected comment beside the clearing Timer, above,
-        // for why this moved rather than merely being re-explained in place.
-        if root.toast-text != "" : Rectangle {
+        // now, so it draws over Settings, the Vault-move and delete-Finding confirmations, the
+        // context menu, and Assemble & Review. See the corrected comment beside the clearing Timer,
+        // above, for why this moved rather than merely being re-explained in place.
+        //
+        // `BUG-100`: no longer shown here at all while the Library, Review & Update or Reclaim
+        // space is open - each of those now docks its OWN `SdToast` inside its own panel instead
+        // (see each component's own mount site below), so a toast fired by an action inside one of
+        // them renders where the Reviewer is actually looking rather than behind it. This root copy
+        // is what remains for every OTHER case (an Editor-level action, or one of the surfaces this
+        // ticket did not touch).
+        if root.toast-text != "" && !root.library-open && !root.review-update-open
+            && !root.reclaim-space-open : SdToast {
+            text: root.toast-text;
+            is-error: root.toast-is-error;
             x: (parent.width - self.width) / 2;
             y: parent.height - self.height - 28px;
             width: min(560px, parent.width - 64px);
-            height: 42px;
-            border-radius: Theme.radius-sharp;
-            background: root.bg-card;
-            border-width: 1px;
-            border-color: root.toast-is-error ? Theme.semantic-error : Theme.semantic-success;
-            drop-shadow-blur: 18px;
-            drop-shadow-color: Theme.overlay-shadow;
-
-            HorizontalLayout {
-                padding-left: 14px;
-                padding-right: 14px;
-                spacing: 10px;
-                alignment: start;
-
-                Rectangle {
-                    width: 8px;
-                    height: 8px;
-                    y: (parent.height - self.height) / 2;
-                    border-radius: Theme.radius-pill;
-                    background: root.toast-is-error ? Theme.semantic-error : Theme.semantic-success;
-                }
-
-                Text {
-                    text: root.toast-text;
-                    font-size: 12px;
-                    font-weight: 600;
-                    color: root.text-primary;
-                    vertical-alignment: center;
-                    wrap: word-wrap;
-                    font-family: "IBM Plex Sans";
-                }
-            }
         }
     }
 }
