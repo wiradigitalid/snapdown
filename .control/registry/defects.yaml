@@ -5387,7 +5387,15 @@ defects:
 
       Note the ordering trap: the map settled files-first and was corrected against `AD-2` on
       2026-08-31. Read the map's correction entry before implementing, not the older line.
-    status: open
+
+      **Verified fixed 2026-09-03, correcting a stale `status: open`.** Ticket 16 built the Delete…
+      path (`on_library_delete_confirmed` in `main.rs` calls `remove_bundle_row_and_folder`, which
+      calls `BundleStore::delete_bundle` - `main.rs:463` - before removing the folder, `AD-2`'s
+      ordering) and ticket 17 added Disassemble/Discard originals/Delete both beside it; `BUG-101`
+      and `BUG-104` since then reworked their copy and reachability without touching the underlying
+      store calls. This entry was never flipped to `fixed` when ticket 16 landed - exactly the
+      silent-staleness failure mode `AGENTS.md` names elsewhere in this file (`BUG-12`'s own entry).
+    status: fixed
   - id: BUG-89
     title: "The Editor window does not name its persona, and two of FR-27's three names are unasserted"
     found: "2026-09-01"
