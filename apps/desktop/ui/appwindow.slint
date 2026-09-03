@@ -20,6 +20,9 @@ import { SdSegmented, SegmentOption } from "components/form-controls.slint";
 import { SdModalHeader } from "components/modal.slint";
 import { SdActionButton, SdSectionLabel, SdCaption, SdDocHeading } from "components/action-button.slint";
 import { AnnotationItem, AnnotationData } from "components/annotation.slint";
+import { SdLibrary, LibraryBundleRow } from "components/library.slint";
+import { SdReviewUpdate, ReviewUpdateBlock } from "components/review-update.slint";
+import { SdReclaimSpace, ReclaimBundleRow } from "components/reclaim-space.slint";
 
 import "../assets/fonts/IBMPlexSans-Medium.ttf";
 import "../assets/fonts/IBMPlexSans-SemiBold.ttf";
@@ -1347,18 +1350,123 @@ export component AppWindow inherits Window {
     // and this cannot know how much, so it does not pretend to.
     in-out property <int> bundle-preview-text-tokens: 0;
 
+    // THE LIBRARY (ticket 11 of the Bundle Library spec). Gated the same way `bundle-preview-open`
+    // is: Rust sets it, Slint never flips it itself. `library-state` is "loading" | "error" |
+    // "ready" - "ready" with an empty `library-rows` IS the empty state, so there is no fourth
+    // value that would just restate `rows.length == 0` in a second place.
+    in-out property <bool> library-open: false;
+    in property <string> library-state: "loading";
+    in property <string> library-error-message: "";
+    in property <[LibraryBundleRow]> library-rows: [];
+
+    // THE ROW MENU'S DESTRUCTIVE GROUP (ticket 16). Which single verb it offers - Disassemble… or
+    // Delete… - is decided in Rust every time the menu opens, from a live read of whether the
+    // Bundle's Findings still exist (`BR-122`). These properties are therefore only ever WRITTEN by
+    // Rust; Slint reads them to draw the menu and never derives the verb itself.
+    in property <string> library-menu-target: "";
+    in property <bool> library-menu-sealed: false;
+    in property <length> library-menu-x;
+    in property <length> library-menu-y;
+    callback library-row-menu-requested(string, length, length);
+    callback library-row-menu-dismissed();
+    callback library-row-menu-action(string, string);
+
+    // THE TWO CONFIRMATIONS. Bundle name and Finding count are supplied by Rust fresh at the moment
+    // a dialog opens - the same live read that decided the verb, never carried over from the row
+    // list, which can be stale by the time a Reviewer's click actually lands.
+    in property <string> library-pending-disassemble: "";
+    in property <string> library-pending-delete: "";
+    in property <string> library-pending-bundle-name: "";
+    in property <int> library-pending-bundle-finding-count: 0;
+    callback library-disassemble-cancelled();
+    callback library-disassemble-confirmed(string);
+    callback library-delete-cancelled();
+    callback library-delete-confirmed(string);
+
+    // REVIEW & UPDATE (`ticket 13` locked mode, `ticket 14` editing). Sits ABOVE the Library
+    // (declared after it below), never closes it - `library-open` is left alone by every callback
+    // here, which is what makes "Close returns to the Library with its scroll position intact" true
+    // by construction: the Library's own `SdLibrary` instance, and its `ScrollView`'s state, are
+    // never torn down.
+    in-out property <bool> review-update-open: false;
+    in property <[ReviewUpdateBlock]> review-update-blocks: [];
+    in property <string> review-update-provenance: "";
+    // Locked / Editing (`ticket 14`). Rust-driven both ways: `true` only after `edit-clicked`
+    // successfully builds an in-memory buffer, `false` again only after Save completes or Cancel/
+    // Discard gives up on it.
+    in-out property <bool> review-update-editing: false;
+    // The "discard changes?" confirmation. `in-out` so `SdReviewUpdate`'s own "Keep editing" can
+    // dismiss it without a Rust round trip, two-way bound at the mount site below.
+    in-out property <bool> review-update-cancel-pending: false;
+
+    // DISCARD ORIGINALS and DELETE BOTH (`ticket 17`). `library-pending-discard-warning` names any
+    // other Bundle that will also be sealed - Rust's own live read, forwarded straight through.
+    in property <string> library-pending-discard: "";
+    in property <string> library-pending-discard-warning: "";
+    callback library-discard-cancelled();
+    callback library-discard-confirmed(string);
+    in property <string> library-pending-delete-both: "";
+    callback library-delete-both-requested(string);
+    callback library-delete-both-cancelled();
+    callback library-delete-both-confirmed(string);
+
+    // RECLAIM SPACE (`ticket 18`). Reached from two doors - a new entry beside the Library's own
+    // Bundle count, and a new button in Settings' Vault card - both of which fire THIS one callback,
+    // which is what makes "both open the same screen" true by construction. Gated the same way
+    // `library-open` is: Rust sets it, Slint never flips it itself. Opening or closing this never
+    // touches `library-open`/`settings-open`, so whichever screen was open underneath stays exactly
+    // as it was.
+    callback reclaim-space-clicked();
+    in-out property <bool> reclaim-space-open: false;
+    in property <[ReclaimBundleRow]> reclaim-space-rows: [];
+    in property <string> reclaim-space-total-label: "";
+    in property <string> reclaim-space-footer-label: "";
+    in property <int> reclaim-space-selected-count: 0;
+    callback reclaim-space-closed();
+    callback reclaim-space-row-toggled(string);
+    callback reclaim-space-discard-clicked();
+
+    // THE BULK CONFIRMATION. `reclaim-space-pending-ids` carries the ticked Bundle ids from the
+    // moment the confirmation opens through to the moment it is confirmed - an `in` property Rust
+    // both writes (on `reclaim-space-discard-clicked`) and reads back (on
+    // `reclaim-space-discard-confirmed`), the same round trip `library-pending-disassemble` makes
+    // for one id, widened to a list.
+    in property <bool> reclaim-space-confirm-open: false;
+    in property <string> reclaim-space-confirm-heading: "";
+    in property <string> reclaim-space-confirm-body: "";
+    in property <[string]> reclaim-space-pending-ids: [];
+    callback reclaim-space-discard-cancelled();
+    callback reclaim-space-discard-confirmed();
+
     // id, ctrl held, shift held. One callback rather than two, because a click on a card is one
     // gesture whose MEANING depends on the modifiers - splitting it into "selected" and "toggled"
     // put the interpretation in the UI, where the anchor for a Shift range does not live.
     callback finding-clicked(string, bool, bool);
     callback finding-note-edited(string);
     callback library-clicked();
+    callback library-closed();
+    callback library-try-again-clicked();
+    callback library-open-file-location-clicked();
+    // Bundle id, forwarded from `SdLibrary`'s own row-level callbacks (`ticket 12`).
+    callback library-copy-markdown-clicked(string);
+    callback library-bundle-open-file-location-clicked(string);
+    // A Library row was clicked - the Bundle's id. Opens Review & Update, locked.
+    callback library-bundle-clicked(string);
+    callback review-update-closed();
+    // Ticket 14: Edit unlocks editing; every field edit forwards here as
+    // (kind, finding-ordinal, marker-ordinal, text); Save and Cancel are their own callbacks because
+    // each needs its own decision made in Rust (write ordering for Save, dirty-check for Cancel);
+    // Discard is the "discard changes?" confirmation's own confirm action.
+    callback review-update-edit-clicked();
+    callback review-update-field-edited(string, int, int, string);
+    callback review-update-save-clicked();
+    callback review-update-cancel-clicked();
+    callback review-update-discard-clicked();
     callback capture-clicked();
     callback open-file-clicked();
     callback paste-clicked();
     callback assemble-bundle-clicked();
     callback copy-image-clicked();
-    callback share-bundle-clicked();
     callback marker-placed(float, float);
     callback delete-marker-clicked(string);
     callback marker-comment-edited(string, string);
@@ -1874,40 +1982,22 @@ export component AppWindow inherits Window {
                         }
                     }
 
-                    // Group 3 (Right): Assemble & Sharing Action Buttons
+                    // Group 3 (Right): Canvas Action.
+                    //
+                    // Ticket 19 (`.scratch/bundle-library/issues/19-...`): Share had no Rust handler
+                    // at all, and Assemble acted on the filmstrip's ticked selection rather than the
+                    // canvas beside it - the filmstrip footer and the finding context menu already
+                    // carry Assemble, so it lost nothing by leaving the ribbon. Copy is the one
+                    // ribbon action that is actually about the canvas: it copies the burned image of
+                    // the open Finding.
+                    // Sized on its own now rather than at the 52px that used to sit beside a wider
+                    // Assemble - a single narrow button in the spot three used to fill read as a gap,
+                    // not a choice.
                     HorizontalLayout {
-                        spacing: 6px;
                         alignment: end;
 
                         Rectangle {
-                            width: 68px;
-                            height: 44px;
-                            border-radius: Theme.radius-sharp;
-                            background: assem-touch.pressed ? Theme.accent-pressed : (assem-touch.has-hover ? Theme.accent-hover : Theme.accent-primary);
-                            drop-shadow-blur: assem-touch.has-hover ? 6px : 2px;
-                            drop-shadow-color: Theme.accent-primary.with-alpha(0.35);
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 16px; height: 16px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    // Coloured like the label beside it. These SVGs are baked white, which was invisible
-                                    // as a choice until BUG-54 made `text-on-accent` dark in dark mode and the label went
-                                    // dark while the glyph stayed white. `SdActionButton` already does this; the ribbon's
-                                    // three hand-rolled buttons did not.
-                                    source: @image-url("../assets/icons/package.svg");
-                                    colorize: Theme.text-on-accent;
-                                }
-                                Text { text: "Assemble"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; font-family: "IBM Plex Sans"; }
-                            }
-                            assem-touch := TouchArea { clicked => { root.assemble-bundle-clicked(); } }
-                        }
-
-                        Rectangle {
-                            width: 52px;
+                            width: 84px;
                             height: 44px;
                             border-radius: Theme.radius-sharp;
                             background: cp-touch.pressed ? Theme.accent-pressed : (cp-touch.has-hover ? Theme.accent-hover : Theme.accent-primary);
@@ -1918,38 +2008,17 @@ export component AppWindow inherits Window {
                                 alignment: center;
                                 spacing: 3px;
                                 Image {
-                                    width: 15px; height: 15px;
+                                    width: 16px; height: 16px;
                                     x: (parent.width - self.width) / 2;
                                     image-fit: contain;
+                                    // Coloured like the label beside it - the pattern BUG-54's follow-up
+                                    // fix established for every hand-rolled ribbon button.
                                     source: @image-url("../assets/icons/copy-white.svg");
                                     colorize: Theme.text-on-accent;
                                 }
-                                Text { text: "Copy"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; font-family: "IBM Plex Sans"; }
+                                Text { text: "Copy Image"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; font-family: "IBM Plex Sans"; }
                             }
                             cp-touch := TouchArea { clicked => { root.copy-image-clicked(); } }
-                        }
-
-                        Rectangle {
-                            width: 52px;
-                            height: 44px;
-                            border-radius: Theme.radius-sharp;
-                            background: sh-touch.pressed ? Theme.accent-pressed : (sh-touch.has-hover ? Theme.accent-hover : Theme.accent-primary);
-                            drop-shadow-blur: sh-touch.has-hover ? 6px : 2px;
-                            drop-shadow-color: Theme.accent-primary.with-alpha(0.35);
-
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 3px;
-                                Image {
-                                    width: 15px; height: 15px;
-                                    x: (parent.width - self.width) / 2;
-                                    image-fit: contain;
-                                    source: @image-url("../assets/icons/share-white.svg");
-                                    colorize: Theme.text-on-accent;
-                                }
-                                Text { text: "Share"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; font-family: "IBM Plex Sans"; }
-                            }
-                            sh-touch := TouchArea { clicked => { root.share-bundle-clicked(); } }
                         }
                     }
                 }
@@ -3105,6 +3174,64 @@ export component AppWindow inherits Window {
             triggered => { root.toast-text = ""; }
         }
 
+        // THE LIBRARY - above the Editor, the same layer Assemble & Review and Settings sit at.
+        if root.library-open : SdLibrary {
+            state: root.library-state;
+            error-message: root.library-error-message;
+            rows: root.library-rows;
+
+            menu-target: root.library-menu-target;
+            menu-sealed: root.library-menu-sealed;
+            menu-x: root.library-menu-x;
+            menu-y: root.library-menu-y;
+            pending-disassemble: root.library-pending-disassemble;
+            pending-delete: root.library-pending-delete;
+            pending-bundle-name: root.library-pending-bundle-name;
+            pending-bundle-finding-count: root.library-pending-bundle-finding-count;
+            pending-discard: root.library-pending-discard;
+            pending-discard-warning: root.library-pending-discard-warning;
+            pending-delete-both: root.library-pending-delete-both;
+
+            closed => { root.library-closed(); }
+            try-again-clicked => { root.library-try-again-clicked(); }
+            open-file-location-clicked => { root.library-open-file-location-clicked(); }
+            copy-markdown-clicked(id) => { root.library-copy-markdown-clicked(id); }
+            bundle-open-file-location-clicked(id) => { root.library-bundle-open-file-location-clicked(id); }
+            row-menu-requested(id, x, y) => { root.library-row-menu-requested(id, x, y); }
+            row-menu-dismissed => { root.library-row-menu-dismissed(); }
+            row-menu-action(action, id) => { root.library-row-menu-action(action, id); }
+            disassemble-cancelled => { root.library-disassemble-cancelled(); }
+            disassemble-confirmed(id) => { root.library-disassemble-confirmed(id); }
+            delete-cancelled => { root.library-delete-cancelled(); }
+            delete-confirmed(id) => { root.library-delete-confirmed(id); }
+            bundle-opened(id) => { root.library-bundle-clicked(id); }
+            discard-cancelled => { root.library-discard-cancelled(); }
+            discard-confirmed(id) => { root.library-discard-confirmed(id); }
+            delete-both-requested(id) => { root.library-delete-both-requested(id); }
+            delete-both-cancelled => { root.library-delete-both-cancelled(); }
+            delete-both-confirmed(id) => { root.library-delete-both-confirmed(id); }
+            reclaim-space-clicked => { root.reclaim-space-clicked(); }
+        }
+
+        // REVIEW & UPDATE (`ticket 13` locked mode, `ticket 14` editing) - declared AFTER the Library
+        // so it stacks above it, never in place of it. `library-open` stays true underneath the whole
+        // time this is open.
+        if root.review-update-open : SdReviewUpdate {
+            blocks: root.review-update-blocks;
+            provenance: root.review-update-provenance;
+            editing: root.review-update-editing;
+            cancel-pending <=> root.review-update-cancel-pending;
+
+            closed => { root.review-update-closed(); }
+            edit-clicked => { root.review-update-edit-clicked(); }
+            field-edited(kind, finding-ordinal, marker-ordinal, text) => {
+                root.review-update-field-edited(kind, finding-ordinal, marker-ordinal, text);
+            }
+            save-clicked => { root.review-update-save-clicked(); }
+            cancel-clicked => { root.review-update-cancel-clicked(); }
+            discard-clicked => { root.review-update-discard-clicked(); }
+        }
+
         // SETTINGS - above the Editor, below the context menu and the confirmations, because those
         // two can be raised from inside it.
         if root.settings-open : SdSettings {
@@ -3143,6 +3270,28 @@ export component AppWindow inherits Window {
                 root.hotkey-key-pressed(action, ctrl, alt, shift, win, text);
             }
             hotkey-enabled-toggled(action, on) => { root.hotkey-enabled-toggled(action, on); }
+            reclaim-space-clicked => { root.reclaim-space-clicked(); }
+        }
+
+        // RECLAIM SPACE (`ticket 18`) - declared AFTER both the Library and Settings so it stacks
+        // ABOVE whichever one is open underneath (Slint draws later siblings on top), the same
+        // reasoning `SdReviewUpdate`'s own mount comment gives. Neither `library-open` nor
+        // `settings-open` is touched by this block - closing Reclaim space simply reveals whichever
+        // one was already there.
+        if root.reclaim-space-open : SdReclaimSpace {
+            rows: root.reclaim-space-rows;
+            total-label: root.reclaim-space-total-label;
+            footer-label: root.reclaim-space-footer-label;
+            selected-count: root.reclaim-space-selected-count;
+            confirm-open: root.reclaim-space-confirm-open;
+            confirm-heading: root.reclaim-space-confirm-heading;
+            confirm-body: root.reclaim-space-confirm-body;
+
+            closed => { root.reclaim-space-closed(); }
+            row-toggled(id) => { root.reclaim-space-row-toggled(id); }
+            discard-clicked => { root.reclaim-space-discard-clicked(); }
+            discard-cancelled => { root.reclaim-space-discard-cancelled(); }
+            discard-confirmed => { root.reclaim-space-discard-confirmed(); }
         }
 
         // MOVING THE VAULT - confirmed, because it moves every file the product owns.

@@ -1,0 +1,469 @@
+import { Theme } from "../theme.slint";
+import { SdModalHeader } from "modal.slint";
+import { SdActionButton, SdDocHeading } from "action-button.slint";
+import { SdTextField } from "text-field.slint";
+import { ScrollView } from "std-widgets.slint";
+
+// ONE BLOCK of the Bundle document, exactly as Review & Update's LOCKED mode renders it, and as
+// ticket 14's edit mode makes four kinds of it editable.
+//
+// Its own struct rather than a reuse of `appwindow.slint`'s `DocBlock`: that struct is declared in
+// the window file that imports THIS component, and Slint has no way to import it back the other
+// direction. `kind` mirrors `ParsedBundleDocument`'s own shape (ticket 10,
+// `crates/snapdown-core/src/domain/markdown.rs`) block for block: title · bundle-notes · finding ·
+// image · note · marker.
+export struct ReviewUpdateBlock {
+    kind: string,
+    // A Finding's position, or a Marker's ordinal. `finding-ordinal` below is a Finding's position
+    // for a "marker" block ONLY - the block's own `ordinal` is already spoken for by the marker's own
+    // per-Finding ordinal, which repeats across Findings (`AD-1`), so a second field is what lets an
+    // edit to Finding 2's Marker 1 be told apart from Finding 1's.
+    ordinal: int,
+    finding-ordinal: int,
+    text: string,
+    image: image,
+    // True on a Finding's first Marker, so "Marker Notes" prints once above its list.
+    starts-section: bool,
+}
+
+// REVIEW & UPDATE. Ticket 13 built locked mode; ticket 14 adds editing on top of it.
+//
+// Opened over the Library (itself over the Editor) when a row is clicked. Built ENTIRELY from
+// `MarkdownSerializer::parse_bundle_document`'s read of the Bundle's own stored document -
+// `main.rs`'s `review_update_doc_blocks` never touches `FindingStore` - which is what lets a sealed
+// Bundle (its Findings already deleted, `BR-11`) open exactly like an unsealed one, in EITHER mode:
+// editing never reads or writes a Finding either (`BR-10`, `BR-11`), it stays entirely inside the
+// in-memory buffer `main.rs` keeps until Save.
+//
+// LOCKED IS THE PREVIEW (ticket 05's resolved variant C): there is no Edit/Preview pair, and NOTHING
+// there carries a hover affordance, a border or a chip - every field is a bare `Text`/`SdDocHeading`,
+// never an `SdTextField`. EDITING swaps exactly four field kinds - the title, the Bundle notes, a
+// Finding's note, a Marker's note - for `SdTextField` in flat mode, and adds the `Fixed at compose`
+// chip beside every image. Everything else (a Finding's heading, its image) stays exactly as locked
+// mode renders it in both modes: the product generates those, so neither mode lets them be typed
+// into.
+export component SdReviewUpdate inherits Rectangle {
+    in property <[ReviewUpdateBlock]> blocks: [];
+    // "N Findings · composed <relative time>" - composed in Rust, the same discipline
+    // `library_row_from_detail` uses for the Library's own meta line, so the pluralisation and the
+    // relative-time ladder live in exactly one place.
+    in property <string> provenance: "";
+    // Locked / Editing. Rust-driven: only `edit-clicked` asks for `true`, and only a completed Save
+    // or Cancel/Discard asks for `false` again - this component never flips it on its own.
+    in property <bool> editing: false;
+    // Whether the "discard changes?" confirmation is showing. `in-out` because "Keep editing"
+    // dismisses it locally without a Rust round trip - Rust only ever sets it to `true`, from
+    // `cancel-clicked`'s handler, after checking whether the buffer actually differs from what is
+    // stored.
+    in-out property <bool> cancel-pending: false;
+
+    callback closed();
+    // Footer's Edit, locked mode only. Rust builds the in-memory edit buffer from the Bundle's own
+    // stored document and flips `editing` on.
+    callback edit-clicked();
+    // Every edit in this window arrives here: kind, the owning Finding's position (0 for "title" and
+    // "bundle-notes", which have none), the Marker's own ordinal (0 unless kind is "marker"), and the
+    // field's new text. One callback rather than four, the same reasoning the Assemble & Review
+    // compose window's own `bundle-block-edited` gives - which store a block reaches is Rust's
+    // business, not the layout's, and for THIS window the answer is always "none of them, yet": every
+    // one of these lands in the in-memory buffer alone, never a Finding, never the row, until Save.
+    callback field-edited(string, int, int, string);
+    // Footer's Save, editing mode only - always enabled, per the map's "Save is always clickable once
+    // editing" (ticket 05's amendment).
+    callback save-clicked();
+    // Footer's Cancel, editing mode only. Rust decides whether the buffer actually differs from what
+    // is stored; if it does, `cancel-pending` is asked to show, otherwise this window returns to
+    // locked immediately.
+    callback cancel-clicked();
+    // The confirmation's own "Discard changes" - the buffer is dropped and this window returns to
+    // locked without saving anything.
+    callback discard-clicked();
+
+    width: 100%;
+    height: 100%;
+    background: Theme.overlay-scrim;
+
+    // Swallows every click that misses the panel, so the Library (and the Editor beneath it) stay
+    // inert - the same reasoning Assemble & Review's own scrim TouchArea gives.
+    TouchArea { }
+
+    // Escape closes it - or, while editing, behaves exactly like Cancel: leaving must ask first when
+    // there is something to lose, and Escape is simply another way to try to leave. Declared before
+    // the panel and focused on creation, so it holds the keyboard the moment this opens.
+    review-update-keys := FocusScope {
+        init => { self.focus(); }
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                if (root.editing) {
+                    root.cancel-clicked();
+                } else {
+                    root.closed();
+                }
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    // A4 portrait, the same geometry Assemble & Review uses (ticket 05: "the modal is 521px wide...
+    // either the two modals stop sharing a geometry, or [it] gets wider for a reason that has
+    // nothing to do with composing" - Review & Update has no such reason).
+    panel := Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        height: max(420px, parent.height - 64px);
+        width: min(parent.width - 64px, max(520px, self.height / 1.414));
+        background: Theme.bg-app;
+        border-radius: Theme.radius-sharp;
+        border-width: 1px;
+        border-color: Theme.border-strong;
+        drop-shadow-blur: 32px;
+        drop-shadow-color: Theme.overlay-shadow;
+
+        VerticalLayout {
+            padding: 0px;
+            spacing: 0px;
+
+            SdModalHeader {
+                icon: @image-url("../../assets/icons/package.svg");
+                title: "Review & Update";
+                closed => { root.closed(); }
+
+                Text {
+                    text: root.provenance;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: Theme.accent-primary;
+                    vertical-alignment: center;
+                    font-family: "IBM Plex Mono";
+                }
+
+                // AS COMPOSED / EDITING - the one badge this window carries. No Edit/Preview pair:
+                // locked already IS the preview, so two controls collapsed into one (ticket 05's
+                // resolved variant C); ticket 14 gives the same badge a second state rather than
+                // adding a second control.
+                Rectangle {
+                    height: 22px;
+                    width: badge-text.preferred-width + 18px;
+                    border-radius: Theme.radius-sharp;
+                    background: root.editing ? Theme.semantic-success-bg : Theme.bg-subtle;
+                    border-width: 1px;
+                    border-color: root.editing ? Theme.semantic-success : Theme.border-subtle;
+
+                    badge-text := Text {
+                        x: 9px;
+                        width: parent.width - 18px;
+                        height: parent.height;
+                        text: root.editing ? "Editing" : "As composed";
+                        font-size: 10px;
+                        font-weight: 700;
+                        color: root.editing ? Theme.semantic-success : Theme.text-muted;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        font-family: "IBM Plex Sans";
+                    }
+                }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                // A shade darker than the header/footer - the whole document area reads as settled,
+                // without a mark on any one element (ticket 05's prototype does the same for its
+                // locked body).
+                background: Theme.bg-subtle;
+
+                ScrollView {
+                    width: 100%;
+                    height: 100%;
+                    vertical-scrollbar-policy: as-needed;
+                    horizontal-scrollbar-policy: always-off;
+
+                    VerticalLayout {
+                        padding-left: 22px;
+                        padding-right: 30px;
+                        padding-top: 16px;
+                        padding-bottom: 22px;
+                        spacing: 10px;
+                        alignment: start;
+
+                        for block in root.blocks : VerticalLayout {
+                            spacing: 4px;
+                            alignment: start;
+
+                            // `# ` - the Bundle's title, exactly as parsed from the stored document.
+                            if block.kind == "title" && !root.editing : SdDocHeading {
+                                level: 1;
+                                text: block.text;
+                            }
+                            if block.kind == "title" && root.editing : SdTextField {
+                                flat: true;
+                                pad: 2px;
+                                text-size: 19px;
+                                placeholder: "Name this handoff";
+                                text: block.text;
+                                edited => { root.field-edited("title", 0, 0, self.text); }
+                            }
+
+                            // `## Bundle Notes` - only when the document already carried one. A Bundle
+                            // that started with no notes cannot gain a first one here; this is a
+                            // correction surface, not an addition surface (ticket 14).
+                            if block.kind == "bundle-notes" : SdDocHeading {
+                                level: 2;
+                                text: "Bundle Notes";
+                            }
+                            if block.kind == "bundle-notes" && !root.editing : Text {
+                                text: block.text;
+                                font-size: 12px;
+                                color: Theme.text-primary;
+                                wrap: word-wrap;
+                                font-family: "IBM Plex Sans";
+                            }
+                            if block.kind == "bundle-notes" && root.editing : SdTextField {
+                                flat: true;
+                                pad: 2px;
+                                text-size: 12px;
+                                placeholder: "What is this handoff about? The agent reads this first.";
+                                text: block.text;
+                                edited => { root.field-edited("bundle-notes", 0, 0, self.text); }
+                            }
+
+                            // `## Finding N` - generated by the composer, never editable in either
+                            // mode.
+                            if block.kind == "finding" : SdDocHeading {
+                                level: 2;
+                                text: "Finding " + block.ordinal;
+                            }
+
+                            // The BUNDLE's own image - resolved against the stored document's own
+                            // folder, never a Finding's `image_path`. No TouchArea, no IconButton, no
+                            // add/remove/reorder/replace in EITHER mode: ticket 14 freezes images
+                            // outright, and ticket 05 found no affordance on an image in the compose
+                            // window either, so locked mode is consistency, not a new restriction.
+                            if block.kind == "image" : HorizontalLayout {
+                                spacing: 8px;
+                                alignment: start;
+                                Rectangle {
+                                    width: min((panel.width - 52px) * 0.5, block.image.width * 1px);
+                                    height: block.image.width > 0
+                                        ? self.width * (block.image.height / block.image.width)
+                                        : 0px;
+                                    Image {
+                                        width: 100%;
+                                        height: 100%;
+                                        image-fit: contain;
+                                        source: block.image;
+                                    }
+                                }
+
+                                // FIXED AT COMPOSE - edit mode only (ticket 14). Locked mode carries
+                                // no chip at all: nothing around it is editable there either, so a
+                                // chip explaining a restriction that does not visibly exist would be
+                                // noise.
+                                if root.editing : Rectangle {
+                                    height: fixed-chip-text.preferred-height + 6px;
+                                    width: fixed-chip-text.preferred-width + 16px;
+                                    border-radius: 3px;
+                                    background: Theme.bg-subtle;
+                                    border-width: 1px;
+                                    border-color: Theme.border-subtle;
+
+                                    fixed-chip-text := Text {
+                                        x: 8px;
+                                        width: parent.width - 16px;
+                                        height: parent.height;
+                                        text: "Fixed at compose";
+                                        font-size: 10px;
+                                        font-weight: 700;
+                                        color: Theme.text-dim;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                        font-family: "IBM Plex Sans";
+                                    }
+                                }
+                            }
+
+                            // `### Notes` - only when the document already carried one. A Finding
+                            // that started with no note cannot gain a first one here; this is a
+                            // correction surface, not an addition surface (ticket 14).
+                            if block.kind == "note" : SdDocHeading {
+                                level: 3;
+                                text: "Notes";
+                            }
+                            if block.kind == "note" && !root.editing : Text {
+                                text: block.text;
+                                font-size: 12px;
+                                color: Theme.text-primary;
+                                wrap: word-wrap;
+                                font-family: "IBM Plex Sans";
+                            }
+                            if block.kind == "note" && root.editing : SdTextField {
+                                flat: true;
+                                pad: 2px;
+                                text-size: 12px;
+                                placeholder: "(no note)";
+                                text: block.text;
+                                edited => { root.field-edited("note", block.ordinal, 0, self.text); }
+                            }
+
+                            // `### Marker Notes`, printed once above the list.
+                            if block.kind == "marker" && block.starts-section : SdDocHeading {
+                                level: 3;
+                                text: "Marker Notes";
+                            }
+                            if block.kind == "marker" && !root.editing : HorizontalLayout {
+                                spacing: 6px;
+                                Text {
+                                    text: block.ordinal + ".";
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    color: Theme.text-muted;
+                                    vertical-alignment: top;
+                                    font-family: "IBM Plex Sans";
+                                }
+                                Text {
+                                    horizontal-stretch: 1;
+                                    text: block.text == "" ? "(no annotation text)" : block.text;
+                                    font-size: 12px;
+                                    color: block.text == "" ? Theme.text-dim : Theme.text-primary;
+                                    wrap: word-wrap;
+                                    font-family: "IBM Plex Sans";
+                                }
+                            }
+                            if block.kind == "marker" && root.editing : HorizontalLayout {
+                                spacing: 6px;
+                                Text {
+                                    text: block.ordinal + ".";
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    color: Theme.text-muted;
+                                    vertical-alignment: top;
+                                    font-family: "IBM Plex Sans";
+                                }
+                                SdTextField {
+                                    flat: true;
+                                    horizontal-stretch: 1;
+                                    pad: 2px;
+                                    text-size: 12px;
+                                    placeholder: "(no note)";
+                                    text: block.text;
+                                    edited => {
+                                        root.field-edited("marker", block.finding-ordinal, block.ordinal, self.text);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // FOOTER - locked: primary Edit, secondary Close. Editing: primary Save (always
+            // enabled - the map's own amendment), secondary Cancel.
+            Rectangle {
+                height: 60px;
+                background: Theme.bg-card;
+                Rectangle { y: 0px; width: 100%; height: 1px; background: Theme.border-subtle; }
+
+                HorizontalLayout {
+                    padding-left: 16px;
+                    padding-right: 16px;
+                    spacing: 10px;
+                    alignment: end;
+
+                    if !root.editing : SdActionButton {
+                        y: (parent.height - self.height) / 2;
+                        label: "Close";
+                        primary: false;
+                        clicked => { root.closed(); }
+                    }
+                    if !root.editing : SdActionButton {
+                        y: (parent.height - self.height) / 2;
+                        label: "Edit";
+                        primary: true;
+                        clicked => { root.edit-clicked(); }
+                    }
+
+                    if root.editing : SdActionButton {
+                        y: (parent.height - self.height) / 2;
+                        label: "Cancel";
+                        primary: false;
+                        clicked => { root.cancel-clicked(); }
+                    }
+                    if root.editing : SdActionButton {
+                        y: (parent.height - self.height) / 2;
+                        label: "Save";
+                        primary: true;
+                        clicked => { root.save-clicked(); }
+                    }
+                }
+            }
+        }
+    }
+
+    // DISCARD CHANGES? - shown only while editing, and only after `cancel-clicked` finds the buffer
+    // actually differs from what is stored. Same 20px/14px/11px-800-uppercase/12px/30px-buttons shape
+    // the Library's own Disassemble/Delete confirmations use (`spec.md`'s "the four confirmations"),
+    // borrowed rather than reinvented.
+    if root.cancel-pending : Rectangle {
+        width: 100%;
+        height: 100%;
+        background: Theme.overlay-scrim;
+        TouchArea {
+            clicked => { root.cancel-pending = false; }
+        }
+
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 340px;
+            height: discard-body.preferred-height;
+            background: Theme.bg-card;
+            border-width: 1px;
+            border-color: Theme.border-strong;
+            border-radius: Theme.radius-sharp;
+            drop-shadow-blur: 32px;
+            drop-shadow-color: Theme.overlay-shadow;
+            TouchArea { }
+
+            discard-body := VerticalLayout {
+                padding: 20px;
+                spacing: 14px;
+
+                Text {
+                    text: "DISCARD CHANGES?";
+                    font-size: 11px;
+                    font-weight: 800;
+                    color: Theme.text-primary;
+                    font-family: "IBM Plex Sans";
+                }
+
+                Text {
+                    text: "What you typed since Edit will be lost. This cannot be undone.";
+                    font-size: 12px;
+                    color: Theme.text-secondary;
+                    wrap: word-wrap;
+                    font-family: "IBM Plex Sans";
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+
+                    SdActionButton {
+                        label: "Keep editing";
+                        primary: false;
+                        height: 30px;
+                        clicked => { root.cancel-pending = false; }
+                    }
+                    SdActionButton {
+                        label: "Discard changes";
+                        height: 30px;
+                        clicked => {
+                            root.cancel-pending = false;
+                            root.discard-clicked();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

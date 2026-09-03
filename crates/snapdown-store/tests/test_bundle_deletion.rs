@@ -5,6 +5,14 @@ use snapdown_store::sqlite::{SqliteBundleStore, SqliteFindingStore};
 use snapdown_store::vault::VaultBlobStore;
 use tempfile::{NamedTempFile, TempDir};
 
+/// **Order corrected 2026-09-02, ticket 16 of the Bundle Library spec.** This test used to delete
+/// the files first and the row second - the ORIGINAL ticket 02 decision, before `wdi-review` found
+/// it contradicted `AD-2` and the map recorded the correction: the record goes first, then the
+/// files. Files-first leaves a row whose Markdown points at images that are gone, which `AD-2`
+/// itself names as the state nothing on disk can tell apart from "meant to survive" - row-first
+/// leaves only files nothing points at, which the Vault sweeper already owns. This test's own
+/// ordering was the trap: an implementer copying "the pattern to test bundle deletion by" would have
+/// copied the wrong order along with it.
 #[test]
 fn bundle_deletion_with_file_synchronization_and_cascade() {
     let tmp_vault = TempDir::new().unwrap();
@@ -38,8 +46,12 @@ fn bundle_deletion_with_file_synchronization_and_cascade() {
     };
     finding_store.create_finding(&finding, &note, &[]).unwrap();
 
-    // 2. Write bundle files on disk
-    let md_path = "bundles/test_bundle.md";
+    // 2. Write bundle files on disk. Both under the SAME `bundles/<id>/` folder, the real layout
+    // `plan_bundle` always uses (`main.rs`: `markdown_path = "bundles/{bundle_id}/bundle.md"`,
+    // `image_path = "bundles/{bundle_id}/finding_{position}_burned.png"`) - the original fixture put
+    // the Markdown one level up from its own image, which no real Bundle ever does and which
+    // `delete_folder` below would not have cleaned up correctly.
+    let md_path = "bundles/test_bundle/bundle.md";
     let img_path = "bundles/test_bundle/burned_1.png";
     vault_store.write_blob(md_path, b"# Test Bundle").unwrap();
     vault_store
@@ -65,10 +77,10 @@ fn bundle_deletion_with_file_synchronization_and_cascade() {
     // Verify bundle created
     assert!(bundle_store.get_bundle(bid).unwrap().is_some());
 
-    // 4. Perform synchronized deletion: remove files and delete DB record
-    vault_store.delete_blob(md_path).unwrap();
-    vault_store.delete_blob(img_path).unwrap();
+    // 4. Perform synchronized deletion, AD-2's order: the row first, then the folder holding both
+    // files - the whole-folder delete ticket 16 added, not two blob deletes picked one at a time.
     bundle_store.delete_bundle(bid).unwrap();
+    vault_store.delete_folder("bundles/test_bundle").unwrap();
 
     // 5. Verify neither DB record nor files exist
     assert!(bundle_store.get_bundle(bid).unwrap().is_none());

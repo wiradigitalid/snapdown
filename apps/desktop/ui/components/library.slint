@@ -1,0 +1,882 @@
+import { Theme } from "../theme.slint";
+import { SdModalHeader } from "modal.slint";
+import { SdActionButton, SdSectionLabel, SdCaption } from "action-button.slint";
+import { SdContextMenu, MenuEntry } from "context-menu.slint";
+import { ScrollView } from "std-widgets.slint";
+
+// ONE ROW - one composed Bundle, as the Library lists it.
+//
+// The thumbnail is always the BundleItem at position 1 (Rust resolves and decodes it before this
+// ever reaches Slint - a Bundle with no items at all gets `image.default`, which Slint renders as
+// nothing rather than a broken frame). `meta-line` is composed in Rust too ("N Findings · composed
+// <relative time>") rather than built here out of three fields, because the pluralisation and the
+// relative-time ladder are Rust's job and a second copy of that logic in Slint is a second place for
+// the two to disagree.
+export struct LibraryBundleRow {
+    id: string,
+    name: string,
+    thumbnail: image,
+    meta-line: string,
+}
+
+// THE LIBRARY.
+//
+// `ticket 11` of the Bundle Library spec. A floating card over a dimmed Editor, `bundle-preview-open`
+// / Assemble & Review's own pattern - gated by `AppWindow.library-open`. **Corrected 2026-09-03**:
+// this used to be drawn OPAQUE edge to edge, on the reading that the artboards (`Main.dc.html`,
+// `States.dc.html`, both fixed at 1280x840) draw no scrim and no inset panel border. That reading
+// held for the artboard's own canvas size, but a real desktop window runs far larger than 1280x840,
+// so edge-to-edge left most of the screen as dead space once a Reviewer had only a handful of
+// Bundles - the owner asked for this to be a floating window instead, on exactly that observation.
+// Sized like Review & Update's own panel, capped rather than filling the window, with the same
+// Escape-to-close FocusScope Assemble & Review already establishes (the Library has no editable
+// state at all in this ticket, so a stray Escape closing it never risks losing a change).
+//
+// A row's CLICK opens Review & Update, locked (`ticket 13`) - `bundle-opened(id)` below, wired on
+// the row's own `TouchArea` (`row-touch`) alongside that same TouchArea's right-click, which still
+// raises the row menu (see below). Rows also carry two everyday actions - `ticket 12` of the Bundle
+// Library spec: Copy Markdown and Open file location, on hover and in the row's own
+// right-click/overflow menu. `ticket 16` adds the destructive group (Disassemble…/Delete…) to the
+// SAME `row-menu` model rather than a second menu: the menu order matches `spec.md`'s "Menu order
+// and the two states" - Copy Markdown, Open file location, then the destructive group, whose single
+// verb is read live from whether the Bundle's Findings still exist (`BR-122`), never cached. Opening
+// the menu (right-click or the overflow button) always asks Rust via `row-menu-requested`, because
+// that live read has to happen at open time - ticket 12's two hover icons stay direct callbacks,
+// unaffected by the menu at all, and ticket 13's click-to-open stays a direct callback too: the two
+// hover icons and the overflow button sit in front of `row-touch` in the same Rectangle, so they
+// intercept their own clicks before `row-touch` ever sees them, and `row-touch` itself splits its
+// own left click (open) from its own right click (menu).
+export component SdLibrary inherits Rectangle {
+    // "loading" | "error" | "ready". "ready" with an empty `rows` IS the empty state - there is no
+    // fourth value for it, because a value that only restates `rows.length == 0` is a second place
+    // for that fact to live and go stale.
+    in property <string> state: "loading";
+    in property <string> error-message: "";
+    in property <[LibraryBundleRow]> rows: [];
+
+    callback closed();
+    // Opens Reclaim space (`ticket 18`) - the header's own entry point, beside the Bundle count. The
+    // SAME callback Settings' Vault card fires, forwarded at `appwindow.slint`'s mount site to one
+    // root-level callback, which is what makes the two doors open the identical screen.
+    callback reclaim-space-clicked();
+    callback try-again-clicked();
+    callback open-file-location-clicked();
+    // A row was clicked - the Bundle's id. Opens Review & Update, locked (ticket 13).
+    callback bundle-opened(string);
+    // Bundle id. Copy Markdown puts the Bundle's stored document on the clipboard, rebased so its
+    // image links resolve on this disk - the rebasing itself is Rust's job (the composer's own
+    // `rebase_image_links`), this callback only says WHICH Bundle.
+    callback copy-markdown-clicked(string);
+    // Bundle id. Distinct from `open-file-location-clicked` above, which has no Bundle to point at
+    // (it reveals `library.db` itself, from the Library's "cannot be read" state) - this one opens
+    // one Bundle's own folder.
+    callback bundle-open-file-location-clicked(string);
+
+    // THE ROW MENU - one model carrying both ticket 12's everyday actions and ticket 16's destructive
+    // group, in the order `spec.md`'s "Menu order and the two states" settles: Copy Markdown, Open
+    // file location, then the destructive group. `menu-target` is the id of the Bundle whose menu is
+    // open, "" when closed - an `in` property, not `private`, because opening the menu needs a LIVE
+    // read of whether the Bundle's Findings still exist (`BR-122`), which only Rust can do; this
+    // component never computes `menu-sealed` and never caches it across two openings.
+    in property <string> menu-target: "";
+    in property <bool> menu-sealed: false;
+    in property <length> menu-x;
+    in property <length> menu-y;
+    callback row-menu-requested(string, length, length);
+    callback row-menu-dismissed();
+    callback row-menu-action(string, string);
+
+    // Two named, separately-typed models, not one array with a per-field ternary on the last entry:
+    // `ticket 17` adds a SECOND destructive row (Discard originals…) that must exist only in the
+    // unsealed model, and an array's own length cannot be conditional in Slint - a bare `cond ? [...]
+    // : [...]` expression also fails to infer `[MenuEntry]` for either branch (tried first; the
+    // compiler reports "Cannot convert [...] to [MenuEntry]" because an inline ternary's branches are
+    // typed before the property they are assigned to). Naming each branch as its own
+    // `[MenuEntry]`-typed property fixes the inference and reads better besides. The sealed model
+    // stays the one entry ticket 16 built. "delete-both" never appears in either model on purpose -
+    // `ticket 17`'s acceptance criteria asks that to be checked structurally, and this is what makes
+    // it true: the Delete both act only ever reaches Slint through `delete-both-requested`, fired
+    // from a link inside the Disassemble confirmation below, never from this model.
+    private property <[MenuEntry]> sealed-row-menu: [
+        { action: "copy-markdown", label: "Copy Markdown", hint: "", separator: false, enabled: true },
+        { action: "reveal", label: "Open file location", hint: "", separator: false, enabled: true },
+        { action: "", label: "", hint: "", separator: true, enabled: false },
+        { action: "delete-bundle", label: "Delete…", hint: "", separator: false, enabled: true },
+    ];
+    private property <[MenuEntry]> unsealed-row-menu: [
+        { action: "copy-markdown", label: "Copy Markdown", hint: "", separator: false, enabled: true },
+        { action: "reveal", label: "Open file location", hint: "", separator: false, enabled: true },
+        { action: "", label: "", hint: "", separator: true, enabled: false },
+        { action: "disassemble-bundle", label: "Disassemble…", hint: "", separator: false, enabled: true },
+        {
+            action: "discard-originals-bundle",
+            label: "Discard originals…",
+            hint: "",
+            separator: false,
+            enabled: true,
+        },
+    ];
+    private property <[MenuEntry]> row-menu: root.menu-sealed ? root.sealed-row-menu : root.unsealed-row-menu;
+
+    // THE FOUR CONFIRMATIONS (`ticket 16` built the first two; `ticket 17` adds Discard originals
+    // and Delete both). Bundle name and Finding count are supplied by Rust at the moment a dialog
+    // opens, fresh off the same live read that chose the verb.
+    in property <string> pending-disassemble: "";
+    in property <string> pending-delete: "";
+    in property <string> pending-bundle-name: "";
+    in property <int> pending-bundle-finding-count: 0;
+    callback disassemble-cancelled();
+    callback disassemble-confirmed(string);
+    callback delete-cancelled();
+    callback delete-confirmed(string);
+
+    // DISCARD ORIGINALS. `pending-discard-warning` names any other Bundle that shares one of the
+    // Findings about to go and will therefore be sealed too (`BR-12`/`BR-122`) - empty when none
+    // does. Computed by Rust fresh at the moment this dialog opens, over the same live read.
+    in property <string> pending-discard: "";
+    in property <string> pending-discard-warning: "";
+    callback discard-cancelled();
+    callback discard-confirmed(string);
+
+    // DELETE BOTH - reachable ONLY as a second-step choice from inside the Disassemble confirmation
+    // (the link at the foot of that dialog below), never as its own menu row: `row-menu` above never
+    // carries a "delete-both" action. `delete-both-requested` asks Rust to swap the Disassemble
+    // dialog for this one; Rust owns that swap because the Bundle name and Finding count it fills in
+    // are its own live read, not something this component may cache across the transition.
+    in property <string> pending-delete-both: "";
+    callback delete-both-requested(string);
+    callback delete-both-cancelled();
+    callback delete-both-confirmed(string);
+
+    width: 100%;
+    height: 100%;
+    background: Theme.overlay-scrim;
+
+    // Swallows any click that misses the panel, so the Editor beneath stays inert - Assemble &
+    // Review's own scrim-covering TouchArea, now that this IS a scrim rather than an opaque screen.
+    TouchArea { }
+
+    // Escape closes it - Assemble & Review's own pattern. Declared before the panel and focused on
+    // creation, so it holds the keyboard until the Reviewer clicks into something else.
+    library-keys := FocusScope {
+        init => { self.focus(); }
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                root.closed();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    // THE PANEL. Capped rather than filling the window - a floating card, Review & Update's own
+    // pattern, sized for a list rather than a document (no A4 aspect ratio: this is rows, not
+    // prose). Shrinks below the cap on a small window, never grows past it on a large one, so a
+    // handful of Bundles never has to fill an entire ultrawide monitor.
+    panel := Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: min(parent.width - 64px, 760px);
+        height: min(parent.height - 64px, 680px);
+        background: Theme.bg-app;
+        border-radius: Theme.radius-sharp;
+        border-width: 1px;
+        border-color: Theme.border-strong;
+        drop-shadow-blur: 32px;
+        drop-shadow-color: Theme.overlay-shadow;
+        TouchArea { }
+
+        VerticalLayout {
+        padding: 0px;
+        spacing: 0px;
+
+        // HEADER - the shared one. Icon and title are the Library's own ribbon icon
+        // (`library.svg`), the same asset the Editor's own Library button already uses - the
+        // artboard draws a different, invented glyph for this, and the running app's own icon is
+        // the one that ships, not a shape redrawn once on the canvas and never reconciled with it.
+        SdModalHeader {
+            icon: @image-url("../../assets/icons/library.svg");
+            title: "Library";
+            closed => { root.closed(); }
+
+            // The Bundle count. Read directly off `rows.length`, never a separately-carried number -
+            // two places agreeing by a shared value rather than by matching numbers is exactly what
+            // `design-system-guide.md` asks for, and it is what makes "the header count equals the
+            // number of rows" true by construction rather than by remembering to keep two numbers in
+            // step.
+            Text {
+                text: root.rows.length + " Bundle" + (root.rows.length == 1 ? "" : "s");
+                font-size: 10px;
+                color: Theme.text-muted;
+                vertical-alignment: center;
+                font-family: "IBM Plex Mono";
+            }
+
+            // RECLAIM SPACE'S HEADER ENTRY (`ticket 18`) - `spec.md`'s "Header: title, Bundle count,
+            // a Reclaim space entry." A plain sibling `Rectangle` sized from its own label, not a
+            // layout cell holding the `Text` and a `TouchArea` as two separate cells - the same
+            // overlay-not-column trick every clickable label in this product uses, because a
+            // `TouchArea` given its own layout cell shrinks to a sliver instead of covering the text
+            // it belongs to.
+            Rectangle {
+                width: reclaim-space-label.preferred-width;
+                reclaim-space-label := Text {
+                    text: "Reclaim space";
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: reclaim-space-touch.has-hover ? Theme.accent-hover : Theme.accent-primary;
+                    vertical-alignment: center;
+                    font-family: "IBM Plex Sans";
+                }
+                reclaim-space-touch := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => { root.reclaim-space-clicked(); }
+                }
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+            background: Theme.bg-app;
+
+            VerticalLayout {
+                padding: 16px;
+                spacing: 16px;
+
+                // "ALL BUNDLES" / "Newest first" - STATIC READOUTS of what the list is, never
+                // controls. There is no search, filter or sort in this release (`r2` per the corpus),
+                // and the map's own rule is that a control nobody can operate repeats the toolbar's
+                // fake shortcut-badge mistake - so neither of these carries a `TouchArea`.
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: start;
+                    SdSectionLabel { text: "ALL BUNDLES"; }
+                    SdCaption { text: "Newest first"; }
+                }
+
+                Rectangle {
+                    vertical-stretch: 1;
+                    background: Theme.bg-card;
+                    border-width: 1px;
+                    border-color: Theme.border-strong;
+                    border-radius: Theme.radius-sharp;
+                    clip: true;
+
+                    // LOADING - skeleton rows in the list's own shape, so nothing jumps into place
+                    // once the real rows land. Four of them, matching `States.dc.html`.
+                    if root.state == "loading" : VerticalLayout {
+                        for i in [0, 1, 2, 3] : Rectangle {
+                            height: 54px;
+                            border-width: i == 3 ? 0px : 1px;
+                            border-color: Theme.border-subtle;
+
+                            HorizontalLayout {
+                                padding-top: 12px;
+                                padding-bottom: 12px;
+                                padding-left: 14px;
+                                padding-right: 12px;
+                                spacing: 12px;
+
+                                Rectangle {
+                                    width: 44px;
+                                    height: 30px;
+                                    border-radius: Theme.radius-sharp;
+                                    background: Theme.bg-hover;
+                                }
+                                VerticalLayout {
+                                    spacing: 6px;
+                                    alignment: center;
+                                    Rectangle { height: 9px; width: 60%; border-radius: 2px; background: Theme.bg-hover; }
+                                    Rectangle { height: 7px; width: 32%; border-radius: 2px; background: Theme.border-subtle; }
+                                }
+                            }
+                        }
+                    }
+
+                    // CANNOT BE READ - names what refused (Rust's `error-message`), with Try again
+                    // (re-reads the store) and Open file location (reveals `library.db`) beside it.
+                    if root.state == "error" : VerticalLayout {
+                        alignment: center;
+                        spacing: 14px;
+
+                        HorizontalLayout {
+                            alignment: center;
+                            // A drawn ring-and-exclamation, not a font glyph and not a new SVG asset
+                            // for one screen - the same "draw it, do not type it" rule the modal
+                            // close and the checkbox tick already follow in this product.
+                            Rectangle {
+                                width: 30px;
+                                height: 30px;
+                                Rectangle {
+                                    width: 30px;
+                                    height: 30px;
+                                    border-radius: 15px;
+                                    border-width: 1.3px;
+                                    border-color: Theme.semantic-error;
+                                }
+                                Rectangle {
+                                    x: 14px;
+                                    y: 8px;
+                                    width: 2px;
+                                    height: 10px;
+                                    border-radius: 1px;
+                                    background: Theme.semantic-error;
+                                }
+                                Rectangle {
+                                    x: 14px;
+                                    y: 20.5px;
+                                    width: 2px;
+                                    height: 2px;
+                                    border-radius: 1px;
+                                    background: Theme.semantic-error;
+                                }
+                            }
+                        }
+
+                        Text {
+                            text: "The Library could not be read";
+                            font-size: 13px;
+                            color: Theme.text-primary;
+                            horizontal-alignment: center;
+                            font-family: "IBM Plex Sans";
+                        }
+
+                        Text {
+                            text: root.error-message;
+                            font-size: 10px;
+                            color: Theme.text-muted;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
+                            font-family: "IBM Plex Mono";
+                        }
+
+                        HorizontalLayout {
+                            alignment: center;
+                            spacing: 8px;
+
+                            SdActionButton {
+                                label: "Try again";
+                                primary: true;
+                                clicked => { root.try-again-clicked(); }
+                            }
+                            SdActionButton {
+                                label: "Open file location";
+                                primary: false;
+                                clicked => { root.open-file-location-clicked(); }
+                            }
+                        }
+                    }
+
+                    // EMPTY - names the next action rather than showing a dead end.
+                    if root.state == "ready" && root.rows.length == 0 : VerticalLayout {
+                        alignment: center;
+                        spacing: 14px;
+
+                        HorizontalLayout {
+                            alignment: center;
+                            Image {
+                                width: 34px;
+                                height: 34px;
+                                image-fit: contain;
+                                source: @image-url("../../assets/icons/library.svg");
+                                colorize: Theme.border-strong;
+                            }
+                        }
+
+                        Text {
+                            text: "No Bundles yet";
+                            font-size: 13px;
+                            color: Theme.text-primary;
+                            horizontal-alignment: center;
+                            font-family: "IBM Plex Sans";
+                        }
+
+                        Text {
+                            text: "Tick Findings in the strip and press Assemble. The Bundle you compose lands here.";
+                            font-size: 10px;
+                            color: Theme.text-muted;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
+                            font-family: "IBM Plex Sans";
+                        }
+                    }
+
+                    // THE LIST - every Bundle, newest-composed first (Rust preserves the store's own
+                    // order; nothing here re-sorts it).
+                    if root.state == "ready" && root.rows.length > 0 : ScrollView {
+                        width: 100%;
+                        height: 100%;
+                        vertical-scrollbar-policy: as-needed;
+                        horizontal-scrollbar-policy: always-off;
+
+                        VerticalLayout {
+                            for row[i] in root.rows : Rectangle {
+                                height: 54px;
+                                background: row-touch.has-hover ? Theme.bg-hover : transparent;
+                                border-width: i == root.rows.length - 1 ? 0px : 1px;
+                                border-color: Theme.border-subtle;
+
+                                row-touch := TouchArea {
+                                    // LEFT click opens Review & Update, locked, on the Bundle exactly
+                                    // as composed (`ticket 13`) - `pointer`, not `default`, because
+                                    // this now reads as clickable. A RIGHT click raises the same row
+                                    // menu the overflow button does - the filmstrip's own gesture
+                                    // (`appwindow.slint`'s `finding-menu`), copied here (`ticket
+                                    // 12`/`ticket 16`). Both routes ask Rust (`row-menu-requested`
+                                    // for the right click; `bundle-opened` for the left), never set
+                                    // state locally, so the destructive entry's verb is read live
+                                    // every time the menu opens. The two hover icons and the overflow
+                                    // button sit later in this same Rectangle's tree, so they draw on
+                                    // top of `row-touch` and intercept their own clicks first - a
+                                    // click on either never reaches this TouchArea at all.
+                                    mouse-cursor: pointer;
+                                    clicked => { root.bundle-opened(row.id); }
+                                    pointer-event(ev) => {
+                                        if (ev.kind == PointerEventKind.down
+                                            && ev.button == PointerEventButton.right) {
+                                            root.row-menu-requested(row.id,
+                                                self.absolute-position.x + self.mouse-x,
+                                                self.absolute-position.y + self.mouse-y);
+                                        }
+                                    }
+                                }
+
+                                HorizontalLayout {
+                                    padding-top: 12px;
+                                    padding-bottom: 12px;
+                                    padding-left: 14px;
+                                    padding-right: 12px;
+                                    spacing: 12px;
+
+                                    // Thumbnail. `canvas-ground` is theme-invariant - the same
+                                    // reasoning the capture overlay's own ground follows - so this
+                                    // reads identically in both themes, which is what the ticket's
+                                    // acceptance criteria ask for explicitly.
+                                    Rectangle {
+                                        width: 44px;
+                                        height: 30px;
+                                        border-radius: Theme.radius-sharp;
+                                        background: Theme.canvas-ground;
+                                        border-width: 1px;
+                                        border-color: Theme.border-strong;
+                                        clip: true;
+
+                                        Image {
+                                            width: 100%;
+                                            height: 100%;
+                                            image-fit: cover;
+                                            source: row.thumbnail;
+                                        }
+                                    }
+
+                                    VerticalLayout {
+                                        horizontal-stretch: 1;
+                                        spacing: 3px;
+                                        alignment: center;
+
+                                        Text {
+                                            text: row.name;
+                                            font-size: 13px;
+                                            color: Theme.text-primary;
+                                            overflow: elide;
+                                            font-family: "IBM Plex Sans";
+                                        }
+                                        Text {
+                                            text: row.meta-line;
+                                            font-size: 10px;
+                                            color: Theme.text-muted;
+                                            overflow: elide;
+                                            font-family: "IBM Plex Mono";
+                                        }
+                                    }
+
+                                    // The row's two hover actions and its overflow button. `ticket
+                                    // 11` laid these out undecorated on purpose ("an icon with no
+                                    // click handler invites nothing"); this ticket gives all three a
+                                    // `TouchArea`.
+                                    if row-touch.has-hover : HorizontalLayout {
+                                        spacing: 4px;
+                                        alignment: end;
+
+                                        Rectangle {
+                                            width: 28px;
+                                            height: 28px;
+                                            border-radius: Theme.radius-sharp;
+                                            background: copy-touch.has-hover ? Theme.bg-hover : Theme.bg-card;
+                                            border-width: 1px;
+                                            border-color: Theme.border-strong;
+                                            Image {
+                                                width: 13px;
+                                                height: 13px;
+                                                image-fit: contain;
+                                                colorize: Theme.text-secondary;
+                                                source: @image-url("../../assets/icons/copy.svg");
+                                            }
+                                            copy-touch := TouchArea {
+                                                mouse-cursor: MouseCursor.pointer;
+                                                clicked => { root.copy-markdown-clicked(row.id); }
+                                            }
+                                        }
+                                        Rectangle {
+                                            width: 28px;
+                                            height: 28px;
+                                            border-radius: Theme.radius-sharp;
+                                            background: reveal-touch.has-hover ? Theme.bg-hover : Theme.bg-card;
+                                            border-width: 1px;
+                                            border-color: Theme.border-strong;
+                                            Image {
+                                                width: 13px;
+                                                height: 13px;
+                                                image-fit: contain;
+                                                colorize: Theme.text-secondary;
+                                                source: @image-url("../../assets/icons/folder.svg");
+                                            }
+                                            reveal-touch := TouchArea {
+                                                mouse-cursor: MouseCursor.pointer;
+                                                clicked => { root.bundle-open-file-location-clicked(row.id); }
+                                            }
+                                        }
+                                        // Overflow - three drawn dots, not a typed "...", for the
+                                        // same reason the checkbox tick and the modal close are
+                                        // drawn: a glyph falls back to whatever the font has. Opens
+                                        // the same `row-menu` a right-click on the row does
+                                        // (`root.row-menu-requested`) - Copy Markdown, Open file
+                                        // location, then the destructive group.
+                                        Rectangle {
+                                            width: 28px;
+                                            height: 28px;
+                                            border-radius: Theme.radius-sharp;
+                                            background: overflow-touch.has-hover ? Theme.bg-hover : Theme.bg-card;
+                                            border-width: 1px;
+                                            border-color: Theme.border-strong;
+                                            HorizontalLayout {
+                                                alignment: center;
+                                                spacing: 3px;
+                                                Rectangle { width: 2.3px; height: 2.3px; border-radius: 1.15px; background: Theme.text-secondary; }
+                                                Rectangle { width: 2.3px; height: 2.3px; border-radius: 1.15px; background: Theme.text-secondary; }
+                                                Rectangle { width: 2.3px; height: 2.3px; border-radius: 1.15px; background: Theme.text-secondary; }
+                                            }
+                                            overflow-touch := TouchArea {
+                                                mouse-cursor: MouseCursor.pointer;
+                                                clicked => {
+                                                    root.row-menu-requested(row.id,
+                                                        self.absolute-position.x + self.mouse-x,
+                                                        self.absolute-position.y + self.mouse-y);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        }
+    }
+
+    // THE ROW MENU - declared here, above the clipped list, so it is never cut off by the
+    // `clip: true` bordered box the rows scroll inside. Same reasoning `appwindow.slint`'s own
+    // canvas/filmstrip context menu gives for living outside whatever it was raised from. Opened by
+    // the overflow button or a right-click on the row, both of which ask Rust
+    // (`row-menu-requested`) for a live-read `menu-target`/`menu-sealed`, so the destructive entry's
+    // verb can never be stale. Copy Markdown and Open file location are handled locally - they carry
+    // no live state - and dismiss the menu the same way a plain dismissal does; the destructive
+    // group is forwarded to Rust, which owns its confirmation step.
+    if root.menu-target != "" : SdContextMenu {
+        entries: root.row-menu;
+        at-x: root.menu-x;
+        at-y: root.menu-y;
+        dismissed => { root.row-menu-dismissed(); }
+        chosen(action) => {
+            if (action == "copy-markdown") {
+                root.copy-markdown-clicked(root.menu-target);
+                root.row-menu-dismissed();
+            } else if (action == "reveal") {
+                root.bundle-open-file-location-clicked(root.menu-target);
+                root.row-menu-dismissed();
+            } else {
+                root.row-menu-action(action, root.menu-target);
+            }
+        }
+    }
+
+    // DISASSEMBLE - confirmed once, the same "confirmation once is the safety" rule the Delete
+    // Finding dialog already follows. Same 20px/14px/11px-800-uppercase/12px/30px-buttons shape as
+    // that dialog, per `spec.md`'s "the four confirmations".
+    if root.pending-disassemble != "" : Rectangle {
+        width: 100%;
+        height: 100%;
+        background: Theme.overlay-scrim;
+        TouchArea {
+            clicked => { root.disassemble-cancelled(); }
+        }
+
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 380px;
+            height: disassemble-body.preferred-height;
+            background: Theme.bg-card;
+            border-width: 1px;
+            border-color: Theme.border-strong;
+            border-radius: Theme.radius-sharp;
+            drop-shadow-blur: 32px;
+            drop-shadow-color: Theme.overlay-shadow;
+            TouchArea { }
+
+            disassemble-body := VerticalLayout {
+                padding: 20px;
+                spacing: 14px;
+
+                SdSectionLabel {
+                    text: "DISASSEMBLE \"" + root.pending-bundle-name + "\"?";
+                }
+
+                Text {
+                    text: "Its " + root.pending-bundle-finding-count + " Finding"
+                        + (root.pending-bundle-finding-count == 1 ? " becomes" : "s become")
+                        + " available to assemble again, with their notes and markers intact."
+                        + " This cannot be undone.";
+                    font-size: 12px;
+                    color: Theme.text-secondary;
+                    wrap: word-wrap;
+                    font-family: "IBM Plex Sans";
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+
+                    SdActionButton {
+                        label: "Keep it";
+                        primary: false;
+                        height: 30px;
+                        clicked => { root.disassemble-cancelled(); }
+                    }
+                    SdActionButton {
+                        label: "Disassemble";
+                        height: 30px;
+                        clicked => { root.disassemble-confirmed(root.pending-disassemble); }
+                    }
+                }
+
+                // THE SECOND STEP (`ticket 17`). A link, not a menu row and not a third equal
+                // button next to Keep it/Disassemble - the most destructive act in the product must
+                // never be one click away, and this puts one deliberate extra click between the
+                // Reviewer and it. Fires `delete-both-requested`, which Rust answers by swapping this
+                // dialog for the Delete both one below.
+                Rectangle {
+                    height: 16px;
+                    HorizontalLayout {
+                        alignment: end;
+                        Text {
+                            text: "Delete the Bundle and its originals instead";
+                            font-size: 11px;
+                            color: Theme.semantic-error;
+                            font-family: "IBM Plex Sans";
+                        }
+                    }
+                    delete-both-link := TouchArea {
+                        mouse-cursor: MouseCursor.pointer;
+                        clicked => { root.delete-both-requested(root.pending-disassemble); }
+                    }
+                }
+            }
+        }
+    }
+
+    // DELETE, on an already-sealed Bundle - nothing comes back, because the originals were
+    // discarded earlier (ticket 17's Discard originals).
+    if root.pending-delete != "" : Rectangle {
+        width: 100%;
+        height: 100%;
+        background: Theme.overlay-scrim;
+        TouchArea {
+            clicked => { root.delete-cancelled(); }
+        }
+
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 380px;
+            height: delete-body.preferred-height;
+            background: Theme.bg-card;
+            border-width: 1px;
+            border-color: Theme.border-strong;
+            border-radius: Theme.radius-sharp;
+            drop-shadow-blur: 32px;
+            drop-shadow-color: Theme.overlay-shadow;
+            TouchArea { }
+
+            delete-body := VerticalLayout {
+                padding: 20px;
+                spacing: 14px;
+
+                SdSectionLabel {
+                    text: "DELETE \"" + root.pending-bundle-name + "\"?";
+                }
+
+                Text {
+                    text: "Its original captures were discarded earlier, so nothing comes back."
+                        + " This cannot be undone.";
+                    font-size: 12px;
+                    color: Theme.text-secondary;
+                    wrap: word-wrap;
+                    font-family: "IBM Plex Sans";
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+
+                    SdActionButton {
+                        label: "Keep it";
+                        primary: false;
+                        height: 30px;
+                        clicked => { root.delete-cancelled(); }
+                    }
+                    SdActionButton {
+                        label: "Delete";
+                        height: 30px;
+                        clicked => { root.delete-confirmed(root.pending-delete); }
+                    }
+                }
+            }
+        }
+    }
+
+    // DISCARD ORIGINALS (`ticket 17`). The source Findings behind an unsealed Bundle go through the
+    // existing whole-Finding deletion path, one at a time; the Bundle's own row, items, document and
+    // image copies are untouched. Sealing is a CONSEQUENCE of the Findings being gone, never a write
+    // here - the next menu open reads live state and offers Delete… only, per `bundle_is_sealed`'s
+    // own doc comment. `pending-discard-warning` names any other Bundle that shares one of these
+    // Findings and will therefore be sealed too (`BR-12`/`BR-122`) - empty when none does.
+    if root.pending-discard != "" : Rectangle {
+        width: 100%;
+        height: 100%;
+        background: Theme.overlay-scrim;
+        TouchArea {
+            clicked => { root.discard-cancelled(); }
+        }
+
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 380px;
+            height: discard-body.preferred-height;
+            background: Theme.bg-card;
+            border-width: 1px;
+            border-color: Theme.border-strong;
+            border-radius: Theme.radius-sharp;
+            drop-shadow-blur: 32px;
+            drop-shadow-color: Theme.overlay-shadow;
+            TouchArea { }
+
+            discard-body := VerticalLayout {
+                padding: 20px;
+                spacing: 14px;
+
+                SdSectionLabel {
+                    text: "DISCARD ORIGINALS FROM \"" + root.pending-bundle-name + "\"?";
+                }
+
+                Text {
+                    text: "Its " + root.pending-bundle-finding-count + " Finding"
+                        + (root.pending-bundle-finding-count == 1 ? "" : "s")
+                        + " and their notes, Markers and image files are discarded."
+                        + " This Bundle keeps its own copies and stays readable, but it can no longer be disassembled."
+                        + (root.pending-discard-warning == "" ? "" : " " + root.pending-discard-warning)
+                        + " This cannot be undone.";
+                    font-size: 12px;
+                    color: Theme.text-secondary;
+                    wrap: word-wrap;
+                    font-family: "IBM Plex Sans";
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+
+                    SdActionButton {
+                        label: "Keep it";
+                        primary: false;
+                        height: 30px;
+                        clicked => { root.discard-cancelled(); }
+                    }
+                    SdActionButton {
+                        label: "Discard";
+                        height: 30px;
+                        clicked => { root.discard-confirmed(root.pending-discard); }
+                    }
+                }
+            }
+        }
+    }
+
+    // DELETE BOTH (`ticket 17`) - the Bundle AND its originals. Reached only from the link inside
+    // the Disassemble confirmation above; never a menu row (`row-menu`'s own model never carries a
+    // "delete-both" action - see the comment beside it). Removes the Bundle (row, then folder) and
+    // then each source Finding (record, then files) - `AD-2`'s ordering, combined over both acts.
+    if root.pending-delete-both != "" : Rectangle {
+        width: 100%;
+        height: 100%;
+        background: Theme.overlay-scrim;
+        TouchArea {
+            clicked => { root.delete-both-cancelled(); }
+        }
+
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 380px;
+            height: delete-both-body.preferred-height;
+            background: Theme.bg-card;
+            border-width: 1px;
+            border-color: Theme.border-strong;
+            border-radius: Theme.radius-sharp;
+            drop-shadow-blur: 32px;
+            drop-shadow-color: Theme.overlay-shadow;
+            TouchArea { }
+
+            delete-both-body := VerticalLayout {
+                padding: 20px;
+                spacing: 14px;
+
+                SdSectionLabel {
+                    text: "DELETE BOTH \"" + root.pending-bundle-name + "\"?";
+                }
+
+                Text {
+                    text: "The Bundle and its " + root.pending-bundle-finding-count + " Finding"
+                        + (root.pending-bundle-finding-count == 1 ? "" : "s")
+                        + " are removed, with their notes, Markers and image files."
+                        + " Nothing comes back to the filmstrip."
+                        + " This cannot be undone.";
+                    font-size: 12px;
+                    color: Theme.text-secondary;
+                    wrap: word-wrap;
+                    font-family: "IBM Plex Sans";
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+
+                    SdActionButton {
+                        label: "Keep it";
+                        primary: false;
+                        height: 30px;
+                        clicked => { root.delete-both-cancelled(); }
+                    }
+                    SdActionButton {
+                        label: "Delete both";
+                        height: 30px;
+                        clicked => { root.delete-both-confirmed(root.pending-delete-both); }
+                    }
+                }
+            }
+        }
+    }
+}

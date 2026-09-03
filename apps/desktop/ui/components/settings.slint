@@ -67,6 +67,9 @@ export component SdSettings inherits Rectangle {
     callback open-editor-after-capture-toggled(bool);
     callback vault-browse();
     callback vault-reveal();
+    // Reclaim space's second door (`ticket 18`) - the SAME callback the Library header's own entry
+    // fires, forwarded at `appwindow.slint`'s mount site to one root-level callback.
+    callback reclaim-space-clicked();
     callback budget-chosen(string);
     callback budget-advanced(int, int, int);
     // action, ctrl, alt, shift, win, and the key's own text. RUST composes the shortcut string,
@@ -262,6 +265,12 @@ export component SdSettings inherits Rectangle {
                                     primary: false;
                                     height: 28px;
                                     clicked => { root.vault-reveal(); }
+                                }
+                                SdActionButton {
+                                    label: "Reclaim space...";
+                                    primary: false;
+                                    height: 28px;
+                                    clicked => { root.reclaim-space-clicked(); }
                                 }
                             }
 

@@ -31,6 +31,12 @@ global-hotkey = "0.8.0"
 
 [dev-dependencies]
 tempfile = { workspace = true }
+# For one test only: a `SqliteBundleStore` built on an UNMIGRATED connection, so `list_bundles`
+# fails for real (an actual "no such table" error, not a faked `CoreError`) - the second of the two
+# "cannot be read" triggers `AppContext.bundle_store` names on itself (`None`, and a read failing on
+# an otherwise-open store). Already a workspace dependency; this only wires it into this crate's
+# dev-deps.
+rusqlite = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 i-slint-backend-winit = "1.17.1"

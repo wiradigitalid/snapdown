@@ -92,8 +92,8 @@ impl BundleStore for SqliteBundleStore {
         // Insert bundle
         tx.execute(
             r#"
-            INSERT INTO bundle (id, name, markdown, markdown_path, composed_at)
-            VALUES (?1, ?2, ?3, ?4, ?5);
+            INSERT INTO bundle (id, name, markdown, markdown_path, composed_at, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6);
             "#,
             rusqlite::params![
                 bundle.id,
@@ -101,6 +101,7 @@ impl BundleStore for SqliteBundleStore {
                 bundle.markdown,
                 bundle.markdown_path,
                 bundle.composed_at,
+                bundle.updated_at,
             ],
         )
         .map_err(|e| CoreError::Validation(e.to_string()))?;
@@ -137,7 +138,7 @@ impl BundleStore for SqliteBundleStore {
 
         let mut stmt = conn
             .prepare(
-                "SELECT id, name, markdown, markdown_path, composed_at FROM bundle WHERE id = ?1;",
+                "SELECT id, name, markdown, markdown_path, composed_at, updated_at FROM bundle WHERE id = ?1;",
             )
             .map_err(|e| CoreError::Validation(e.to_string()))?;
 
@@ -149,6 +150,7 @@ impl BundleStore for SqliteBundleStore {
                     markdown: row.get(2)?,
                     markdown_path: row.get(3)?,
                     composed_at: row.get(4)?,
+                    updated_at: row.get(5)?,
                 })
             })
             .optional()
@@ -197,8 +199,10 @@ impl BundleStore for SqliteBundleStore {
             .lock()
             .map_err(|e| CoreError::Validation(e.to_string()))?;
 
+        // ORDER BY composed_at DESC only - ticket 15's own instruction not to re-sort on the
+        // last-edited time this migration adds. Fixing a typo in an old Bundle must not move it.
         let mut stmt = conn
-            .prepare("SELECT id, name, markdown, markdown_path, composed_at FROM bundle ORDER BY composed_at DESC;")
+            .prepare("SELECT id, name, markdown, markdown_path, composed_at, updated_at FROM bundle ORDER BY composed_at DESC;")
             .map_err(|e| CoreError::Validation(e.to_string()))?;
 
         let bundle_rows = stmt
@@ -209,6 +213,7 @@ impl BundleStore for SqliteBundleStore {
                     markdown: row.get(2)?,
                     markdown_path: row.get(3)?,
                     composed_at: row.get(4)?,
+                    updated_at: row.get(5)?,
                 })
             })
             .map_err(|e| CoreError::Validation(e.to_string()))?;
@@ -254,7 +259,13 @@ impl BundleStore for SqliteBundleStore {
         Ok(details)
     }
 
-    fn update_bundle_markdown(&self, id: &str, markdown: &str) -> Result<(), CoreError> {
+    fn update_bundle_name_and_markdown(
+        &self,
+        id: &str,
+        name: &str,
+        markdown: &str,
+        updated_at: &str,
+    ) -> Result<(), CoreError> {
         let conn = self
             .conn
             .lock()
@@ -262,8 +273,8 @@ impl BundleStore for SqliteBundleStore {
 
         let rows = conn
             .execute(
-                "UPDATE bundle SET markdown = ?1 WHERE id = ?2;",
-                rusqlite::params![markdown, id],
+                "UPDATE bundle SET name = ?1, markdown = ?2, updated_at = ?3 WHERE id = ?4;",
+                rusqlite::params![name, markdown, updated_at, id],
             )
             .map_err(|e| CoreError::Validation(e.to_string()))?;
 

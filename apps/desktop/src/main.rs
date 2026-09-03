@@ -14,12 +14,12 @@ use global_hotkey::hotkey::HotKey;
 use global_hotkey::{GlobalHotKeyEvent, HotKeyState};
 use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, SharedString, VecModel};
 use snapdown_capture::{CaptureTarget, RegionCapturer};
-use snapdown_core::domain::bundle::{Bundle, BundleItem};
+use snapdown_core::domain::bundle::{Bundle, BundleDetail, BundleItem};
 use snapdown_core::domain::finding::{
     AnnotationShape, Finding, FindingDetail, Note, Region, VisualAnnotation,
 };
 use snapdown_core::domain::image::ImageDimensions;
-use snapdown_core::domain::markdown::MarkdownSerializer;
+use snapdown_core::domain::markdown::{MarkdownSerializer, ParsedBundleDocument};
 use snapdown_core::domain::setting::{
     HotkeyAction, NamedBudget, QualityBudget, ResolvedPair, Setting, SettingKey, SettingValue,
 };
@@ -254,6 +254,984 @@ fn rgba_to_slint_image(img: &image::RgbaImage) -> slint::Image {
     let (w, h) = (img.width(), img.height());
     let pixel_buffer = SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(img.as_raw(), w, h);
     slint::Image::from_rgba8(pixel_buffer)
+}
+
+/// The largest a Library row's thumbnail is ever decoded: the artboard's 44x30 row art at 2x for a
+/// HiDPI display - the same reasoning `THUMB_MAX_W`/`THUMB_MAX_H` give for the filmstrip, at the
+/// Library row's own much smaller size.
+const LIBRARY_THUMB_MAX_W: u32 = 88;
+const LIBRARY_THUMB_MAX_H: u32 = 60;
+
+/// "just now" / "N minutes ago" / "yesterday" / "last week" / ... from an RFC3339 instant to `now`.
+///
+/// No crate in `Cargo.toml` offers this - checked before writing it, because a hand-rolled ladder is
+/// exactly the kind of thing that already exists somewhere and should not be reinvented twice.
+/// `chrono` itself only formats an ABSOLUTE instant; the relative wording is ours to write. `now` is
+/// a parameter rather than `Utc::now()` read inside, so the ladder itself can be tested against fixed
+/// instants instead of a clock that moves while the test runs.
+fn relative_time(rfc3339: &str, now: chrono::DateTime<chrono::Utc>) -> String {
+    let Ok(then) = chrono::DateTime::parse_from_rfc3339(rfc3339) else {
+        return "an unknown time ago".to_string();
+    };
+    let then = then.with_timezone(&chrono::Utc);
+    let seconds = (now - then).num_seconds().max(0);
+
+    match seconds {
+        0..=44 => "just now".to_string(),
+        45..=89 => "a minute ago".to_string(),
+        90..=2699 => format!("{} minutes ago", (seconds + 30) / 60),
+        2700..=5399 => "an hour ago".to_string(),
+        5400..=86399 => format!("{} hours ago", (seconds + 1800) / 3600),
+        86400..=151199 => "yesterday".to_string(),
+        151200..=603799 => format!("{} days ago", (seconds + 43200) / 86400),
+        603800..=1209599 => "last week".to_string(),
+        _ => {
+            let weeks = (seconds + 302400) / 604800;
+            if weeks < 5 {
+                format!("{weeks} weeks ago")
+            } else {
+                let months = ((seconds as f64) / (86400.0 * 30.44)).round() as i64;
+                if months < 12 {
+                    format!("{months} month{} ago", if months == 1 { "" } else { "s" })
+                } else {
+                    let years = ((seconds as f64) / (86400.0 * 365.25)).round() as i64;
+                    format!("{years} year{} ago", if years == 1 { "" } else { "s" })
+                }
+            }
+        }
+    }
+}
+
+/// Decodes and thumbnails the Bundle's own copy of an image - never a Finding's. Assembling copies
+/// (`Further Notes` in the spec: "Assembling copies, it never moves"), so a Bundle's `BundleItem`
+/// image survives Discard originals and even a fully sealed Bundle, which is exactly why the Library
+/// resolves this path rather than a Finding's `image_path`.
+fn load_bundle_thumbnail(ctx: &AppContext, image_path: &str) -> slint::Image {
+    let path = if PathBuf::from(image_path).is_absolute() {
+        PathBuf::from(image_path)
+    } else {
+        ctx.vault_path.join(image_path)
+    };
+    if !path.exists() {
+        return slint::Image::default();
+    }
+    match image::open(&path) {
+        Ok(dyn_img) => rgba_to_slint_image(
+            &dyn_img
+                .thumbnail(LIBRARY_THUMB_MAX_W, LIBRARY_THUMB_MAX_H)
+                .to_rgba8(),
+        ),
+        Err(_) => slint::Image::default(),
+    }
+}
+
+/// Ticket 15's own " · edited <relative time>" suffix, shared by the Library row's meta line and
+/// Review & Update's own provenance line so the two surfaces cannot drift apart on the wording or
+/// the comparison. Empty when `updated_at` still reads as never-edited - either a Bundle that has
+/// never been saved through, or one backfilled by migration v9 - never when the two happen to render
+/// the same relative-time WORD (e.g. both "yesterday"): the comparison is on the stored strings, not
+/// on `relative_time`'s output, which is what ticket 09's option B actually asked for ("only when it
+/// differs from `composed_at`").
+fn edited_suffix(bundle: &Bundle, now: chrono::DateTime<chrono::Utc>) -> String {
+    if bundle.updated_at == bundle.composed_at {
+        String::new()
+    } else {
+        format!(" · edited {}", relative_time(&bundle.updated_at, now))
+    }
+}
+
+/// One `BundleDetail` from the store, as one Library row. The meta line is composed here - "N
+/// Findings · composed <relative time>", the exact wording `spec.md`'s Implementation Decisions
+/// section gives three times over - rather than in Slint, so the pluralisation and the relative-time
+/// ladder live in exactly one place. Ticket 15 appends `edited_suffix`'s " · edited <relative time>"
+/// only when the Bundle's last-edited time differs from when it was composed.
+fn library_row_from_detail(
+    ctx: &AppContext,
+    detail: &BundleDetail,
+    now: chrono::DateTime<chrono::Utc>,
+) -> LibraryBundleRow {
+    let thumbnail = detail
+        .items
+        .first()
+        .map(|item| load_bundle_thumbnail(ctx, &item.image_path))
+        .unwrap_or_default();
+    let count = detail.items.len();
+    LibraryBundleRow {
+        id: detail.bundle.id.clone().into(),
+        name: detail.bundle.name.clone().into(),
+        thumbnail,
+        meta_line: format!(
+            "{count} Finding{} · composed {}{}",
+            if count == 1 { "" } else { "s" },
+            relative_time(&detail.bundle.composed_at, now),
+            edited_suffix(&detail.bundle, now)
+        )
+        .into(),
+    }
+}
+
+/// Every Bundle, as the Library will show it. `list_bundles` already orders newest-composed first
+/// (`bundle_store.rs`'s own `ORDER BY composed_at DESC`); nothing here re-sorts it, per the ticket's
+/// own instruction not to.
+///
+/// Two distinct refusals collapse into the same `Err`, because both read as "the Library could not
+/// be read" to the Reviewer and both get the same Try again: `bundle_store` being `None` (the tables
+/// never opened, `AppContext::init`'s own comment explains why that is not an in-memory fallback),
+/// and `list_bundles` itself failing (a locked or corrupt `library.db`).
+fn build_library_rows(
+    ctx: &AppContext,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<Vec<LibraryBundleRow>, String> {
+    let store = ctx
+        .bundle_store
+        .as_ref()
+        .ok_or_else(|| "The Bundle library could not be opened.".to_string())?;
+    let mut details = store
+        .list_bundles()
+        .map_err(|e| format!("Could not read the Library: {e}"))?;
+    // BUG-90: a Bundle composed before BUG-86's 2026-08-31 fix still carries its broken image link -
+    // repaired here, once, the moment the Library reads it (see `repair_bundle_image_links`'s own doc
+    // comment). Read as `&mut` so a repair's corrected document is what every row below - and every
+    // later fresh `get_bundle` from Review & Update or Copy Markdown - actually sees.
+    for detail in &mut details {
+        repair_bundle_image_links(ctx, &mut detail.bundle);
+    }
+    Ok(details
+        .iter()
+        .map(|detail| library_row_from_detail(ctx, detail, now))
+        .collect())
+}
+
+/// Opens the Library and (re-)reads the store into it. The same function serves the initial open and
+/// Try again, which is what makes "Try again re-reads the store" true by construction rather than by
+/// two call sites agreeing to do the same thing.
+fn open_library(window: &AppWindow, ctx: &AppContext) {
+    window.set_library_state("loading".into());
+    window.set_library_open(true);
+
+    match build_library_rows(ctx, chrono::Utc::now()) {
+        Ok(rows) => {
+            window.set_library_rows(ModelRc::from(Rc::new(VecModel::from(rows))));
+            window.set_library_error_message(SharedString::new());
+            window.set_library_state("ready".into());
+        }
+        Err(message) => {
+            window.set_library_rows(ModelRc::from(Rc::new(VecModel::from(Vec::<
+                LibraryBundleRow,
+            >::new()))));
+            window.set_library_error_message(message.into());
+            window.set_library_state("error".into());
+        }
+    }
+}
+
+/// Whether a Bundle's originals are gone - read LIVE from whether every one of its `BundleItem`s'
+/// Findings still exists, never a stored flag (`BR-122`). No `sealed` column exists in the schema on
+/// purpose (confirmed against `migrations.rs`): a Finding deleted after the Library last opened this
+/// Bundle's menu must change the answer the very next time it opens, and a cached bit could not do
+/// that. Migration v6 is what legalises the sealed case at all - it dropped `bundle_item`'s FK on
+/// `finding_id` precisely so a Bundle can outlive its Findings.
+///
+/// An empty Bundle (no items) reads as unsealed - vacuously true by the same rule the spec states
+/// ("every one of its BundleItems' Findings still exists"), and harmless: Disassemble on one just
+/// removes an empty Bundle, the same as Delete would.
+fn bundle_is_sealed(ctx: &AppContext, detail: &BundleDetail) -> bool {
+    detail
+        .items
+        .iter()
+        .any(|item| !matches!(ctx.finding_store.get_finding(&item.finding_id), Ok(Some(_))))
+}
+
+/// Removes a Bundle's row (its `BundleItem`s cascade via the schema's own `ON DELETE CASCADE`) and
+/// only then its Vault folder - `AD-2`'s order, record first, then files. Disassemble and Delete both
+/// call this: `spec.md`'s Implementation Decisions say the two acts do exactly the same thing to
+/// persisted state, and only what happens to the Findings differs (nothing, either way - Disassemble
+/// writes no Finding, it only stops holding them; `bundle_is_sealed`'s own doc comment says why that
+/// is enough to bring them back to the filmstrip).
+///
+/// `Ok(true)` means the row went but the folder could not be removed - an orphan the Vault sweeper
+/// already owns, and never a listed Bundle whose files are gone, which is the state `AD-2`'s own
+/// "Prevents" names. `Ok(false)` means both went cleanly. `Err` means the ROW delete itself failed:
+/// nothing was touched, and the message names what refused.
+fn remove_bundle_row_and_folder(ctx: &AppContext, bundle_id: &str) -> Result<bool, String> {
+    let store = ctx
+        .bundle_store
+        .as_ref()
+        .ok_or_else(|| "The Bundle library could not be opened.".to_string())?;
+
+    store
+        .delete_bundle(bundle_id)
+        .map_err(|e| format!("Could not delete the Bundle: {e}"))?;
+
+    // The row is already gone at this point. A folder-removal failure below is reported to the
+    // caller as an orphan, never as an overall error - the Reviewer asked for the Bundle gone from
+    // the Library, and it is; retrying would not un-delete a row that already went.
+    let folder = format!("bundles/{bundle_id}");
+    match ctx.vault_store.delete_folder(&folder) {
+        Ok(()) => Ok(false),
+        Err(e) => {
+            eprintln!("Deleted Bundle {bundle_id} but left its folder behind: {e}");
+            Ok(true)
+        }
+    }
+}
+
+/// The widest a Review & Update image is ever decoded - the same bound `PREVIEW_MAX_EDGE` gives the
+/// Assemble preview, for the same reason: an open window should not hold several full-resolution
+/// decodes at once.
+const REVIEW_UPDATE_MAX_EDGE: u32 = 900;
+
+/// Resolves one Finding's stored image link the way a CommonMark reader resolves it: against the
+/// document's OWN folder, exactly as `test_nfr8_image_resolution.rs` already proves for the
+/// serializer's own output. This - not `BundleItem.image_path`, and never a Finding's `image_path` -
+/// is "the Bundle's own stored image path" ticket 13 means: it comes from the parsed document alone,
+/// so it resolves identically whether the Bundle is sealed or not.
+fn resolve_bundle_document_image(
+    vault_path: &Path,
+    markdown_path: &str,
+    image_link: &str,
+) -> PathBuf {
+    let relative = image_link.trim_start_matches("./");
+    let folder = markdown_path
+        .trim_start_matches('/')
+        .rsplit_once('/')
+        .map(|(folder, _)| folder);
+    match folder {
+        Some(folder) => vault_path.join(folder).join(relative),
+        None => vault_path.join(relative),
+    }
+}
+
+/// Repairs a Bundle's stored document in place, if and only if it still carries `BUG-86`'s broken
+/// link shape.
+///
+/// `BUG-86`'s fix (2026-08-31) changed `serialize_bundle` for every Bundle composed from then on, but
+/// nothing ever repaired a Bundle composed BEFORE it: those documents still have a Finding's image
+/// link doubling the `bundles/<id>/` folder the document itself already sits in
+/// (`![Finding 1](./bundles/<id>/finding_1_burned.png)` where the file is really one level up, right
+/// beside `bundle.md`). Resolving that link the way `resolve_bundle_document_image` does - correctly,
+/// against the document's own folder - lands on nothing, which is why Review & Update's image never
+/// rendered for any Bundle composed before the fix: it reads the image path from the stored document
+/// alone (`BR-11`), so it faithfully reproduced the same broken resolution `BUG-86` already named.
+/// Worse, `bundle_markdown_for_clipboard` hands that same broken link to whatever reads the copied
+/// Markdown, so this was never only a display bug.
+///
+/// A Finding's link is corrected only when BOTH: (1) resolving it as stored finds no file, and (2)
+/// stripping one duplicate copy of the document's own folder from its front DOES find a file - two-
+/// sided confirmation, so a link is never rewritten onto a target that also does not exist. Runs the
+/// first time the Library reads a Bundle (`build_library_rows`) - by the time any row exists to click
+/// into Review & Update or Copy Markdown, the store already holds the corrected document, since both
+/// of those re-read the store fresh rather than reusing the Library's own list.
+///
+/// Writes the file first, atomically, then the row (`AD-2`'s order), passing `updated_at` back
+/// UNCHANGED: this is a repair, not a Reviewer's edit, and ticket 15's "edited" suffix must never
+/// appear on a Bundle nobody touched. A write failure is logged and left for the next Library open to
+/// retry - it never blocks the Library from listing the Bundle with its (still broken) links.
+fn repair_bundle_image_links(ctx: &AppContext, bundle: &mut Bundle) {
+    let Ok(mut parsed) = MarkdownSerializer::parse_bundle_document(&bundle.markdown) else {
+        return;
+    };
+    let folder = bundle
+        .markdown_path
+        .trim_start_matches('/')
+        .rsplit_once('/')
+        .map(|(folder, _)| folder.to_string());
+
+    let mut changed = false;
+    for finding in &mut parsed.findings {
+        let resolved = resolve_bundle_document_image(
+            &ctx.vault_path,
+            &bundle.markdown_path,
+            &finding.image_link,
+        );
+        if resolved.is_file() {
+            continue;
+        }
+        let Some(folder) = folder.as_deref() else {
+            continue;
+        };
+        let relative = finding.image_link.trim_start_matches("./");
+        let Some(deduped) = relative
+            .strip_prefix(folder)
+            .and_then(|rest| rest.strip_prefix('/'))
+        else {
+            continue;
+        };
+        let candidate_link = format!("./{deduped}");
+        let candidate_path =
+            resolve_bundle_document_image(&ctx.vault_path, &bundle.markdown_path, &candidate_link);
+        if candidate_path.is_file() {
+            finding.image_link = candidate_link;
+            changed = true;
+        }
+    }
+
+    if !changed {
+        return;
+    }
+
+    let repaired = MarkdownSerializer::serialize_parsed(&parsed);
+    let Some(store) = ctx.bundle_store.as_ref() else {
+        return;
+    };
+    let absolute_path = ctx.vault_path.join(&bundle.markdown_path);
+    if let Err(e) = write_file_atomically(&absolute_path, repaired.as_bytes()) {
+        eprintln!(
+            "Could not repair Bundle {}'s broken image links: {e}",
+            bundle.id
+        );
+        return;
+    }
+    if let Err(e) = store.update_bundle_name_and_markdown(
+        &bundle.id,
+        &bundle.name,
+        &repaired,
+        &bundle.updated_at,
+    ) {
+        eprintln!(
+            "Repaired Bundle {}'s file but could not update its row: {e}",
+            bundle.id
+        );
+        return;
+    }
+    bundle.markdown = repaired;
+}
+
+/// The Bundle exactly as composed, as a flat sequence of blocks - Review & Update's locked view
+/// (`ticket 13`). Built ENTIRELY from `MarkdownSerializer::parse_bundle_document`'s read of the
+/// Bundle's own stored document: this function never touches `ctx.finding_store` and never looks at
+/// a `BundleItem` either, which is exactly what lets a sealed Bundle (`BR-11`, its Findings already
+/// deleted) open exactly like an unsealed one - there is nothing here that COULD notice the
+/// difference.
+fn review_update_doc_blocks(
+    ctx: &AppContext,
+    bundle: &Bundle,
+) -> Result<Vec<ReviewUpdateBlock>, String> {
+    let parsed = MarkdownSerializer::parse_bundle_document(&bundle.markdown)
+        .map_err(|e| format!("This Bundle's document could not be read: {e}"))?;
+
+    let mut blocks = Vec::new();
+    blocks.push(ReviewUpdateBlock {
+        kind: "title".into(),
+        text: parsed.title.clone().into(),
+        ..Default::default()
+    });
+    if !parsed.notes.trim().is_empty() {
+        blocks.push(ReviewUpdateBlock {
+            kind: "bundle-notes".into(),
+            text: parsed.notes.clone().into(),
+            ..Default::default()
+        });
+    }
+
+    for finding in &parsed.findings {
+        let position = finding.position as i32;
+        blocks.push(ReviewUpdateBlock {
+            kind: "finding".into(),
+            ordinal: position,
+            ..Default::default()
+        });
+
+        // The BUNDLE's own copy, decoded from disk at the path the stored document itself names -
+        // never a Finding's clean image, and never read through the Finding store.
+        let image_path = resolve_bundle_document_image(
+            &ctx.vault_path,
+            &bundle.markdown_path,
+            &finding.image_link,
+        );
+        let image = std::fs::read(&image_path)
+            .ok()
+            .and_then(|bytes| image::load_from_memory(&bytes).ok())
+            .map(|decoded| {
+                rgba_to_slint_image(
+                    &decoded
+                        .thumbnail(REVIEW_UPDATE_MAX_EDGE, REVIEW_UPDATE_MAX_EDGE)
+                        .to_rgba8(),
+                )
+            })
+            .unwrap_or_default();
+
+        blocks.push(ReviewUpdateBlock {
+            kind: "image".into(),
+            ordinal: position,
+            image,
+            ..Default::default()
+        });
+
+        if !finding.note.trim().is_empty() {
+            blocks.push(ReviewUpdateBlock {
+                kind: "note".into(),
+                // This Finding's own position - ticket 14's edit routing key for a "note" block,
+                // the same role `ordinal` already plays on the "finding" block above.
+                ordinal: position,
+                text: finding.note.clone().into(),
+                ..Default::default()
+            });
+        }
+
+        for (marker_index, marker) in finding.markers.iter().enumerate() {
+            blocks.push(ReviewUpdateBlock {
+                kind: "marker".into(),
+                ordinal: marker.ordinal as i32,
+                // The OWNING Finding's position, ticket 14's edit routing key: a Marker's own
+                // `ordinal` is scoped to its Finding (`AD-1`) and repeats across Findings, so it
+                // alone cannot tell Finding 2's Marker 1 apart from Finding 1's.
+                finding_ordinal: position,
+                text: marker.comment.clone().into(),
+                // The heading prints once, above the first Marker.
+                starts_section: marker_index == 0,
+                ..Default::default()
+            });
+        }
+    }
+
+    Ok(blocks)
+}
+
+/// Review & Update's own provenance line - the same wording `library_row_from_detail` gives the
+/// Library row's meta line, and the same `edited_suffix` (ticket 15), kept as its own function
+/// rather than inlined into `set_review_update_view` so it can be tested without an `AppWindow`.
+fn review_update_provenance_line(
+    bundle: &Bundle,
+    finding_count: usize,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
+    format!(
+        "{finding_count} Finding{} · composed {}{}",
+        if finding_count == 1 { "" } else { "s" },
+        relative_time(&bundle.composed_at, now),
+        edited_suffix(bundle, now)
+    )
+}
+
+/// Pushes one Bundle's locked-mode rendering into the window's own properties - the provenance line
+/// and the block list. Shared by `open_review_update` and ticket 14's Save success path, which needs
+/// exactly this same refresh once the document the window is showing has changed underneath it.
+fn set_review_update_view(
+    window: &AppWindow,
+    ctx: &AppContext,
+    bundle: &Bundle,
+) -> Result<(), String> {
+    let blocks = review_update_doc_blocks(ctx, bundle)?;
+    let finding_count = blocks.iter().filter(|b| b.kind == "finding").count();
+    window.set_review_update_provenance(
+        review_update_provenance_line(bundle, finding_count, chrono::Utc::now()).into(),
+    );
+    window.set_review_update_blocks(ModelRc::from(Rc::new(VecModel::from(blocks))));
+    Ok(())
+}
+
+/// Opens Review & Update, locked, on the Bundle a Library row named. Re-reads the store rather than
+/// trusting the row's own cached fields, the same discipline `open_library` follows for Try again -
+/// the Library and this window can otherwise disagree about a Bundle that changed between the two.
+///
+/// `current` is ticket 14's own state: the Bundle this window is showing, kept alive for as long as
+/// the window is open so `on_review_update_edit_clicked` has something to build a buffer from, and
+/// refreshed in place by a successful Save.
+fn open_review_update(
+    window: &AppWindow,
+    ctx: &AppContext,
+    bundle_id: &str,
+    current: &Rc<RefCell<Option<Bundle>>>,
+) {
+    let Some(store) = ctx.bundle_store.as_ref() else {
+        toast(window, "The Bundle library could not be opened.", true);
+        return;
+    };
+    let bundle = match store.get_bundle(bundle_id) {
+        Ok(Some(detail)) => detail.bundle,
+        Ok(None) => {
+            toast(window, "That Bundle is no longer in the Library.", true);
+            return;
+        }
+        Err(e) => {
+            toast(window, format!("Could not open that Bundle: {e}"), true);
+            return;
+        }
+    };
+
+    if let Err(message) = set_review_update_view(window, ctx, &bundle) {
+        toast(window, message, true);
+        return;
+    }
+    *current.borrow_mut() = Some(bundle);
+    window.set_review_update_open(true);
+}
+
+/// Closes Review & Update. Only its own gate and its own blocks - never `library_open` or anything
+/// else the Library or the Editor own, which is what keeps the Library's scroll position intact on
+/// the way back (`ticket 13`'s own acceptance criterion). Also resets `editing` and the "discard
+/// changes?" confirmation (ticket 14) - the caller drops the Bundle and the edit buffer themselves,
+/// since those live outside the window's own properties.
+fn close_review_update(window: &AppWindow) {
+    window.set_review_update_open(false);
+    window.set_review_update_editing(false);
+    window.set_review_update_cancel_pending(false);
+    // The blocks hold every decoded image. Dropping them on close bounds the cost to the time the
+    // window is open, the same reasoning `close_bundle_preview` already follows.
+    window.set_review_update_blocks(ModelRc::from(Rc::new(VecModel::from(Vec::<
+        ReviewUpdateBlock,
+    >::new()))));
+}
+
+/// Names of other Bundles that share at least one of the given Finding ids, excluding the Bundle
+/// whose originals are about to be discarded. `BR-12`/`BR-122`: discarding one Bundle's originals
+/// can silently seal a second Bundle built from the same captures, and the Discard originals
+/// confirmation (`ticket 17`) is the only place that consequence is said out loud (`spec.md`'s "The
+/// four confirmations"). Computed here over the existing `list_bundles()` read rather than a new SQL
+/// path - the whole-Bundle listing already carries every `BundleItem` needed to answer this, and a
+/// second query for the same fact would be a second place for it to disagree.
+fn bundles_sharing_findings(
+    ctx: &AppContext,
+    exclude_bundle_id: &str,
+    finding_ids: &[String],
+) -> Vec<String> {
+    let Some(store) = ctx.bundle_store.as_ref() else {
+        return Vec::new();
+    };
+    let ids: std::collections::HashSet<&str> = finding_ids.iter().map(String::as_str).collect();
+    store
+        .list_bundles()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|detail| detail.bundle.id != exclude_bundle_id)
+        .filter(|detail| {
+            detail
+                .items
+                .iter()
+                .any(|item| ids.contains(item.finding_id.as_str()))
+        })
+        .map(|detail| detail.bundle.name)
+        .collect()
+}
+
+/// The extra sentence the Discard originals confirmation names any other affected Bundle with, per
+/// `spec.md`'s "The four confirmations". Empty when nothing else shares a Finding - `library.slint`
+/// only inserts it into the dialog body when it is non-empty.
+fn discard_warning_text(other_bundles: &[String]) -> String {
+    if other_bundles.is_empty() {
+        return String::new();
+    }
+    let quoted: Vec<String> = other_bundles
+        .iter()
+        .map(|name| format!("\"{name}\""))
+        .collect();
+    let verb = if other_bundles.len() == 1 {
+        "shares"
+    } else {
+        "share"
+    };
+    format!(
+        "{} {verb} one of these Findings and will also become sealed.",
+        quoted.join(", ")
+    )
+}
+
+/// Discards a Bundle's source Findings one at a time, through the existing whole-Finding deletion
+/// path (`delete_finding_everywhere`, record then files per Finding) - the Bundle's own row, items,
+/// document and image copies are never touched here. Stops at the first failure rather than skipping
+/// past it: the ticket's own acceptance criterion asks that Findings not yet processed stay intact,
+/// which a skip-and-continue strategy (the multi-select Delete Finding flow's own choice) would not
+/// give - a Finding after the failed one would already be gone too.
+///
+/// Returns `(discarded, orphaned, refused)`: how many Findings went, how many of those left an
+/// orphaned image file behind, and - on a partial run - the id of the Finding that refused and why.
+fn discard_originals(
+    ctx: &AppContext,
+    finding_ids: &[String],
+) -> (usize, usize, Option<(String, String)>) {
+    let mut discarded = 0usize;
+    let mut orphaned = 0usize;
+    for finding_id in finding_ids {
+        match delete_finding_everywhere(ctx, finding_id) {
+            Ok(orphan) => {
+                discarded += 1;
+                if orphan {
+                    orphaned += 1;
+                }
+            }
+            Err(e) => return (discarded, orphaned, Some((finding_id.clone(), e))),
+        }
+    }
+    (discarded, orphaned, None)
+}
+
+/// One edit landing in the in-memory buffer - ticket 14's whole editing model. `kind` matches
+/// `ReviewUpdateBlock.kind`; `finding_ordinal` is the owning Finding's position (0 for "title" and
+/// "bundle-notes", which have none); `marker_ordinal` is a Marker's own ordinal (0 unless `kind` is
+/// "marker"). Never touches `FindingStore` - it cannot: nothing here is given one - which is what
+/// keeps `BR-10`/`BR-11` true by construction rather than by discipline.
+fn apply_review_update_field_edit(
+    parsed: &mut ParsedBundleDocument,
+    kind: &str,
+    finding_ordinal: i32,
+    marker_ordinal: i32,
+    text: &str,
+) {
+    match kind {
+        "title" => parsed.title = text.to_string(),
+        "bundle-notes" => parsed.notes = text.to_string(),
+        "note" => {
+            if let Some(finding) = parsed
+                .findings
+                .iter_mut()
+                .find(|f| f.position as i32 == finding_ordinal)
+            {
+                finding.note = text.to_string();
+            }
+        }
+        "marker" => {
+            if let Some(finding) = parsed
+                .findings
+                .iter_mut()
+                .find(|f| f.position as i32 == finding_ordinal)
+            {
+                if let Some(marker) = finding
+                    .markers
+                    .iter_mut()
+                    .find(|m| m.ordinal as i32 == marker_ordinal)
+                {
+                    marker.comment = text.to_string();
+                }
+            }
+        }
+        other => {
+            // "finding" and "image" are generated by the composer and are not editable, so nothing
+            // should be able to send them here.
+            eprintln!("A Review & Update field of kind `{other}` reported an edit; ignoring it.");
+        }
+    }
+}
+
+/// Whether Cancel must ask before it discards the buffer: true unless serialising `parsed` reproduces
+/// `bundle`'s own stored document byte for byte AND the title matches its row name - the exact same
+/// predicate Save's own no-op check uses (`save_review_update_edit` below), because "nothing to lose"
+/// and "nothing to write" are the same question asked from two different buttons.
+fn review_update_edit_is_dirty(bundle: &Bundle, parsed: &ParsedBundleDocument) -> bool {
+    let document_same = MarkdownSerializer::document_unchanged(parsed, &bundle.markdown);
+    let name_same = parsed.title.trim() == bundle.name.trim();
+    !(document_same && name_same)
+}
+
+/// Writes `bytes` to `path` atomically: a temporary file beside it, written in full, then renamed
+/// over the destination. `BR-5`/`AD-2`'s "lands completely or not at all" for a single file - a
+/// process killed mid-write leaves only the orphaned temporary file, never a half-written
+/// destination.
+fn write_file_atomically(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = path.file_name().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "path has no file name")
+    })?;
+    let mut tmp_name = file_name.to_os_string();
+    tmp_name.push(".tmp");
+    let tmp_path = parent.join(tmp_name);
+    std::fs::write(&tmp_path, bytes)?;
+    std::fs::rename(&tmp_path, path)?;
+    Ok(())
+}
+
+#[derive(Debug)]
+enum ReviewUpdateSaveOutcome {
+    /// The edited blocks serialise to the stored document with the title unchanged - nothing was
+    /// written, per the map's "Saved. Nothing had changed."
+    NoChange,
+    Saved,
+}
+
+/// Ticket 14's Save, and the one place `BR-5` is kept: the file is written first, atomically, then
+/// the row - name and document together, under the store's `update_bundle_name_and_markdown`. If the
+/// row refuses, the file is put back exactly as it stood (the previous document text is still sitting
+/// in `bundle.markdown`, held for exactly this) and the caller is told which part refused; `bundle`
+/// and `parsed` are both left as they were on any error, so Save can be tried again.
+///
+/// Takes a store trait object and a vault root rather than an `&AppContext`, on purpose: this is the
+/// write-ordering guard's own seam. A test can hand it a `BundleStore` that fails on command, without
+/// needing a second concrete `AppContext` shape to do it.
+fn save_review_update_edit(
+    vault_path: &Path,
+    bundle_store: &dyn BundleStore,
+    bundle: &mut Bundle,
+    parsed: &ParsedBundleDocument,
+) -> Result<ReviewUpdateSaveOutcome, String> {
+    let new_document = MarkdownSerializer::serialize_parsed(parsed);
+    let new_name = parsed.title.trim().to_string();
+
+    // The no-op guard `FR-40`'s always-clickable Save relies on: a Save that changes nothing must
+    // write nothing. Seen red first by hard-coding `document_same` to `false` - the write below then
+    // runs unconditionally and the no-op test fails, exactly as it must to prove this line is load-
+    // bearing - then restored.
+    let document_same = MarkdownSerializer::document_unchanged(parsed, &bundle.markdown);
+    let name_same = new_name == bundle.name.trim();
+    if document_same && name_same {
+        return Ok(ReviewUpdateSaveOutcome::NoChange);
+    }
+
+    let absolute_path = vault_path.join(bundle.markdown_path.trim_start_matches('/'));
+    let previous_document = bundle.markdown.clone();
+
+    write_file_atomically(&absolute_path, new_document.as_bytes())
+        .map_err(|e| format!("Could not write the Bundle's file: {e}"))?;
+
+    // Ticket 15: the last-edited time moves to exactly this instant - computed here, once, so the
+    // same string lands in the row and in the caller's own in-memory `bundle` below, never two
+    // separate clock reads that could disagree by a tick. Reached only past the no-op guard above,
+    // which is what makes "moves only when the update actually writes" true by construction rather
+    // than by a second check inside the store.
+    let updated_at = SystemClock::new().now_rfc3339();
+
+    if let Err(e) = bundle_store.update_bundle_name_and_markdown(
+        &bundle.id,
+        &new_name,
+        &new_document,
+        &updated_at,
+    ) {
+        // The row refused after the file already changed. Put the file back exactly as it was -
+        // BR-5's "an unsaved edit survives so it can be tried again" for the file half of the pair.
+        // Seen red first by commenting this call out - the write-ordering test then finds the file
+        // still holding the NEW text after a forced row failure, and fails - then restored.
+        if let Err(restore_err) =
+            write_file_atomically(&absolute_path, previous_document.as_bytes())
+        {
+            return Err(format!(
+                "The Bundle's row could not be updated ({e}), and putting its file back also \
+                 failed ({restore_err}). The file on disk may no longer match the Library."
+            ));
+        }
+        return Err(format!(
+            "The Bundle's row could not be updated: {e}. Its file was put back exactly as it was."
+        ));
+    }
+
+    bundle.markdown = new_document;
+    bundle.name = new_name;
+    bundle.updated_at = updated_at;
+    Ok(ReviewUpdateSaveOutcome::Saved)
+}
+
+// ===== ticket 18: Reclaim space ==========================================================
+
+/// Resolves a stored image path against the Vault root the way every other reader in this file
+/// already does (`load_bundle_thumbnail`, `open_file_location`, …): an absolute path passes through,
+/// a relative one is Vault-relative. Pulled out here rather than duplicated a fifth time.
+fn vault_absolute(vault_path: &Path, image_path: &str) -> PathBuf {
+    let candidate = PathBuf::from(image_path);
+    if candidate.is_absolute() {
+        candidate
+    } else {
+        vault_path.join(image_path)
+    }
+}
+
+/// The disk space a Bundle's ORIGINAL captures still occupy - the sum of every one of its
+/// `BundleItem`s' own FINDING's image file, measured from the file on disk (`fs::metadata().len()`),
+/// per `spec.md`'s "Reclaim space": *"Sizes are measured from the files on disk, not estimated."*
+/// Never the Bundle's own burned copy under `bundles/<id>/` - that copy is what survives Discard
+/// originals and is why the Bundle stays readable at all afterwards.
+///
+/// A Finding that fails to resolve - already gone, or its file missing - contributes nothing rather
+/// than aborting the row: `bundle_is_sealed`'s own live read is what decides whether a Bundle
+/// qualifies for this list at all, and a race between that read and this sum must not crash Reclaim
+/// space, only under-report by whatever vanished in between.
+fn bundle_original_bytes(ctx: &AppContext, detail: &BundleDetail) -> u64 {
+    detail
+        .items
+        .iter()
+        .filter_map(|item| {
+            ctx.finding_store
+                .get_finding(&item.finding_id)
+                .ok()
+                .flatten()
+        })
+        .filter_map(|finding_detail| {
+            let path = vault_absolute(&ctx.vault_path, &finding_detail.finding.image_path);
+            std::fs::metadata(&path).ok().map(|m| m.len())
+        })
+        .sum()
+}
+
+/// "373.1 MB" - one decimal place, the exact wording `spec.md`'s own artboard uses
+/// (`ReclaimSpace.dc.html`). An exact zero prints bare ("0 MB"), matching `ReclaimEmpty.dc.html`.
+fn format_mb(bytes: u64) -> String {
+    if bytes == 0 {
+        "0 MB".to_string()
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    }
+}
+
+/// One unsealed Bundle, as Reclaim space lists it. "N original captures · <relative composed
+/// time>" - deliberately NOT `library_row_from_detail`'s "N Findings · composed <relative time>":
+/// the two screens count the same Findings for two different reasons (how many exist, versus how
+/// many are about to be discarded), and the wording says which. `bytes` is passed in rather than
+/// recomputed here, so `build_reclaim_rows` sums it exactly once per Bundle for the header total AND
+/// this row, never twice.
+fn reclaim_row_from_bytes(
+    ctx: &AppContext,
+    detail: &BundleDetail,
+    bytes: u64,
+    now: chrono::DateTime<chrono::Utc>,
+) -> ReclaimBundleRow {
+    let thumbnail = detail
+        .items
+        .first()
+        .map(|item| load_bundle_thumbnail(ctx, &item.image_path))
+        .unwrap_or_default();
+    let count = detail.items.len();
+    ReclaimBundleRow {
+        id: detail.bundle.id.clone().into(),
+        name: detail.bundle.name.clone().into(),
+        thumbnail,
+        meta_line: format!(
+            "{count} original capture{} · {}",
+            if count == 1 { "" } else { "s" },
+            relative_time(&detail.bundle.composed_at, now)
+        )
+        .into(),
+        size_label: format_mb(bytes).into(),
+        size_bytes: bytes as f32,
+        selected: false,
+    }
+}
+
+/// Every UNSEALED Bundle, as Reclaim space will show it, and the exact byte sum across all of
+/// them - `bundle_is_sealed`'s own live read decides which ones qualify, never a stored flag, the
+/// same discipline the Library's row menu already follows. Returns the sum as a plain `u64` rather
+/// than one derived from the rows' own `f32` fields afterwards, so the header total is never a
+/// float round-trip of numbers already known exactly.
+fn build_reclaim_rows(
+    ctx: &AppContext,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<(Vec<ReclaimBundleRow>, u64), String> {
+    let store = ctx
+        .bundle_store
+        .as_ref()
+        .ok_or_else(|| "The Bundle library could not be opened.".to_string())?;
+    let details = store
+        .list_bundles()
+        .map_err(|e| format!("Could not read the Library: {e}"))?;
+
+    let mut rows = Vec::new();
+    let mut total_bytes: u64 = 0;
+    for detail in details
+        .iter()
+        .filter(|detail| !bundle_is_sealed(ctx, detail))
+    {
+        let bytes = bundle_original_bytes(ctx, detail);
+        total_bytes += bytes;
+        rows.push(reclaim_row_from_bytes(ctx, detail, bytes, now));
+    }
+    Ok((rows, total_bytes))
+}
+
+/// Recomputes the footer readout ("N of M selected · X MB will be freed") and the Discard button's
+/// gate, straight off the rows model Rust itself just wrote - never a second running total kept
+/// beside it, which is what makes "the footer always agrees with the ticks" true by construction
+/// rather than by two numbers agreeing to move together.
+fn refresh_reclaim_space_footer(window: &AppWindow) {
+    let rows = window.get_reclaim_space_rows();
+    let total = rows.row_count();
+    let mut selected = 0usize;
+    let mut freed_bytes = 0f64;
+    for row in rows.iter() {
+        if row.selected {
+            selected += 1;
+            freed_bytes += row.size_bytes as f64;
+        }
+    }
+    window.set_reclaim_space_selected_count(selected as i32);
+    window.set_reclaim_space_footer_label(
+        format!(
+            "{selected} of {total} selected · {} will be freed",
+            format_mb(freed_bytes as u64)
+        )
+        .into(),
+    );
+}
+
+/// Opens Reclaim space and (re-)reads the store into it - the same function serves the initial open
+/// and the re-read after a bulk Discard, the discipline `open_library` already follows for Try
+/// again: the two must never be allowed to disagree about what "read the store" means. A refusal
+/// (the store never opened, or a locked/corrupt `library.db`) toasts and leaves the screen closed -
+/// unlike the Library, Reclaim space has no "cannot be read" state of its own to show one in.
+fn open_reclaim_space(window: &AppWindow, ctx: &AppContext) {
+    match build_reclaim_rows(ctx, chrono::Utc::now()) {
+        Ok((rows, total_bytes)) => {
+            window.set_reclaim_space_rows(ModelRc::from(Rc::new(VecModel::from(rows))));
+            window.set_reclaim_space_total_label(
+                format!("{} reclaimable", format_mb(total_bytes)).into(),
+            );
+            refresh_reclaim_space_footer(window);
+            window.set_reclaim_space_open(true);
+        }
+        Err(message) => toast(window, message, true),
+    }
+}
+
+/// Names of Bundles, other than the ones about to be discarded, that share a Finding with any of
+/// them and will therefore become sealed too (`BR-12`/`BR-122`) - the bulk form of ticket 17's own
+/// `bundles_sharing_findings`, which only ever excludes ONE Bundle at a time. Excluding the WHOLE
+/// ticked set here (not just the Bundle currently being reasoned about) is what stops a second
+/// Bundle in the same batch from being reported as a side effect of the first, when really both are
+/// simply being discarded together.
+fn bundles_sealed_by_bulk_discard(
+    ctx: &AppContext,
+    ticked_ids: &[String],
+    finding_ids: &[String],
+) -> Vec<String> {
+    let Some(store) = ctx.bundle_store.as_ref() else {
+        return Vec::new();
+    };
+    let ticked: std::collections::HashSet<&str> = ticked_ids.iter().map(String::as_str).collect();
+    let ids: std::collections::HashSet<&str> = finding_ids.iter().map(String::as_str).collect();
+    store
+        .list_bundles()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|detail| !ticked.contains(detail.bundle.id.as_str()))
+        .filter(|detail| {
+            detail
+                .items
+                .iter()
+                .any(|item| ids.contains(item.finding_id.as_str()))
+        })
+        .map(|detail| detail.bundle.name)
+        .collect()
+}
+
+/// The bulk Discard originals confirmation's body: counts Bundles and captures across the WHOLE
+/// ticked set (the ticket's own acceptance criterion) and appends ticket 17's own shared-Finding
+/// sentence (`discard_warning_text`) when it applies.
+fn reclaim_confirm_body(bundle_count: usize, capture_count: usize, warning: &str) -> String {
+    let bundle_word = if bundle_count == 1 {
+        "Bundle"
+    } else {
+        "Bundles"
+    };
+    let capture_word = if capture_count == 1 {
+        "capture"
+    } else {
+        "captures"
+    };
+    let mut text = format!(
+        "{capture_count} original {capture_word} across {bundle_count} {bundle_word}, with their \
+         notes, Markers and image files, are discarded. Each Bundle keeps its own copy and stays \
+         readable, but can no longer be disassembled."
+    );
+    if !warning.is_empty() {
+        text.push(' ');
+        text.push_str(warning);
+    }
+    text.push_str(" This cannot be undone.");
+    text
+}
+
+/// "DISCARD ORIGINALS FROM 3 BUNDLES?" - the bulk confirmation's heading, pluralised the same way
+/// every other heading in this file is.
+fn reclaim_confirm_heading(bundle_count: usize) -> String {
+    format!(
+        "DISCARD ORIGINALS FROM {bundle_count} BUNDLE{}?",
+        if bundle_count == 1 { "" } else { "S" }
+    )
 }
 
 fn load_findings_into_window(
@@ -1401,6 +2379,43 @@ fn open_folder(path: &Path) -> Result<(), String> {
 #[cfg(not(windows))]
 fn open_folder(_path: &Path) -> Result<(), String> {
     Err("Showing a folder in the file manager is implemented on Windows only.".to_string())
+}
+
+/// A Bundle's own folder, absolute - its Markdown and its burned image copies together, never a
+/// single file inside it. `AD-4`'s layout puts a Bundle's own document at `bundles/{id}/bundle.md`
+/// under the Vault root, so the folder is the document's own parent - derived from `markdown_path`
+/// rather than assumed as `"bundles".join(id)` a second time, so a Bundle laid out differently one
+/// day (nothing in this codebase promises it never will be) is still followed correctly.
+fn bundle_folder_path(ctx: &AppContext, bundle: &Bundle) -> PathBuf {
+    match Path::new(&bundle.markdown_path).parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => ctx.vault_path.join(parent),
+        _ => ctx.vault_path.clone(),
+    }
+}
+
+/// Ticket 12's Copy Markdown: the Bundle's whole stored document, with every image link rewritten
+/// to an absolute path a local agent can open - same words, same order, only the link destinations
+/// differ (`AD-9` as narrowed by `DEC-012`). The rewriting itself is the composer rebasing its own
+/// document (`MarkdownSerializer::rebase_image_links`, ticket 10) - nothing here edits the text.
+///
+/// Works identically for a sealed Bundle (its original Findings gone): this reads only the Bundle's
+/// own stored `markdown`/`markdown_path`, never a Finding.
+fn bundle_markdown_for_clipboard(ctx: &AppContext, bundle_id: &str) -> Result<String, String> {
+    let store = ctx
+        .bundle_store
+        .as_ref()
+        .ok_or_else(|| "The Bundle library could not be opened.".to_string())?;
+    let detail = store
+        .get_bundle(bundle_id)
+        .map_err(|e| format!("Could not read the Bundle: {e}"))?
+        .ok_or_else(|| "That Bundle is no longer in the Library.".to_string())?;
+
+    MarkdownSerializer::rebase_image_links(
+        &detail.bundle.markdown,
+        &ctx.vault_path.to_string_lossy(),
+        &detail.bundle.markdown_path,
+    )
+    .map_err(|e| format!("Could not prepare the Markdown for copying: {e}"))
 }
 
 /// Which Findings a confirmed deletion should take.
@@ -2930,6 +3945,26 @@ fn put_bitmap_on_clipboard(bmp: &[u8]) -> Result<(), String> {
         .map_err(|e| format!("Could not write to the clipboard: {e}"))
 }
 
+/// Text onto the Windows clipboard, emptying it FIRST - ticket 12's Copy Markdown, and the same
+/// `Clipboard::new_attempts(10)` + explicit-clear discipline `put_bitmap_on_clipboard` established
+/// above. Unlike `raw::set_bitmap`, `raw::set_string_with` is passed `DoClear` here rather than
+/// relying on a default, for the same reason: the crate's own default for the STRING path already
+/// clears (`raw::set_string` is `DoClear` by default, unlike the bitmap path's `NoClear`), but the
+/// bitmap comment above is exactly why that default is not trusted silently a second time - it is
+/// named explicitly instead of assumed.
+#[cfg(windows)]
+fn put_text_on_clipboard(text: &str) -> Result<(), String> {
+    let _clip = clipboard_win::Clipboard::new_attempts(10)
+        .map_err(|e| format!("Could not open the clipboard: {e}"))?;
+    clipboard_win::raw::set_string_with(text, clipboard_win::options::DoClear)
+        .map_err(|e| format!("Could not write to the clipboard: {e}"))
+}
+
+#[cfg(not(windows))]
+fn put_text_on_clipboard(_text: &str) -> Result<(), String> {
+    Err("Writing to the clipboard is implemented on Windows only.".to_string())
+}
+
 /// `has_text_selection`: the note field currently holds a text selection.
 /// `force_image`: the chord is Ctrl+Enter, which never means text.
 fn copy_chord_target(has_text_selection: bool, force_image: bool) -> CopyChordTarget {
@@ -4128,10 +5163,765 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // Bundles Drawer / Library Toggle
-    main_window.on_library_clicked(|| {
-        println!("Open Snapdown Library / Bundle History clicked");
+    // THE LIBRARY (ticket 11 of the Bundle Library spec). Opens over the Editor, lists every
+    // composed Bundle, and closes back to it - the Editor's own canvas/selection/scroll are never
+    // touched by any of this, which is what makes the round trip free.
+    let win_library = main_window.as_weak();
+    let ctx_library = ctx.clone();
+    main_window.on_library_clicked(move || {
+        let Some(win) = win_library.upgrade() else {
+            return;
+        };
+        open_library(&win, &ctx_library);
     });
+
+    let win_library_closed = main_window.as_weak();
+    main_window.on_library_closed(move || {
+        if let Some(win) = win_library_closed.upgrade() {
+            win.set_library_open(false);
+        }
+    });
+
+    let win_library_retry = main_window.as_weak();
+    let ctx_library_retry = ctx.clone();
+    main_window.on_library_try_again_clicked(move || {
+        let Some(win) = win_library_retry.upgrade() else {
+            return;
+        };
+        open_library(&win, &ctx_library_retry);
+    });
+
+    // The Library's own "cannot be read" state has no Bundle to point at - what refused was
+    // `library.db` itself - so this reveals the database file, not a Bundle's folder the way
+    // ticket 12's row-level Open file location will.
+    let win_library_reveal = main_window.as_weak();
+    let ctx_library_reveal = ctx.clone();
+    main_window.on_library_open_file_location_clicked(move || {
+        let Some(win) = win_library_reveal.upgrade() else {
+            return;
+        };
+        let db_path = app_database_path();
+        if let Err(e) = open_file_location(&ctx_library_reveal, &db_path.to_string_lossy()) {
+            toast(&win, e, true);
+        }
+    });
+
+    // COPY MARKDOWN (ticket 12) - the Bundle's whole stored document, image links rebased to an
+    // absolute path a local agent can open. The toast follows the house pattern of saying what did
+    // and did not travel: the paths carry the operator's user name, so it says so.
+    let win_library_copy_md = main_window.as_weak();
+    let ctx_library_copy_md = ctx.clone();
+    main_window.on_library_copy_markdown_clicked(move |bundle_id| {
+        let Some(win) = win_library_copy_md.upgrade() else {
+            return;
+        };
+        let markdown = match bundle_markdown_for_clipboard(&ctx_library_copy_md, bundle_id.as_str())
+        {
+            Ok(markdown) => markdown,
+            Err(message) => {
+                toast(&win, message, true);
+                return;
+            }
+        };
+        match put_text_on_clipboard(&markdown) {
+            Ok(()) => toast(
+                &win,
+                "Markdown copied. The image links carry their location on this disk.",
+                false,
+            ),
+            Err(message) => toast(&win, message, true),
+        }
+    });
+
+    // OPEN FILE LOCATION, per row (ticket 12) - the Bundle's OWN folder, not one file inside it
+    // (`open_folder`, not `open_file_location` - see that pair's own doc comments for why they are
+    // two different functions). Distinct from `library-open-file-location-clicked` above, which has
+    // no Bundle to point at.
+    let win_library_reveal_bundle = main_window.as_weak();
+    let ctx_library_reveal_bundle = ctx.clone();
+    main_window.on_library_bundle_open_file_location_clicked(move |bundle_id| {
+        let Some(win) = win_library_reveal_bundle.upgrade() else {
+            return;
+        };
+        let Some(store) = ctx_library_reveal_bundle.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+        let bundle = match store.get_bundle(bundle_id.as_str()) {
+            Ok(Some(detail)) => detail.bundle,
+            Ok(None) => {
+                toast(&win, "That Bundle is no longer in the Library.", true);
+                return;
+            }
+            Err(e) => {
+                toast(&win, format!("Could not read the Bundle: {e}"), true);
+                return;
+            }
+        };
+        let folder = bundle_folder_path(&ctx_library_reveal_bundle, &bundle);
+        if let Err(message) = open_folder(&folder) {
+            toast(&win, message, true);
+        }
+    });
+
+    // THE ROW MENU'S DESTRUCTIVE GROUP (ticket 16 of the Bundle Library spec). Copy Markdown and
+    // Open file location are ticket 12's rows in the SAME menu (`library.slint`'s `row-menu`); this
+    // handler only ever sees "disassemble-bundle"/"delete-bundle" because the menu resolves those
+    // two actions locally and forwards only the destructive group here. Whichever single verb the
+    // destructive entry offers is decided HERE, live, every time the menu opens: never cached on the
+    // row (`BR-122`), so a Finding deleted between two menu openings changes the verb the very next
+    // time.
+    let win_menu_req = main_window.as_weak();
+    let ctx_menu_req = ctx.clone();
+    main_window.on_library_row_menu_requested(move |id, x, y| {
+        let Some(win) = win_menu_req.upgrade() else {
+            return;
+        };
+        let Some(store) = ctx_menu_req.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+        match store.get_bundle(id.as_str()) {
+            Ok(Some(detail)) => {
+                let sealed = bundle_is_sealed(&ctx_menu_req, &detail);
+                win.set_library_menu_target(id);
+                win.set_library_menu_sealed(sealed);
+                win.set_library_menu_x(x);
+                win.set_library_menu_y(y);
+            }
+            Ok(None) => {
+                // Gone since the row was drawn - refresh rather than open a menu for a Bundle that
+                // no longer exists.
+                open_library(&win, &ctx_menu_req);
+            }
+            Err(e) => toast(&win, format!("Could not read the Bundle: {e}"), true),
+        }
+    });
+
+    let win_menu_dismissed = main_window.as_weak();
+    main_window.on_library_row_menu_dismissed(move || {
+        if let Some(win) = win_menu_dismissed.upgrade() {
+            win.set_library_menu_target(SharedString::new());
+        }
+    });
+
+    // An item was chosen. Neither destructive action fires from the menu itself - both go through
+    // their own confirmation, the same one-click-away safety `pending-delete-finding` already gives
+    // deleting a Finding.
+    let win_menu_action = main_window.as_weak();
+    let ctx_menu_action = ctx.clone();
+    main_window.on_library_row_menu_action(move |action, id| {
+        let Some(win) = win_menu_action.upgrade() else {
+            return;
+        };
+        win.set_library_menu_target(SharedString::new());
+
+        let Some(store) = ctx_menu_action.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+        let detail = match store.get_bundle(id.as_str()) {
+            Ok(Some(detail)) => detail,
+            Ok(None) => {
+                open_library(&win, &ctx_menu_action);
+                return;
+            }
+            Err(e) => {
+                toast(&win, format!("Could not read the Bundle: {e}"), true);
+                return;
+            }
+        };
+        win.set_library_pending_bundle_name(detail.bundle.name.clone().into());
+        win.set_library_pending_bundle_finding_count(detail.items.len() as i32);
+        match action.as_str() {
+            "disassemble-bundle" => win.set_library_pending_disassemble(id),
+            "delete-bundle" => win.set_library_pending_delete(id),
+            "discard-originals-bundle" => {
+                let finding_ids: Vec<String> =
+                    detail.items.iter().map(|i| i.finding_id.clone()).collect();
+                let others = bundles_sharing_findings(&ctx_menu_action, id.as_str(), &finding_ids);
+                win.set_library_pending_discard_warning(discard_warning_text(&others).into());
+                win.set_library_pending_discard(id);
+            }
+            _ => {}
+        }
+    });
+
+    let win_disassemble_cancel = main_window.as_weak();
+    main_window.on_library_disassemble_cancelled(move || {
+        if let Some(win) = win_disassemble_cancel.upgrade() {
+            win.set_library_pending_disassemble(SharedString::new());
+        }
+    });
+
+    let win_delete_cancel = main_window.as_weak();
+    main_window.on_library_delete_cancelled(move || {
+        if let Some(win) = win_delete_cancel.upgrade() {
+            win.set_library_pending_delete(SharedString::new());
+        }
+    });
+
+    // DISASSEMBLE - the Bundle's row and folder go, and its Findings come back to the filmstrip
+    // untouched: `spec.md` states plainly that Disassemble writes no Finding, and
+    // `load_findings_into_window`'s own filter is what makes them reappear (they were only ever
+    // hidden because a `bundle_item` row held them).
+    let win_disassemble_confirm = main_window.as_weak();
+    let ctx_disassemble_confirm = ctx.clone();
+    main_window.on_library_disassemble_confirmed(move |id| {
+        let Some(win) = win_disassemble_confirm.upgrade() else {
+            return;
+        };
+        win.set_library_pending_disassemble(SharedString::new());
+
+        match remove_bundle_row_and_folder(&ctx_disassemble_confirm, id.as_str()) {
+            Ok(orphaned) => {
+                open_library(&win, &ctx_disassemble_confirm);
+                load_findings_into_window(&win, &ctx_disassemble_confirm, None);
+                let message = if orphaned {
+                    "Bundle disassembled. Its Findings are back in the strip. The Bundle's folder \
+                     could not be removed and is now an orphan."
+                        .to_string()
+                } else {
+                    "Bundle disassembled. Its Findings are back in the strip.".to_string()
+                };
+                toast(&win, message, false);
+            }
+            Err(e) => toast(&win, format!("Could not disassemble the Bundle: {e}"), true),
+        }
+    });
+
+    // DELETE, on an already-sealed Bundle - the row and folder go; nothing returns to the filmstrip
+    // because the originals were discarded earlier (ticket 17's Discard originals, out of this
+    // ticket's scope).
+    let win_delete_confirm = main_window.as_weak();
+    let ctx_delete_confirm = ctx.clone();
+    main_window.on_library_delete_confirmed(move |id| {
+        let Some(win) = win_delete_confirm.upgrade() else {
+            return;
+        };
+        win.set_library_pending_delete(SharedString::new());
+
+        match remove_bundle_row_and_folder(&ctx_delete_confirm, id.as_str()) {
+            Ok(orphaned) => {
+                open_library(&win, &ctx_delete_confirm);
+                let message = if orphaned {
+                    "Bundle deleted. Its folder could not be removed and is now an orphan."
+                        .to_string()
+                } else {
+                    "Bundle deleted.".to_string()
+                };
+                toast(&win, message, false);
+            }
+            Err(e) => toast(&win, format!("Could not delete the Bundle: {e}"), true),
+        }
+    });
+
+    // REVIEW & UPDATE (ticket 13's locked mode, ticket 14's editing). Opens over the Library on a row
+    // click, built entirely from the Bundle's own stored document - never a Finding, in either mode.
+    // Closing touches nothing the Library or the Editor own, which is what keeps the Library's scroll
+    // position intact underneath.
+    //
+    // Two cells, not one: `review_update_bundle` is the Bundle this window is showing, kept alive so
+    // Edit has something to build a buffer from and refreshed in place by a successful Save;
+    // `review_update_edit` is `Some` only while editing - the in-memory buffer `BR-10`/`BR-11` keep
+    // every keystroke inside until Save actually writes it.
+    let review_update_bundle: Rc<RefCell<Option<Bundle>>> = Rc::new(RefCell::new(None));
+    let review_update_edit: Rc<RefCell<Option<ParsedBundleDocument>>> = Rc::new(RefCell::new(None));
+
+    let win_review_update = main_window.as_weak();
+    let ctx_review_update = ctx.clone();
+    let bundle_review_update = review_update_bundle.clone();
+    main_window.on_library_bundle_clicked(move |bundle_id| {
+        let Some(win) = win_review_update.upgrade() else {
+            return;
+        };
+        open_review_update(&win, &ctx_review_update, &bundle_id, &bundle_review_update);
+    });
+
+    let win_review_update_closed = main_window.as_weak();
+    let bundle_review_update_closed = review_update_bundle.clone();
+    let edit_review_update_closed = review_update_edit.clone();
+    main_window.on_review_update_closed(move || {
+        if let Some(win) = win_review_update_closed.upgrade() {
+            close_review_update(&win);
+        }
+        *bundle_review_update_closed.borrow_mut() = None;
+        *edit_review_update_closed.borrow_mut() = None;
+    });
+
+    // EDIT - builds the in-memory buffer from the Bundle's own stored document (never re-reading the
+    // store: `review_update_bundle` already holds what `open_review_update` last confirmed) and flips
+    // the badge to Editing.
+    let win_review_update_edit = main_window.as_weak();
+    let bundle_review_update_edit = review_update_bundle.clone();
+    let edit_review_update_edit = review_update_edit.clone();
+    main_window.on_review_update_edit_clicked(move || {
+        let Some(win) = win_review_update_edit.upgrade() else {
+            return;
+        };
+        let Some(bundle) = bundle_review_update_edit.borrow().clone() else {
+            return;
+        };
+        match MarkdownSerializer::parse_bundle_document(&bundle.markdown) {
+            Ok(parsed) => {
+                *edit_review_update_edit.borrow_mut() = Some(parsed);
+                win.set_review_update_editing(true);
+            }
+            Err(e) => {
+                toast(
+                    &win,
+                    format!("This Bundle's document could not be read: {e}"),
+                    true,
+                );
+            }
+        }
+    });
+
+    // EVERY field edit in the window comes through here, straight into the buffer above. Never the
+    // Finding store, never the row - that only happens on Save.
+    let edit_review_update_field = review_update_edit.clone();
+    main_window.on_review_update_field_edited(
+        move |kind, finding_ordinal, marker_ordinal, text| {
+            let mut slot = edit_review_update_field.borrow_mut();
+            let Some(parsed) = slot.as_mut() else {
+                return;
+            };
+            apply_review_update_field_edit(
+                parsed,
+                kind.as_str(),
+                finding_ordinal,
+                marker_ordinal,
+                text.as_str(),
+            );
+        },
+    );
+
+    // CANCEL - returns to locked at once when the buffer already matches what is stored, otherwise
+    // asks first. The dialog's own confirm is `discard-clicked`, below.
+    let win_review_update_cancel = main_window.as_weak();
+    let bundle_review_update_cancel = review_update_bundle.clone();
+    let edit_review_update_cancel = review_update_edit.clone();
+    main_window.on_review_update_cancel_clicked(move || {
+        let Some(win) = win_review_update_cancel.upgrade() else {
+            return;
+        };
+        let dirty = {
+            let bundle_slot = bundle_review_update_cancel.borrow();
+            let edit_slot = edit_review_update_cancel.borrow();
+            match (bundle_slot.as_ref(), edit_slot.as_ref()) {
+                (Some(bundle), Some(parsed)) => review_update_edit_is_dirty(bundle, parsed),
+                _ => false,
+            }
+        };
+        if dirty {
+            win.set_review_update_cancel_pending(true);
+        } else {
+            *edit_review_update_cancel.borrow_mut() = None;
+            win.set_review_update_editing(false);
+        }
+    });
+
+    // DISCARD CHANGES - the confirmation's own confirm action. Drops the buffer without writing
+    // anything; the locked-mode blocks were never mutated while editing, so they already show the
+    // Bundle exactly as it was stored.
+    let win_review_update_discard = main_window.as_weak();
+    let edit_review_update_discard = review_update_edit.clone();
+    main_window.on_review_update_discard_clicked(move || {
+        let Some(win) = win_review_update_discard.upgrade() else {
+            return;
+        };
+        *edit_review_update_discard.borrow_mut() = None;
+        win.set_review_update_cancel_pending(false);
+        win.set_review_update_editing(false);
+    });
+
+    // SAVE - `BR-5`'s write ordering, all in `save_review_update_edit`. On success the window's
+    // blocks are refreshed from the Bundle `save_review_update_edit` just updated in place, so locked
+    // mode shows the new text; on failure `editing` stays true and the buffer survives untouched, so
+    // Save can be tried again.
+    let win_review_update_save = main_window.as_weak();
+    let ctx_review_update_save = ctx.clone();
+    let bundle_review_update_save = review_update_bundle.clone();
+    let edit_review_update_save = review_update_edit.clone();
+    main_window.on_review_update_save_clicked(move || {
+        let Some(win) = win_review_update_save.upgrade() else {
+            return;
+        };
+        let Some(store) = ctx_review_update_save.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be reached.", true);
+            return;
+        };
+        let mut bundle_slot = bundle_review_update_save.borrow_mut();
+        let Some(bundle) = bundle_slot.as_mut() else {
+            return;
+        };
+        let mut edit_slot = edit_review_update_save.borrow_mut();
+        let Some(parsed) = edit_slot.as_ref() else {
+            return;
+        };
+
+        let outcome = save_review_update_edit(
+            &ctx_review_update_save.vault_path,
+            store.as_ref(),
+            bundle,
+            parsed,
+        );
+        match outcome {
+            Ok(ReviewUpdateSaveOutcome::NoChange) => {
+                *edit_slot = None;
+                win.set_review_update_editing(false);
+                toast(&win, "Saved. Nothing had changed.", false);
+            }
+            Ok(ReviewUpdateSaveOutcome::Saved) => {
+                if let Err(message) = set_review_update_view(&win, &ctx_review_update_save, bundle)
+                {
+                    toast(&win, message, true);
+                } else {
+                    toast(&win, "Saved.", false);
+                }
+                *edit_slot = None;
+                win.set_review_update_editing(false);
+            }
+            Err(message) => {
+                // `editing` stays true and `edit_slot` stays `Some` - BR-5's "an unsaved edit
+                // survives so it can be tried again."
+                toast(&win, message, true);
+            }
+        }
+    });
+
+    let win_discard_cancel = main_window.as_weak();
+    main_window.on_library_discard_cancelled(move || {
+        if let Some(win) = win_discard_cancel.upgrade() {
+            win.set_library_pending_discard(SharedString::new());
+            win.set_library_pending_discard_warning(SharedString::new());
+        }
+    });
+
+    // DISCARD ORIGINALS (ticket 17). Deletes each of the Bundle's source Findings through the
+    // existing whole-Finding deletion path, stopping at the first refusal - the Bundle's own row,
+    // items, document and image copies are never touched. Sealing is a consequence of the Findings
+    // being gone, not a write made here: the very next menu open re-reads live state
+    // (`bundle_is_sealed`) and offers Delete… only, with no flag ever set anywhere.
+    let win_discard_confirm = main_window.as_weak();
+    let ctx_discard_confirm = ctx.clone();
+    main_window.on_library_discard_confirmed(move |id| {
+        let Some(win) = win_discard_confirm.upgrade() else {
+            return;
+        };
+        win.set_library_pending_discard(SharedString::new());
+        win.set_library_pending_discard_warning(SharedString::new());
+
+        let Some(store) = ctx_discard_confirm.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+        let detail = match store.get_bundle(id.as_str()) {
+            Ok(Some(detail)) => detail,
+            Ok(None) => {
+                open_library(&win, &ctx_discard_confirm);
+                return;
+            }
+            Err(e) => {
+                toast(&win, format!("Could not read the Bundle: {e}"), true);
+                return;
+            }
+        };
+        let finding_ids: Vec<String> = detail.items.iter().map(|i| i.finding_id.clone()).collect();
+        let total = finding_ids.len();
+
+        let (discarded, orphaned, refused) = discard_originals(&ctx_discard_confirm, &finding_ids);
+
+        open_library(&win, &ctx_discard_confirm);
+        load_findings_into_window(&win, &ctx_discard_confirm, None);
+
+        let noun = if discarded == 1 {
+            "Finding"
+        } else {
+            "Findings"
+        };
+        let had_failure = refused.is_some();
+        let message = match refused {
+            Some((finding_id, error)) => format!(
+                "{discarded} of {total} originals discarded. Finding {finding_id} refused: {error}"
+            ),
+            None if orphaned == 0 => {
+                format!("{discarded} {noun} discarded. The Bundle keeps its own copies.")
+            }
+            None => format!(
+                "{discarded} {noun} discarded. {orphaned} image file(s) could not be removed and \
+                 are now orphans."
+            ),
+        };
+        toast(&win, message, had_failure);
+    });
+
+    // DELETE BOTH's second-step request (ticket 17): swaps the Disassemble confirmation for the
+    // Delete both one, with a fresh live read of the Bundle's own name and Finding count - the same
+    // read every other confirmation opens with, never a value carried over from the dialog it
+    // replaces.
+    let win_delete_both_req = main_window.as_weak();
+    let ctx_delete_both_req = ctx.clone();
+    main_window.on_library_delete_both_requested(move |id| {
+        let Some(win) = win_delete_both_req.upgrade() else {
+            return;
+        };
+        win.set_library_pending_disassemble(SharedString::new());
+
+        let Some(store) = ctx_delete_both_req.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+        match store.get_bundle(id.as_str()) {
+            Ok(Some(detail)) => {
+                win.set_library_pending_bundle_name(detail.bundle.name.clone().into());
+                win.set_library_pending_bundle_finding_count(detail.items.len() as i32);
+                win.set_library_pending_delete_both(id);
+            }
+            Ok(None) => open_library(&win, &ctx_delete_both_req),
+            Err(e) => toast(&win, format!("Could not read the Bundle: {e}"), true),
+        }
+    });
+
+    let win_delete_both_cancel = main_window.as_weak();
+    main_window.on_library_delete_both_cancelled(move || {
+        if let Some(win) = win_delete_both_cancel.upgrade() {
+            win.set_library_pending_delete_both(SharedString::new());
+        }
+    });
+
+    // DELETE BOTH's confirmed act: the Bundle first (row, then folder - `remove_bundle_row_and_folder`,
+    // AD-2's ordering), then each source Finding (record, then files - `delete_finding_everywhere`,
+    // stopping at the first refusal the same way Discard originals does). Nothing returns to the
+    // filmstrip either way, because both the Bundle's hold on the Findings and the Findings
+    // themselves are gone by the time this finishes.
+    let win_delete_both_confirm = main_window.as_weak();
+    let ctx_delete_both_confirm = ctx.clone();
+    main_window.on_library_delete_both_confirmed(move |id| {
+        let Some(win) = win_delete_both_confirm.upgrade() else {
+            return;
+        };
+        win.set_library_pending_delete_both(SharedString::new());
+
+        let Some(store) = ctx_delete_both_confirm.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+        let detail = match store.get_bundle(id.as_str()) {
+            Ok(Some(detail)) => detail,
+            Ok(None) => {
+                open_library(&win, &ctx_delete_both_confirm);
+                return;
+            }
+            Err(e) => {
+                toast(&win, format!("Could not read the Bundle: {e}"), true);
+                return;
+            }
+        };
+        let finding_ids: Vec<String> = detail.items.iter().map(|i| i.finding_id.clone()).collect();
+        let total = finding_ids.len();
+
+        match remove_bundle_row_and_folder(&ctx_delete_both_confirm, id.as_str()) {
+            Ok(bundle_orphaned) => {
+                let (discarded, mut orphaned, refused) =
+                    discard_originals(&ctx_delete_both_confirm, &finding_ids);
+                if bundle_orphaned {
+                    orphaned += 1;
+                }
+
+                open_library(&win, &ctx_delete_both_confirm);
+                load_findings_into_window(&win, &ctx_delete_both_confirm, None);
+
+                let had_failure = refused.is_some();
+                let message = match refused {
+                    Some((finding_id, error)) => format!(
+                        "Bundle deleted. {discarded} of {total} originals discarded. Finding \
+                         {finding_id} refused: {error}"
+                    ),
+                    None if orphaned == 0 => "Bundle and its originals deleted.".to_string(),
+                    None => format!(
+                        "Bundle and its originals deleted. {orphaned} file(s) could not be \
+                         removed and are now orphans."
+                    ),
+                };
+                toast(&win, message, had_failure);
+            }
+            Err(e) => toast(&win, format!("Could not delete the Bundle: {e}"), true),
+        }
+    });
+
+    // RECLAIM SPACE (ticket 18 of the Bundle Library spec). Reached from two doors - the Library
+    // header's own entry and Settings' Vault card - both of which fire this SAME callback, so both
+    // land on the SAME handler and therefore the same screen; there is only ever one way this opens.
+    let win_reclaim_open = main_window.as_weak();
+    let ctx_reclaim_open = ctx.clone();
+    main_window.on_reclaim_space_clicked(move || {
+        let Some(win) = win_reclaim_open.upgrade() else {
+            return;
+        };
+        open_reclaim_space(&win, &ctx_reclaim_open);
+    });
+
+    let win_reclaim_closed = main_window.as_weak();
+    main_window.on_reclaim_space_closed(move || {
+        if let Some(win) = win_reclaim_closed.upgrade() {
+            win.set_reclaim_space_open(false);
+        }
+    });
+
+    // A row's checkbox was ticked or unticked. Flips just that row's `selected` bit in the model
+    // Rust itself owns and rebuilds the footer straight off it - no second running total kept
+    // anywhere else that could disagree with what the rows themselves show.
+    let win_reclaim_toggle = main_window.as_weak();
+    main_window.on_reclaim_space_row_toggled(move |id| {
+        let Some(win) = win_reclaim_toggle.upgrade() else {
+            return;
+        };
+        let mut rows: Vec<ReclaimBundleRow> = win.get_reclaim_space_rows().iter().collect();
+        if let Some(row) = rows.iter_mut().find(|r| r.id == id) {
+            row.selected = !row.selected;
+        }
+        win.set_reclaim_space_rows(ModelRc::from(Rc::new(VecModel::from(rows))));
+        refresh_reclaim_space_footer(&win);
+    });
+
+    // THE FOOTER'S OWN BUTTON opens ONE bulk confirmation, counting Bundles and captures across the
+    // WHOLE ticked set - not ticket 17's per-Bundle dialog run several times, which would show the
+    // Reviewer several toasts for one intention. Nothing is discarded yet; this only computes what
+    // the confirmation says.
+    let win_reclaim_discard_clicked = main_window.as_weak();
+    let ctx_reclaim_discard_clicked = ctx.clone();
+    main_window.on_reclaim_space_discard_clicked(move || {
+        let Some(win) = win_reclaim_discard_clicked.upgrade() else {
+            return;
+        };
+        let ticked: Vec<String> = win
+            .get_reclaim_space_rows()
+            .iter()
+            .filter(|r| r.selected)
+            .map(|r| r.id.to_string())
+            .collect();
+        if ticked.is_empty() {
+            return;
+        }
+        let Some(store) = ctx_reclaim_discard_clicked.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+
+        let mut capture_count = 0usize;
+        let mut all_finding_ids: Vec<String> = Vec::new();
+        for id in &ticked {
+            if let Ok(Some(detail)) = store.get_bundle(id) {
+                capture_count += detail.items.len();
+                all_finding_ids.extend(detail.items.iter().map(|i| i.finding_id.clone()));
+            }
+        }
+        let sealed_elsewhere =
+            bundles_sealed_by_bulk_discard(&ctx_reclaim_discard_clicked, &ticked, &all_finding_ids);
+
+        win.set_reclaim_space_confirm_heading(reclaim_confirm_heading(ticked.len()).into());
+        win.set_reclaim_space_confirm_body(
+            reclaim_confirm_body(
+                ticked.len(),
+                capture_count,
+                &discard_warning_text(&sealed_elsewhere),
+            )
+            .into(),
+        );
+        win.set_reclaim_space_pending_ids(ModelRc::from(Rc::new(VecModel::from(
+            ticked
+                .into_iter()
+                .map(SharedString::from)
+                .collect::<Vec<_>>(),
+        ))));
+        win.set_reclaim_space_confirm_open(true);
+    });
+
+    let win_reclaim_discard_cancel = main_window.as_weak();
+    main_window.on_reclaim_space_discard_cancelled(move || {
+        if let Some(win) = win_reclaim_discard_cancel.upgrade() {
+            win.set_reclaim_space_confirm_open(false);
+        }
+    });
+
+    // THE CONFIRMED ACT. Runs ticket 17's own `discard_originals` once per ticked Bundle - never a
+    // single call over every Finding merged together, so a refusal partway through one Bundle stops
+    // at that Bundle exactly the way a single-Bundle Discard would, rather than abandoning Findings
+    // in Bundles that had not even started yet. The screen re-reads afterwards (`open_reclaim_space`)
+    // so every discarded (now sealed) Bundle disappears from it on its own - opening the Library and
+    // its row menu already reads `bundle_is_sealed` live, so nothing further is needed to make it
+    // show them sealed too.
+    let win_reclaim_discard_confirm = main_window.as_weak();
+    let ctx_reclaim_discard_confirm = ctx.clone();
+    main_window.on_reclaim_space_discard_confirmed(move || {
+        let Some(win) = win_reclaim_discard_confirm.upgrade() else {
+            return;
+        };
+        win.set_reclaim_space_confirm_open(false);
+
+        let ticked: Vec<String> = win
+            .get_reclaim_space_pending_ids()
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+
+        let Some(store) = ctx_reclaim_discard_confirm.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+
+        let bundle_count = ticked.len();
+        let mut total_discarded = 0usize;
+        let mut total_orphaned = 0usize;
+        let mut refusal: Option<String> = None;
+        for id in &ticked {
+            let Ok(Some(detail)) = store.get_bundle(id) else {
+                continue;
+            };
+            let finding_ids: Vec<String> =
+                detail.items.iter().map(|i| i.finding_id.clone()).collect();
+            let (discarded, orphaned, refused) =
+                discard_originals(&ctx_reclaim_discard_confirm, &finding_ids);
+            total_discarded += discarded;
+            total_orphaned += orphaned;
+            if let Some((finding_id, error)) = refused {
+                refusal = Some(format!("Finding {finding_id} refused: {error}"));
+            }
+        }
+
+        open_reclaim_space(&win, &ctx_reclaim_discard_confirm);
+        load_findings_into_window(&win, &ctx_reclaim_discard_confirm, None);
+
+        let noun = if total_discarded == 1 {
+            "Finding"
+        } else {
+            "Findings"
+        };
+        let bundle_word = if bundle_count == 1 {
+            "Bundle"
+        } else {
+            "Bundles"
+        };
+        let had_failure = refusal.is_some();
+        let message = match refusal {
+            Some(reason) => format!(
+                "{total_discarded} {noun} discarded across {bundle_count} {bundle_word}. {reason}"
+            ),
+            None if total_orphaned == 0 => format!(
+                "{total_discarded} {noun} discarded across {bundle_count} {bundle_word}. Each \
+                 Bundle keeps its own copies."
+            ),
+            None => format!(
+                "{total_discarded} {noun} discarded. {total_orphaned} image file(s) could not be \
+                 removed and are now orphans."
+            ),
+        };
+        toast(&win, message, had_failure);
+    });
+
+    // Bundles Drawer Toggle. Deliberately untouched by this ticket - the spec's own "Out of Scope"
+    // names it as a separate, undescribed pattern nothing has asked for yet.
     main_window.on_bundles_drawer_clicked(|| {
         println!("Toggle Bundles Drawer clicked");
     });
@@ -5820,5 +7610,2554 @@ mod tests {
         } else {
             png_fixture(40, 30)
         }
+    }
+
+    // ===== ticket 11: the Library opens and lists every Bundle =============================
+
+    /// The ladder the spec's own wording implies: "just now / N minutes ago / yesterday / last
+    /// week". Fixed instants on both sides, not `Utc::now()`, so this cannot flake on a slow CI
+    /// runner the way a real-clock comparison would.
+    #[test]
+    fn relative_time_reads_a_ladder_of_plain_words() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-09-02T12:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let ago = |seconds: i64| (now - chrono::Duration::seconds(seconds)).to_rfc3339();
+
+        assert_eq!(relative_time(&ago(10), now), "just now");
+        assert_eq!(relative_time(&ago(60), now), "a minute ago");
+        assert_eq!(relative_time(&ago(60 * 5), now), "5 minutes ago");
+        assert_eq!(relative_time(&ago(60 * 60), now), "an hour ago");
+        assert_eq!(relative_time(&ago(60 * 60 * 3), now), "3 hours ago");
+        assert_eq!(relative_time(&ago(60 * 60 * 30), now), "yesterday");
+        assert_eq!(relative_time(&ago(60 * 60 * 24 * 3), now), "3 days ago");
+        assert_eq!(relative_time(&ago(60 * 60 * 24 * 8), now), "last week");
+        assert_eq!(relative_time(&ago(60 * 60 * 24 * 21), now), "3 weeks ago");
+        assert_eq!(relative_time(&ago(60 * 60 * 24 * 90), now), "3 months ago");
+        assert_eq!(relative_time(&ago(60 * 60 * 24 * 400), now), "1 year ago");
+    }
+
+    /// A composed time this build cannot parse must not panic the Library open - it must read as
+    /// "an unknown time ago" rather than crash the whole overlay over one bad row.
+    #[test]
+    fn relative_time_refuses_gracefully_on_unparseable_input() {
+        let now = chrono::Utc::now();
+        assert_eq!(relative_time("not a timestamp", now), "an unknown time ago");
+    }
+
+    /// `bundle_store: None` is one of the two "cannot be read" triggers `AppContext` documents on
+    /// its own field - the tables never opened. `build_library_rows` must refuse out loud with a
+    /// message that names what refused, the same shape `prepare_bundle` already uses for the same
+    /// condition, rather than silently reporting an empty Library.
+    #[test]
+    fn build_library_rows_refuses_out_loud_when_the_bundle_store_is_none() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+
+        let err = build_library_rows(&ctx, chrono::Utc::now())
+            .expect_err("a None store must refuse, not read empty");
+        assert!(
+            err.contains("could not be opened"),
+            "the message must name what refused: {err}"
+        );
+    }
+
+    /// A `list_bundles` failure - a locked or corrupt `library.db` - is the other trigger
+    /// `AppContext.bundle_store`'s own doc comment names, and it must surface the underlying
+    /// reason rather than a generic sentence, so the Reviewer sees what actually refused.
+    ///
+    /// Built on a connection that was never migrated, so `list_bundles`'s own query fails for
+    /// real - "no such table: bundle" - rather than a `CoreError` faked to look like one.
+    #[test]
+    fn build_library_rows_refuses_out_loud_when_list_bundles_itself_fails() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let unmigrated = rusqlite::Connection::open_in_memory().expect("an in-memory connection");
+        let bundle_store = SqliteBundleStore::new(Arc::new(Mutex::new(unmigrated)));
+
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let err = build_library_rows(&ctx, chrono::Utc::now())
+            .expect_err("an unmigrated connection must refuse");
+        assert!(
+            err.contains("Could not read the Library"),
+            "the message must name what refused: {err}"
+        );
+    }
+
+    /// The row-building path end to end, against a real in-memory store and real files on a temp
+    /// Vault: every Bundle appears once, newest-composed first (the store's own `ORDER BY
+    /// composed_at DESC`, not re-sorted here), the thumbnail is the BundleItem at position 1 and
+    /// actually DECODES (not merely a signature-and-dimensions fake - `AGENTS.md`'s own rule), and
+    /// the meta line reads "N Findings · composed <relative time>" exactly as `spec.md`'s
+    /// Implementation Decisions section states it three times over.
+    #[test]
+    fn build_library_rows_lists_every_bundle_newest_composed_first_with_a_decoded_thumbnail() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+
+        let older = Bundle::new(
+            "b-older".into(),
+            "Older review".into(),
+            "# Older review".into(),
+            "bundles/b-older/bundle.md".into(),
+            "2026-08-28T10:00:00Z".into(),
+        )
+        .unwrap();
+        let older_items = vec![BundleItem::new(
+            "bi-older-1".into(),
+            "b-older".into(),
+            "f-older-1".into(),
+            1,
+            "bundles/b-older/finding_1_burned.png".into(),
+        )
+        .unwrap()];
+
+        let newer = Bundle::new(
+            "b-newer".into(),
+            "Newer review".into(),
+            "# Newer review".into(),
+            "bundles/b-newer/bundle.md".into(),
+            "2026-09-01T10:00:00Z".into(),
+        )
+        .unwrap();
+        let newer_items = vec![
+            BundleItem::new(
+                "bi-newer-1".into(),
+                "b-newer".into(),
+                "f-newer-1".into(),
+                1,
+                "bundles/b-newer/finding_1_burned.png".into(),
+            )
+            .unwrap(),
+            BundleItem::new(
+                "bi-newer-2".into(),
+                "b-newer".into(),
+                "f-newer-2".into(),
+                2,
+                "bundles/b-newer/finding_2_burned.png".into(),
+            )
+            .unwrap(),
+        ];
+
+        bundle_store
+            .create_bundle(&older, &older_items)
+            .expect("creating the older Bundle must succeed");
+        bundle_store
+            .create_bundle(&newer, &newer_items)
+            .expect("creating the newer Bundle must succeed");
+
+        for item in older_items.iter().chain(newer_items.iter()) {
+            let path = vault_dir.path().join(&item.image_path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, png_fixture(12, 8)).unwrap();
+        }
+
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        // A fixed "now", not `Utc::now()`: `composed_at` above is fixed too, so the relative-time
+        // wording below is deterministic whatever day this test actually runs.
+        let now = chrono::DateTime::parse_from_rfc3339("2026-09-02T10:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        let rows = build_library_rows(&ctx, now).expect("a healthy store must list its Bundles");
+        assert_eq!(rows.len(), 2, "every Bundle must appear once");
+
+        // Newest-composed first - the store's own order, preserved rather than re-sorted.
+        assert_eq!(rows[0].id, "b-newer");
+        assert_eq!(rows[1].id, "b-older");
+
+        assert_eq!(
+            rows[0].meta_line, "2 Findings · composed yesterday",
+            "the meta line must read exactly \"N Findings · composed <relative time>\""
+        );
+        assert_eq!(rows[1].meta_line, "1 Finding · composed 5 days ago");
+
+        // The thumbnail must actually DECODE, not merely carry a plausible signature and
+        // dimensions - the fabrication this repository has been burned by before.
+        assert!(
+            rows[0].thumbnail.size().width > 0,
+            "the thumbnail must be a real decoded image, not the empty default"
+        );
+    }
+
+    // ===== ticket 12: Copy Markdown and Open file location, from a Library row ==============
+
+    /// Builds a `(Bundle, [BundleItem])` pair whose `markdown` is a real composed document (via
+    /// `MarkdownSerializer::serialize_bundle`, not a hand-typed fixture), so `rebase_image_links`
+    /// has the exact grammar it expects to parse.
+    fn bundle_fixture(bundle_id: &str) -> (Bundle, Vec<BundleItem>) {
+        let fid = format!("f-{bundle_id}");
+        let finding_detail = detail(&fid, 40, 30, vec![]);
+        let item = BundleItem::new(
+            format!("bi-{bundle_id}"),
+            bundle_id.to_string(),
+            fid,
+            1,
+            format!("bundles/{bundle_id}/finding_1_burned.png"),
+        )
+        .unwrap();
+        let markdown_path = format!("bundles/{bundle_id}/bundle.md");
+        let markdown = MarkdownSerializer::serialize_bundle(
+            "Checkout Flow Review",
+            "",
+            &[(&item, &finding_detail)],
+            &markdown_path,
+        );
+        let bundle = Bundle::new(
+            bundle_id.to_string(),
+            "Checkout Flow Review".to_string(),
+            markdown,
+            markdown_path,
+            "2026-09-01T10:00:00Z".to_string(),
+        )
+        .unwrap();
+        (bundle, vec![item])
+    }
+
+    fn library_test_ctx(vault_dir: &Path, bundle_store: SqliteBundleStore) -> AppContext {
+        AppContext {
+            vault_store: VaultBlobStore::new(vault_dir).expect("a vault at a temp path"),
+            vault_path: vault_dir.to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        }
+    }
+
+    /// The acceptance criterion at its own seam: the clipboard text is produced by calling
+    /// `MarkdownSerializer::rebase_image_links` - not a second, UI-side reimplementation - so this
+    /// asserts equality against calling that function directly, the same way the ticket's checklist
+    /// asks for.
+    #[test]
+    fn bundle_markdown_for_clipboard_is_exactly_what_rebase_image_links_produces() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let (bundle, items) = bundle_fixture("b-1");
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("creating the Bundle must succeed");
+        let ctx = library_test_ctx(vault_dir.path(), bundle_store);
+
+        let got = bundle_markdown_for_clipboard(&ctx, "b-1").expect("must produce clipboard text");
+        let expected = MarkdownSerializer::rebase_image_links(
+            &bundle.markdown,
+            &vault_dir.path().to_string_lossy(),
+            &bundle.markdown_path,
+        )
+        .expect("rebase must succeed independently too");
+        assert_eq!(
+            got, expected,
+            "Copy Markdown must hand the composer's own rebase output to the clipboard, unchanged"
+        );
+
+        // And the diff from the stored document is exactly the image link destinations: absolute,
+        // forward-slashed, `<>`-wrapped - never anything else in the document.
+        assert_ne!(
+            got, bundle.markdown,
+            "rebasing must actually change something"
+        );
+        assert!(
+            got.contains('<'),
+            "the rebased link must be angle-bracket wrapped"
+        );
+        let vault_forward_slash = vault_dir.path().to_string_lossy().replace('\\', "/");
+        assert!(
+            got.contains(&format!(
+                "<{vault_forward_slash}/bundles/b-1/finding_1_burned.png>"
+            )),
+            "the rebased link must be absolute and point at the Bundle's own burned copy: {got}"
+        );
+    }
+
+    /// The stored file itself is never touched by Copy Markdown - `bundle_markdown_for_clipboard`
+    /// only reads the row and transforms a string in memory. Proven against a real file on disk,
+    /// not merely by reading the function's own source.
+    #[test]
+    fn bundle_markdown_for_clipboard_leaves_the_stored_file_byte_identical() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let (bundle, items) = bundle_fixture("b-1");
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("creating the Bundle must succeed");
+
+        let folder = vault_dir.path().join("bundles").join("b-1");
+        std::fs::create_dir_all(&folder).unwrap();
+        let markdown_file = folder.join("bundle.md");
+        std::fs::write(&markdown_file, bundle.markdown.as_bytes()).unwrap();
+        let before = std::fs::read(&markdown_file).unwrap();
+
+        let ctx = library_test_ctx(vault_dir.path(), bundle_store);
+        bundle_markdown_for_clipboard(&ctx, "b-1").expect("must succeed");
+
+        let after = std::fs::read(&markdown_file).unwrap();
+        assert_eq!(
+            before, after,
+            "Copy Markdown must not write to the stored Markdown file at all"
+        );
+    }
+
+    /// `AD-11`/`BR-11`: a sealed Bundle (its Findings deleted) works exactly the same as an
+    /// unsealed one, because nothing here ever reads a Finding - it stands entirely on the Bundle's
+    /// own stored `markdown`/`markdown_path`. Proven by never creating the Finding at all; the
+    /// `finding_store` in `library_test_ctx` is empty for both this test and the one above.
+    #[test]
+    fn bundle_markdown_for_clipboard_works_the_same_for_a_sealed_bundle() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let (bundle, items) = bundle_fixture("b-sealed");
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("creating the Bundle must succeed");
+        // No Finding is ever created for "f-b-sealed" - the Bundle is sealed from the moment it
+        // exists, per `BR-122`'s "computed live, no stored flag" rule.
+        let ctx = library_test_ctx(vault_dir.path(), bundle_store);
+
+        let got = bundle_markdown_for_clipboard(&ctx, "b-sealed").expect(
+            "a sealed Bundle must copy exactly like an unsealed one - nothing here reads a Finding",
+        );
+        assert!(got.contains("Checkout Flow Review"));
+    }
+
+    #[test]
+    fn bundle_markdown_for_clipboard_refuses_when_the_bundle_is_gone() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let ctx = library_test_ctx(vault_dir.path(), bundle_store);
+
+        let err = bundle_markdown_for_clipboard(&ctx, "does-not-exist")
+            .expect_err("a missing Bundle must refuse");
+        assert!(
+            err.contains("no longer in the Library"),
+            "the message must say what refused: {err}"
+        );
+    }
+
+    #[test]
+    fn bundle_markdown_for_clipboard_refuses_when_the_store_is_none() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+
+        let err = bundle_markdown_for_clipboard(&ctx, "b-1").expect_err("a None store must refuse");
+        assert!(
+            err.contains("could not be opened"),
+            "the message must name what refused: {err}"
+        );
+    }
+
+    /// The Bundle's OWN folder - `AD-4`'s layout, `bundles/{id}/` under the Vault root - derived
+    /// from `markdown_path`'s own parent rather than a second `"bundles".join(id)` construction.
+    #[test]
+    fn bundle_folder_path_is_the_markdown_files_own_folder() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (bundle, _items) = bundle_fixture("b-1");
+        let ctx = library_test_ctx(
+            vault_dir.path(),
+            SqliteBundleStore::open_in_memory().expect("a bundle store"),
+        );
+
+        let folder = bundle_folder_path(&ctx, &bundle);
+        assert_eq!(folder, vault_dir.path().join("bundles").join("b-1"));
+    }
+
+    /// The degenerate case: a Bundle whose document sits at the Vault root has no folder of its
+    /// own to speak of, so the Vault root itself is what "its folder" means - the same fallback
+    /// `MarkdownSerializer::image_reference` uses for a document with no folder prefix.
+    #[test]
+    fn bundle_folder_path_falls_back_to_the_vault_root_when_markdown_path_has_no_folder() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let mut bundle = bundle_fixture("b-1").0;
+        bundle.markdown_path = "bundle.md".to_string();
+        let ctx = library_test_ctx(
+            vault_dir.path(),
+            SqliteBundleStore::open_in_memory().expect("a bundle store"),
+        );
+
+        let folder = bundle_folder_path(&ctx, &bundle);
+        assert_eq!(folder, vault_dir.path().to_path_buf());
+    }
+
+    /// Open file location's other half - a folder that no longer exists must refuse rather than
+    /// silently do nothing, which is what lets `on_library_bundle_open_file_location_clicked` toast
+    /// instead of leaving the Reviewer looking at nothing happening. Only the "not a directory"
+    /// branch is exercised here: `open_folder` would spawn `explorer.exe` for a path that DOES
+    /// exist, which a background test run must never do.
+    #[cfg(windows)]
+    #[test]
+    fn open_folder_refuses_when_the_bundles_folder_no_longer_exists() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (bundle, _items) = bundle_fixture("b-gone");
+        let ctx = library_test_ctx(
+            vault_dir.path(),
+            SqliteBundleStore::open_in_memory().expect("a bundle store"),
+        );
+        let folder = bundle_folder_path(&ctx, &bundle);
+        assert!(!folder.exists(), "the fixture must not create the folder");
+
+        let err = open_folder(&folder).expect_err("a missing folder must refuse, not do nothing");
+        assert_eq!(err, "That folder no longer exists.");
+    }
+
+    // ===== ticket 16: disassemble a Bundle, or delete a sealed one ==========================
+
+    fn finding_fixture(finding_store: &SqliteFindingStore, id: &str) {
+        let finding = Finding {
+            id: id.to_string(),
+            image_path: format!("findings/{id}.png"),
+            image_width: 40,
+            image_height: 30,
+            captured_at: "2026-09-01T10:00:00Z".to_string(),
+            source_monitor: "\\\\.\\DISPLAY1".to_string(),
+            region: "0,0,40,30".to_string(),
+            resolved_long_edge: None,
+            resolved_encoder_quality: None,
+            budget_name: None,
+        };
+        let note = Note {
+            id: format!("note-{id}"),
+            finding_id: id.to_string(),
+            body: String::new(),
+            updated_at: "2026-09-01T10:00:00Z".to_string(),
+        };
+        finding_store
+            .create_finding(&finding, &note, &[])
+            .expect("creating the fixture Finding must succeed");
+    }
+
+    /// Same shape as ticket 12's `bundle_fixture` above, but writes straight into a bundle store
+    /// instead of returning an in-memory pair - named `store_bundle_fixture` rather than reusing
+    /// `bundle_fixture` because the two signatures collided when the tickets merged and this one is
+    /// the store-writing side of that collision.
+    fn store_bundle_fixture(
+        bundle_store: &SqliteBundleStore,
+        bundle_id: &str,
+        finding_ids: &[&str],
+    ) {
+        let bundle = Bundle::new(
+            bundle_id.to_string(),
+            "Fixture Bundle".to_string(),
+            "# Fixture Bundle".to_string(),
+            format!("bundles/{bundle_id}/bundle.md"),
+            "2026-09-01T12:00:00Z".to_string(),
+        )
+        .expect("a valid fixture Bundle");
+        let items: Vec<BundleItem> = finding_ids
+            .iter()
+            .enumerate()
+            .map(|(i, fid)| {
+                BundleItem::new(
+                    format!("bi-{bundle_id}-{i}"),
+                    bundle_id.to_string(),
+                    fid.to_string(),
+                    (i + 1) as u32,
+                    format!("bundles/{bundle_id}/finding_{}_burned.png", i + 1),
+                )
+                .expect("a valid fixture BundleItem")
+            })
+            .collect();
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("creating the fixture Bundle must succeed");
+    }
+
+    /// `BR-122`: which verb the menu offers must be read LIVE, never from a stored flag - proven
+    /// here by asking the SAME question twice, with a Finding deleted in between, exactly the shape
+    /// the ticket's own acceptance criterion describes ("a fixture where a Finding is deleted between
+    /// two menu openings"). No `sealed` column exists anywhere in the schema to cache the answer in,
+    /// so the only way this can pass is if the check re-reads the Finding store every time.
+    #[test]
+    fn bundle_is_sealed_reads_live_never_a_cached_answer() {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        finding_fixture(&finding_store, "f1");
+        finding_fixture(&finding_store, "f2");
+        store_bundle_fixture(&bundle_store, "b1", &["f1", "f2"]);
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        // Menu opening #1: every Finding still exists.
+        let detail = ctx
+            .bundle_store
+            .as_ref()
+            .unwrap()
+            .get_bundle("b1")
+            .unwrap()
+            .unwrap();
+        assert!(
+            !bundle_is_sealed(&ctx, &detail),
+            "a Bundle whose Findings all exist must read as unsealed"
+        );
+
+        // A Finding goes, exactly as it would through the ordinary Delete Finding flow.
+        ctx.finding_store
+            .delete_finding("f1")
+            .expect("deleting the fixture Finding must succeed");
+
+        // Menu opening #2: the SAME Bundle, re-fetched, exactly as a second `get_bundle` call would
+        // be made on a second menu open. If the answer were cached anywhere it would still read
+        // unsealed here.
+        let detail_again = ctx
+            .bundle_store
+            .as_ref()
+            .unwrap()
+            .get_bundle("b1")
+            .unwrap()
+            .unwrap();
+        assert!(
+            bundle_is_sealed(&ctx, &detail_again),
+            "the very next read must see the Finding is gone and flip to sealed"
+        );
+    }
+
+    /// `BUG-90`: a Bundle composed before `BUG-86`'s 2026-08-31 fix still carries the doubled-folder
+    /// link the fix was meant to stop producing. This is the loop that was RED before the fix existed
+    /// (see the commit that added this test): `resolve_bundle_document_image` on the stored link
+    /// found no file, because the link really is `./bundles/<id>/finding_1_burned.png` while the file
+    /// sits one level up. Real bytes, not a mock - the fixture writes an actual PNG at the file's real
+    /// location and never at the doubled one, so a wrong fix (writing the repaired image somewhere
+    /// convenient rather than finding where the file already is) would still fail this.
+    #[test]
+    fn repair_bundle_image_links_fixes_bug_86s_doubled_folder_segment_and_leaves_updated_at_alone()
+    {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle_id = "b-legacy";
+        let bundle_folder = vault_dir.path().join("bundles").join(bundle_id);
+        std::fs::create_dir_all(&bundle_folder).expect("create the fixture Bundle's own folder");
+        std::fs::write(
+            bundle_folder.join("finding_1_burned.png"),
+            png_fixture(4, 4),
+        )
+        .expect("write the fixture image at its REAL location, one level up from the doubled one");
+
+        // BUG-86's exact broken shape, byte for byte: the link doubles the folder the document
+        // itself is already sitting in.
+        let broken_markdown = format!(
+            "# Legacy review\n\n## Finding 1\n\n![Finding 1](./bundles/{bundle_id}/finding_1_burned.png)\n\n"
+        );
+        let bundle = Bundle::new(
+            bundle_id.to_string(),
+            "Legacy review".to_string(),
+            broken_markdown,
+            format!("bundles/{bundle_id}/bundle.md"),
+            "2026-08-27T20:28:00Z".to_string(),
+        )
+        .expect("a valid fixture Bundle");
+        let items = vec![BundleItem::new(
+            format!("bi-{bundle_id}-1"),
+            bundle_id.to_string(),
+            "f1".to_string(),
+            1,
+            format!("bundles/{bundle_id}/finding_1_burned.png"),
+        )
+        .expect("a valid fixture BundleItem")];
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("creating the fixture Bundle must succeed");
+
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        // SEEN RED: the link exactly as stored resolves to nothing, before any fix runs.
+        let parsed_before = MarkdownSerializer::parse_bundle_document(&bundle.markdown).unwrap();
+        let before_path = resolve_bundle_document_image(
+            &ctx.vault_path,
+            &bundle.markdown_path,
+            &parsed_before.findings[0].image_link,
+        );
+        assert!(
+            !before_path.is_file(),
+            "the loop must be red before the fix runs: {before_path:?} must not exist"
+        );
+
+        let mut repaired = bundle.clone();
+        repair_bundle_image_links(&ctx, &mut repaired);
+
+        // The link is corrected, and now resolves to the real file.
+        let parsed_after = MarkdownSerializer::parse_bundle_document(&repaired.markdown).unwrap();
+        assert_eq!(
+            parsed_after.findings[0].image_link,
+            "./finding_1_burned.png"
+        );
+        let after_path = resolve_bundle_document_image(
+            &ctx.vault_path,
+            &repaired.markdown_path,
+            &parsed_after.findings[0].image_link,
+        );
+        assert!(
+            after_path.is_file(),
+            "the repaired link must resolve to the file that was there all along"
+        );
+
+        // A repair is not an edit: ticket 15's `updated_at` must not move, or every legacy Bundle
+        // would read as "edited just now" the first time this ships.
+        assert_eq!(
+            repaired.updated_at, bundle.updated_at,
+            "repairing a broken link must never look like a Reviewer's Save"
+        );
+
+        // Persisted, not just fixed in memory: a fresh `get_bundle` - exactly what Review & Update
+        // and Copy Markdown both do - sees the corrected document.
+        let refetched = ctx
+            .bundle_store
+            .as_ref()
+            .unwrap()
+            .get_bundle(bundle_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(refetched.bundle.markdown, repaired.markdown);
+        assert_eq!(refetched.bundle.updated_at, bundle.updated_at);
+
+        // The file on disk was rewritten too - not just the row - so Copy Markdown's own read of the
+        // stored file (`bundle_markdown_for_clipboard`) sees the same corrected document.
+        let file_contents =
+            std::fs::read_to_string(ctx.vault_path.join(&bundle.markdown_path)).unwrap();
+        assert_eq!(file_contents, repaired.markdown);
+    }
+
+    /// A document composed AFTER `BUG-86`'s fix already resolves - repairing it must be a no-op, not
+    /// just "produces the same text": the row and the file must never even be written to, which the
+    /// GetLastError-of-diffing-files check below (an mtime read) is a weak proxy for, so this also
+    /// exercises the store to see if a repeat call ever touches `updated_at`.
+    #[test]
+    fn repair_bundle_image_links_leaves_an_already_correct_document_untouched() {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle_id = "b-current";
+        let bundle_folder = vault_dir.path().join("bundles").join(bundle_id);
+        std::fs::create_dir_all(&bundle_folder).expect("create the fixture Bundle's own folder");
+        std::fs::write(
+            bundle_folder.join("finding_1_burned.png"),
+            png_fixture(4, 4),
+        )
+        .expect("write the fixture image");
+
+        let correct_markdown =
+            "# Current review\n\n## Finding 1\n\n![Finding 1](./finding_1_burned.png)\n\n"
+                .to_string();
+        let bundle = Bundle::new(
+            bundle_id.to_string(),
+            "Current review".to_string(),
+            correct_markdown.clone(),
+            format!("bundles/{bundle_id}/bundle.md"),
+            "2026-09-01T12:00:00Z".to_string(),
+        )
+        .expect("a valid fixture Bundle");
+        let items = vec![BundleItem::new(
+            format!("bi-{bundle_id}-1"),
+            bundle_id.to_string(),
+            "f1".to_string(),
+            1,
+            format!("bundles/{bundle_id}/finding_1_burned.png"),
+        )
+        .expect("a valid fixture BundleItem")];
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("creating the fixture Bundle must succeed");
+
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let mut unchanged = bundle.clone();
+        repair_bundle_image_links(&ctx, &mut unchanged);
+
+        assert_eq!(
+            unchanged.markdown, correct_markdown,
+            "an already-correct document must not change"
+        );
+        let refetched = ctx
+            .bundle_store
+            .as_ref()
+            .unwrap()
+            .get_bundle(bundle_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            refetched.bundle.markdown, correct_markdown,
+            "the row must never be written to when nothing needed repairing"
+        );
+    }
+
+    /// Belt and braces: when NEITHER the stored link NOR the de-duplicated candidate resolves to a
+    /// real file, the document must be left alone rather than "fixed" onto a target that also does
+    /// not exist - the two-sided confirmation `repair_bundle_image_links` describes in its own doc
+    /// comment, proven by removing the one thing that would let either resolution succeed.
+    #[test]
+    fn repair_bundle_image_links_refuses_to_guess_when_no_candidate_resolves() {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle_id = "b-orphaned";
+        // Deliberately no file written anywhere - the Bundle's own folder is not even created.
+
+        let broken_markdown = format!(
+            "# Orphaned review\n\n## Finding 1\n\n![Finding 1](./bundles/{bundle_id}/finding_1_burned.png)\n\n"
+        );
+        let bundle = Bundle::new(
+            bundle_id.to_string(),
+            "Orphaned review".to_string(),
+            broken_markdown.clone(),
+            format!("bundles/{bundle_id}/bundle.md"),
+            "2026-08-27T20:28:00Z".to_string(),
+        )
+        .expect("a valid fixture Bundle");
+        let items = vec![BundleItem::new(
+            format!("bi-{bundle_id}-1"),
+            bundle_id.to_string(),
+            "f1".to_string(),
+            1,
+            format!("bundles/{bundle_id}/finding_1_burned.png"),
+        )
+        .expect("a valid fixture BundleItem")];
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("creating the fixture Bundle must succeed");
+
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let mut unrepaired = bundle.clone();
+        repair_bundle_image_links(&ctx, &mut unrepaired);
+
+        assert_eq!(
+            unrepaired.markdown, broken_markdown,
+            "a link that resolves nowhere either way must be left exactly as stored, not guessed at"
+        );
+    }
+
+    /// The clean path: both the row and the folder go, and the folder is genuinely removed from
+    /// disk, not merely reported gone.
+    #[test]
+    fn remove_bundle_row_and_folder_removes_both_cleanly() {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b-clean", &["f1"]);
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        vault_store
+            .write_blob("bundles/b-clean/bundle.md", b"# Fixture Bundle")
+            .expect("writing the fixture Markdown must succeed");
+        vault_store
+            .write_blob("bundles/b-clean/finding_1_burned.png", &png_fixture(4, 4))
+            .expect("writing the fixture image must succeed");
+
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let orphaned = remove_bundle_row_and_folder(&ctx, "b-clean")
+            .expect("a healthy row and a healthy folder must both go without error");
+        assert!(!orphaned, "nothing should be left behind on the clean path");
+
+        assert!(
+            ctx.bundle_store
+                .as_ref()
+                .unwrap()
+                .get_bundle("b-clean")
+                .unwrap()
+                .is_none(),
+            "the row must be gone"
+        );
+        assert!(
+            !vault_dir.path().join("bundles/b-clean").exists(),
+            "the whole folder must be gone, not merely emptied"
+        );
+    }
+
+    /// A row-delete failure must leave EVERYTHING intact - the row (trivially, since it never
+    /// left) and the files, and the message must name what refused. Built on a connection that
+    /// was never migrated, the same trick `build_library_rows_refuses_out_loud_when_list_bundles_itself_fails`
+    /// already uses, so `delete_bundle` fails for real ("no such table: bundle"), not on a faked
+    /// `CoreError`.
+    #[test]
+    fn a_row_delete_failure_leaves_the_row_and_the_folder_both_untouched() {
+        let unmigrated = rusqlite::Connection::open_in_memory().expect("an in-memory connection");
+        let broken_bundle_store = SqliteBundleStore::new(Arc::new(Mutex::new(unmigrated)));
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        let md_rel = "bundles/b-broken/bundle.md";
+        vault_store
+            .write_blob(md_rel, b"# Untouched")
+            .expect("writing the fixture Markdown must succeed");
+
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(broken_bundle_store)),
+        };
+
+        let err = remove_bundle_row_and_folder(&ctx, "b-broken")
+            .expect_err("a database whose `bundle` table does not exist must refuse out loud");
+        assert!(
+            err.contains("Could not delete the Bundle"),
+            "the message must name what refused: {err}"
+        );
+        assert!(
+            vault_dir.path().join(md_rel).exists(),
+            "a row-delete failure must leave the files exactly as it found them"
+        );
+    }
+
+    /// `AD-2`'s ordering, proven under a REAL injected failure rather than a mock: the row goes
+    /// first, and when the folder removal that follows fails, the row stays gone and the files stay
+    /// put - never the reverse. Windows refuses to delete a file another handle holds open without
+    /// `FILE_SHARE_DELETE` - the same mechanism `AGENTS.md`'s own "a leftover Snapdown.exe process
+    /// locks its own file" pitfall describes - so holding the Bundle's own Markdown file open with
+    /// an EXPLICIT share mode of zero (no read, no write, no delete for anyone else) is a real,
+    /// deterministic fault injector, not a fake one.
+    ///
+    /// This is `share_mode(0)` via `OpenOptionsExt`, not a plain `File::open`, and that distinction
+    /// is exactly what the first version of this test got wrong: current Rust's `std::fs::File::open`
+    /// on Windows already requests `FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE` by
+    /// default (for POSIX rename/delete-of-open-file parity), so a plain `File::open` held here did
+    /// NOT block `remove_dir_all` at all - the first run of this test failed outright, the folder
+    /// went, and `result.unwrap()` (the orphan flag) came back `false` where the test expected `true`.
+    /// The explicit `share_mode(0)` below is what actually withholds `FILE_SHARE_DELETE`.
+    ///
+    /// **Seen red first, by hand** (not automated - the acceptance criterion asks for the order to
+    /// be swapped and watched fail): with the two calls inside `remove_bundle_row_and_folder`
+    /// swapped so the folder removal runs BEFORE `store.delete_bundle`, this test fails, because the
+    /// same held-open file that blocks the folder removal now runs before the row is ever touched -
+    /// the function returns `Err` without deleting the row at all, so
+    /// `get_bundle("b-lock").unwrap().is_none()` fails: the row is still present. Restoring the
+    /// correct order (row first, as written below) makes it pass again.
+    #[test]
+    fn folder_removal_failing_after_the_row_is_gone_never_leaves_the_row_present_with_the_files_gone(
+    ) {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b-lock", &["f1"]);
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        let md_rel = "bundles/b-lock/bundle.md";
+        vault_store
+            .write_blob(md_rel, b"# Locked Bundle")
+            .expect("writing the fixture Markdown must succeed");
+        vault_store
+            .write_blob("bundles/b-lock/finding_1_burned.png", &png_fixture(4, 4))
+            .expect("writing the fixture image must succeed");
+
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let md_path = vault_dir.path().join(md_rel);
+        // `share_mode(0)`: no `FILE_SHARE_*` flag at all, so no other handle - including the one
+        // `remove_dir_all` needs to delete this file - can even be opened while this one lives.
+        use std::os::windows::fs::OpenOptionsExt;
+        let held_open = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&md_path)
+            .expect("to open the file exclusively, holding it locked");
+
+        let result = remove_bundle_row_and_folder(&ctx, "b-lock");
+
+        assert!(
+            result.is_ok(),
+            "a folder-removal failure after a successful row delete must not bubble up as an \
+             overall Err - the Reviewer asked for the Bundle gone, and it is: {result:?}"
+        );
+        assert!(
+            result.unwrap(),
+            "the folder failed to go, so this must be reported as an orphan"
+        );
+
+        assert!(
+            ctx.bundle_store
+                .as_ref()
+                .unwrap()
+                .get_bundle("b-lock")
+                .unwrap()
+                .is_none(),
+            "the row must be gone even though the folder removal failed"
+        );
+        assert!(
+            md_path.exists(),
+            "the file must still be on disk - AD-2 forbids the reverse state (row gone, files \
+             gone too, or worse, row present with files gone), and a file surviving here is what \
+             proves the row went FIRST"
+        );
+
+        drop(held_open);
+    }
+
+    // ===== ticket 13: Review & Update opens locked, and never reads a Finding =================
+
+    /// A `Bundle` whose stored document differs from what its Findings would produce today, plus a
+    /// real burned image file laid out on a temp Vault the way `write_bundle` lays one out - the
+    /// fixture this ticket's own acceptance criteria name: "verified against a Bundle whose stored
+    /// document was hand-edited to differ from what its Findings would produce today".
+    fn stored_document_edited_after_composing_fixture(
+        vault_dir: &Path,
+        bundle_id: &str,
+        stored_note: &str,
+    ) -> Bundle {
+        let markdown_path = format!("bundles/{bundle_id}/bundle.md");
+        let mut stored_detail = detail("f-1", 20, 14, vec![]);
+        stored_detail.note.body = stored_note.to_string();
+        let item = BundleItem::new(
+            format!("{bundle_id}-item-1"),
+            bundle_id.to_string(),
+            "f-1".to_string(),
+            1,
+            format!("bundles/{bundle_id}/finding_1_burned.png"),
+        )
+        .unwrap();
+        let stored_markdown = MarkdownSerializer::serialize_bundle(
+            "Hand-Edited Review",
+            "",
+            &[(&item, &stored_detail)],
+            &markdown_path,
+        );
+
+        let image_path = vault_dir
+            .join("bundles")
+            .join(bundle_id)
+            .join("finding_1_burned.png");
+        std::fs::create_dir_all(image_path.parent().unwrap()).unwrap();
+        std::fs::write(&image_path, png_fixture(20, 14)).unwrap();
+
+        Bundle::new(
+            bundle_id.to_string(),
+            "Hand-Edited Review".into(),
+            stored_markdown,
+            markdown_path,
+            "2026-08-20T10:00:00Z".into(),
+        )
+        .unwrap()
+    }
+
+    /// The ticket's own fixture: the stored document says one thing, a LIVE Finding with the same id
+    /// says another. `review_update_doc_blocks` must render the stored text - which it does simply
+    /// by never asking the Finding store anything at all.
+    #[test]
+    fn review_update_doc_blocks_render_the_stored_document_even_when_a_live_finding_disagrees() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle = stored_document_edited_after_composing_fixture(
+            vault_dir.path(),
+            "b-hand-edited",
+            "Corrected by hand after composing.",
+        );
+
+        // A live Finding for the same id, carrying text the stored document does NOT have. If this
+        // path read the Finding store even once, this is what it would surface instead.
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        let mut live_detail = detail("f-1", 20, 14, vec![]);
+        live_detail.note.body = "What the Finding says RIGHT NOW - unrelated to the Bundle.".into();
+        finding_store
+            .create_finding(
+                &live_detail.finding,
+                &live_detail.note,
+                &live_detail.markers,
+            )
+            .expect("seed a live Finding");
+
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+
+        let blocks =
+            review_update_doc_blocks(&ctx, &bundle).expect("a well-formed document must parse");
+        let notes: Vec<&str> = blocks
+            .iter()
+            .filter(|b| b.kind == "note")
+            .map(|b| b.text.as_str())
+            .collect();
+        assert_eq!(
+            notes,
+            vec!["Corrected by hand after composing."],
+            "the STORED document's text must render, not a regeneration from the live Finding"
+        );
+        assert!(
+            !blocks.iter().any(|b| b.text.contains("RIGHT NOW")),
+            "the live Finding's text must never appear anywhere: this path reads only the stored \
+             document"
+        );
+    }
+
+    /// A sealed Bundle (`BR-11`: its Findings already deleted) must render IDENTICALLY to how it did
+    /// before sealing. Built the same fixture twice - once against an EMPTY Finding store, once
+    /// against one seeded with a Finding for the same id - and asserts the two renders are the same,
+    /// which is only possible because neither call can see the Finding store at all.
+    #[test]
+    fn review_update_doc_blocks_render_a_sealed_bundle_identically_to_an_unsealed_one() {
+        let sealed_vault = tempfile::tempdir().expect("a temp dir");
+        let sealed_bundle = stored_document_edited_after_composing_fixture(
+            sealed_vault.path(),
+            "b-sealed",
+            "The original note.",
+        );
+        let sealed_ctx = AppContext {
+            vault_store: VaultBlobStore::new(sealed_vault.path()).expect("a vault at a temp path"),
+            vault_path: sealed_vault.path().to_path_buf(),
+            // EMPTY - the sealed case: every Finding this Bundle ever held is gone.
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+        let sealed_blocks = review_update_doc_blocks(&sealed_ctx, &sealed_bundle)
+            .expect("a sealed Bundle's own document must still parse");
+
+        let unsealed_vault = tempfile::tempdir().expect("a temp dir");
+        // Same bundle id and same stored text, laid out on a second Vault, but with a Finding of the
+        // same id still present in the store this time.
+        let unsealed_bundle = stored_document_edited_after_composing_fixture(
+            unsealed_vault.path(),
+            "b-sealed",
+            "The original note.",
+        );
+        let unsealed_finding_store =
+            SqliteFindingStore::open_in_memory().expect("a findings store");
+        let present = detail("f-1", 20, 14, vec![]);
+        unsealed_finding_store
+            .create_finding(&present.finding, &present.note, &present.markers)
+            .expect("seed the still-present Finding");
+        let unsealed_ctx = AppContext {
+            vault_store: VaultBlobStore::new(unsealed_vault.path())
+                .expect("a vault at a temp path"),
+            vault_path: unsealed_vault.path().to_path_buf(),
+            finding_store: Arc::new(unsealed_finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+        let unsealed_blocks = review_update_doc_blocks(&unsealed_ctx, &unsealed_bundle)
+            .expect("an unsealed Bundle's own document must parse the same way");
+
+        assert_eq!(
+            sealed_blocks.len(),
+            unsealed_blocks.len(),
+            "sealing must not change the block count"
+        );
+        for (sealed, unsealed) in sealed_blocks.iter().zip(unsealed_blocks.iter()) {
+            assert_eq!(sealed.kind, unsealed.kind);
+            assert_eq!(sealed.ordinal, unsealed.ordinal);
+            assert_eq!(sealed.text, unsealed.text);
+            assert_eq!(sealed.starts_section, unsealed.starts_section);
+        }
+        // And the image itself DECODED in both cases - the Bundle's own copy, read from disk by the
+        // path the stored document names, present whether or not the Finding is.
+        let sealed_image = sealed_blocks
+            .iter()
+            .find(|b| b.kind == "image")
+            .expect("an image block must exist");
+        let unsealed_image = unsealed_blocks
+            .iter()
+            .find(|b| b.kind == "image")
+            .expect("an image block must exist");
+        assert!(
+            sealed_image.image.size().width > 0,
+            "the sealed image must actually decode"
+        );
+        assert_eq!(sealed_image.image.size(), unsealed_image.image.size());
+    }
+
+    /// A document `parse_bundle_document` refuses (never produced by this composer) must refuse out
+    /// loud, the same shape every other Bundle-library path in this file uses, rather than panicking
+    /// or silently opening an empty window.
+    #[test]
+    fn review_update_doc_blocks_refuses_out_loud_on_a_document_it_cannot_parse() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let bundle = Bundle::new(
+            "b-broken".into(),
+            "Broken".into(),
+            "Not a Bundle document at all".into(),
+            "bundles/b-broken/bundle.md".into(),
+            "2026-08-20T10:00:00Z".into(),
+        )
+        .unwrap();
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+
+        let err = review_update_doc_blocks(&ctx, &bundle)
+            .expect_err("a document this composer never wrote must be refused, not guessed at");
+        assert!(
+            err.contains("could not be read"),
+            "the message must name what refused: {err}"
+        );
+    }
+
+    // ===== ticket 17: discard originals, and the two-step Delete both =========================
+
+    /// `BR-12`/`BR-122`: a second Bundle built from the same captures must be named, not silently
+    /// swept up. Two Bundles share `f1`; discarding `f1`/`f2` (the target Bundle's own Findings)
+    /// must name the OTHER Bundle and exclude the target itself from its own warning.
+    #[test]
+    fn bundles_sharing_findings_names_every_other_bundle_and_excludes_the_target() {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b-target", &["f1", "f2"]);
+        store_bundle_fixture(&bundle_store, "b-other", &["f1", "f3"]);
+        store_bundle_fixture(&bundle_store, "b-unrelated", &["f4"]);
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let others =
+            bundles_sharing_findings(&ctx, "b-target", &["f1".to_string(), "f2".to_string()]);
+        assert_eq!(
+            others,
+            vec!["Fixture Bundle".to_string()],
+            "b-other shares f1 with the target and must be named exactly once; b-unrelated shares \
+             nothing and b-target must never name itself"
+        );
+    }
+
+    /// The ordinary case: no other Bundle shares any of the Findings about to be discarded.
+    #[test]
+    fn bundles_sharing_findings_is_empty_when_nothing_else_shares_a_finding() {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b-target", &["f1"]);
+        store_bundle_fixture(&bundle_store, "b-unrelated", &["f2"]);
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let others = bundles_sharing_findings(&ctx, "b-target", &["f1".to_string()]);
+        assert!(
+            others.is_empty(),
+            "nothing else shares f1, so the warning list must be empty"
+        );
+    }
+
+    /// The confirmation's own wording: singular, plural, and the empty case `library.slint` treats
+    /// as "say nothing extra".
+    #[test]
+    fn discard_warning_text_covers_none_one_and_many() {
+        assert_eq!(discard_warning_text(&[]), "");
+        assert_eq!(
+            discard_warning_text(&["Q3 Report".to_string()]),
+            "\"Q3 Report\" shares one of these Findings and will also become sealed."
+        );
+        assert_eq!(
+            discard_warning_text(&["Q3 Report".to_string(), "Handover Notes".to_string()]),
+            "\"Q3 Report\", \"Handover Notes\" share one of these Findings and will also become \
+             sealed."
+        );
+    }
+
+    /// The clean path: every Finding goes, through the real whole-Finding deletion path, and none
+    /// refuses.
+    #[test]
+    fn discard_originals_deletes_every_finding_when_none_refuses() {
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        finding_fixture(&finding_store, "f1");
+        finding_fixture(&finding_store, "f2");
+        finding_fixture(&finding_store, "f3");
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        for id in ["f1", "f2", "f3"] {
+            vault_store
+                .write_blob(&format!("findings/{id}.png"), &png_fixture(4, 4))
+                .expect("writing the fixture image must succeed");
+        }
+
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+
+        let finding_ids = vec!["f1".to_string(), "f2".to_string(), "f3".to_string()];
+        let (discarded, orphaned, refused) = discard_originals(&ctx, &finding_ids);
+
+        assert_eq!(discarded, 3, "all three Findings must be discarded");
+        assert_eq!(orphaned, 0, "every image file was removed cleanly");
+        assert!(refused.is_none(), "nothing refused on the clean path");
+        for id in ["f1", "f2", "f3"] {
+            assert!(
+                ctx.finding_store.get_finding(id).unwrap().is_none(),
+                "{id} must be gone"
+            );
+        }
+    }
+
+    /// The acceptance criterion built to fail red first, by hand: inject a failure on the SECOND of
+    /// three Findings (`f2` is referenced by the caller but was never created, so
+    /// `delete_finding_everywhere`'s own `get_finding` refuses it for real - not a mock) and prove
+    /// the Findings not yet processed stay intact. `f1` (before the failure) must be gone; `f3`
+    /// (after it) must be untouched - row AND file both - which is only true if `discard_originals`
+    /// stops at the first refusal rather than skipping past it the way the multi-select Delete
+    /// Finding flow does.
+    #[test]
+    fn discard_originals_stops_at_the_first_refusal_and_leaves_the_rest_intact() {
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        finding_fixture(&finding_store, "f1");
+        // f2 is deliberately never created - the injected failure.
+        finding_fixture(&finding_store, "f3");
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        for id in ["f1", "f3"] {
+            vault_store
+                .write_blob(&format!("findings/{id}.png"), &png_fixture(4, 4))
+                .expect("writing the fixture image must succeed");
+        }
+
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+
+        let finding_ids = vec!["f1".to_string(), "f2".to_string(), "f3".to_string()];
+        let (discarded, orphaned, refused) = discard_originals(&ctx, &finding_ids);
+
+        assert_eq!(
+            discarded, 1,
+            "only f1, the one before the failure, must have gone"
+        );
+        assert_eq!(orphaned, 0);
+        let (refused_id, message) = refused.expect("f2 must have refused");
+        assert_eq!(refused_id, "f2");
+        assert!(
+            message.contains("no longer in the Library"),
+            "the message must name what refused: {message}"
+        );
+
+        assert!(
+            ctx.finding_store.get_finding("f1").unwrap().is_none(),
+            "f1 was processed before the failure and must be gone"
+        );
+        assert!(
+            ctx.finding_store.get_finding("f3").unwrap().is_some(),
+            "f3 was never reached - stopping at the first refusal must leave it INTACT, not \
+             deleted by a skip-and-continue strategy"
+        );
+        assert!(
+            vault_dir.path().join("findings/f3.png").exists(),
+            "f3's image file must still be on disk - not merely its row"
+        );
+    }
+
+    /// `FR-41`'s own proof: after Discard originals, the Bundle's row, `BundleItem`s, stored
+    /// document and every image copy are byte-identical to before. `discard_originals` never touches
+    /// `ctx.bundle_store` at all - this test proves that by reading the Bundle back and comparing
+    /// every field and every file's bytes, not merely asserting the row still exists.
+    #[test]
+    fn discard_originals_leaves_the_bundle_byte_identical() {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        finding_fixture(&finding_store, "f1");
+        finding_fixture(&finding_store, "f2");
+        store_bundle_fixture(&bundle_store, "b-kept", &["f1", "f2"]);
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        let md_bytes = b"# Fixture Bundle\n\nUntouched.";
+        vault_store
+            .write_blob("bundles/b-kept/bundle.md", md_bytes)
+            .expect("writing the fixture Markdown must succeed");
+        let image_1 = png_fixture(4, 4);
+        let image_2 = png_fixture(6, 6);
+        vault_store
+            .write_blob("bundles/b-kept/finding_1_burned.png", &image_1)
+            .expect("writing the fixture image must succeed");
+        vault_store
+            .write_blob("bundles/b-kept/finding_2_burned.png", &image_2)
+            .expect("writing the fixture image must succeed");
+        for id in ["f1", "f2"] {
+            vault_store
+                .write_blob(&format!("findings/{id}.png"), &png_fixture(3, 3))
+                .expect("writing the fixture Finding image must succeed");
+        }
+
+        let before = bundle_store.get_bundle("b-kept").unwrap().unwrap();
+
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let (discarded, _orphaned, refused) =
+            discard_originals(&ctx, &["f1".to_string(), "f2".to_string()]);
+        assert_eq!(discarded, 2);
+        assert!(refused.is_none());
+
+        // The Findings and their OWN images are gone.
+        assert!(ctx.finding_store.get_finding("f1").unwrap().is_none());
+        assert!(ctx.finding_store.get_finding("f2").unwrap().is_none());
+        assert!(!vault_dir.path().join("findings/f1.png").exists());
+        assert!(!vault_dir.path().join("findings/f2.png").exists());
+
+        // The Bundle's row, its BundleItems, and its stored document are byte-for-byte the same.
+        let after = ctx
+            .bundle_store
+            .as_ref()
+            .unwrap()
+            .get_bundle("b-kept")
+            .unwrap()
+            .expect("the Bundle itself must still exist - Discard originals never removes it");
+        assert_eq!(after.bundle.id, before.bundle.id);
+        assert_eq!(after.bundle.name, before.bundle.name);
+        assert_eq!(
+            after.bundle.markdown, before.bundle.markdown,
+            "the stored document must be byte-identical"
+        );
+        assert_eq!(after.bundle.markdown_path, before.bundle.markdown_path);
+        assert_eq!(after.bundle.composed_at, before.bundle.composed_at);
+        assert_eq!(
+            after.items.len(),
+            before.items.len(),
+            "every BundleItem must survive"
+        );
+        for (a, b) in after.items.iter().zip(before.items.iter()) {
+            assert_eq!(a.id, b.id);
+            assert_eq!(a.finding_id, b.finding_id);
+            assert_eq!(a.position, b.position);
+            assert_eq!(a.image_path, b.image_path);
+        }
+
+        // The Bundle's own Markdown file and both burned-image copies are byte-identical on disk.
+        assert_eq!(
+            std::fs::read(vault_dir.path().join("bundles/b-kept/bundle.md")).unwrap(),
+            md_bytes,
+            "the Bundle's Markdown file on disk must be untouched"
+        );
+        assert_eq!(
+            std::fs::read(vault_dir.path().join("bundles/b-kept/finding_1_burned.png")).unwrap(),
+            image_1,
+            "the Bundle's first image copy must be untouched"
+        );
+        assert_eq!(
+            std::fs::read(vault_dir.path().join("bundles/b-kept/finding_2_burned.png")).unwrap(),
+            image_2,
+            "the Bundle's second image copy must be untouched"
+        );
+    }
+
+    // ===== ticket 14: edit and save a Bundle ===================================================
+
+    /// Lays out a real Bundle the way the compose path does: the composed document AND its `.md`
+    /// file on disk, plus each Finding's burned image - what ticket 14's Save needs something real
+    /// to read back and write over. One Finding per entry in `finding_notes`, no Markers.
+    fn review_update_save_fixture(
+        vault_dir: &Path,
+        bundle_id: &str,
+        title: &str,
+        bundle_notes: &str,
+        finding_notes: &[&str],
+    ) -> (Bundle, Vec<BundleItem>) {
+        let markdown_path = format!("bundles/{bundle_id}/bundle.md");
+        let mut items = Vec::new();
+        let mut owned_details = Vec::new();
+        for (index, note) in finding_notes.iter().enumerate() {
+            let position = (index + 1) as u32;
+            let fid = format!("f-{bundle_id}-{position}");
+            let mut d = detail(&fid, 20, 14, vec![]);
+            d.note.body = note.to_string();
+            let item = BundleItem::new(
+                format!("{bundle_id}-item-{position}"),
+                bundle_id.to_string(),
+                fid,
+                position,
+                format!("bundles/{bundle_id}/finding_{position}_burned.png"),
+            )
+            .unwrap();
+
+            let image_path = vault_dir
+                .join("bundles")
+                .join(bundle_id)
+                .join(format!("finding_{position}_burned.png"));
+            std::fs::create_dir_all(image_path.parent().unwrap()).unwrap();
+            std::fs::write(&image_path, png_fixture(20, 14)).unwrap();
+
+            items.push(item.clone());
+            owned_details.push((item, d));
+        }
+
+        let refs: Vec<(&BundleItem, &FindingDetail)> =
+            owned_details.iter().map(|(item, d)| (item, d)).collect();
+        let markdown =
+            MarkdownSerializer::serialize_bundle(title, bundle_notes, &refs, &markdown_path);
+
+        let md_file = vault_dir.join(&markdown_path);
+        std::fs::create_dir_all(md_file.parent().unwrap()).unwrap();
+        std::fs::write(&md_file, &markdown).unwrap();
+
+        let bundle = Bundle::new(
+            bundle_id.to_string(),
+            title.to_string(),
+            markdown,
+            markdown_path,
+            "2026-08-20T10:00:00Z".to_string(),
+        )
+        .unwrap();
+        (bundle, items)
+    }
+
+    /// A `BundleStore` that forwards everything to a real store except
+    /// `update_bundle_name_and_markdown`, which always refuses - the fixture the write-ordering
+    /// guard needs: a failure that lands strictly AFTER the file has already been renamed into place
+    /// and strictly BEFORE the row would have changed. `inner` shares the real store's own
+    /// `Arc<Mutex<Connection>>` (`SqliteBundleStore: Clone`), so a query made through the ORIGINAL
+    /// handle after a call through this wrapper sees the same database.
+    struct FailingRowUpdateStore {
+        inner: SqliteBundleStore,
+    }
+
+    impl BundleStore for FailingRowUpdateStore {
+        fn create_bundle(&self, bundle: &Bundle, items: &[BundleItem]) -> Result<(), CoreError> {
+            self.inner.create_bundle(bundle, items)
+        }
+        fn get_bundle(&self, id: &str) -> Result<Option<BundleDetail>, CoreError> {
+            self.inner.get_bundle(id)
+        }
+        fn list_bundles(&self) -> Result<Vec<BundleDetail>, CoreError> {
+            self.inner.list_bundles()
+        }
+        fn update_bundle_name_and_markdown(
+            &self,
+            _id: &str,
+            _name: &str,
+            _markdown: &str,
+            _updated_at: &str,
+        ) -> Result<(), CoreError> {
+            Err(CoreError::Validation("simulated row-write failure".into()))
+        }
+        fn delete_bundle(&self, id: &str) -> Result<(), CoreError> {
+            self.inner.delete_bundle(id)
+        }
+    }
+
+    /// `FR-40`'s own proof: a changed title and a changed Finding note produce a stored document
+    /// whose heading and that note read the new text, with every other line - the second Finding's
+    /// note, both image references - untouched. The file on disk and the row end up holding the
+    /// exact same document.
+    #[test]
+    fn save_with_a_changed_title_and_note_updates_only_what_changed() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (mut bundle, items) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-save",
+            "Original Title",
+            "",
+            &["First finding note.", "Second finding note."],
+        );
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("seed the row");
+
+        let mut parsed = MarkdownSerializer::parse_bundle_document(&bundle.markdown)
+            .expect("the fixture's own document must parse");
+        apply_review_update_field_edit(&mut parsed, "title", 0, 0, "New Title");
+        apply_review_update_field_edit(&mut parsed, "note", 1, 0, "Corrected first note.");
+
+        let outcome =
+            save_review_update_edit(vault_dir.path(), &bundle_store, &mut bundle, &parsed)
+                .expect("a real change must save");
+        assert!(matches!(outcome, ReviewUpdateSaveOutcome::Saved));
+
+        assert!(
+            bundle.markdown.starts_with("# New Title\n\n"),
+            "the heading must read the new title: {}",
+            bundle.markdown
+        );
+        assert!(
+            bundle.markdown.contains("Corrected first note."),
+            "the edited Finding's note must read the new text"
+        );
+        assert!(
+            !bundle.markdown.contains("First finding note."),
+            "the old note text must be gone"
+        );
+        assert!(
+            bundle.markdown.contains("Second finding note."),
+            "the OTHER Finding's note must be untouched"
+        );
+        assert!(
+            bundle
+                .markdown
+                .contains("![Finding 1](./finding_1_burned.png)")
+                && bundle
+                    .markdown
+                    .contains("![Finding 2](./finding_2_burned.png)"),
+            "both image references must be untouched: {}",
+            bundle.markdown
+        );
+        assert_eq!(bundle.name, "New Title");
+
+        let on_disk = std::fs::read_to_string(vault_dir.path().join(&bundle.markdown_path))
+            .expect("the file must exist");
+        assert_eq!(
+            on_disk, bundle.markdown,
+            "the file must hold what was saved"
+        );
+
+        let row = bundle_store
+            .get_bundle("b-save")
+            .unwrap()
+            .expect("the row must still exist");
+        assert_eq!(
+            row.bundle.markdown, bundle.markdown,
+            "the row must match the file"
+        );
+        assert_eq!(row.bundle.name, "New Title");
+    }
+
+    /// A Save whose edited blocks serialise to the stored document with the title unchanged writes
+    /// NEITHER the file nor the row - proven by modification time AND a byte comparison, the
+    /// stronger of the two the ticket asks for. The no-op guard this proves is
+    /// `save_review_update_edit`'s `document_same && name_same` check: hard-coding `document_same` to
+    /// `false` and re-running this test is how it was seen red before being restored (see this
+    /// ticket's final report for the exact steps taken).
+    #[test]
+    fn save_with_nothing_changed_writes_neither_file_nor_row() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (mut bundle, items) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-noop",
+            "Untouched Title",
+            "Untouched notes.",
+            &["Untouched note."],
+        );
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("seed the row");
+
+        let parsed = MarkdownSerializer::parse_bundle_document(&bundle.markdown)
+            .expect("the fixture's own document must parse");
+
+        let md_path = vault_dir.path().join(&bundle.markdown_path);
+        let before_bytes = std::fs::read(&md_path).unwrap();
+        let before_modified = std::fs::metadata(&md_path).unwrap().modified().unwrap();
+        // Windows' filesystem timestamp resolution is coarse enough that two writes a few
+        // milliseconds apart can share one mtime - which would make a mtime assertion pass even for
+        // a bug that DID rewrite the file. Sleeping past that resolution first is what makes an
+        // unchanged mtime actually mean something.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        let outcome =
+            save_review_update_edit(vault_dir.path(), &bundle_store, &mut bundle, &parsed)
+                .expect("a no-op Save must not error");
+        assert!(matches!(outcome, ReviewUpdateSaveOutcome::NoChange));
+
+        let after_bytes = std::fs::read(&md_path).unwrap();
+        let after_modified = std::fs::metadata(&md_path).unwrap().modified().unwrap();
+        assert_eq!(
+            before_bytes, after_bytes,
+            "the file's bytes must be untouched"
+        );
+        assert_eq!(
+            before_modified, after_modified,
+            "the file must not have been written at all"
+        );
+
+        let row = bundle_store.get_bundle("b-noop").unwrap().unwrap();
+        assert_eq!(row.bundle.markdown, bundle.markdown);
+        assert_eq!(row.bundle.name, "Untouched Title");
+    }
+
+    /// Write ordering (`BR-5`): a failure injected strictly after the file has been renamed into
+    /// place and strictly before the row would change leaves the file restored to its previous
+    /// content, the row untouched, and the error naming the row as what refused. `bundle` and
+    /// `parsed` are both left exactly as the caller passed them, which is the data half of "the
+    /// edited text is still in the fields" - the window keeps `editing` true and the buffer alive on
+    /// this same `Err`, proven at the wiring level in `test_review_update_wiring.rs`.
+    ///
+    /// The restore step this proves was seen red first: with `write_file_atomically` for the restore
+    /// commented out, this test failed with the file still holding the NEW text after the forced row
+    /// failure. See this ticket's final report for the exact steps taken.
+    #[test]
+    fn save_write_ordering_restores_the_file_when_the_row_refuses() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (mut bundle, items) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-fail",
+            "Original Title",
+            "",
+            &["Original note."],
+        );
+        let real_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        real_store
+            .create_bundle(&bundle, &items)
+            .expect("seed the row");
+        let failing_store = FailingRowUpdateStore {
+            inner: real_store.clone(),
+        };
+
+        let original_document = bundle.markdown.clone();
+        let mut parsed = MarkdownSerializer::parse_bundle_document(&bundle.markdown)
+            .expect("the fixture's own document must parse");
+        apply_review_update_field_edit(&mut parsed, "title", 0, 0, "New Title");
+        apply_review_update_field_edit(&mut parsed, "note", 1, 0, "New note.");
+
+        let err = save_review_update_edit(vault_dir.path(), &failing_store, &mut bundle, &parsed)
+            .expect_err("the row was made to refuse");
+        assert!(
+            err.contains("row") && err.contains("could not be updated"),
+            "the toast must name the part that refused: {err}"
+        );
+
+        let md_path = vault_dir.path().join(&bundle.markdown_path);
+        let on_disk = std::fs::read_to_string(&md_path).unwrap();
+        assert_eq!(
+            on_disk, original_document,
+            "the file must be put back exactly as it was"
+        );
+
+        let row = real_store.get_bundle("b-fail").unwrap().unwrap();
+        assert_eq!(
+            row.bundle.markdown, original_document,
+            "the row must be untouched - the failing store never actually wrote to it"
+        );
+        assert_eq!(row.bundle.name, "Original Title");
+
+        // `bundle` (the caller's own buffer) is left exactly as it was passed - it is only mutated
+        // on success.
+        assert_eq!(bundle.markdown, original_document);
+        assert_eq!(bundle.name, "Original Title");
+        // `parsed` (the edit buffer) is untouched by the failure - it still holds the edit, so a
+        // retried Save has something to retry with.
+        assert_eq!(parsed.title, "New Title");
+    }
+
+    /// Editing a Finding's note IN THE BUNDLE leaves that Finding's own note - and every OTHER Bundle
+    /// holding it - byte-identical. Asserted at the store seam: a real `FindingStore` for the
+    /// Finding, and a second real Bundle (`b-other`) that embeds the same Finding's note at its OWN
+    /// compose time. `save_review_update_edit` never takes a `FindingStore` at all, so this also
+    /// stands as the strongest form of `BR-10`/`BR-11`'s "never reads or writes a Finding": the type
+    /// signature makes it impossible, not merely unexercised.
+    #[test]
+    fn editing_a_findings_note_in_one_bundle_leaves_the_finding_and_every_other_bundle_untouched() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+
+        // The live Finding, independent of either Bundle's own snapshot of it (`BR-10`: a Bundle is
+        // a snapshot).
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        let mut shared = detail("f-shared", 20, 14, vec![]);
+        shared.note.body = "The Finding's own live note.".to_string();
+        finding_store
+            .create_finding(&shared.finding, &shared.note, &shared.markers)
+            .expect("seed the shared Finding");
+
+        // Bundle A: the one that gets edited.
+        let (mut bundle_a, items_a) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-a",
+            "Bundle A",
+            "",
+            &["Snapshot note for A."],
+        );
+        // Bundle B: shares the SAME Finding id, with its OWN snapshot text, and is never touched.
+        let (bundle_b, items_b) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-b",
+            "Bundle B",
+            "",
+            &["Snapshot note for B."],
+        );
+
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        bundle_store.create_bundle(&bundle_a, &items_a).unwrap();
+        bundle_store.create_bundle(&bundle_b, &items_b).unwrap();
+
+        let mut parsed = MarkdownSerializer::parse_bundle_document(&bundle_a.markdown)
+            .expect("Bundle A's own document must parse");
+        apply_review_update_field_edit(&mut parsed, "note", 1, 0, "Corrected in Bundle A only.");
+
+        let outcome =
+            save_review_update_edit(vault_dir.path(), &bundle_store, &mut bundle_a, &parsed)
+                .expect("editing a Bundle's own snapshot must save");
+        assert!(matches!(outcome, ReviewUpdateSaveOutcome::Saved));
+
+        // Bundle A now reads the correction.
+        assert!(bundle_a.markdown.contains("Corrected in Bundle A only."));
+
+        // The Finding's own row: byte-identical to what it was seeded with.
+        let live = finding_store
+            .get_finding("f-shared")
+            .unwrap()
+            .expect("the Finding must still exist");
+        assert_eq!(
+            live.note.body, "The Finding's own live note.",
+            "the Finding's own note must be byte-identical - nothing in the save path may write it"
+        );
+
+        // Bundle B's row: byte-identical to what it was composed with, and unaware Bundle A changed.
+        let other = bundle_store.get_bundle("b-b").unwrap().unwrap();
+        assert_eq!(
+            other.bundle.markdown, bundle_b.markdown,
+            "Bundle B's stored document must be untouched by editing Bundle A"
+        );
+        assert!(other.bundle.markdown.contains("Snapshot note for B."));
+        assert!(!other
+            .bundle
+            .markdown
+            .contains("Corrected in Bundle A only."));
+    }
+
+    /// Editing and saving a SEALED Bundle (its Findings already deleted) works identically to an
+    /// unsealed one. `save_review_update_edit`'s signature has no `FindingStore` parameter at all -
+    /// there is no `finding_store` in scope for this test to even seed - so "identically" holds by
+    /// construction rather than by a comparison against a second run.
+    #[test]
+    fn editing_and_saving_a_sealed_bundle_works_the_same_as_an_unsealed_one() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (mut bundle, items) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-sealed-save",
+            "Sealed Bundle",
+            "",
+            &["A note from before the Finding was discarded."],
+        );
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        bundle_store.create_bundle(&bundle, &items).unwrap();
+
+        let mut parsed = MarkdownSerializer::parse_bundle_document(&bundle.markdown)
+            .expect("a sealed Bundle's own document must still parse");
+        apply_review_update_field_edit(&mut parsed, "note", 1, 0, "Corrected after sealing.");
+
+        let outcome =
+            save_review_update_edit(vault_dir.path(), &bundle_store, &mut bundle, &parsed)
+                .expect("a sealed Bundle must save exactly like an unsealed one");
+        assert!(matches!(outcome, ReviewUpdateSaveOutcome::Saved));
+        assert!(bundle.markdown.contains("Corrected after sealing."));
+
+        let row = bundle_store.get_bundle("b-sealed-save").unwrap().unwrap();
+        assert_eq!(row.bundle.markdown, bundle.markdown);
+    }
+
+    /// Cancel's own predicate: dirty only once something was actually typed, clean for an untouched
+    /// buffer - the same `document_unchanged` + title comparison Save's no-op check uses.
+    #[test]
+    fn review_update_edit_is_dirty_only_after_a_real_edit() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (bundle, _items) =
+            review_update_save_fixture(vault_dir.path(), "b-dirty", "A Title", "", &["A note."]);
+        let mut parsed = MarkdownSerializer::parse_bundle_document(&bundle.markdown).unwrap();
+        assert!(
+            !review_update_edit_is_dirty(&bundle, &parsed),
+            "an untouched buffer must not be dirty"
+        );
+
+        apply_review_update_field_edit(&mut parsed, "title", 0, 0, "A Different Title");
+        assert!(
+            review_update_edit_is_dirty(&bundle, &parsed),
+            "a typed change must be dirty"
+        );
+    }
+
+    /// `review_update_doc_blocks`' own wiring key for ticket 14: a "note" block's `ordinal` names its
+    /// owning Finding's position, and a "marker" block's `finding-ordinal` does too - separate from
+    /// the marker's own `ordinal`, which is scoped to its Finding (`AD-1`) and repeats across them.
+    #[test]
+    fn review_update_doc_blocks_give_note_and_marker_blocks_their_owning_findings_position() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let m1 = marker("m-2-1", "f-b-ordinals-2", 1, "Marker on Finding 2");
+        let bundle_id = "b-ordinals";
+        let markdown_path = format!("bundles/{bundle_id}/bundle.md");
+        let mut d1 = detail("f-b-ordinals-1", 20, 14, vec![]);
+        d1.note.body = "Finding 1 note".into();
+        let mut d2 = detail("f-b-ordinals-2", 20, 14, vec![m1]);
+        d2.note.body = "Finding 2 note".into();
+        let item1 = BundleItem::new(
+            format!("{bundle_id}-item-1"),
+            bundle_id.to_string(),
+            "f-b-ordinals-1".to_string(),
+            1,
+            format!("bundles/{bundle_id}/finding_1_burned.png"),
+        )
+        .unwrap();
+        let item2 = BundleItem::new(
+            format!("{bundle_id}-item-2"),
+            bundle_id.to_string(),
+            "f-b-ordinals-2".to_string(),
+            2,
+            format!("bundles/{bundle_id}/finding_2_burned.png"),
+        )
+        .unwrap();
+        for position in [1u32, 2] {
+            let image_path = vault_dir
+                .path()
+                .join("bundles")
+                .join(bundle_id)
+                .join(format!("finding_{position}_burned.png"));
+            std::fs::create_dir_all(image_path.parent().unwrap()).unwrap();
+            std::fs::write(&image_path, png_fixture(20, 14)).unwrap();
+        }
+        let markdown = MarkdownSerializer::serialize_bundle(
+            "Ordinals",
+            "",
+            &[(&item1, &d1), (&item2, &d2)],
+            &markdown_path,
+        );
+        let bundle = Bundle::new(
+            bundle_id.to_string(),
+            "Ordinals".into(),
+            markdown,
+            markdown_path,
+            "2026-08-20T10:00:00Z".into(),
+        )
+        .unwrap();
+
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+        let blocks = review_update_doc_blocks(&ctx, &bundle).expect("must parse");
+
+        let note1 = blocks
+            .iter()
+            .find(|b| b.kind == "note" && b.text == "Finding 1 note")
+            .expect("Finding 1's note block must exist");
+        assert_eq!(
+            note1.ordinal, 1,
+            "a note block's ordinal names its owning Finding's position"
+        );
+
+        let note2 = blocks
+            .iter()
+            .find(|b| b.kind == "note" && b.text == "Finding 2 note")
+            .expect("Finding 2's note block must exist");
+        assert_eq!(note2.ordinal, 2);
+
+        let marker_block = blocks
+            .iter()
+            .find(|b| b.kind == "marker")
+            .expect("the Marker block must exist");
+        assert_eq!(marker_block.ordinal, 1, "the marker's OWN ordinal");
+        assert_eq!(
+            marker_block.finding_ordinal, 2,
+            "the OWNING Finding's position, separate from the marker's own ordinal"
+        );
+    }
+
+    // ===== ticket 18: Reclaim space =============================================================
+
+    /// "One decimal place, except an exact zero" - the exact wording `spec.md`'s own artboard uses
+    /// (`ReclaimSpace.dc.html`'s "373.1 MB reclaimable", `ReclaimEmpty.dc.html`'s "0 MB reclaimable").
+    #[test]
+    fn format_mb_formats_with_one_decimal_and_zero_bare() {
+        assert_eq!(format_mb(0), "0 MB");
+        // Exactly 1.5 MiB and exactly 2 MiB - chosen so the expected string has no floating-point
+        // rounding ambiguity of its own.
+        assert_eq!(format_mb(1_048_576 + 524_288), "1.5 MB");
+        assert_eq!(format_mb(1_048_576 * 2), "2.0 MB");
+    }
+
+    /// `spec.md`'s "Reclaim space": *"Sizes are measured from the files on disk, not estimated."*
+    /// Proven against a fixture with KNOWN file sizes that bear no relation to the images' own
+    /// dimensions - `bundle_original_bytes` must report exactly what `fs::metadata` says, not a
+    /// number derived from width/height/format.
+    #[test]
+    fn bundle_original_bytes_sums_every_original_findings_image_file_size_on_disk() {
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        finding_fixture(&finding_store, "f1");
+        finding_fixture(&finding_store, "f2");
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        // Deliberately not valid PNGs and deliberately different sizes from each other - this
+        // function must never decode an image or assume a dimension, only measure the file.
+        vault_store
+            .write_blob("findings/f1.png", &vec![7u8; 1_234])
+            .expect("writing the fixture image must succeed");
+        vault_store
+            .write_blob("findings/f2.png", &vec![9u8; 4_321])
+            .expect("writing the fixture image must succeed");
+
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b1", &["f1", "f2"]);
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let detail = ctx
+            .bundle_store
+            .as_ref()
+            .unwrap()
+            .get_bundle("b1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            bundle_original_bytes(&ctx, &detail),
+            1_234 + 4_321,
+            "the sum must equal exactly what the two files occupy on disk"
+        );
+    }
+
+    /// A Finding that no longer resolves - already gone, or its file missing - must contribute
+    /// nothing rather than aborting the whole sum. `bundle_is_sealed`'s own live read is what keeps
+    /// a fully-sealed Bundle off the Reclaim space list at all; this is the partial case, one Finding
+    /// short of that, which must still produce a number rather than a panic.
+    #[test]
+    fn bundle_original_bytes_skips_a_finding_that_does_not_resolve_rather_than_aborting() {
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        finding_fixture(&finding_store, "f1");
+        // f2's Finding row is never created - `get_finding` refuses it for real.
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        vault_store
+            .write_blob("findings/f1.png", &vec![1u8; 2_000])
+            .expect("writing the fixture image must succeed");
+
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b1", &["f1", "f2"]);
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let detail = ctx
+            .bundle_store
+            .as_ref()
+            .unwrap()
+            .get_bundle("b1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            bundle_original_bytes(&ctx, &detail),
+            2_000,
+            "only f1's own file counts - f2 contributes nothing rather than the sum refusing"
+        );
+    }
+
+    /// The acceptance criterion, straight off the store: Reclaim space lists exactly the UNSEALED
+    /// Bundles, each row's size is the sum of its own Findings' files on disk, and the header total
+    /// is their sum. `b-sealed` has both its Findings already deleted (`bundle_is_sealed` reads that
+    /// live) and must not appear at all.
+    #[test]
+    fn build_reclaim_rows_lists_only_unsealed_bundles_with_sizes_measured_from_disk() {
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        finding_fixture(&finding_store, "f1");
+        finding_fixture(&finding_store, "f2");
+        // f3/f4 back "b-sealed" below and are never created - that Bundle is sealed from the moment
+        // it exists, `BR-122`'s "computed live, no stored flag" rule.
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        vault_store
+            .write_blob("findings/f1.png", &vec![1u8; 10_000])
+            .expect("writing the fixture image must succeed");
+        vault_store
+            .write_blob("findings/f2.png", &vec![2u8; 20_000])
+            .expect("writing the fixture image must succeed");
+
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b-unsealed", &["f1", "f2"]);
+        store_bundle_fixture(&bundle_store, "b-sealed", &["f3", "f4"]);
+
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let (rows, total_bytes) =
+            build_reclaim_rows(&ctx, chrono::Utc::now()).expect("the store must be readable");
+
+        assert_eq!(rows.len(), 1, "only the unsealed Bundle may appear");
+        assert_eq!(rows[0].id, "b-unsealed");
+        assert_eq!(
+            rows[0].size_bytes as u64, 30_000,
+            "the row's size must equal the exact sum of its own Findings' files on disk"
+        );
+        assert_eq!(rows[0].size_label, "0.0 MB");
+        assert_eq!(
+            total_bytes, 30_000,
+            "the header total must equal the sum of the rows it lists - there is only one row here"
+        );
+    }
+
+    /// `FR-42`'s own proof: the total after discarding equals the previous total minus the sum of
+    /// what was discarded. Two unsealed Bundles with distinct, known sizes; discard one; rebuild;
+    /// the new total must be the exact difference, and the discarded Bundle (now sealed) must be
+    /// gone from the list.
+    #[test]
+    fn discarding_originals_reduces_the_reclaim_total_by_exactly_what_was_discarded() {
+        let finding_store = SqliteFindingStore::open_in_memory().expect("a findings store");
+        finding_fixture(&finding_store, "f1");
+        finding_fixture(&finding_store, "f2");
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let vault_store = VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path");
+        vault_store
+            .write_blob("findings/f1.png", &vec![1u8; 50_000])
+            .expect("writing the fixture image must succeed");
+        vault_store
+            .write_blob("findings/f2.png", &vec![2u8; 70_000])
+            .expect("writing the fixture image must succeed");
+
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b-keep", &["f1"]);
+        store_bundle_fixture(&bundle_store, "b-discard", &["f2"]);
+
+        let ctx = AppContext {
+            vault_store,
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let (rows_before, total_before) =
+            build_reclaim_rows(&ctx, chrono::Utc::now()).expect("the store must be readable");
+        assert_eq!(rows_before.len(), 2);
+        assert_eq!(total_before, 50_000 + 70_000);
+        let discarded_row_bytes = rows_before
+            .iter()
+            .find(|r| r.id == "b-discard")
+            .expect("b-discard must be listed before it is discarded")
+            .size_bytes as u64;
+        assert_eq!(discarded_row_bytes, 70_000);
+
+        let (discarded_count, _orphaned, refused) = discard_originals(&ctx, &["f2".to_string()]);
+        assert_eq!(discarded_count, 1);
+        assert!(refused.is_none());
+
+        let (rows_after, total_after) =
+            build_reclaim_rows(&ctx, chrono::Utc::now()).expect("the store must be readable");
+        assert_eq!(
+            rows_after.len(),
+            1,
+            "the discarded Bundle is sealed now and must disappear from the list"
+        );
+        assert_eq!(rows_after[0].id, "b-keep");
+        assert_eq!(
+            total_after,
+            total_before - discarded_row_bytes,
+            "the total after discarding must equal the previous total minus exactly what was \
+             discarded - FR-42's own proof"
+        );
+    }
+
+    /// The bulk form of `BR-12`/`BR-122`: a Bundle NOT in the ticked set that shares a Finding with
+    /// any of them must be named, and a bundle that IS in the ticked set must never be reported
+    /// against another one also being discarded in the same batch - both are simply going, not one
+    /// "sealing" the other.
+    #[test]
+    fn bundles_sealed_by_bulk_discard_excludes_the_whole_ticked_set_and_includes_others() {
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        store_bundle_fixture(&bundle_store, "b-ticked-1", &["f1"]);
+        store_bundle_fixture(&bundle_store, "b-ticked-2", &["f2"]);
+        // Shares f1 with b-ticked-1 - must be named, since it is NOT being discarded itself.
+        store_bundle_fixture(&bundle_store, "b-other", &["f1", "f3"]);
+        // Shares nothing with the ticked set.
+        store_bundle_fixture(&bundle_store, "b-unrelated", &["f4"]);
+
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: Some(Arc::new(bundle_store)),
+        };
+
+        let ticked = vec!["b-ticked-1".to_string(), "b-ticked-2".to_string()];
+        let finding_ids = vec!["f1".to_string(), "f2".to_string()];
+        let sealed = bundles_sealed_by_bulk_discard(&ctx, &ticked, &finding_ids);
+
+        assert_eq!(
+            sealed,
+            vec!["Fixture Bundle".to_string()],
+            "only b-other qualifies: b-ticked-1/2 are excluded because they are IN the ticked set, \
+             and b-unrelated shares nothing"
+        );
+    }
+
+    /// The bulk confirmation's own wording: it counts Bundles and captures, and appends the
+    /// shared-Finding warning only when one was actually found - reusing ticket 17's own
+    /// `discard_warning_text` rather than composing a second sentence for the same fact.
+    #[test]
+    fn reclaim_confirm_body_counts_bundles_and_captures_and_includes_the_warning_when_present() {
+        let plain = reclaim_confirm_body(3, 22, "");
+        assert!(plain.contains("22 original captures across 3 Bundles"));
+        assert!(plain.contains("This cannot be undone."));
+        assert!(
+            !plain.contains("shares one of these Findings"),
+            "no warning was passed - none must appear"
+        );
+
+        let warned = reclaim_confirm_body(
+            1,
+            1,
+            "\"Q3 Report\" shares one of these Findings and will also become sealed.",
+        );
+        assert!(warned.contains("1 original capture across 1 Bundle,"));
+        assert!(warned
+            .contains("\"Q3 Report\" shares one of these Findings and will also become sealed."));
+    }
+
+    #[test]
+    fn reclaim_confirm_heading_pluralizes_bundle_count() {
+        assert_eq!(
+            reclaim_confirm_heading(1),
+            "DISCARD ORIGINALS FROM 1 BUNDLE?"
+        );
+        assert_eq!(
+            reclaim_confirm_heading(3),
+            "DISCARD ORIGINALS FROM 3 BUNDLES?"
+        );
+    }
+
+    // ===== ticket 15: an edited Bundle says so =================================================
+
+    /// `edited_suffix`'s own two branches: nothing appended while `updated_at` still equals
+    /// `composed_at` (a Bundle that has never been saved through, or one migration v9 just
+    /// backfilled), and the exact " · edited <relative time>" text ticket 09's option B settles once
+    /// it differs.
+    #[test]
+    fn edited_suffix_is_empty_when_the_times_match_and_names_the_edit_when_they_differ() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-09-02T10:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        let never_edited = Bundle::new(
+            "b-never-edited".into(),
+            "Untouched".into(),
+            "# Untouched".into(),
+            "bundles/b-never-edited/bundle.md".into(),
+            "2026-08-28T10:00:00Z".into(),
+        )
+        .unwrap();
+        assert_eq!(
+            edited_suffix(&never_edited, now),
+            "",
+            "a Bundle whose last-edited time still equals its composed time must show no suffix"
+        );
+
+        let mut edited = never_edited.clone();
+        edited.updated_at = "2026-09-01T10:00:00Z".into();
+        assert_eq!(
+            edited_suffix(&edited, now),
+            " · edited yesterday",
+            "a Bundle whose last-edited time differs must name it, exactly as spec.md's wording gives"
+        );
+    }
+
+    /// Review & Update's own provenance line follows the identical rule the Library row's meta line
+    /// does - both built over the shared `edited_suffix`, so the two surfaces cannot say different
+    /// things about the same Bundle.
+    #[test]
+    fn review_update_provenance_line_matches_the_librarys_own_wording_rule() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-09-02T10:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        let mut bundle = Bundle::new(
+            "b-prov".into(),
+            "A Review".into(),
+            "# A Review".into(),
+            "bundles/b-prov/bundle.md".into(),
+            "2026-08-28T10:00:00Z".into(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            review_update_provenance_line(&bundle, 2, now),
+            "2 Findings · composed 5 days ago",
+            "an unedited Bundle's provenance line must carry no edited suffix"
+        );
+
+        bundle.updated_at = "2026-09-01T10:00:00Z".into();
+        assert_eq!(
+            review_update_provenance_line(&bundle, 1, now),
+            "1 Finding · composed 5 days ago · edited yesterday",
+            "an edited Bundle's provenance line must append the same suffix the Library row does"
+        );
+    }
+
+    /// The Library row itself, end to end: a never-edited Bundle's meta line carries no "edited"
+    /// text at all, and one whose `updated_at` differs from `composed_at` carries exactly one. Built
+    /// with a bare struct literal (not `Bundle::new`, which always sets `updated_at` from
+    /// `composed_at` at construction) because this is standing in for a Bundle a real Save already
+    /// touched.
+    #[test]
+    fn library_row_appends_the_edited_suffix_only_when_updated_at_differs_from_composed_at() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = AppContext {
+            vault_store: VaultBlobStore::new(vault_dir.path()).expect("a vault at a temp path"),
+            vault_path: vault_dir.path().to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        };
+        let now = chrono::DateTime::parse_from_rfc3339("2026-09-02T10:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        let untouched = BundleDetail {
+            bundle: Bundle::new(
+                "b-untouched".into(),
+                "Untouched Review".into(),
+                "# Untouched Review".into(),
+                "bundles/b-untouched/bundle.md".into(),
+                "2026-08-28T10:00:00Z".into(),
+            )
+            .unwrap(),
+            items: vec![],
+        };
+        let untouched_row = library_row_from_detail(&ctx, &untouched, now);
+        assert_eq!(untouched_row.meta_line, "0 Findings · composed 5 days ago");
+
+        let edited = BundleDetail {
+            bundle: Bundle {
+                id: "b-edited".into(),
+                name: "Edited Review".into(),
+                markdown: "# Edited Review".into(),
+                markdown_path: "bundles/b-edited/bundle.md".into(),
+                composed_at: "2026-08-28T10:00:00Z".into(),
+                updated_at: "2026-09-01T10:00:00Z".into(),
+            },
+            items: vec![],
+        };
+        let edited_row = library_row_from_detail(&ctx, &edited, now);
+        assert_eq!(
+            edited_row.meta_line,
+            "0 Findings · composed 5 days ago · edited yesterday"
+        );
+    }
+
+    /// A Save that actually changes the document or the title moves `updated_at` to a fresh instant,
+    /// distinct from the fixed `composed_at` the fixture gives every Bundle - asserted both on the
+    /// caller's own in-memory `bundle` and on the row read back from the store, which must agree.
+    /// `composed_at` itself must never move.
+    #[test]
+    fn save_with_a_real_change_moves_updated_at() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (mut bundle, items) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-touch",
+            "Original Title",
+            "",
+            &["Original note."],
+        );
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("seed the row");
+
+        let original_updated_at = bundle.updated_at.clone();
+        assert_eq!(
+            original_updated_at, bundle.composed_at,
+            "a freshly composed Bundle must read as never edited before any Save"
+        );
+
+        let mut parsed = MarkdownSerializer::parse_bundle_document(&bundle.markdown)
+            .expect("the fixture's own document must parse");
+        apply_review_update_field_edit(&mut parsed, "note", 1, 0, "Corrected note.");
+
+        let outcome =
+            save_review_update_edit(vault_dir.path(), &bundle_store, &mut bundle, &parsed)
+                .expect("a real change must save");
+        assert!(matches!(outcome, ReviewUpdateSaveOutcome::Saved));
+
+        assert_ne!(
+            bundle.updated_at, original_updated_at,
+            "a Save that actually changed the document must move the last-edited time"
+        );
+        assert_ne!(
+            bundle.updated_at, bundle.composed_at,
+            "the moved last-edited time must differ from composed_at"
+        );
+        assert_eq!(
+            bundle.composed_at, "2026-08-20T10:00:00Z",
+            "composed_at itself must never move"
+        );
+
+        let row = bundle_store.get_bundle("b-touch").unwrap().unwrap();
+        assert_eq!(
+            row.bundle.updated_at, bundle.updated_at,
+            "the row's own last-edited time must match exactly what the caller now holds"
+        );
+        assert_eq!(row.bundle.composed_at, bundle.composed_at);
+    }
+
+    /// A no-op Save - the same guard `save_with_nothing_changed_writes_neither_file_nor_row` proves
+    /// for the file and the row - must leave `updated_at` exactly as it was too: ticket 09's option B
+    /// is what keeps ticket 05's always-clickable Save free of a visible side effect, and a moved
+    /// last-edited time on a "nothing had changed" Save would BE that side effect.
+    #[test]
+    fn save_with_nothing_changed_leaves_updated_at_untouched() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (mut bundle, items) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-noop-touch",
+            "Untouched Title",
+            "Untouched notes.",
+            &["Untouched note."],
+        );
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        bundle_store
+            .create_bundle(&bundle, &items)
+            .expect("seed the row");
+
+        let original_updated_at = bundle.updated_at.clone();
+
+        let parsed = MarkdownSerializer::parse_bundle_document(&bundle.markdown)
+            .expect("the fixture's own document must parse");
+
+        let outcome =
+            save_review_update_edit(vault_dir.path(), &bundle_store, &mut bundle, &parsed)
+                .expect("a no-op Save must not error");
+        assert!(matches!(outcome, ReviewUpdateSaveOutcome::NoChange));
+
+        assert_eq!(
+            bundle.updated_at, original_updated_at,
+            "a no-op Save must leave the last-edited time exactly as it was"
+        );
+        let row = bundle_store.get_bundle("b-noop-touch").unwrap().unwrap();
+        assert_eq!(
+            row.bundle.updated_at, original_updated_at,
+            "the row itself must not have moved either"
+        );
+    }
+
+    /// Ticket 15's own "the sort does not change": editing the OLDER of two Bundles through a real
+    /// `save_review_update_edit` must not move it in `list_bundles`' own order - newest-composed
+    /// first, `bundle_store.rs`'s `ORDER BY composed_at DESC`, never re-sorted by the last-edited
+    /// time this ticket adds. `composed_at`/`updated_at` are overridden after the fixture builds each
+    /// Bundle (the fixture itself always uses one fixed composed time), which is safe here because
+    /// neither field affects the document `create_bundle` stores.
+    #[test]
+    fn editing_the_oldest_bundle_does_not_move_it_in_the_stores_own_order() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+
+        let (mut older, older_items) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-order-older",
+            "Older review",
+            "",
+            &["Original note."],
+        );
+        older.composed_at = "2026-08-10T10:00:00Z".into();
+        older.updated_at = older.composed_at.clone();
+
+        let (mut newer, newer_items) = review_update_save_fixture(
+            vault_dir.path(),
+            "b-order-newer",
+            "Newer review",
+            "",
+            &["Another note."],
+        );
+        newer.composed_at = "2026-08-25T10:00:00Z".into();
+        newer.updated_at = newer.composed_at.clone();
+
+        let bundle_store = SqliteBundleStore::open_in_memory().expect("a bundle store");
+        bundle_store
+            .create_bundle(&older, &older_items)
+            .expect("seed the older row");
+        bundle_store
+            .create_bundle(&newer, &newer_items)
+            .expect("seed the newer row");
+
+        let before = bundle_store.list_bundles().expect("list before editing");
+        assert_eq!(before[0].bundle.id, "b-order-newer");
+        assert_eq!(before[1].bundle.id, "b-order-older");
+
+        let mut parsed = MarkdownSerializer::parse_bundle_document(&older.markdown)
+            .expect("the older Bundle's own document must parse");
+        apply_review_update_field_edit(&mut parsed, "note", 1, 0, "Corrected the older one.");
+        let outcome = save_review_update_edit(vault_dir.path(), &bundle_store, &mut older, &parsed)
+            .expect("a real change to the older Bundle must save");
+        assert!(matches!(outcome, ReviewUpdateSaveOutcome::Saved));
+        assert_ne!(
+            older.updated_at, older.composed_at,
+            "the edit must actually move the older Bundle's last-edited time"
+        );
+
+        let after = bundle_store.list_bundles().expect("list after editing");
+        assert_eq!(
+            after[0].bundle.id, "b-order-newer",
+            "editing the older Bundle must not move it ahead of the newer one"
+        );
+        assert_eq!(
+            after[1].bundle.id, "b-order-older",
+            "the sort stays keyed on composed_at, never on the last-edited time"
+        );
     }
 }
