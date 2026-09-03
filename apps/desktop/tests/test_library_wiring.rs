@@ -646,3 +646,29 @@ fn the_row_hover_icons_are_gated_by_visible_ored_across_every_touch_area_not_by_
         );
     }
 }
+
+/// The overflow button's three dots are fixed-size children of a `HorizontalLayout` with no explicit
+/// height - Slint fills that layout to its 28px parent, and without `cross-axis-alignment: center`
+/// the dots sat pinned to the TOP of that space instead of centred in the button, a one-line CSS-
+/// flexbox-shaped miss that was easy not to notice while `BUG-91`'s flicker was still making the
+/// whole hover state hard to look at for more than a moment.
+#[test]
+fn the_overflow_buttons_dots_are_centred_on_both_axes() {
+    let library = flat(&read("ui/components/library.slint"));
+    let at = library
+        .find("overflow-touch := TouchArea")
+        .expect("the overflow button's TouchArea must exist");
+    // The dots' HorizontalLayout is declared just BEFORE its own TouchArea sibling in the same
+    // Rectangle - search backward from there rather than forward, so this does not accidentally
+    // match a later, unrelated `alignment: center;` elsewhere in the file.
+    let before = &library[..at];
+    let layout_at = before
+        .rfind("HorizontalLayout {")
+        .expect("the overflow button's dots must sit in their own HorizontalLayout");
+    let window = &before[layout_at..];
+    assert!(
+        window.contains("cross-axis-alignment: center"),
+        "the dots' HorizontalLayout must centre its cross (vertical) axis too, not just the main \
+         (horizontal) one - `alignment: center` alone leaves fixed-size children pinned to the top"
+    );
+}

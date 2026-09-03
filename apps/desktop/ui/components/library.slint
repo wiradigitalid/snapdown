@@ -569,7 +569,16 @@ export component SdLibrary inherits Rectangle {
                                             border-width: 1px;
                                             border-color: Theme.border-strong;
                                             HorizontalLayout {
+                                                // `alignment` only centers along the MAIN (horizontal)
+                                                // axis - CSS flexbox calls the cross axis's own
+                                                // property `align-items`, and Slint's name for it is
+                                                // `cross-axis-alignment`. Without it, three fixed-size
+                                                // 2.3px dots sat pinned to the top of this 28px-tall
+                                                // box instead of centred in it - visible only once
+                                                // `BUG-91`'s fix let the hover state hold still long
+                                                // enough to actually look at.
                                                 alignment: center;
+                                                cross-axis-alignment: center;
                                                 spacing: 3px;
                                                 Rectangle { width: 2.3px; height: 2.3px; border-radius: 1.15px; background: Theme.text-secondary; }
                                                 Rectangle { width: 2.3px; height: 2.3px; border-radius: 1.15px; background: Theme.text-secondary; }
