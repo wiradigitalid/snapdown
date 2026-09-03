@@ -5543,3 +5543,75 @@ defects:
       as stored rather than corrected onto a guess. `cargo fmt`, `clippy -D warnings` and
       `cargo test --workspace --no-fail-fast` all exit 0.
     status: fixed
+
+  - id: BUG-91
+    title: "A Library row's hover icons flickered on and off the moment the cursor moved onto one of them"
+    found: "2026-09-03"
+    found_by: kodesh87, manually testing the just-merged Bundle Library feature - "suka hilang2 iconnya pas saya gerakkan cursor disini" (a screenshot of the row's icon area, cursor mid-row)
+    component: bundle
+    severity: medium
+    contradicts: []
+    root_cause: code
+    evidence: |
+      `library.slint`'s row: `row-touch` (a `TouchArea`) covers the whole 54px row. A later sibling -
+      painted on top, per Slint's declaration-order-is-paint-order rule - holds the thumbnail, the
+      name/meta text and, gated by `if row-touch.has-hover : HorizontalLayout { ... }`, the row's
+      three hover icons (Copy Markdown, Open file location, overflow), each with its OWN `TouchArea`.
+
+      Confirmed empirically, not by reading Slint's source and guessing: a minimal, self-contained
+      reproduction of this exact shape (outer `TouchArea` + a later sibling holding its own
+      `TouchArea`s, gated on the outer one's `has-hover`) was driven headless with a
+      `slint::platform::WindowEvent::PointerMoved` sweep across the row, 5px at a time, reading
+      `row-touch`'s `has-hover` after each step:
+
+        x=  0.0..120.0  probe_hover=true              (over the thumbnail/name area - stable)
+        x=125.0         probe_hover=false   <- FLIP    (the icon group's own bounds start here)
+        x=130.0         probe_hover=true    <- FLIP
+        x=135.0         probe_hover=false   <- FLIP
+        x=140.0         probe_hover=true
+        x=145.0         probe_hover=true
+        x=150.0         probe_hover=false   <- FLIP
+        ... (12 flips total across the icon group's ~65px width, alternating almost every 5px step)
+
+      The mechanism: once the cursor sits over one of the icons' own `TouchArea`s (declared later,
+      painted on top, geometrically inside `row-touch`'s bounds), Slint's hit-test stops delivering
+      hover to `row-touch` for that position. Because the icon group's very EXISTENCE is gated with
+      `if` on `row-touch.has-hover` alone, that single frame tears the whole subtree down - which
+      removes the icons' `TouchArea`s from the hit path, hands hover back to `row-touch` (nothing else
+      occupies that pixel now), which flips `if` back to true and rebuilds the group, which puts the
+      icons' `TouchArea`s back in the hit path, which takes hover away from `row-touch` again - a
+      feedback loop with no stable state, running once per pointer-move event delivered while the
+      cursor sits anywhere over the icon group.
+
+      Confirmed as the ONLY instance of this shape in the whole UI tree
+      (`grep -rn "if .*\.has-hover.*:" apps/desktop/ui/` returns exactly one hit, this one) -
+      `ticket 12`'s own addition, not a pattern inherited from elsewhere.
+    fix: |
+      The icon group (`library.slint`) is now a named, ALWAYS-instantiated `HorizontalLayout`
+      (`icon-actions`), gated with `visible:` rather than `if`, and its condition ORs in every
+      `TouchArea` in the group alongside `row-touch`'s own:
+      `row-touch.has-hover || copy-touch.has-hover || reveal-touch.has-hover ||
+      overflow-touch.has-hover`. Since Slint DOES correctly set `has-hover` on whichever element
+      currently wins the hit-test (the icon itself, once the group exists and the cursor sits over
+      it), the OR keeps the group visible continuously across the handoff, instead of the single term
+      that dropped to false the instant the icons became the hit target.
+
+      SEEN RED FIRST: the same headless sweep re-run against the fix candidate, checking the icon
+      group's own resolved `visible` value (not `row-touch.has-hover` alone, which still fluctuates
+      internally and is now irrelevant on its own) - 0 flips across the full sweep, and confirmed to
+      correctly resolve back to `false` once the cursor left the row entirely (not just permanently
+      stuck on). The regression test
+      `the_row_hover_icons_are_gated_by_visible_ored_across_every_touch_area_not_by_an_if_on_row_touch_alone`
+      (`test_library_wiring.rs`) was then run against the ORIGINAL `if row-touch.has-hover` source,
+      re-created by reverting the file: it failed exactly as expected, naming the anti-pattern.
+      Restored, re-ran, green.
+
+      This crate has no `[lib]` target - every existing test in this repo's desktop suite reads
+      `.slint`/`.rs` source text rather than driving a live component, because there is no way to link
+      a compiled `SdLibrary` instance into an integration test binary. The regression test added here
+      keeps that same shape (source-reading, asserting the fix's structure is present) rather than
+      faking a live-interaction test that cannot actually exist against this crate's current layout -
+      the headless sweep that found and proved the fix was a throwaway probe outside the repository,
+      not a shipped test. `cargo fmt`, `clippy -D warnings` and `cargo test --workspace --no-fail-fast`
+      all exit 0.
+    status: fixed

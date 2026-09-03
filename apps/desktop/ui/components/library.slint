@@ -494,7 +494,26 @@ export component SdLibrary inherits Rectangle {
                                     // 11` laid these out undecorated on purpose ("an icon with no
                                     // click handler invites nothing"); this ticket gives all three a
                                     // `TouchArea`.
-                                    if row-touch.has-hover : HorizontalLayout {
+                                    // Gated with `visible`, deliberately NOT with `if`, and on the
+                                    // OR of every TouchArea in this group rather than `row-touch`
+                                    // alone. `row-touch` covers the whole row, so once its bounds
+                                    // overlap these icons' own TouchAreas (declared later, painted
+                                    // on top), Slint's hit-test stops delivering hover to `row-touch`
+                                    // the moment the pointer sits over an icon - and an `if` gated on
+                                    // that alone tore this exact subtree down the instant that
+                                    // happened, which put the icons' own TouchAreas out of the hit
+                                    // path, handed hover back to `row-touch`, and rebuilt them again:
+                                    // a flicker loop confirmed with a headless `PointerMoved` sweep
+                                    // (`BUG-91`) - `row-touch.has-hover` alone toggled on every 5px
+                                    // step across the icon group, while OR-ing in the icons' own
+                                    // `has-hover` (which Slint DOES set correctly for whichever
+                                    // element currently wins the hit-test) held `visible` at a
+                                    // constant `true` for the same sweep, zero flips.
+                                    icon-actions := HorizontalLayout {
+                                        visible: row-touch.has-hover
+                                            || copy-touch.has-hover
+                                            || reveal-touch.has-hover
+                                            || overflow-touch.has-hover;
                                         spacing: 4px;
                                         alignment: end;
 

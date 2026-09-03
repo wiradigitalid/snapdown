@@ -587,3 +587,62 @@ fn relative_time_is_hand_written_not_a_crate() {
         "the hand-written ladder must exist"
     );
 }
+
+/// `BUG-91`: a row's hover icons flickered on and off the moment the cursor actually moved onto one
+/// of them. `row-touch` covers the whole row; the icon group is a later sibling painted on top, so
+/// once its own TouchAreas overlapped the cursor position, Slint stopped delivering hover to
+/// `row-touch` - and gating the icon group's existence on `row-touch.has-hover` ALONE (via `if`) tore
+/// the group down the instant that happened, which put its TouchAreas out of the hit path, handed
+/// hover back to `row-touch`, and rebuilt the group again: a flicker loop.
+///
+/// Confirmed empirically during diagnosis with a headless `PointerMoved` sweep across a minimal
+/// reproduction of this exact structure (outer TouchArea + a later sibling holding its own
+/// TouchAreas): `row-touch.has-hover` alone toggled on every 5px step once the sweep entered the
+/// icon group's bounds, while OR-ing in the icons' own `has-hover` (which Slint DOES set correctly
+/// for whichever element currently wins the hit-test) held steady with zero flips for the same
+/// sweep, and correctly went false again once the cursor left the row entirely. See `BUG-91` in
+/// `defects.yaml` for the full sweep output.
+///
+/// This crate has no `[lib]` target, so no test here can drive a live `SdLibrary` instance the way
+/// that headless probe did - every wiring test in this file reads source text instead, and this one
+/// is no exception. It is a narrower guarantee than the probe gave: it cannot prove the runtime is
+/// flicker-free, only that the specific fix that was proven flicker-free is still there. Watch for a
+/// change to the icon group's `visible` condition, an `if` reappearing in its place, or new hover
+/// state being layered on without an accompanying OR term - none of the three would page anyone.
+#[test]
+fn the_row_hover_icons_are_gated_by_visible_ored_across_every_touch_area_not_by_an_if_on_row_touch_alone(
+) {
+    let library = flat(&read("ui/components/library.slint"));
+
+    assert!(
+        !library.contains("if row-touch.has-hover : HorizontalLayout"),
+        "BUG-91: gating the icon group's very existence on `row-touch.has-hover` alone is the \
+         exact shape that flickered - `if` tears the group down the instant hover moves onto one \
+         of its own TouchAreas, which is what caused the loop"
+    );
+
+    let visible_at = library
+        .find("icon-actions := HorizontalLayout {")
+        .map(|start| &library[start..])
+        .and_then(|rest| rest.find("visible:").map(|i| &rest[i..]))
+        .expect("the icon group must be a named, always-instantiated HorizontalLayout with its own `visible` binding");
+    let condition_end = visible_at
+        .find(';')
+        .expect("the `visible` binding must end with `;`");
+    let condition = &visible_at[..condition_end];
+
+    for must_appear in [
+        "row-touch.has-hover",
+        "copy-touch.has-hover",
+        "reveal-touch.has-hover",
+        "overflow-touch.has-hover",
+    ] {
+        assert!(
+            condition.contains(must_appear),
+            "BUG-91: the icon group's `visible` condition must OR in every one of its own \
+             TouchAreas' `has-hover` alongside `row-touch`'s, or hovering directly onto whichever \
+             one is left out reproduces the exact same flicker for that icon - missing: \
+             `{must_appear}` in {condition:?}"
+        );
+    }
+}
