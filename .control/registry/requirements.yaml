@@ -678,6 +678,13 @@ journeys:
   - id: UJ-6
     title: The Reviewer hands a Bundle to an agent on a server
     prd: agent-handoff
+  # UJ-7 born 2026-09-03 by wdi-product, closing a UJ-5 collision found separately: this journey's
+  # prose (prd.md 2.3) had been calling itself "UJ-5" since it was written, never registered as its
+  # own row, and that id was already spoken for by the two rows above. UJ-5 and UJ-6 stayed untouched
+  # — they were correct — and this journey took the next free id instead.
+  - id: UJ-7
+    title: Visual markup and redaction on canvas
+    prd: capture-to-markdown
 
 # NOT PROMISED, and deliberately.
 #
