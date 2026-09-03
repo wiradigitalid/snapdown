@@ -911,6 +911,12 @@ export component SdSettings inherits Rectangle {
                             SdCaption {
                                 text: "Type set in IBM Plex, licensed under the SIL Open Font License 1.1.";
                             }
+                            // `NTL-3`. The icons are Lucide, and ISC asks that the notice travel with
+                            // every copy - this binary being one. The notice names Feather because
+                            // Lucide's own does.
+                            SdCaption {
+                                text: "Icons from Lucide (https://lucide.dev), ISC License; portions copyright Cole Bemis as part of Feather (MIT).";
+                            }
                         }
                     }
                 }
