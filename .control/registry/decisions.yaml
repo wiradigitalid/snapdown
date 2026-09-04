@@ -16,7 +16,7 @@ decisions:
     created: "2026-08-22"
   - id: DEC-002
     title: An agent reads the Library through a stateless MCP bridge and a key the Reviewer pastes
-    status: applied
+    status: superseded
     file: .control/decisions/DEC-002-mcp-bridge-and-key.md
     serves: [CAP-7]
     touches:
@@ -166,3 +166,36 @@ decisions:
     touches:
       - .control/registry/components.yaml
     created: "2026-08-31"
+  - id: DEC-014
+    title: "`AD-9` reaches the paths an agent reads, not an artifact made for a person"
+    status: accepted
+    file: .control/decisions/DEC-014-ad-9-reaches-agent-paths-not-human-artifacts.md
+    serves: [CAP-12]
+    touches:
+      - .how/_platform/ARCHITECTURE-SPINE.md
+      - .control/questions/answered.md
+    created: "2026-09-01"
+  - id: DEC-015
+    title: The published Bundle reader is a page `web-api` renders, not a container of its own
+    status: accepted
+    file: .control/decisions/DEC-015-the-published-reader-is-a-page-web-api-renders.md
+    serves: [CAP-8]
+    touches:
+      - .control/registry/components.yaml
+      - .control/registry/defects.yaml
+      - .control/structure-codebase.md
+      - .how/_platform/ARCHITECTURE-SPINE.md
+      - .how/_platform/c4-l2-containers.md
+      - .how/_platform/cross-cutting.md
+      - .how/_platform/inventory-api.md
+      - .how/_platform/inventory-screen.md
+      - .how/sharing/SDD-sharing.md
+    created: "2026-09-01"
+  - id: DEC-016
+    title: Snapdown hands a Bundle to an agent only as copied Markdown; the MCP bridge is removed
+    status: accepted
+    file: .control/decisions/DEC-016-agent-bridge-removed-markdown-only-handoff.md
+    serves: []
+    supersedes: DEC-002
+    touches: []
+    created: "2026-09-04"
