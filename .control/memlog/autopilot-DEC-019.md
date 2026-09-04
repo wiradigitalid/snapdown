@@ -12,8 +12,10 @@ BUG-61, BUG-77, BUG-106]}`, `parked: [ad-n, sensitive]`, `smoke_test: agent`, `l
 `expires: 2026-09-11`).
 
 - Iteration: 0 (preflight only — no work started yet)
-- Run branch: `autopilot/DEC-019` — not yet created, not yet pushed, no PR opened
-- Stopped at: Preflight complete, mandate accepted. Isolated worktree not yet created.
+- Run branch: `autopilot/DEC-019`, commit `8d3b85b` (preflight docs only). Isolated worktree at
+  `D:\Developer\wiradigital.id\snapdown-autopilot-dec019` — every Door 2 iteration works there, not in
+  the coordinator's own `main` checkout. Not yet pushed, no PR opened.
+- Stopped at: Preflight complete, mandate accepted, worktree created. Loop starting.
 - Blocked: —
 - Parked: —
 - Next: create the isolated worktree off `main` at the run branch `autopilot/DEC-019`, run
