@@ -133,25 +133,6 @@ them that way.
 
 Goals — see `.control/registry/goals.yaml` → `goals:`.
 
-<!-- wdi-upgrade, 2026-09-04: the two paragraphs below explained BG-7's split (OQ-20) and the
-BG-6/BG-7 distinction. Both compare two goals at once rather than stating one goal's own reason, so
-they have no single `why:` row to move into without guessing — left here for the owner to place,
-reported in the wdi-upgrade output.
-
-**BG-7's bar is split, and the split is the point.** It used to end *"the bar is the experience of
-Snagit and of Cobalt Capture, on a product that does less than either"*, applied to the whole product.
-That was put to the owner as `OQ-20` on 2026-09-01 and they split it. The **capture** half — the part
-a person operates with their hands — keeps Snagit and Cobalt Capture as its benchmark. The **handoff**
-half is measured against `BG-2` and `BG-3` instead, time and tokens, because its reader is a machine
-and a human-tool benchmark spends effort there on affordances an agent cannot use. What the split buys
-is checkability: *median handoff under 120 seconds* can be verified and *feels as good as Snagit*
-cannot, and `DEC-005` lifts only on a bar that is **met and verified** by its own wording.
-
-BG-6 and BG-7 look adjacent and are not the same goal. BG-6 is about **frequency** — a setting the
-Reviewer touches once. BG-7 is about **cost per encounter** — what that one touch, and every capture
-after it, actually demands of them. A product can fully satisfy BG-6 with a screen nobody can read.
--->
-
 ## Success Criteria
 
 The measure: **median time to hand off a five-finding review, from first hotkey press to the agent

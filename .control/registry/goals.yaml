@@ -36,6 +36,9 @@ goals:
     title: A review is disposable — findings and their files leave together
     measure: Zero files in the Vault that nothing points at, and zero records pointing at a file
       that is gone
+  # BG-6 and BG-7 look adjacent and are not the same goal. BG-6 is about frequency - a setting the
+  # Reviewer touches once. BG-7 is about cost per encounter - what that one touch, and every capture
+  # after it, actually demands of them. A product can fully satisfy BG-6 with a screen nobody can read.
   - id: BG-6
     title: The tool never becomes the thing being managed
     measure: Cold start to a usable tray icon under 3 seconds, and no setting touched after the
@@ -45,6 +48,13 @@ goals:
     measure: A Reviewer who has never seen Snapdown reaches their first handed-over Bundle without
       being told how; every text element meets WCAG AA contrast in both Windows themes; no primary
       surface requires scrolling to discover that a control exists
+    why: OQ-20 (2026-09-01) split this goal's bar in two. It used to read as one bar, the experience
+      of Snagit and of Cobalt Capture, applied to the whole product. The capture half - the part a
+      person operates by hand - keeps Snagit and Cobalt Capture as its benchmark. The handoff half is
+      measured against BG-2 and BG-3 instead, time and tokens, because its reader is a machine and a
+      human-tool benchmark spends effort there on affordances an agent cannot use. The split buys
+      checkability - median handoff under 120 seconds can be verified where "feels as good as Snagit"
+      cannot - and DEC-005 lifts only on a bar that is met and verified by its own wording.
   # BG-8 born 2026-09-01, closing OQ-31. CAP-12 (Export PDF) hung off BG-2 and the misfit was recorded
   # as known: BG-2's measure is a handoff TIME, which cannot report on an exporter, and BG-2 promises
   # "no file management" while an export exists precisely to produce a file a person manages - so the

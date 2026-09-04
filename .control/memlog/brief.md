@@ -1,7 +1,7 @@
 ---
 topic: Snapdown — screenshot findings composed into Markdown for coding agents
 artifact: .what/_product-brief/brief.md
-updated: 2026-09-01T09:12
+updated: 2026-09-04T17:06
 ---
 
 - (event) headless run, intent create — owner authorised writing and approval of G1..G5 in one pass without further questions
@@ -79,3 +79,4 @@ Assumptions section, cross-referenced to `DEC-005` and `DEC-004`.
 - **The Problem, The Solution, Who This Serves, and Scope are unchanged.** Nothing the owner reported
   was a problem-statement failure. The problem was right; the surface carrying it was not.
 - (change) BG-8 born 2026-09-01, closing OQ-31, and the number matters: the OQ row said 'a sixth goal' and BG-6 and BG-7 have both existed since G1, so the new goal is the EIGHTH. CAP-12 (Export PDF) had hung off BG-2 under a comment admitting the fit was known to be imperfect - BG-2's measure is a handoff TIME that cannot report on an exporter, and BG-2 promises 'no file management' while an export exists to produce a file a person manages, so the capability was serving a goal whose own words it contradicts. Owner chose a new goal over amending BG-2's measure, because stretching that phrase would weaken a promise the product holds elsewhere. BG-8 reads 'A review is readable by someone who does not have Snapdown', measured as zero Findings lost, reordered, or stripped of image or note between a Bundle's stored Markdown and the document exported from it. CAP-12's goal: re-pointed BG-2 -> BG-8. SECOND change in the same pass, from OQ-20: BG-7's bar is SPLIT. It used to end 'the bar is the experience of Snagit and of Cobalt Capture', applied to the whole product; the capture half keeps that benchmark, the handoff half is measured against BG-2 and BG-3 instead, because its reader is a machine. This lands on BG-7's own wording in the brief, which nobody had noticed was where that sentence lived - it was being treated as ticket 06's problem alone.
+- (change by owner) wdi-upgrade (2026-09-04) had parked two cross-goal rationale paragraphs (BG-7's split from OQ-20, and the BG-6/BG-7 distinction) in an HTML comment under Goals, unable to place them without guessing. Homed now: BG-7's split rationale became goals.yaml's why: field on BG-7; the BG-6/BG-7 distinction became a YAML comment above BG-6, matching BG-8's existing comment style. The now-redundant parked comment was deleted from brief.md, leaving Goals as the pointer line only.

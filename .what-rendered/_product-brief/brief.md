@@ -148,6 +148,7 @@ Rendered from `.control/registry/goals.yaml`.
 ### BG-7 — Snapdown's own surface costs the Reviewer no attention
 
 **Measure:** A Reviewer who has never seen Snapdown reaches their first handed-over Bundle without being told how; every text element meets WCAG AA contrast in both Windows themes; no primary surface requires scrolling to discover that a control exists  
+**Why:** OQ-20 (2026-09-01) split this goal's bar in two. It used to read as one bar, the experience of Snagit and of Cobalt Capture, applied to the whole product. The capture half - the part a person operates by hand - keeps Snagit and Cobalt Capture as its benchmark. The handoff half is measured against BG-2 and BG-3 instead, time and tokens, because its reader is a machine and a human-tool benchmark spends effort there on affordances an agent cannot use. The split buys checkability - median handoff under 120 seconds can be verified where "feels as good as Snagit" cannot - and DEC-005 lifts only on a bar that is met and verified by its own wording.  
 
 ### BG-8 — A review is readable by someone who does not have Snapdown
 
