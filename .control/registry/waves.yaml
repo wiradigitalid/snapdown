@@ -899,7 +899,12 @@ waves:
 
   - id: W8
     title: Capture becomes real
-    status: open
+    # Corrected 2026-09-04 by wdi-autopilot: this row read `status: open` while all six stories below
+    # (W8-S1 through W8-S6) carry their own merge commits in git history - the last, `1e84c86` "Merge
+    # W8-S6: FR-8 is met end to end, and the burn is reachable", closed the wave in substance without
+    # this row ever being updated. crates/snapdown-capture exists, generate_placeholder_image is gone,
+    # and burn_markers/reduce_image no longer write fake headers - verified against code, not assumed.
+    status: closed
     release: r3
     prd: [capture-to-markdown]
     fr: [FR-1, FR-2, FR-4, FR-8]

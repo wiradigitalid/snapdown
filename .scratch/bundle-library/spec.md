@@ -1,6 +1,6 @@
 # Spec: Bundle Library
 
-**Status:** ready-for-agent
+**Status:** done — every ticket (10-19) built, tested, reviewed and merged via PR #38 into `main` (2026-09-03). Status line was stale until this correction, 2026-09-04.
 **Source:** `map.md` and its nine resolved tickets (`issues/01`–`09`). Every decision below was taken
 there; this document assembles them into one buildable statement and adds only the implementation
 decisions a builder needs. Written 2026-09-02, the day the map's exit condition was met.

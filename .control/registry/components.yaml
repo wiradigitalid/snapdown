@@ -292,12 +292,31 @@ logical_components:
     area: editor-ui
     depends_on: [LC-010, LC-013]
   - id: LC-014
-    name: bundles-editor
+    # Renamed 2026-09-04 from `bundles-editor`, by wdi-autopilot's registry catch-up after the Bundle
+    # Library spec closed (PR #38). `bundles-editor` named the plan; `library` names the Slint
+    # component that actually ships it - SdLibrary in apps/desktop/ui/components/library.slint.
+    name: library
     lc_type: ui-screen
     container: desktop-app
     component: bundle
     area: editor-ui
     depends_on: [LC-010, LC-013]
+  # LC-033 and LC-034 born 2026-09-04 by the same catch-up. Both screens shipped in PR #38 with no LC
+  # registered - inventory-screen.md rows 10 and 16 named them as a plan; these rows are what V12 checks.
+  - id: LC-033
+    name: review-update
+    lc_type: ui-screen
+    container: desktop-app
+    component: bundle
+    area: editor-ui
+    depends_on: [LC-010, LC-013]
+  - id: LC-034
+    name: reclaim-space
+    lc_type: ui-screen
+    container: desktop-app
+    component: finding
+    area: vault-fs
+    depends_on: [LC-004, LC-005]
   # --- settings · desktop-app -------------------------------------------------------
   # LC-028 born 2026-08-23 by wdi-ux, landing DESIGN-settings.md. FR-27 and FR-28 are promises about
   # the WINDOW FRAME, and in the shipped build the frame is inline JSX at the top of App.tsx owned by

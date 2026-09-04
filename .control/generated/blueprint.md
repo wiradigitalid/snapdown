@@ -470,6 +470,17 @@ window rather than a route has `—` for its route.
 `No` is stable. A new row takes the next number; a removed one keeps its number with
 `status: removed`.
 
+#### Correction, 2026-09-04 — rows 8, 10 and 16 caught up to Slint, by `wdi-autopilot`
+
+The Bundle Library spec (`.scratch/bundle-library/`) closed with PR #38 (2026-09-03), which is exactly
+the "wayfinder map" work the note below said this table's re-plan was waiting on. Rows 8 and 10's
+`Route` cells are corrected here to say what actually opens them — `SdLibrary` and `SdReviewUpdate` in
+`apps/desktop/ui/components/library.slint` and `review-update.slint` — and row 16 drops its "PLAN ONLY"
+line for the same reason: `SdReclaimSpace` in `apps/desktop/ui/components/reclaim-space.slint` is built
+and shipped. **Only these three rows moved.** Every other row below is still the 2026-08-23 React-era
+snapshot the note below describes, and re-planning the rest of this table against Slint is still owed —
+this correction narrowed that debt, it did not pay it off.
+
 #### Derivation finding, 2026-08-31 — the Route column is a fossil, and this is not hand work
 
 `inventory.py` was run against `.constitution/project/inventory-readers.py` and reports **15
@@ -517,14 +528,14 @@ produce. The honest state is a table that says what it planned, beside a finding
 | 5 | Finding detail with Marker canvas | `/findings/:id` | `finding` | Reviewer | UC-4, UC-5 | [`.how/finding/01-ux/assets/01-studio-workspace.html`](../finding/01-ux/assets/01-studio-workspace.html) |
 | 6 | Delete Findings confirmation | `/findings/delete` (modal) | `finding` | Reviewer | UC-7 | [`.how/bundle/01-ux/assets/05-saved-bundles-drawer.html`](../bundle/01-ux/assets/05-saved-bundles-drawer.html) |
 | 7 | Orphan report | `/findings/orphans` | `finding` | Reviewer | UC-8 | [`.how/finding/01-ux/assets/01-studio-workspace.html`](../finding/01-ux/assets/01-studio-workspace.html) |
-| 8 | Editor — Bundles | `/bundles` | `bundle` | Reviewer | UC-10, UC-11, UC-23, UC-28, UC-30 | [`.how/bundle/01-ux/assets/05-saved-bundles-drawer.html`](../bundle/01-ux/assets/05-saved-bundles-drawer.html) |
+| 8 | Editor — Bundles (Library) | — (a full-window overlay in the Editor; `DEC-007` retired React Router) | `bundle` | Reviewer | UC-10, UC-11, UC-23, UC-28, UC-30 | [`.how/bundle/01-ux/assets/05-saved-bundles-drawer.html`](../bundle/01-ux/assets/05-saved-bundles-drawer.html) |
 | 9 | Compose Bundle | `/bundles/compose` (modal) | `bundle` | Reviewer | UC-9 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
-| 10 | Bundle detail | `/bundles/:id` | `bundle` | Reviewer | UC-11, UC-12, UC-23, UC-28, UC-29 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
+| 10 | Bundle detail (Review & Update) | — (a full-window overlay opened from row 8; `DEC-007` retired React Router) | `bundle` | Reviewer | UC-11, UC-12, UC-23, UC-28, UC-29 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 | 11 | Publish and unpublish a Bundle | `/bundles/:id/publish` (modal) | `sharing` | Reviewer | UC-20, UC-22 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 | 12 | Settings — General & Quality | `/settings` | `settings` | Reviewer | UC-13, UC-14, UC-15, UC-16 | [`.how/settings/01-ux/assets/06a-settings-general.html`](../settings/01-ux/assets/06a-settings-general.html)<br>[`.how/settings/01-ux/assets/06b-settings-hotkeys.html`](../settings/01-ux/assets/06b-settings-hotkeys.html)<br>[`.how/settings/01-ux/assets/06d-settings-about.html`](../settings/01-ux/assets/06d-settings-about.html) |
 | 13 | Settings — Agent access | `/settings/agent-access` | `agent-access` | Reviewer | UC-17, UC-19 | withdrawn by `DEC-016` — status: removed |
 | 14 | Published Bundle reader | `/b/:slug` | `sharing` | Remote coding agent, Reviewer | UC-21 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
-| 16 | Reclaim space | — (a desktop surface; PLAN ONLY, no code and no route) | `finding` | Reviewer | UC-31 | _none yet_ |
+| 16 | Reclaim space | — (a full-window overlay, reached from row 8's header and from Settings' Vault area) | `finding` | Reviewer | UC-31 | _none yet_ |
 | 15 | Publication not available | `/b/:slug` (the refused state) | `sharing` | Remote coding agent, Reviewer | UC-22 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 
 Row 0 is numbered 0 rather than 16 deliberately. Numbers here are stable and a new row normally takes

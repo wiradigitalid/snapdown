@@ -315,9 +315,14 @@ functional:
     writes: [Finding, Note, Marker, VisualAnnotation]
     # BR-59 ("Composing does not remove the Findings it used from the Library") stays TRUE and MUST
     # NOT be amended for this. It governs COMPOSING; this is a separate, later, explicit act.
+    # Corrected 2026-09-04 by wdi-autopilot: the proof line named only the triggering Bundle until a
+    # gap closed at ticket 17 found the built confirmation dialog also names any OTHER Bundle sharing
+    # one of the discarded Findings (BR-12) - the proof now says so too. Code wins; documents follow.
     proof: Discarding the originals behind a Bundle leaves the Bundle readable with its own images
       while its source Findings and their image files are gone from the Library and the Vault, and
-      the Bundle can no longer be disassembled.
+      the Bundle can no longer be disassembled. Where another Bundle shares one of those Findings, its
+      confirmation names that Bundle before the Reviewer confirms, and that Bundle can no longer be
+      disassembled either once the act completes.
   - id: FR-42
     title: See which Bundles still hold original captures, and reclaim their disk in bulk
     capability: CAP-5
@@ -403,7 +408,12 @@ functional:
     writes: [Finding]
     proof: Clicking any visual annotation or marker displays its interactive control points (8-point
       resizing handles for boxes, start/end points for arrows, tail handle for callouts); pressing
-      Delete or Backspace removes the active element.
+      Delete removes the active element.
+    # Corrected 2026-09-04 by wdi-autopilot: this line named "Delete or Backspace" until a
+    # verification pass found the built code deletes only on Delete, by the owner's own deliberate
+    # decision - "Tombol backspace jangan mendelete element" - and a test
+    # (test_annotation_wiring.rs::backspace_does_not_delete_an_annotation) proves Backspace is
+    # excluded on purpose rather than missing. Code wins; the proof line catches up to it.
   - id: FR-38
     title: Change the front-to-back order of canvas annotations
     capability: CAP-11

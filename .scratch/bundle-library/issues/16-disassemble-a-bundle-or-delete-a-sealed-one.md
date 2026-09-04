@@ -17,7 +17,7 @@ and neither is any Delete-both path.
 
 **Blocked by:** 11
 
-**Status:** ready-for-agent
+**Status:** done — feat/merge commits per `.control/memlog/autopilot-2026-09-04.md` iteration 1; PR #38 merged 2026-09-03. Status line was stale until this correction.
 
 - [ ] The menu shows Disassemble… for a Bundle whose Findings all exist and Delete… for one missing
       any, determined by a live read — asserted with a fixture where a Finding is deleted between two

@@ -30,6 +30,13 @@ cannot be undone, and a Bundle's images may hold anything that was on the Review
 a Bundle's own title and notes can also be corrected after composition (`FR-40`), and the captures
 behind it can be destroyed while it survives (`FR-41`, which belongs to `finding`).
 
+**A Bundle carries a last-edited time, distinct from when it was composed.** Correcting its title or
+notes (`FR-40`) moves it; a Save that changes nothing does not, and neither does anything that happens
+to a Finding, since a Bundle is a snapshot. A freshly composed Bundle has not been edited, so its
+last-edited time equals its composed time until the first real Save — the two are shown apart in the
+Library only once they differ, so a Bundle nobody has corrected reads as exactly what it says: composed,
+once, and untouched since.
+
 **Corrected 2026-08-31, two claims.**
 
 The second decision used to end *"so that the clipboard, the Local API, and a published page all serve

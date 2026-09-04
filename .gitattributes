@@ -1,0 +1,7 @@
+# Found 2026-09-04 while diagnosing a test that failed only on a Windows checkout: with
+# `core.autocrlf=true` and no `.gitattributes`, git silently rewrote every committed `*.slint` file's
+# LF line endings to CRLF on disk. Any test that reads such a file with raw `fs::read_to_string` and
+# matches a literal containing `\n` (rather than going through a whitespace-normalizing helper) breaks
+# on that checkout even though the committed content is correct. Force LF so every checkout matches
+# the blob regardless of the cloning platform's `core.autocrlf` setting.
+*.slint text eol=lf

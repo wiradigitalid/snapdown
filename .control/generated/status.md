@@ -45,15 +45,16 @@ work_progress:
   stories_total: 3
   work_progress: 100%
 - wave: W8
-  status: open
+  status: closed
   stories_done: 6
   stories_total: 6
   work_progress: 100%
-gate_readiness: 81%
+gate_readiness: 77%
 validators_red:
 - V12
 - V13
 - V16
+- V19
 - V3
 - V6
 validators_skipped:

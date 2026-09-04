@@ -16,7 +16,7 @@ a separate, later, explicit act.
 
 **Blocked by:** 16
 
-**Status:** ready-for-agent
+**Status:** done — feat/merge commits per `.control/memlog/autopilot-2026-09-04.md` iteration 1; PR #38 merged 2026-09-03. Status line was stale until this correction.
 
 - [ ] Discard originals appears only for an unsealed Bundle; after it runs, the same Bundle's menu
       shows Delete… only, without any stored flag having been written

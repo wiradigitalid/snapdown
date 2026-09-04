@@ -14,7 +14,7 @@ implementation `FR-12` has ever had.
 
 **Blocked by:** 10 (the composer's rebase), 11 (the row)
 
-**Status:** ready-for-agent
+**Status:** done — feat/merge commits per `.control/memlog/autopilot-2026-09-04.md` iteration 1; PR #38 merged 2026-09-03. Status line was stale until this correction.
 
 - [ ] Both actions appear on row hover and in the row's menu, as the artboards place them
 - [ ] After Copy Markdown, the clipboard holds a document that differs from the stored one only in
