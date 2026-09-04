@@ -284,6 +284,7 @@ decisions:
       expires: "2026-09-11"
   - id: DEC-019
     title: "Mandate: carry every open FR and every open defect to closed, unattended, checking in only at the smoke test"
+    type: mandate
     status: accepted
     file: .control/decisions/DEC-019-autopilot-mandate-r4-close-every-open-defect.md
     serves: []
@@ -299,3 +300,19 @@ decisions:
       smoke_test: agent
       loop: 5m
       expires: "2026-09-11"
+  - id: DEC-020
+    title: The publish dialog and the reader's not-found page are withdrawn; the bare reader DEC-015 already found stands, corrected in wording
+    status: applied
+    file: .control/decisions/DEC-020-withdraw-publish-dialog-and-not-found-page-correct-the-reader.md
+    serves: [CAP-8]
+    touches:
+      - .control/registry/defects.yaml
+      - .control/registry/components.yaml
+      - .how/_platform/inventory-screen.md
+      - .how/sharing/SDD-sharing.md
+      - .how/bundle/01-ux/DESIGN.md
+      - .how/bundle/SDD-bundle.md
+      - .control/questions/assumptions.md
+      - .control/questions/answered.md
+    created: "2026-09-04"
+    accepted_by: DEC-019

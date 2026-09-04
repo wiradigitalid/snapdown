@@ -13,10 +13,15 @@ verified: ""
 
 Two front ends. Rows 1–13 are the desktop UI inside `desktop-app` — a React webview until `DEC-007`,
 native Slint since. Rows 14–15 were `web-ui` in the reader's browser; `DEC-015` withdrew that
-container on 2026-09-01, and those two rows now describe screens that would live in `web-api` if they
-were ever built. **They are still `BUG-2` and are deliberately left standing** — withdrawing them is
-`OQ-22`'s answer, not `DEC-015`'s, and that question is still the owner's. A desktop surface that is a
-window rather than a route has `—` for its route.
+container on 2026-09-01 and moved the reader itself (`LC-027`) into `web-api`, where it already runs.
+
+**Resolved 2026-09-04 by `DEC-020`, closing `BUG-2` and answering `OQ-22`.** Row 14 is corrected, not
+withdrawn — `LC-027` genuinely serves `GET /b/{slug}` today, as a bare server-rendered `<pre>` dump, and
+the row now describes that instead of the `PublishedBundleReader.tsx` that was never written. Row 15 is
+withdrawn outright: the refused state has never rendered a page at all, only a JSON error envelope, so
+there was nothing to correct it toward. Row 11's publish dialog (`LC-022`) is withdrawn with it — `BUG-23`
+found publishing has no Slint caller at all, and none of the three will be built while `DEC-005` holds. A
+desktop surface that is a window rather than a route has `—` for its route.
 
 `No` is stable. A new row takes the next number; a removed one keeps its number with
 `status: removed`.
@@ -82,12 +87,12 @@ produce. The honest state is a table that says what it planned, beside a finding
 | 8 | Editor — Bundles (Library) | — (a full-window overlay in the Editor; `DEC-007` retired React Router) | `bundle` | Reviewer | UC-10, UC-11, UC-23, UC-28, UC-30 | [`.how/bundle/01-ux/assets/05-saved-bundles-drawer.html`](../bundle/01-ux/assets/05-saved-bundles-drawer.html) |
 | 9 | Compose Bundle | `/bundles/compose` (modal) | `bundle` | Reviewer | UC-9 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 | 10 | Bundle detail (Review & Update) | — (a full-window overlay opened from row 8; `DEC-007` retired React Router) | `bundle` | Reviewer | UC-11, UC-12, UC-23, UC-28, UC-29 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
-| 11 | Publish and unpublish a Bundle | `/bundles/:id/publish` (modal) | `sharing` | Reviewer | UC-20, UC-22 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
+| 11 | Publish and unpublish a Bundle | `/bundles/:id/publish` (modal) | `sharing` | Reviewer | UC-20, UC-22 | withdrawn by `DEC-020` — status: removed |
 | 12 | Settings — General & Quality | `/settings` | `settings` | Reviewer | UC-13, UC-14, UC-15, UC-16 | [`.how/settings/01-ux/assets/06a-settings-general.html`](../settings/01-ux/assets/06a-settings-general.html)<br>[`.how/settings/01-ux/assets/06b-settings-hotkeys.html`](../settings/01-ux/assets/06b-settings-hotkeys.html)<br>[`.how/settings/01-ux/assets/06d-settings-about.html`](../settings/01-ux/assets/06d-settings-about.html) |
 | 13 | Settings — Agent access | `/settings/agent-access` | `agent-access` | Reviewer | UC-17, UC-19 | withdrawn by `DEC-016` — status: removed |
-| 14 | Published Bundle reader | `/b/:slug` | `sharing` | Remote coding agent, Reviewer | UC-21 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
+| 14 | Published Bundle reader | `/b/:slug` | `sharing` | Remote coding agent, Reviewer | UC-21 | corrected by `DEC-020`, 2026-09-04 — served by `LC-027` as a bare server-rendered `<pre>` page (`server.go:132-159`), not the mockup below; no design asset exists for what is actually built |
 | 16 | Reclaim space | — (a full-window overlay, reached from row 8's header and from Settings' Vault area) | `finding` | Reviewer | UC-31 | _none yet_ |
-| 15 | Publication not available | `/b/:slug` (the refused state) | `sharing` | Remote coding agent, Reviewer | UC-22 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
+| 15 | Publication not available | `/b/:slug` (the refused state) | `sharing` | Remote coding agent, Reviewer | UC-22 | withdrawn by `DEC-020` — status: removed |
 
 Row 0 is numbered 0 rather than 16 deliberately. Numbers here are stable and a new row normally takes
 the next one — but the shell is not a new surface, it is the frame every other row has always been
@@ -122,9 +127,11 @@ The system tray menu is still not a screen, and row 0 does not change that. The 
 **Snapdown** persona and the shell to **Snapdown Editor** (`DEC-003`); the tray holds no state and
 draws no surface.
 
-Rows 14 and 15 are the same route in two states. They are listed separately because the refused state
-is a promise — NFR-15 requires it to be identical for an unknown, a revoked, and a never-issued slug —
-and a promise with no row is a promise nobody checks.
+Rows 14 and 15 were the same route in two states. Row 15 is withdrawn by `DEC-020` — the refused state
+has no page at all, only a JSON error envelope from `LC-023` (`writeIdentical404`) — but the invariant
+it tracked is unchanged: NFR-15 still requires that body to be identical for an unknown, a revoked, and
+a never-issued slug, and that guarantee belongs to `inventory-api.md`'s rows now, not to a screen row
+here.
 
 No row is owned by `_platform`.
 
@@ -163,12 +170,14 @@ The five screen gaps are real, and each names the file that is absent:
 | 14 | Published Bundle reader | `PublishedBundleReader.tsx` — **does not exist.** `BUG-2` |
 | 15 | Publication not available | `PublicationNotFound.tsx` — **does not exist.** `BUG-2` |
 
-Rows 11, 14 and 15 are the serious ones. `HANDOVER.md` recorded all three as delivered in W5 and no
-file behind any of them was ever written. What `GET /b/{slug}` actually returns is the stored Markdown
-inside a bare `<pre>` with no stylesheet and no rendered images. For a coding agent that is arguably
-enough; for the human reader those rows promise, it is not. `DEC-005` freezes `sharing`, so `BUG-2` is
-registered and decided when that lifts — and it is a **promise** decision, not a task: withdrawing the
-three rows may be the correct answer for a product whose reader is a machine.
+Rows 11, 14 and 15 were the serious ones. `HANDOVER.md` recorded all three as delivered in W5 and no
+file behind any of them was ever written. **Decided 2026-09-04 by `DEC-020`, closing `BUG-2`:** row 11
+(the publish dialog) and row 15 (the refused-state page) are withdrawn — nothing was ever built behind
+either, and `DEC-005`'s freeze forbids building them now. Row 14 is corrected rather than withdrawn:
+`DEC-015` had already moved `LC-027` into `web-api`, where `GET /b/{slug}` genuinely returns a
+server-rendered page — a bare `<pre>` with no stylesheet and no rendered images. That is not the
+`PublishedBundleReader.tsx` promise, and the promise is what is withdrawn; the machine-facing path, and
+the crude human-readable page beside it, both stand exactly as they were built.
 
 Rows 7 and 9 — the orphan report and the Compose Bundle dialog — **do** have components
 (`OrphanReportView.tsx`, `BundleComposer.tsx`) and now read cleanly. An earlier note here said they

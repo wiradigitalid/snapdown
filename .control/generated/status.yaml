@@ -13,14 +13,14 @@ validators_skipped:
     coverage is checked at G5
 open_questions:
   blocking: 0
-  assumptions: 23
+  assumptions: 22
   external: 3
-  answered: 10
+  answered: 11
   open_by_whose:
     owner: 0
     run: 0
     frozen: 0
-    unstated: 23
+    unstated: 22
   blocking_budget: 12
   blocking_over_budget: false
   assumptions_budget_per_gate: 15

@@ -51,7 +51,6 @@ Rendered from `components.yaml`.
 | --- | --- | --- | --- |
 | `LC-020` | publish-client | `gateway` | `desktop-app` |
 | `LC-021` | publication-store | `store` | `desktop-app` |
-| `LC-022` | publish-dialog | `ui-composite` | `desktop-app` |
 | `LC-023` | publication-router | `gateway` | `web-api` |
 | `LC-024` | served-publication-store | `store` | `web-api` |
 | `LC-027` | bundle-reader | `ui-screen` | `web-api` |
@@ -65,15 +64,14 @@ Six Logical Components across three containers. Registered in `.control/registry
 | --- | --- | --- | --- |
 | LC-020 `publish-client` | gateway | `desktop-app` | Publish, unpublish, and reconcile against the service. Owns the staging protocol and the publish credential's use |
 | LC-021 `publication-store` | store | `desktop-app` | The `publication` row: slug, base URL, timestamps, and the sticky last error |
-| LC-022 `publish-dialog` | ui-composite | `desktop-app` | The confirmation that names the Bundle and says what publishing exposes, plus the state and URL shown per Bundle |
+| ~~LC-022 `publish-dialog`~~ | ui-composite | `desktop-app` | **Withdrawn by `DEC-020`, 2026-09-04.** Never built — `BUG-23`'s rescoped note found publishing has no Slint caller at all — and `DEC-005` forbids building it while it holds |
 | LC-023 `publication-router` | gateway | `web-api` | The six web routes: three public reads, three credential-gated writes. Owns content negotiation and the identical-refusal rule |
 | LC-024 `served-publication-store` | store | `web-api` | `published_bundle` and `published_blob`, plus the blob directory. The whole state NFR-14 keeps in one directory |
 | LC-027 `bundle-reader` | ui-screen | `web-api` | Renders one Publication for a person, server-side, as HTML. Serves the same Markdown an agent gets. Container corrected from `web-ui` 2026-09-01 by `DEC-015` |
 
 ```mermaid
 graph TD
-    LC022["LC-022 publish-dialog"] --> LC020["LC-020 publish-client"]
-    LC020 --> LC021["LC-021 publication-store"]
+    LC020["LC-020 publish-client"] --> LC021["LC-021 publication-store"]
     LC020 --> LC013(["LC-013 bundle-store<br/>bundle, read-only"])
     LC020 --> LC025(["LC-025 settings-store<br/>settings, read-only"])
     LC020 -->|"HTTPS, publish credential"| LC023["LC-023 publication-router"]
@@ -82,6 +80,10 @@ graph TD
     LC027["LC-027 bundle-reader"] -->|"HTTPS GET"| LC023
     P(["Person in a browser"]) --> LC027
 ```
+
+`LC-022` fed `LC-020` in this diagram until `DEC-020` withdrew it, 2026-09-04 — nothing mints the
+publish confirmation `LC-020` describes below, because nothing calls `LC-020` from a Slint surface at
+all while `DEC-005` holds.
 
 `LC-023` and `LC-024` are the Go half and depend on nothing in the Rust tree. The only thing crossing
 the language seam is the publish request, and rows 12–14 of `inventory-api.md` are the entire
@@ -114,7 +116,8 @@ Rendered from `ARCHITECTURE-SPINE.md`. A row marked **yes** binds this component
 ## Failure Behaviour
 
 Every boundary this component has. Derived from `.how/_platform/inventory-api.md` rows 9–14 and
-`inventory-screen.md` rows 11, 14, and 15, plus the two store boundaries.
+`inventory-screen.md` row 14 (corrected) — rows 11 and 15 withdrawn by `DEC-020`, 2026-09-04 — plus the
+two store boundaries.
 
 | Boundary | Slow | Absent | Lying | What the user sees | What is logged |
 | --- | --- | --- | --- | --- | --- |
@@ -125,7 +128,7 @@ Every boundary this component has. Derived from `.how/_platform/inventory-api.md
 | `LC-020` → `LC-013 bundle-store` | Local SQLite; over 5 s means a failing disk, and the publish is refused | The Bundle is gone — deleted between the click and the read. The publish is abandoned | Returns a Bundle whose image files are missing from the Vault. Checked before staging: a missing image refuses the publish naming the file, rather than publishing a review with broken images | A dialog naming what is missing. Nothing was published | `event=publish_source_incomplete`, the Bundle id, the filenames |
 | `LC-021 publication-store` | Not applicable | The `publication` row is missing while the service still serves the slug — an orphaned Publication. Found by the reconcile the Reviewer can run, and it is why endpoint 14 takes a slug rather than a Bundle id | Holds a slug the service has never heard of, from a publish that failed after the row was written. The row is written **after** the service confirms, so this is unreachable by design rather than by check | Nothing, unless a reconcile surfaces it | `event=publication_orphaned`, the slug |
 | Remote agent → `LC-023` (endpoints 9, 10, 11) | The service is one binary reading local files; slow means the host is saturated. No timeout of its own — the agent's client owns that | The slug is unknown, was never issued, or was unpublished. All three answer identically: `not_found`, same status, same body (NFR-15, BR-24) | Not applicable in this direction — the agent is a reader with nothing to lie about. A crafted image filename is the hostile input, refused by resolving against the Publication's own directory | Nothing on the desktop. The agent gets `not_found` and stops | `event=publication_not_found`, the slug prefix only, at debug level. A full log of every attempted slug is itself an enumeration surface |
-| `LC-027` → `LC-023` (screens 14, 15) | The page shows a loading state, then a plain message. It never blocks on a spinner without a way out | `not_found`. The page renders screen 15, the refused state, which is identical for every cause | Not applicable | A page saying the review is not available. No hint about whether it ever existed | Nothing server-side beyond the row above; the page is rendered in-process by `web-api` and logs nothing of its own |
+| `LC-027` → `LC-023` (screen 14) | The response is written synchronously in one handler; there is no loading state to get stuck in | `not_found`. `LC-023` answers with `writeIdentical404` — a JSON error envelope, not a page. There is no rendered not-found screen; row 15, which once claimed one, is withdrawn by `DEC-020` for exactly this reason | Not applicable | A browser gets a JSON body, not a message page. No hint about whether the slug ever existed, and no styling distinguishes this from any other JSON error | Nothing server-side beyond the row above; `web-api` logs nothing of its own |
 | `LC-023` → `LC-024` | Embedded SQLite plus a directory. Slow means a failing disk; over 5 s answers `unavailable` | The directory or the SQLite file is missing — a mounted volume gone. Every route answers `unavailable`, including the write routes, so a publish fails rather than half-succeeding | Reports a blob written that is not on disk. The write path re-stats every file before confirming the manifest, which is the same check the client relies on | The publishing Reviewer sees `publish_failed`; a reader sees `unavailable`, which is honestly different from `not_found` | `event=store_unavailable`, the operation. `web-api` never logs the content it serves |
 
 Two entries are the ones worth arguing about, and both are deliberate:

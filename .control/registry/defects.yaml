@@ -79,7 +79,14 @@ defects:
       surface is machine-facing only. The second is cheaper and may be correct: Snapdown's reader is
       a machine. It changes a promise, so it goes through wdi-product, not a patch.
     blocked_by: DEC-005, which freezes `sharing`. Registered now, decided when that lifts.
-    status: open
+    resolved: |
+      2026-09-04, by `DEC-020`. Withdrawal, not a build: row 11 (the publish dialog, `LC-022`) and row
+      15 (the reader's not-found page) are withdrawn outright, since neither was ever built and
+      `DEC-005` still forbids building either. Row 14 is corrected rather than withdrawn — `DEC-015`
+      had already found `LC-027` genuinely serves `GET /b/{slug}` as a bare server-rendered `<pre>`
+      page, which this row's own evidence, filed 2026-08-23, predates. `LC-027` is not retired; only
+      `LC-022` is. Full reasoning in `DEC-020`.
+    status: closed
   - id: BUG-3
     title: The web service interpolates published Markdown into HTML without escaping it
     found: "2026-08-23"
