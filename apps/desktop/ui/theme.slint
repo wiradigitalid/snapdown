@@ -105,9 +105,9 @@ export global Theme {
     //
     // The overlay is drawn over a frozen screenshot of the operator's desktop, not over app
     // chrome, so the scrim, the selection ring and the loupe grid MUST read the same in both
-    // themes - a light scrim over a dark screenshot is invisible. That is the same reasoning as
-    // the four deliberately theme-invariant groups in `web/ui/src/styles/tokens.css`, and it is
-    // why these four carry no `is-dark` branch.
+    // themes - a light scrim over a dark screenshot is invisible. That is the same reasoning
+    // that made the Marker and canvas-annotation groups above theme-invariant, and it is why
+    // these four carry no `is-dark` branch.
     out property <color> overlay-scrim:         #000000.with-alpha(0.65); // Dim outside the selection
     out property <color> overlay-ring:          #38bdf8;                  // Selection & pixel-cell outline
     out property <color> overlay-grid:          #ffffff.with-alpha(0.22); // Loupe pixel lattice

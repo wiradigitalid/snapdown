@@ -3,7 +3,7 @@ type: design-system
 scope: _platform
 status: draft
 created: "2026-08-23"
-updated: "2026-08-23"
+updated: "2026-09-04"
 ---
 
 # Design System — Snapdown
@@ -53,49 +53,40 @@ one theme."
 
 ## Tokens
 
-### Colour — surface and text
+**The four tables below still name the pre-Slint CSS scheme (`--color-*` custom properties in
+`tokens.css`), and `tokens.css` itself was deleted with `web/ui` under `OQ-27` on 2026-09-01.**
+`apps/desktop/ui/theme.slint` is the real, shipped source of truth today (confirmed by
+`test_theme_contrast.rs`'s own first line), and its token set is not a rename of this one — it is
+organised differently and is smaller in places:
 
-| Token | For | Resolves in |
-|---|---|---|
-| `--color-bg` | The window's own ground. Never transparent | `tokens.css` |
-| `--color-surface` | A panel, card, or rail sitting on the ground | `tokens.css` |
-| `--color-surface-raised` | A panel above another panel — a modal, a popover, a selected row | `tokens.css` |
-| `--color-surface-sunken` | **New.** An inset well: a preview area, a code block, a recorder chip at rest | to add |
-| `--color-text` | Body text on `--color-bg` or `--color-surface` | `tokens.css` |
-| `--color-text-muted` | Secondary text. MUST still meet AA — muted is not an exemption | `tokens.css` |
-| `--color-border` | The line between two surfaces | `tokens.css` |
-| `--color-border-strong` | A control's own edge — input, recorder chip, segmented control | `tokens.css` |
+- A clean correspondence exists for the surface/text/border basics: `--color-bg` → `bg-app`,
+  `--color-surface` → `bg-card`, `--color-text` → `text-primary`, `--color-text-muted` →
+  `text-muted`, `--color-border` → `border-subtle`, `--color-border-strong` → `border-strong`,
+  `--color-accent`/`-text` → `accent-primary`/`text-on-accent`.
+- **`--color-warning-bg`/`-text`, `--color-info-bg`/`-text`, and `--color-neutral-bg`/`-text` have
+  no counterpart in `theme.slint` at all** — verified by reading the file in full on 2026-09-04, not
+  inferred from a naming mismatch. Either the states they served (a failed hotkey, a listening
+  recorder, a disabled badge) no longer exist in the shipped UI, or they are still drawn from a
+  literal colour, which `AD-10` forbids.
+- `--color-danger`/`-text` has no paired token either; the closest is the single, unpaired
+  `semantic-error`.
+- The Marker badge's actual colour is `annotation-stroke` (its fill) and `text-on-plate` (its
+  label) — not a `--color-marker*` triple — per `theme.slint`'s own comment that it "borrowed
+  `semantic-error`... and now takes `annotation-stroke`" as of 2026-09-02.
+- `--color-surface-raised` and `--color-surface-sunken` have no `theme.slint` counterpart; `bg-hover`
+  and `bg-subtle` are the nearest candidates but serve different roles (a hover state, a readout
+  strip) and neither is verified as the intended replacement.
 
-### Colour — meaning
+**This is a design-system audit, not a rename, and it is left to `wdi-ux` / `wdi-component` rather
+than guessed here:** whether a missing category was dropped on purpose, still wants a literal
+somewhere it should not, or needs a new `theme.slint` property is a design decision, and inventing
+an answer would put a second wrong mapping in this document in place of the first.
 
-Each of these carries a **paired text token**. That pairing is the mechanism that makes `NFR-16`
-satisfiable: a background is never used without the foreground proven against it.
-
-| Token pair | For | Resolves in |
-|---|---|---|
-| `--color-accent` / `--color-accent-text` | The one primary action on a surface | `tokens.css` |
-| `--color-danger` / `--color-danger-text` | Delete, revoke, unpublish | `tokens.css` |
-| `--color-success-bg` / `--color-success-text` | **New.** A hotkey that is registered and active | to add — replaces literal `#dcfce7`/`#166534` |
-| `--color-warning-bg` / `--color-warning-text` | **New.** A hotkey that failed to register at startup | to add — replaces literal `#fef3c7`/`#854d0e` |
-| `--color-info-bg` / `--color-info-text` | **New.** A recorder chip while it is listening | to add — replaces literal `#eff6ff` |
-| `--color-neutral-bg` / `--color-neutral-text` | **New.** A disabled or inert badge | to add — replaces literal `#f1f5f9`/`#64748b` |
-| `--color-marker` / `--color-marker-text` / `--color-marker-ring` | A numbered Marker badge burned onto an image | `tokens.css` |
-
-### Colour — theme-invariant, and defined here anyway
-
-`AD-10` is explicit that a deliberately theme-invariant token **MUST still be defined in the token
-file**, and must say where it is defined why it does not follow the theme. Three groups qualify, and
-all three live here rather than in a component's own `DESIGN.md`:
-
-| Token | For | Why it does not follow the theme |
-|---|---|---|
-| `--color-marker` / `-text` / `-ring` | A numbered Marker badge | Burned into an exported image read on another machine under another theme |
-| `--color-overlay-scrim` | The capture overlay's scrim | Drawn over the Reviewer's own screen content, not over a Snapdown surface |
-| `--color-overlay-ring` | The selected region's edge | Must stay visible over any content the Reviewer happens to be capturing |
-| `--canvas-checker` | Transparency behind an image that does not fill its pane | Sits behind image content, not behind app chrome |
-
-They are the one place a literal value is correct, and `NFR-17`'s lint rule must be scoped to allow
-them **in this file only**.
+The two theme-invariant tokens this document already named — the capture overlay's scrim and its
+selection ring — **do** exist verbatim: `overlay-scrim` and `overlay-ring` in `theme.slint`, exactly
+as `AD-10` requires for a token that does not follow `is-dark`. `--canvas-checker` (transparency
+behind a non-filling image) has no match; `canvas-ground` is a different, solid-colour token for the
+canvas's ground plate, not a checker pattern.
 
 An earlier draft of `.how/finding/01-ux/DESIGN.md` declared `--overlay-*` and `--canvas-checker` as
 component-local tokens that "stay here rather than being promoted". That contradicted `AD-10`, which
@@ -104,8 +95,10 @@ spine wins. Corrected 2026-08-23.
 
 ### Space, radius, type, elevation
 
-Unchanged from `tokens.css` and not restated here: `--space-1`..`--space-6`, `--radius-sm|md`,
-`--font-ui`, `--font-mono`, `--text-xs`..`--text-xl`, `--shadow-raised`, `--z-overlay|toast|modal`.
+`theme.slint` carries only `radius-sharp` and `radius-pill` today. The rest of this list —
+`--space-1`..`--space-6`, `--font-ui`, `--font-mono`, `--text-xs`..`--text-xl`, `--shadow-raised`,
+`--z-overlay|toast|modal` — was "unchanged from `tokens.css`" until that file was deleted under
+`OQ-27`; whether each survives as a Slint property, a literal, or nothing is unverified.
 
 ### Typography & Font Stacks
 - **Primary UI**: `Plus Jakarta Sans`, `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
@@ -119,8 +112,10 @@ Zero-dependency, high-contrast visual glyphs:
 - `🗑️` Delete Action (Marker & Bundle)
 - `📦` Assemble Bundle Action
 - `📋` Copy Markdown to Clipboard
-- `🤖` Local MCP Agent Bridge (`port:3849`)
 - `⚙️` Settings & Preferences Modal
+
+A `🤖` **Local MCP Agent Bridge** (`port:3849`) glyph stood here until `DEC-016` withdrew the Local
+API and the MCP Bridge outright on 2026-09-04; there is no running channel left for an icon to name.
 
 One addition the density work needs:
 
@@ -136,25 +131,31 @@ what `NFR-16` is checked against — every state is a state something is readabl
 
 | Element | States it MUST support | Implementation |
 |---|---|---|
-| `Button` | default · hover · active · focus-visible · disabled · busy | `web/ui` |
-| `TextField` | default · focus-visible · invalid · disabled · read-only | `web/ui` |
-| `TextArea` | default · focus-visible · invalid · disabled · read-only | `web/ui` |
-| `Checkbox` | checked · unchecked · indeterminate · disabled | `web/ui` |
-| `SegmentedControl` | each option unselected · selected · focus-visible · disabled | `web/ui` |
-| `Toggle` | on · off · **indeterminate** · focus-visible · disabled | `web/ui` |
-| `Badge` | success · warning · neutral · danger · info | `web/ui` |
-| `MarkerBadge` | ordinal number · focused · dragged · theme-invariant | `web/ui` |
-| `MarkerLayer` | idle · inserting · dragging · delete-key-bound | `web/ui` |
-| `HotkeyChip` | bound · listening · unbound · conflicted | `web/ui` |
-| `Disclosure` | collapsed · expanded · focus-visible | `web/ui` |
-| `Modal` / `ConfirmDialog`| mounted · backdrop-blur · keydown-esc · confirm · cancel | `web/ui` |
-| `EmptyState` | an illustration slot, a sentence, one action | `web/ui` |
-| `ErrorState` | what failed, in the Reviewer's terms, and what they can do | `web/ui` |
-| `Toast` | info · success · danger, auto-dismiss and manual | `web/ui` |
-| `TokenEstimator` | calculated image + text sum · live telemetry | `web/ui` |
-| `LoupeViewport` *(W10)* | 6x pixel grid · center reticle · hex/rgb inspector | `web/ui` |
-| `AxisGuides` *(W9)* | crosshair horizontal/vertical axes · edge-flipped HUD | `web/ui` |
-| `SnappingHighlight` *(W11)*| magnetic boundary box · 8px threshold · alt-disable | `web/ui` |
+| `Button` | default · hover · active · focus-visible · disabled · busy | `apps/desktop/ui` |
+| `TextField` | default · focus-visible · invalid · disabled · read-only | `apps/desktop/ui` |
+| `TextArea` | default · focus-visible · invalid · disabled · read-only | `apps/desktop/ui` |
+| `Checkbox` | checked · unchecked · indeterminate · disabled | `apps/desktop/ui` |
+| `SegmentedControl` | each option unselected · selected · focus-visible · disabled | `apps/desktop/ui` |
+| `Toggle` | on · off · **indeterminate** · focus-visible · disabled | `apps/desktop/ui` |
+| `Badge` | success · warning · neutral · danger · info | `apps/desktop/ui` |
+| `MarkerBadge` | ordinal number · focused · dragged · theme-invariant | `apps/desktop/ui` |
+| `MarkerLayer` | idle · inserting · dragging · delete-key-bound | `apps/desktop/ui` |
+| `HotkeyChip` | bound · listening · unbound · conflicted | `apps/desktop/ui` |
+| `Disclosure` | collapsed · expanded · focus-visible | `apps/desktop/ui` |
+| `Modal` / `ConfirmDialog`| mounted · backdrop-blur · keydown-esc · confirm · cancel | `apps/desktop/ui` |
+| `EmptyState` | an illustration slot, a sentence, one action | `apps/desktop/ui` |
+| `ErrorState` | what failed, in the Reviewer's terms, and what they can do | `apps/desktop/ui` |
+| `Toast` | info · success · danger, auto-dismiss and manual | `apps/desktop/ui` |
+| `TokenEstimator` | calculated image + text sum · live telemetry | `apps/desktop/ui` |
+| `LoupeViewport` *(W10)* | 6x pixel grid · center reticle · hex/rgb inspector | `apps/desktop/ui` |
+| `AxisGuides` *(W9)* | crosshair horizontal/vertical axes · edge-flipped HUD | `apps/desktop/ui` |
+| `SnappingHighlight` *(W11)*| magnetic boundary box · 8px threshold · alt-disable | `apps/desktop/ui` |
+
+**`Implementation` corrected 2026-09-04 to `apps/desktop/ui` from `web/ui`, deleted under `OQ-27`.**
+This is a location fix only. Which `.slint` file under that tree each row actually lands in — and
+whether every row still names a real, currently-built element — is unverified and needs the same
+per-component sweep `AGENTS.md`'s reachability pitfall already demands elsewhere: confirm each is
+**instantiated** in a `.slint` file, not merely plausible from its name.
 
 `Toggle`'s **indeterminate** state is not decoration. `FR-18` requires the startup control to reflect
 the real OS registration and never an intended one, and reading that state is asynchronous. Without a

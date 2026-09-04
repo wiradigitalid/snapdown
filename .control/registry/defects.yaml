@@ -3633,7 +3633,14 @@ defects:
       The pieces that already exist: `SqliteAccessKeyStore`, `SqliteBundleStore`, `VaultBlobStore`,
       the `tiny_http` dependency, and the Bridge itself - which means the contract is already written
       down in `client.rs` and does not have to be designed.
-    status: open
+    resolution: |
+      MOOT, not fixed. `DEC-016` withdrew the Local API, the MCP Bridge, `agent-access`, and CAP-7
+      outright on 2026-09-04 rather than building any of them - the gap this row named no longer has
+      anything to be a gap in. `crates/snapdown-bridge`, `SqliteAccessKeyStore`, and every other piece
+      `fix:` above pointed at are deleted, not merely unfinished. Same shape as `OQ-6`, closed the same
+      day as moot rather than answered: nothing here needed fixing once the feature it blocked stopped
+      existing.
+    status: fixed
 
   - id: BUG-60
     title: A corrupt library.db now produces a silently empty Library, and the session's work is lost on exit
