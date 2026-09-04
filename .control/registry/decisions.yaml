@@ -282,3 +282,20 @@ decisions:
       smoke_test: owner
       loop: 10m
       expires: "2026-09-11"
+  - id: DEC-019
+    title: "Mandate: carry every open FR and every open defect to closed, unattended, checking in only at the smoke test"
+    status: accepted
+    file: .control/decisions/DEC-019-autopilot-mandate-r4-close-every-open-defect.md
+    serves: []
+    touches: []
+    created: "2026-09-04"
+    accepted_by: kodesh87, 2026-09-04
+    mandate:
+      from_gate: G5
+      scope:
+        fr: all
+        defects: [BUG-2, BUG-7, BUG-23, BUG-28, BUG-37, BUG-57, BUG-60, BUG-61, BUG-77, BUG-106]
+      parked: [ad-n, sensitive]
+      smoke_test: agent
+      loop: 5m
+      expires: "2026-09-11"
