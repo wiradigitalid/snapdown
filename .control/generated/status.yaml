@@ -10,9 +10,10 @@ validators_red:
 - refs-resolve
 validators_skipped:
   review-trace: 'advisory — trace stale, re-run before the next gate or spec close: .how/_platform/ARCHITECTURE-SPINE.md
-    (changed at e610993, reviewed at a36de2c), .how/bundle/SDD-bundle.md (changed at e8b8350, reviewed
-    at abc5a6f), .what/bundle/SRS-bundle.md (changed at e8b8350, reviewed at abc5a6f), .what/finding/SRS-finding.md
-    (changed at e8b8350, reviewed at abc5a6f)'
+    (changed at e610993, reviewed at a36de2c), .how/bundle/SDD-bundle.md (changed at b937f19, reviewed
+    at abc5a6f), .how/finding/SDD-finding.md (changed at b937f19, reviewed at abc5a6f), .what/bundle/SRS-bundle.md
+    (changed at b937f19, reviewed at abc5a6f), .what/finding/SRS-finding.md (changed at b937f19, reviewed
+    at abc5a6f)'
   uc-scheduled: no spec yet, so no ticket yet — every unscheduled UC is the correct state. Full catalogue
     coverage is checked at G5
 open_questions:

@@ -397,15 +397,13 @@ quietly dropped:
   contrast assertion run over both themes, not by inspection. This is the requirement the shipped
   build fails: colour values were hard-coded for a light theme inside components whose tokens follow
   `prefers-color-scheme`, so the two disagree wherever they meet.
-<!-- wdi-upgrade, 2026-09-04: this bullet's "Enforced by" clause still names "a lint rule that refuses
-a literal colour outside the token file", which requirements-capture-to-markdown.yaml's own NFR-17
-row corrected on 2026-09-01 to the two Rust guards over apps/desktop/ui/theme.slint that actually
-exist. Content correction, not structural, so left as it stood in main's prd.md; flagged in the
-wdi-upgrade report rather than silently rewritten. -->
 - **NFR-17** — serves BG-7. No colour is defined only for one theme. Every surface renders correctly
   under either Windows theme setting and under a change of that setting while running. Enforced by
-  a test that renders every screen in both themes and by a lint rule that refuses a literal colour
-  outside the token file.
+  two Rust guards over `apps/desktop/ui/theme.slint`, the palette that actually ships: a contrast test
+  over every token in both themes, and a test refusing a colour literal in the capture overlay. (Read
+  *"a test that renders every screen in both themes and by a lint rule that refuses a literal colour
+  outside the token file"* until 2026-09-01 — that lint covered only `web/ui/src`, deleted under
+  `OQ-27`, and never the Slint surfaces that are the whole shipped UI.)
 - **NFR-18** — serves BG-3. The parameters Auto resolved for a Capture are stored with that
   Finding, so a Finding can always say what produced it and a change to the derivation cannot
   silently rewrite the past. Enforced by an assertion that every stored Finding carries its resolved

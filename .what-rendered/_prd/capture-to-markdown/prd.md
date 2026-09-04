@@ -15,16 +15,13 @@ neither the reviewer nor the agent can still say which note belonged to which pi
 attachment between an observation and its evidence is the thing being lost, and it is the only
 thing that made the observation useful.
 
-<!-- wdi-upgrade, 2026-09-04: this paragraph still names an "MCP server the agent reads on the same
-machine after the user hands it a key" as one of the handoff shapes. `DEC-016` (2026-09-04) removed
-that channel outright — the handoff is now the copied Markdown and the unlisted web URL only. This
-is a content correction, not a structural one, so it is left for the owning skill (`wdi-problem`)
-rather than rewritten here; flagged in the wdi-upgrade report. -->
 Snapdown keeps that attachment as a first-class fact, from the moment of capture through to the
-handoff. The handoff has three shapes and they carry the same content: a Markdown file to paste, an
-MCP server the agent reads on the same machine after the user hands it a key, and an unlisted web
-URL for an agent that runs somewhere else. Because agents are billed by what they read, every image
-is downscaled and re-encoded on the way in, under a budget the user sets once.
+handoff. The handoff has two shapes and they carry the same content: a Markdown file the reviewer
+copies and pastes themselves, and an unlisted web URL for an agent that runs somewhere else. A third
+shape — an MCP server the agent read on the same machine after the reviewer handed it a key — stood
+here until `DEC-016` withdrew it on 2026-09-04; the copy-and-paste path already covered what it was
+for. Because agents are billed by what they read, every image is downscaled and re-encoded on the
+way in, under a budget the user sets once.
 
 Visual review stops being something that happens inside a chat window and becomes an artifact with a
 shape. A reviewer accumulates findings the way they accumulate commits: cheaply, in passing, without
@@ -758,15 +755,13 @@ quietly dropped:
   contrast assertion run over both themes, not by inspection. This is the requirement the shipped
   build fails: colour values were hard-coded for a light theme inside components whose tokens follow
   `prefers-color-scheme`, so the two disagree wherever they meet.
-<!-- wdi-upgrade, 2026-09-04: this bullet's "Enforced by" clause still names "a lint rule that refuses
-a literal colour outside the token file", which requirements-capture-to-markdown.yaml's own NFR-17
-row corrected on 2026-09-01 to the two Rust guards over apps/desktop/ui/theme.slint that actually
-exist. Content correction, not structural, so left as it stood in main's prd.md; flagged in the
-wdi-upgrade report rather than silently rewritten. -->
 - **NFR-17** — serves BG-7. No colour is defined only for one theme. Every surface renders correctly
   under either Windows theme setting and under a change of that setting while running. Enforced by
-  a test that renders every screen in both themes and by a lint rule that refuses a literal colour
-  outside the token file.
+  two Rust guards over `apps/desktop/ui/theme.slint`, the palette that actually ships: a contrast test
+  over every token in both themes, and a test refusing a colour literal in the capture overlay. (Read
+  *"a test that renders every screen in both themes and by a lint rule that refuses a literal colour
+  outside the token file"* until 2026-09-01 — that lint covered only `web/ui/src`, deleted under
+  `OQ-27`, and never the Slint surfaces that are the whole shipped UI.)
 - **NFR-18** — serves BG-3. The parameters Auto resolved for a Capture are stored with that
   Finding, so a Finding can always say what produced it and a change to the derivation cannot
   silently rewrite the past. Enforced by an assertion that every stored Finding carries its resolved

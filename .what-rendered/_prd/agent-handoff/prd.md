@@ -15,16 +15,13 @@ neither the reviewer nor the agent can still say which note belonged to which pi
 attachment between an observation and its evidence is the thing being lost, and it is the only
 thing that made the observation useful.
 
-<!-- wdi-upgrade, 2026-09-04: this paragraph still names an "MCP server the agent reads on the same
-machine after the user hands it a key" as one of the handoff shapes. `DEC-016` (2026-09-04) removed
-that channel outright — the handoff is now the copied Markdown and the unlisted web URL only. This
-is a content correction, not a structural one, so it is left for the owning skill (`wdi-problem`)
-rather than rewritten here; flagged in the wdi-upgrade report. -->
 Snapdown keeps that attachment as a first-class fact, from the moment of capture through to the
-handoff. The handoff has three shapes and they carry the same content: a Markdown file to paste, an
-MCP server the agent reads on the same machine after the user hands it a key, and an unlisted web
-URL for an agent that runs somewhere else. Because agents are billed by what they read, every image
-is downscaled and re-encoded on the way in, under a budget the user sets once.
+handoff. The handoff has two shapes and they carry the same content: a Markdown file the reviewer
+copies and pastes themselves, and an unlisted web URL for an agent that runs somewhere else. A third
+shape — an MCP server the agent read on the same machine after the reviewer handed it a key — stood
+here until `DEC-016` withdrew it on 2026-09-04; the copy-and-paste path already covered what it was
+for. Because agents are billed by what they read, every image is downscaled and re-encoded on the
+way in, under a budget the user sets once.
 
 Visual review stops being something that happens inside a chat window and becomes an artifact with a
 shape. A reviewer accumulates findings the way they accumulate commits: cheaply, in passing, without

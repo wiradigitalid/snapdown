@@ -27,16 +27,13 @@ neither the reviewer nor the agent can still say which note belonged to which pi
 attachment between an observation and its evidence is the thing being lost, and it is the only
 thing that made the observation useful.
 
-<!-- wdi-upgrade, 2026-09-04: this paragraph still names an "MCP server the agent reads on the same
-machine after the user hands it a key" as one of the handoff shapes. `DEC-016` (2026-09-04) removed
-that channel outright — the handoff is now the copied Markdown and the unlisted web URL only. This
-is a content correction, not a structural one, so it is left for the owning skill (`wdi-problem`)
-rather than rewritten here; flagged in the wdi-upgrade report. -->
 Snapdown keeps that attachment as a first-class fact, from the moment of capture through to the
-handoff. The handoff has three shapes and they carry the same content: a Markdown file to paste, an
-MCP server the agent reads on the same machine after the user hands it a key, and an unlisted web
-URL for an agent that runs somewhere else. Because agents are billed by what they read, every image
-is downscaled and re-encoded on the way in, under a budget the user sets once.
+handoff. The handoff has two shapes and they carry the same content: a Markdown file the reviewer
+copies and pastes themselves, and an unlisted web URL for an agent that runs somewhere else. A third
+shape — an MCP server the agent read on the same machine after the reviewer handed it a key — stood
+here until `DEC-016` withdrew it on 2026-09-04; the copy-and-paste path already covered what it was
+for. Because agents are billed by what they read, every image is downscaled and re-encoded on the
+way in, under a budget the user sets once.
 
 Visual review stops being something that happens inside a chat window and becomes an artifact with a
 shape. A reviewer accumulates findings the way they accumulate commits: cheaply, in passing, without
@@ -87,8 +84,8 @@ its image file goes with it.
 
 **Hand off.** Select the findings that belong to one concern and Snapdown writes them into one
 Markdown bundle — a named group with its own images, its own file, and its own lifetime. The bundle
-is then read in whichever way suits the agent: copied as text, read over MCP from a key the user
-pastes into the chat, or fetched from an unlisted URL by an agent running elsewhere.
+is then read in whichever way suits the agent: copied as text and pasted directly, or fetched from an
+unlisted URL by an agent running elsewhere.
 
 Every image is downscaled and re-encoded on capture against a budget the user sets, because the
 whole point is that an agent reads this.
@@ -101,8 +98,8 @@ that changes what matters: the note-to-image binding has to survive serialisatio
 image has to be cheap to read, and the output has to be a file rather than a picture on a clipboard.
 
 The honest differentiator is not technical. It is that the output format is the point rather than an
-export option, and that the three handoff paths — clipboard, MCP, URL — are the same bundle rather
-than three features. There is no moat here beyond building the loop properly and keeping it fast.
+export option, and that the two handoff paths — clipboard and URL — are the same bundle rather than
+two features. There is no moat here beyond building the loop properly and keeping it fast.
 
 One tool is aimed at the same problem rather than a neighbouring one: Cobalt Capture
 (`https://cobaltcapture.com/`), a browser-based visual feedback tool that publishes a review as a
@@ -196,9 +193,12 @@ nobody can measure, and its own Cost section admits as much.
 - A user-chosen target folder for image files, with deletion of a finding deleting its file.
 - Multi-select of findings, and composition into a named Markdown bundle.
 - Bundles as the grouping unit: listed, re-openable, deletable together with their images.
-- An MCP server the user grants access to by pasting a key, plus a loopback API behind it.
 - Publishing a chosen bundle to an unlisted web URL, and a web service that serves it.
 - Run-at-Windows-startup as a setting.
+
+**An MCP server the user grants access to by pasting a key, plus a loopback API behind it, stood
+here** until `DEC-016` withdrew the whole channel on 2026-09-04: the copy-and-paste path already
+covered what it was for.
 
 ### Scope Out
 
@@ -222,9 +222,6 @@ nobody can measure, and its own Cost section admits as much.
   or any test fixture derived from real capture output.
 - **A captured screenshot may contain personal data.** Forbids automatic upload, background sync, or
   any publish the user did not perform on a named bundle.
-- **An agent MUST NOT reach the library without the user handing it a key.** Forbids an always-on
-  discovery endpoint, an unauthenticated loopback API, and MCP access that works before the key is
-  pasted.
 - **No account, sign-in, or network call is a precondition for capturing.** Forbids putting any part
   of the capture loop behind connectivity.
 - **Deleting a finding deletes its image file.** Forbids a soft-delete that leaves the file on disk,
@@ -236,5 +233,11 @@ nobody can measure, and its own Cost section admits as much.
   superseding decision to do so.
 - **One installed executable carries the whole desktop product.** Forbids a second binary for the
   editor, and forbids the product and its window disagreeing about their own name. Recorded as
-  `DEC-003`. The `mcp-bridge` is not an exception to this: an MCP client launches it, the Reviewer
-  never does, and it owns no window.
+  `DEC-003`.
+
+**An agent MUST NOT reach the library without the user handing it a key** stood here, forbidding an
+always-on discovery endpoint, an unauthenticated loopback API, and MCP access that worked before the
+key was pasted, until `DEC-016` withdrew the channel it governed on 2026-09-04 — there is no channel
+left for it to bind. The `mcp-bridge` exception this constraint's neighbour named — *"an MCP client
+launches it, the Reviewer never does, and it owns no window"* — is withdrawn with it: the `mcp-bridge`
+executable no longer exists.
