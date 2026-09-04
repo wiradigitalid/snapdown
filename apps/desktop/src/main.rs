@@ -1403,6 +1403,9 @@ fn load_active_detail(window: &AppWindow, ctx: &AppContext, active_id: &str) {
 
     window.set_current_filename(filename.into());
     window.set_active_finding_id(f.id.clone().into());
+    // `FR-34`. View state belongs to the view being looked at, not to a Library-wide preference:
+    // opening a different Finding always starts back at natural size.
+    window.set_canvas_zoom(1.0);
 
     // Says what was saved, and - when the Quality Budget shrank it - what it was saved FROM.
     //
@@ -4057,6 +4060,76 @@ fn copy_region_to_clipboard(
     Err("Copying an image to the clipboard is implemented on Windows only.".to_string())
 }
 
+/// Bytes already fetched off the Windows clipboard - a BMP, the exact shape `raw::get_bitmap`
+/// produces and the exact shape `encode_region_for_clipboard` above already writes - decoded to
+/// RGBA8. `FR-35`.
+///
+/// The mirror of `encode_region_for_clipboard`: this half never touches the OS clipboard itself, so
+/// it is unit-testable with fabricated BMP bytes, for the same reason that function's own test
+/// fabricates bytes rather than depending on whatever a CI machine's real clipboard happens to hold.
+#[cfg(any(windows, test))]
+fn decode_clipboard_image_bytes(bmp: &[u8]) -> Result<(Vec<u8>, u32, u32), String> {
+    let decoded = image::load_from_memory(bmp)
+        .map_err(|e| format!("Could not decode the clipboard image: {e}"))?;
+    let rgba = decoded.to_rgba8();
+    let (width, height) = (rgba.width(), rgba.height());
+    Ok((rgba.into_raw(), width, height))
+}
+
+/// What `paste_clipboard_image` does once it already knows whether the clipboard holds a bitmap -
+/// `None` meaning it does not. Split out for the same reason `encode_region_for_clipboard` is: a
+/// test can supply `Some(fabricated bytes)` or `None` directly, without depending on what happens to
+/// be on the machine's real clipboard when `cargo test` runs. `FR-35`.
+///
+/// Goes through the SAME `persist_finding` a Capture or an Import already calls - never a second,
+/// independently written reduction path (`AD-4`: an image is reduced exactly once, at capture, and
+/// no original is kept).
+#[cfg(any(windows, test))]
+fn persist_clipboard_bitmap(ctx: &AppContext, bmp: Option<&[u8]>) -> Result<String, String> {
+    let Some(bmp) = bmp else {
+        return Err("The clipboard does not hold an image.".to_string());
+    };
+
+    let (rgba, width, height) = decode_clipboard_image_bytes(bmp)?;
+
+    persist_finding(
+        ctx,
+        &rgba,
+        (width, height),
+        (0, 0, width, height),
+        "Pasted",
+        "",
+    )
+    .ok_or_else(|| {
+        "Could not save the pasted image. The Vault write or the database insert failed."
+            .to_string()
+    })
+}
+
+/// Reads whatever image is on the Windows clipboard and turns it into a new Finding. `FR-35`.
+///
+/// `is_format_avail` is checked first, and deliberately outside any `Clipboard` guard of our own -
+/// `IsClipboardFormatAvailable` needs no open clipboard, unlike a read or a write - so a Reviewer who
+/// presses Paste with no image on the clipboard gets a clear, specific reason rather than a raw
+/// decode failure or, worse, nothing happening at all.
+#[cfg(windows)]
+fn paste_clipboard_image(ctx: &AppContext) -> Result<String, String> {
+    let bmp = if clipboard_win::raw::is_format_avail(clipboard_win::formats::CF_BITMAP) {
+        let bytes: Vec<u8> = clipboard_win::get_clipboard(clipboard_win::formats::Bitmap)
+            .map_err(|e| format!("Could not read the clipboard: {e}"))?;
+        Some(bytes)
+    } else {
+        None
+    };
+
+    persist_clipboard_bitmap(ctx, bmp.as_deref())
+}
+
+#[cfg(not(windows))]
+fn paste_clipboard_image(_ctx: &AppContext) -> Result<String, String> {
+    Err("Pasting an image from the clipboard is implemented on Windows only.".to_string())
+}
+
 /// Crops the capture canvas to the selected region, shrinks it to the active QualityBudget,
 /// writes it to the Vault, and records the Finding plus its note.
 ///
@@ -4207,6 +4280,62 @@ fn prewarm_capture_overlay() {
             canvas: None,
         }]
     });
+}
+
+/// `FR-34`. The clamp and step for canvas zoom, kept as pure arithmetic with no Slint runtime
+/// involved, so it can be unit-tested directly. `1.0` is "natural size" - one canvas pixel is one
+/// image pixel. `canvas-zoom` is pure view state: nothing here reads or writes `finding_store`,
+/// `library.db`, or a `Setting`, and nothing in `crates/snapdown-core` knows this exists.
+const CANVAS_ZOOM_MIN: f32 = 0.25;
+const CANVAS_ZOOM_MAX: f32 = 4.0;
+const CANVAS_ZOOM_STEP: f32 = 0.25;
+
+fn zoomed_in(current: f32) -> f32 {
+    (current + CANVAS_ZOOM_STEP).min(CANVAS_ZOOM_MAX)
+}
+
+fn zoomed_out(current: f32) -> f32 {
+    (current - CANVAS_ZOOM_STEP).max(CANVAS_ZOOM_MIN)
+}
+
+#[cfg(test)]
+mod canvas_zoom_tests {
+    use super::*;
+
+    #[test]
+    fn zooming_in_then_out_the_same_number_of_steps_returns_to_the_start() {
+        let start = 1.0_f32;
+        let after_in = zoomed_in(zoomed_in(zoomed_in(start)));
+        let back = zoomed_out(zoomed_out(zoomed_out(after_in)));
+        assert_eq!(
+            back, start,
+            "a round trip with no clamp hit must be exact, not merely close"
+        );
+    }
+
+    #[test]
+    fn zoom_in_never_exceeds_the_maximum() {
+        let mut zoom = CANVAS_ZOOM_MIN;
+        for _ in 0..500 {
+            zoom = zoomed_in(zoom);
+        }
+        assert_eq!(
+            zoom, CANVAS_ZOOM_MAX,
+            "repeated zoom-in past the ceiling must stay AT it"
+        );
+    }
+
+    #[test]
+    fn zoom_out_never_drops_below_the_minimum() {
+        let mut zoom = CANVAS_ZOOM_MAX;
+        for _ in 0..500 {
+            zoom = zoomed_out(zoom);
+        }
+        assert_eq!(
+            zoom, CANVAS_ZOOM_MIN,
+            "repeated zoom-out past the floor must stay AT it"
+        );
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -4818,6 +4947,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(message) => toast(&win, message, false),
             Err(message) => toast(&win, message, true),
         }
+    });
+
+    // ZOOM - `FR-34`. Pure view state: the arithmetic lives in `zoomed_in`/`zoomed_out` above (unit
+    // tested with no Slint runtime involved), and these three handlers only read the current value,
+    // compute the next one, and push it straight back. Nothing here touches `finding_store`.
+    let win_weak_zoom_in = main_window.as_weak();
+    main_window.on_zoom_in_clicked(move || {
+        let Some(win) = win_weak_zoom_in.upgrade() else {
+            return;
+        };
+        win.set_canvas_zoom(zoomed_in(win.get_canvas_zoom()));
+    });
+
+    let win_weak_zoom_out = main_window.as_weak();
+    main_window.on_zoom_out_clicked(move || {
+        let Some(win) = win_weak_zoom_out.upgrade() else {
+            return;
+        };
+        win.set_canvas_zoom(zoomed_out(win.get_canvas_zoom()));
+    });
+
+    let win_weak_zoom_reset = main_window.as_weak();
+    main_window.on_zoom_reset_clicked(move || {
+        let Some(win) = win_weak_zoom_reset.upgrade() else {
+            return;
+        };
+        // `1.0` directly, not through `zoomed_in`/`zoomed_out`: reset is "go to natural size", not
+        // "take one more step".
+        win.set_canvas_zoom(1.0);
     });
 
     let win_weak_rev = main_window.as_weak();
@@ -6578,6 +6736,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // Pasting an image already on the Windows clipboard as a new Finding. `FR-35`.
+    //
+    // `paste-clicked` has been declared since the toolbar was written and was listed in
+    // `DELIBERATELY_UNHANDLED` for exactly one reason: nothing read an image out of the clipboard
+    // yet. It goes through `persist_finding` the same way Import does just above - a pasted image is
+    // not a second kind of Finding with its own rules either.
+    let win_weak_paste = main_window.as_weak();
+    let ctx_paste = ctx.clone();
+    main_window.on_paste_clicked(move || {
+        let Some(win) = win_weak_paste.upgrade() else {
+            return;
+        };
+        match paste_clipboard_image(&ctx_paste) {
+            Ok(id) => {
+                load_findings_into_window(&win, &ctx_paste, Some(&id));
+                toast(&win, "Pasted from the clipboard as a new Finding.", false);
+            }
+            Err(message) => toast(&win, message, true),
+        }
+    });
+
     // --- Tray icon, global hotkeys, and startup registration ---
     let tray_icon_bytes = include_bytes!("../assets/app-icon.png");
     let tray_icon_rgba = image::load_from_memory(tray_icon_bytes)
@@ -7235,6 +7414,138 @@ mod tests {
                 .expect("to read the Library")
                 .is_empty(),
             "a copy must record no Finding"
+        );
+    }
+
+    /// `FR-35`. A minimal `AppContext` for the paste tests below, mirroring the one
+    /// `a_copy_writes_nothing_and_hands_over_a_decodable_image` builds above - no Bundle store
+    /// involved, since paste never touches one.
+    fn paste_test_ctx(vault_dir: &Path) -> AppContext {
+        AppContext {
+            vault_store: VaultBlobStore::new(vault_dir).expect("a vault at a temp path"),
+            vault_path: vault_dir.to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        }
+    }
+
+    /// A BMP exactly the shape `raw::get_bitmap` hands back and `encode_region_for_clipboard`
+    /// already produces: an uncompressed RGB bitmap, no alpha. Solid-coloured so the decoded pixel
+    /// can be asserted against, the same way `a_copy_writes_nothing_and_hands_over_a_decodable_image`
+    /// asserts a real pixel rather than trusting a signature and a size.
+    fn fabricate_clipboard_bmp(width: u32, height: u32, rgb: [u8; 3]) -> Vec<u8> {
+        let mut img = image::RgbImage::new(width, height);
+        for pixel in img.pixels_mut() {
+            *pixel = image::Rgb(rgb);
+        }
+        let mut bmp = Vec::new();
+        image::codecs::bmp::BmpEncoder::new(&mut bmp)
+            .encode(img.as_raw(), width, height, image::ExtendedColorType::Rgb8)
+            .expect("a fabricated BMP must encode");
+        bmp
+    }
+
+    #[test]
+    fn decode_clipboard_image_bytes_decodes_a_real_bitmap() {
+        let bmp = fabricate_clipboard_bmp(3, 2, [10, 20, 30]);
+        let (rgba, width, height) =
+            decode_clipboard_image_bytes(&bmp).expect("a valid BMP must decode");
+        assert_eq!((width, height), (3, 2));
+        // RGBA8, four bytes per pixel - decode the actual bytes rather than trusting the reported
+        // dimensions, per this repository's own rule against a signature-and-size test.
+        assert_eq!(&rgba[0..4], &[10, 20, 30, 255]);
+    }
+
+    #[test]
+    fn decode_clipboard_image_bytes_refuses_garbage_without_panicking() {
+        let err = decode_clipboard_image_bytes(b"not a bitmap")
+            .expect_err("garbage bytes must not decode");
+        assert!(!err.is_empty());
+    }
+
+    /// User Story 10: pressing Paste with nothing on the clipboard must say so clearly, not do
+    /// nothing and not create a Finding.
+    #[test]
+    fn persist_clipboard_bitmap_refuses_when_nothing_is_available() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = paste_test_ctx(vault_dir.path());
+
+        let err = persist_clipboard_bitmap(&ctx, None).expect_err("None must refuse");
+        assert_eq!(err, "The clipboard does not hold an image.");
+        assert!(
+            ctx.finding_store
+                .list_findings()
+                .expect("to read the Library")
+                .is_empty(),
+            "no Finding may be created when there is nothing to paste"
+        );
+    }
+
+    #[test]
+    fn persist_clipboard_bitmap_refuses_a_corrupt_bitmap_and_creates_no_finding() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = paste_test_ctx(vault_dir.path());
+
+        let err = persist_clipboard_bitmap(&ctx, Some(b"not a bitmap"))
+            .expect_err("corrupt bytes must refuse");
+        assert!(!err.is_empty());
+        assert!(
+            ctx.finding_store
+                .list_findings()
+                .expect("to read the Library")
+                .is_empty(),
+            "a decode failure must create no Finding"
+        );
+    }
+
+    /// The whole point of `FR-35`: a real image on the clipboard becomes a real Finding, reduced
+    /// under the same Quality Budget a Capture would use, appearing with an empty Note.
+    #[test]
+    fn persist_clipboard_bitmap_creates_one_finding_reduced_under_the_active_budget() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = paste_test_ctx(vault_dir.path());
+
+        let bmp = fabricate_clipboard_bmp(12, 8, [40, 120, 200]);
+        let id = persist_clipboard_bitmap(&ctx, Some(&bmp)).expect("a real bitmap must persist");
+
+        let findings = ctx
+            .finding_store
+            .list_findings()
+            .expect("to read the Library");
+        assert_eq!(findings.len(), 1, "exactly one Finding must exist");
+
+        let detail = ctx
+            .finding_store
+            .get_finding(&id)
+            .expect("to read the Finding")
+            .expect("the Finding must exist");
+        assert_eq!(detail.note.body, "", "a pasted Finding's Note starts empty");
+        assert_eq!(
+            detail.finding.source_monitor, "Pasted",
+            "a pasted Finding must be labelled as such, not confused with an Import"
+        );
+
+        // Decode the STORED file, not just the row's own reported dimensions - the mistake this
+        // repository's own rule warns against is trusting a signature-and-size pair.
+        let stored_path = ctx.vault_path.join(&detail.finding.image_path);
+        let decoded = image::open(&stored_path).expect("the stored file must decode as an image");
+        assert_eq!(
+            (decoded.width(), decoded.height()),
+            (detail.finding.image_width, detail.finding.image_height),
+            "the row's own dimensions must match what was actually written"
+        );
+        let resolved_long_edge = detail
+            .finding
+            .resolved_long_edge
+            .expect("NFR-18: the resolved budget must be stored with the Finding");
+        assert!(
+            decoded.width().max(decoded.height()) <= resolved_long_edge,
+            "the stored image's long edge must fit the Quality Budget that was resolved for it"
         );
     }
 
