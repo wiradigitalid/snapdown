@@ -11,7 +11,8 @@ Mandate: `DEC-019`. Parameters at `.control/registry/decisions.yaml` → `DEC-01
 BUG-61, BUG-77, BUG-106]}`, `parked: [ad-n, sensitive]`, `smoke_test: agent`, `loop: 5m`,
 `expires: 2026-09-11`).
 
-- Iteration: 4, commit (pending — merge of `BUG-57` about to be committed alongside this row)
+- Iteration: 5, commit `67f73b2` (no new commit — still waiting on `BUG-60`/`BUG-2`, both `running`
+  again per `ListAgents`; `validate.py --generate` re-confirmed only the known baseline red)
 - Run branch: `autopilot/DEC-019`. Isolated worktree at
   `D:\Developer\wiradigital.id\snapdown-autopilot-dec019` is the coordinator's own. Not yet pushed, no
   PR opened. **The owner asked (mid-run, this session) that once the current in-flight work lands
