@@ -11,35 +11,36 @@ Mandate: `DEC-019`. Parameters at `.control/registry/decisions.yaml` → `DEC-01
 BUG-61, BUG-77, BUG-106]}`, `parked: [ad-n, sensitive]`, `smoke_test: agent`, `loop: 5m`,
 `expires: 2026-09-11`).
 
-- Iteration: 6, commit `137157a`
-- Run branch: `autopilot/DEC-019`. Isolated worktree at
-  `D:\Developer\wiradigital.id\snapdown-autopilot-dec019` is the coordinator's own. Not yet pushed, no
-  PR opened. **The owner asked (mid-run, this session) that once the current in-flight work lands
-  clean, the loop stops and the branch is pushed for the next session to continue — see Next below.
-  This is a deliberate pause, not § Finish: the mandate stays `accepted`, scope is not exhausted.**
-- Stopped at: **Capacity**, about to become a deliberate pause once `BUG-60` lands — `BUG-2` reported,
-  independently verified (`validate.py --generate` clean beyond baseline, docs-only diff confirmed, no
-  code touched), and merged via `git merge --no-ff docs/bug-2-withdraw-sharing-reader` — one auto-merged
-  file (`defects.yaml`, disjoint region from `BUG-57`'s note). Worktree/branch deleted. `BUG-57` was
-  merged the iteration before. Only `BUG-60` (`a91901bc93997d2bc`) still `running`, ~15 min in.
+- Iteration: 7, commit (pending — this pause commit)
+- Run branch: `autopilot/DEC-019`, about to be pushed to `origin` (no PR yet — the mandate isn't
+  finished, this is a mid-run checkpoint). Isolated worktree at
+  `D:\Developer\wiradigital.id\snapdown-autopilot-dec019` is the coordinator's own; the next session
+  should reuse it (or re-create with `git worktree add` if it's gone) rather than working in `main`.
+- Stopped at: **Owner-directed pause.** All three dispatches from this session landed, were
+  independently verified, and merged clean: `BUG-57` (no code change, corrected note), `BUG-2`
+  (`DEC-020` opened/accepted/applied, promise withdrawn/corrected), `BUG-60` (startup failure
+  visibility — native dialog, refuse-not-label, three `unwrap`s removed, code-reviewed clean). Full
+  `cargo test --workspace --no-fail-fast` green on the merged branch; `validate.py --generate` shows
+  only the pre-existing baseline red (`V6`×5, `V16`×1) plus one non-blocking `review-trace` advisory on
+  `SDD-bundle.md`. The owner asked mid-run to stop here and hand off to the next session rather than
+  continue unattended — not § Finish: the mandate stays `accepted`, `expires: 2026-09-11`, scope is
+  not exhausted.
 - Blocked: —
 - Parked: —
-- In flight:
-  - `fix/bug-60-startup-failure-visibility`, worktree `D:\Developer\wiradigital.id\snapdown-fix-bug-60`,
-    agent `a91901bc93997d2bc` — `BUG-60`. Code + defects.yaml only.
-- Next: **on the owner's mid-run instruction, once `BUG-60` lands and verifies clean, STOP HERE for
-  this session** — do not dispatch `BUG-77`/`BUG-106`/anything further. Instead: cancel the loop
-  (`CronDelete`, job `888923fa`), push `autopilot/DEC-019` to `origin` (no PR yet — the mandate isn't
-  finished, this is a mid-run checkpoint), and leave this `## Resume` block naming the next runnable
-  defects for whichever session picks the mandate back up: `BUG-77` (small, has a named preferred
-  fix) and `BUG-106` (Crop tool — a real feature build, isolated to the crop interaction + a new store
-  op). `BUG-23`, `BUG-28`, `BUG-37` are not independently actionable this run (BUG-23: blocked behind
-  DEC-005, no Slint publish entry point to fix; BUG-28: remaining latency work is explicitly the
+- In flight: — (nothing; all three dispatches from this session are merged and their worktrees deleted)
+- Next: a future `/wdi-autopilot` invocation (or the owner directly) picks up from here. Runnable
+  defects still open in scope: `BUG-77` (small, has a named preferred fix — a Delete control on the
+  filmstrip card/Finding panel, plus a Vault link) and `BUG-106` (Crop tool — a real feature build,
+  drag-to-select + a store-level crop operation, isolated to `appwindow.slint` + a new store method).
+  `BUG-23`, `BUG-28`, `BUG-37` are not independently actionable by this mandate (BUG-23: blocked behind
+  `DEC-005`, no Slint publish entry point to fix; BUG-28: remaining latency work is explicitly the
   owner's call per its own `fix:`; BUG-37: needs a `wdi-ux` look-and-feel study naming Graphite, not a
   code fix) — leave open with their existing notes, do not close them, do not attempt the
-  design/ordering calls they defer. `BUG-7` is worked only for its agent-doable half (already `DONE`);
-  do not attempt the history-scrub half under any circumstance. `BUG-2`, `BUG-57`, `BUG-61` are
-  merged and done as of this pause; `BUG-60` will be too as soon as it reports and verifies clean.
+  design/ordering calls they defer. `BUG-7` is worked only for its agent-doable half (already `DONE`
+  — screenshots removed from the tree); do not attempt the git-history-scrub half under any
+  circumstance, mandate or not. `BUG-2`, `BUG-57`, `BUG-60`, `BUG-61` are done. When `BUG-77` and
+  `BUG-106` are both closed, every runnable row in scope is exhausted and the next iteration goes to
+  § Finish (smoke test, since `smoke_test: agent`; push; PR ready-for-review if green).
 
 ## Decisions
 
@@ -56,3 +57,5 @@ BUG-61, BUG-77, BUG-106]}`, `parked: [ad-n, sensitive]`, `smoke_test: agent`, `l
 | Iter 4 | wdi-autopilot Door 2 | `BUG-57` agent reported outcome (a): `library-clicked` was already wired by the bundle-library merge (not something this run needed to fix); `bundles-drawer-clicked` is confirmed still a genuine stub with no surface to wire to. No code changed; only a corrective note added to `defects.yaml`, `status` stays `open`. Merged clean via `git merge --no-ff` — no conflict, since the agent's branch never touched the ledger. Worktree/branch deleted | Re-running the diagnosis myself instead of trusting the report — not done here since the report's own evidence (exact file:line citations, the specific commit `36048a7`, the exact `KNOWN_STUBS` content) was independently checkable and checked | If the report's citations don't hold up, the next reader of `BUG-57`'s row catches it — nothing was closed on unverified trust | `.control/registry/defects.yaml` (BUG-57 note), merge commit on `autopilot/DEC-019` |
 | Iter 4 | wdi-autopilot Door 2 | **The owner sent a mid-run instruction in this session**: once the current in-flight work lands clean, stop the loop, commit, and push, so the next session continues the mandate rather than this one running further unattended right now. Recorded here rather than silently complying, since it changes this iteration's stop from the ordinary three (Done/Capacity/Blocked) to a fourth, owner-directed one: a deliberate pause. Not treated as § Finish — the mandate stays `accepted`, not `applied`; scope is not exhausted; no smoke test run; no PR opened, only the run branch pushed | Continuing to dispatch `BUG-77`/`BUG-106` immediately, which the owner's instruction directly countermands | If this pause is later judged wrong, the owner resumes with `/wdi-autopilot` or restarts the loop — nothing here is destructive or hard to reverse | — (instruction only; acted on once `BUG-60`/`BUG-2` land, below) |
 | Iter 6 | wdi-autopilot Door 2 | `BUG-2` agent reported: opened, accepted (`accepted_by: DEC-019`) and applied `DEC-020` — withdraws the never-built publish dialog (row 11) and not-found page (row 15) outright, but *corrects rather than withdraws* row 14/`LC-027`, having caught that `DEC-015` (2026-09-01, applied) already found the bare reader real and explicitly rejected retiring `LC-027` — withdrawing it here would have silently contradicted an applied decision. Also fixed a real gap: `DEC-019`'s own `decisions.yaml` row was missing `type: mandate`, which `accepted_by: DEC-019` needed to validate. Independently verified (`validate.py --generate` clean beyond baseline, diff confirmed docs-only) and merged; one file (`defects.yaml`) auto-merged against `BUG-57`'s disjoint edit | Trusting `BUG-2`'s literal `fix:` text ("withdraw ... LC-027") without cross-checking `DEC-015`, which would have reopened a settled, applied decision by contradiction | Had this shipped uncaught, `V6`-style refs-resolve drift or a direct contradiction between two applied `DEC-`s would have surfaced at the next `wdi-reconcile` or review pass | `DEC-020` (new), `BUG-2` closed, 7 corpus files corrected, merge commit on `autopilot/DEC-019` |
+| Iter 7 | wdi-autopilot Door 2 | `BUG-60` agent reported: `AppContext::init` split into a pure `try_init` and a thin `init` wrapper; a corrupt/failed store open now refuses outright (native `rfd::MessageDialog`, foregrounded, names the store and path) instead of silently falling back to `open_in_memory()`; all three `.unwrap()`s replaced with a reported `process::exit(1)`. Design call made and documented: refuse rather than label-and-continue, since only refusal actually prevents the data loss `BUG-60` names. Agent self-dispatched an independent `/code-review` pass (ready to merge, nits only, no blockers) before reporting. Independently re-verified here: `cargo fmt`/`clippy`/`test --workspace --no-fail-fast` all green, including the new mutation-verified corrupt-DB regression test. Merged; one file (`defects.yaml`) auto-merged | Trusting the agent's own review pass as sufficient without an independent re-run | If my re-run had disagreed, this row would say so — it agreed | `apps/desktop/src/main.rs`, `.control/registry/defects.yaml`, merge commit on `autopilot/DEC-019` |
+| Iter 7 | wdi-autopilot Door 2 | **Executed the owner's mid-run pause instruction**, now that all three in-flight dispatches (`BUG-57`, `BUG-2`, `BUG-60`) are merged and independently verified clean: stopping the loop, pushing `autopilot/DEC-019` to `origin`, and leaving `## Resume` naming `BUG-77`/`BUG-106` as the next runnable rows for whichever session resumes the mandate | Dispatching `BUG-77`/`BUG-106` now that capacity is free, which the owner's instruction directly countermands | If this pause is later judged wrong, the owner resumes with `/wdi-autopilot` (iteration door, mandate still `accepted`) — nothing here is destructive | `.control/memlog/autopilot-DEC-019.md`, pushed branch `autopilot/DEC-019` |
