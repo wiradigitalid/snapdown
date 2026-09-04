@@ -6068,10 +6068,11 @@ defects:
       Windows clipboard yet"* - so this is a documented gap, not a silent regression, but it is still
       a live button that does nothing when the Reviewer clicks it.
     fix: |
-      Not fixed. Recorded on the owner's request; no code changed. Fixing this means building
-      clipboard-in (reading an image out of the Windows clipboard) and removing the
-      `DELIBERATELY_UNHANDLED` entry alongside wiring a real handler - out of scope for this entry.
-    status: open
+      Fixed by `FR-35` (2026-09-04): `on_paste_clicked` in `main.rs` now reads an image off the
+      Windows clipboard via `clipboard-win`, decodes it, and hands it to the same `persist_finding`
+      path Capture already calls. `paste-clicked` left `test_ui_callbacks_reach_rust.rs`'s
+      `DELIBERATELY_UNHANDLED` list; the callback is wired.
+    status: fixed
 
   - id: BUG-106
     title: "Crop tool has no effect - it only changes the cursor and which tool icon is highlighted"
