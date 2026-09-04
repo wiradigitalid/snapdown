@@ -1,0 +1,58 @@
+# goals.yaml — SSOT for BG, the product's goals. Nothing else lives here.
+#
+# Keys are English; prose values follow the product's chosen `doc_language`.
+#
+# ONE FILE, ONE WRITER, ONE GATE. This file is `wdi-problem`'s, written at G1 when the brief lands.
+# CAP, FR, NFR, and UJ all belong to an initiative instead, and live in
+# `requirements-<slug>.yaml` — the slug being that PRD's own folder name under `.what/_prd/`.
+# That file is `wdi-product`'s, written at G2.
+#
+# `CAP` is NOT here, and the reason is worth writing down because the opposite was tried first: a
+# capability is declared by a feature, one feature is one capability, and a feature lives in exactly
+# one PRD. The argument for keeping CAP at the product level was that `depends_on` between
+# capabilities crosses initiatives — but that buys nothing, because every validator reads the MERGED
+# view of all requirement files and never opens one by name. A cross-file `depends_on` resolves
+# exactly as well as a same-file one.
+#
+# IDS ARE ALLOCATED ONCE AND THE SEQUENCE IS GLOBAL TO THE PRODUCT. `FR-12` means one thing in this
+# repo no matter which file holds it — that is what lets a ticket say `satisfies: [FR-12]` without
+# also naming the PRD. `id-allocated-once` fails when two files declare the same id.
+
+goals:
+  - id: BG-1
+    title: A note is unambiguously attached to the image it describes
+    measure: Zero notes attached to the wrong image, on every handoff
+  - id: BG-2
+    title: Capture to handoff happens in one pass, with no file management
+    measure: Median handoff time for a five-Finding review under 120 seconds
+  - id: BG-3
+    title: A handoff costs as few agent tokens as it can while staying legible
+    measure: Stored bytes per Finding a small fraction of the unreduced capture, at a quality the
+      Reviewer does not override
+  - id: BG-4
+    title: The same review reaches an agent that is not on the capture machine
+    measure: Every published Bundle is fetchable by the remote agent on the first try
+  - id: BG-5
+    title: A review is disposable — findings and their files leave together
+    measure: Zero files in the Vault that nothing points at, and zero records pointing at a file
+      that is gone
+  - id: BG-6
+    title: The tool never becomes the thing being managed
+    measure: Cold start to a usable tray icon under 3 seconds, and no setting touched after the
+      first run
+  - id: BG-7
+    title: Snapdown's own surface costs the Reviewer no attention
+    measure: A Reviewer who has never seen Snapdown reaches their first handed-over Bundle without
+      being told how; every text element meets WCAG AA contrast in both Windows themes; no primary
+      surface requires scrolling to discover that a control exists
+  # BG-8 born 2026-09-01, closing OQ-31. CAP-12 (Export PDF) hung off BG-2 and the misfit was recorded
+  # as known: BG-2's measure is a handoff TIME, which cannot report on an exporter, and BG-2 promises
+  # "no file management" while an export exists precisely to produce a file a person manages - so the
+  # capability was serving a goal whose own words it contradicts. Stretching that phrase to admit an
+  # exporter would have weakened a promise the product holds elsewhere. A different audience earns its
+  # own goal. NOT numbered BG-6: that id has been taken since G1, and so has BG-7 - the OQ-31 row said
+  # "a sixth goal" and was already wrong when written, which is recorded in answered.md.
+  - id: BG-8
+    title: A review is readable by someone who does not have Snapdown
+    measure: Zero Findings lost, reordered, or stripped of their image or note between a Bundle's
+      stored Markdown and the document exported from it

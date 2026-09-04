@@ -72,14 +72,9 @@ requires navigation to survive any surface's failure.
 
 ## Inherited Constraints · [guarded]
 
-Quoted verbatim from `.how/_platform/ARCHITECTURE-SPINE.md`. A design that must deviate goes to
-`wdi-decision`; it does not argue here.
+A design that must deviate goes to `wdi-decision`; it does not argue here.
 
 **AD-2 — A record and its files live or die together**
-> Any operation that creates or removes a Finding, a Bundle, or a BundleItem MUST create or remove
-> that record's files in the same unit of work, and MUST leave the prior state intact if any part of
-> it fails. A record MUST NOT be committed before its files exist, and files MUST NOT be removed
-> before the record is.
 
 Reaches this component through the Vault move (`UC-14`, `SCN-01`), and the code satisfies it by
 **ordering** rather than by compensation: every file is copied and verified before any source is
@@ -94,11 +89,6 @@ Reaches this component because it holds the web service address. Holding an addr
 it; nothing here initiates a network call.
 
 **AD-10 — Colour has exactly one authority, and every colour exists in both themes**
-> Every colour MUST be defined once, in the token stylesheet, and MUST be defined for both the light
-> and the dark theme. A component MUST NOT contain a colour literal. A meaning background MUST be
-> used only through its paired foreground token, so the pair is proven once rather than at each use.
-> A token that is deliberately theme-invariant — the Marker badge, the capture overlay's scrim — MUST
-> say so where it is defined and MUST still be defined in the token file.
 
 **The shipped code violated this**, and `W6-S1` fixed it at `420ecce`, in the pre-`DEC-007` webview.
 `HotkeySection.tsx` carried `#dcfce7`, `#166534`, `#f1f5f9`, `#64748b`, `#fef3c7`, `#fde047`,
@@ -110,9 +100,6 @@ written against eight literals in one file. The Slint rebuild carries the same r
 `design-system-guide.md`, enforced over `apps/desktop/ui/theme.slint` rather than `tokens.css`.
 
 **AD-11 — One process owns the Library, and the Editor is a persona of it**
-> Exactly one desktop process MUST own the Library. The tray, the global hotkeys, the capture
-> overlay, and the Editor window MUST all live in it. A second desktop executable MUST NOT be
-> produced by a build.
 
 The build satisfies both sentences today. `target/release/` held a stale `desktop.exe` beside
 `Snapdown.exe` until it was deleted by hand on 2026-08-23, and nothing prevented it recurring at the

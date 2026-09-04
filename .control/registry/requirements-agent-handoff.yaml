@@ -1,0 +1,116 @@
+# requirements-agent-handoff.yaml — SSOT for CAP · FR · NFR · UJ belonging to the
+# `agent-handoff` PRD.
+#
+# Keys are English; prose values follow the product's chosen `doc_language`.
+# Numbers are allocated from the product's global sequence and MUST NOT restart here — see
+# `.control/registry/goals.yaml` for where BG lives and why CAP is not there.
+
+capabilities:
+  # CAP-7 "Let an agent on this machine read a Bundle, after the Reviewer hands it a key" stood
+  # here, `component: agent-access`, until 2026-09-04. `DEC-016` withdrew it along with the
+  # component: the running channel it named is removed in full, and FR-19..FR-22 are withdrawn
+  # with it below. Not reused.
+  - id: CAP-8
+    title: Let an agent on another host read a Bundle over HTTPS
+    goal: BG-4
+    component: sharing
+    target_release: r2
+    prd: agent-handoff
+    depends_on: [CAP-4]
+
+functional:
+  # --- CAP-7 Local agent access (withdrawn) -------------------------------------------
+  # FR-19 "Issue and copy an Access Key", FR-20 "Serve the Library over the Local API", FR-21 "Read
+  # a Bundle through MCP", and FR-22 "Revoke access" stood here, all `capability: CAP-7`,
+  # `component: agent-access`, until 2026-09-04. `DEC-016` withdrew all four along with CAP-7 and
+  # the component: Snapdown no longer opens a running channel into the Library for an agent, and the
+  # only way a Bundle reaches one is the Markdown a Reviewer copies or pastes themselves. None of
+  # the four ids is reused.
+  # --- CAP-8 Web sharing -------------------------------------------------------------
+  - id: FR-23
+    title: Publish a Bundle
+    statement: The Reviewer can publish a selected Bundle to their web service and receive an unlisted
+      URL for it. Realizes UJ-6.
+    capability: CAP-8
+    component: sharing
+    writes: [Publication]
+    proof: Publishing a Bundle yields a URL that, fetched from another machine, returns that Bundle's
+      Markdown with working image links.
+  - id: FR-24
+    title: Serve a published Bundle
+    statement: The web service serves a published Bundle at its unlisted URL as Markdown, with its
+      images fetchable from that document, to any client that has the URL. Realizes UJ-6.
+    capability: CAP-8
+    component: sharing
+    proof: A plain HTTP client given the URL retrieves the Markdown, and every image reference in it
+      retrieves an image.
+  - id: FR-25
+    title: Unpublish a Bundle
+    statement: The Reviewer can unpublish a Bundle, after which its URL stops resolving and its
+      content is removed from the service.
+    capability: CAP-8
+    component: sharing
+    writes: [Publication]
+    proof: After unpublishing, fetching the previously working URL from another machine returns
+      nothing, and the Bundle is still intact in the Library.
+  - id: FR-26
+    title: See and copy a Bundle's Publication
+    statement: The Reviewer can see, for every Bundle, whether it is published, when it was published,
+      and at what URL — and can copy that URL in one action. Realizes UJ-6.
+    capability: CAP-8
+    component: sharing
+    proof: The Bundle list distinguishes published from unpublished Bundles at a glance, and copying
+      the URL of a published one puts a working URL on the clipboard.
+
+nonfunctional:
+  # NFR-9 "The Local API binds 127.0.0.1 only and refuses every request without a currently valid
+  # Access Key, comparing keys in constant time" stood here, `component: agent-access`, until
+  # 2026-09-04. `DEC-016` withdrew it along with the Local API and the component; not reused.
+  - id: NFR-10
+    title: A Publication's URL slug carries at least 128 bits of entropy from a cryptographically
+      secure source
+    goal: BG-4
+    component: sharing
+    enforced_by: An assertion on slug generation
+  - id: NFR-11
+    title: No Finding, Note, or Bundle leaves this machine except through a publish the Reviewer
+      confirmed on a named Bundle
+    goal: BG-4
+    component: sharing
+    enforced_by: A test exercising capture, composition, and idle operation with outbound calls
+      failing, asserting none was attempted
+  - id: NFR-12
+    title: Only reduced images are ever transmitted or published; an unreduced capture never leaves
+      the machine
+    goal: BG-3
+    component: sharing
+    enforced_by: An assertion on the publish payload
+  - id: NFR-13
+    title: An unpublish takes effect on the next request, with no cache or grace period
+    # Narrowed 2026-09-04. Read "A revoke and an unpublish each take effect..." until `DEC-016`
+    # withdrew the Access Key and the revoke it described; the invariant is unchanged for the half
+    # that survives it.
+    goal: BG-5
+    component: sharing
+    enforced_by: A test calling immediately after an unpublish
+  - id: NFR-14
+    title: The web service runs as one executable with one configuration file, needs no database
+      server, and its whole state is one directory
+    goal: BG-6
+    component: sharing
+    enforced_by: An integration test starting it from a clean directory and serving a published
+      Bundle
+  - id: NFR-15
+    title: The web service exposes no route that lists, searches, or enumerates Publications, and
+      returns the same refusal for an unknown slug as for a revoked one
+    goal: BG-4
+    component: sharing
+    enforced_by: A route-inventory test and a response-equality test
+
+journeys:
+  - id: UJ-5
+    title: The Reviewer hands a Bundle to the agent in the next window
+    prd: agent-handoff
+  - id: UJ-6
+    title: The Reviewer hands a Bundle to an agent on a server
+    prd: agent-handoff

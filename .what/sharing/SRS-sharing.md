@@ -51,12 +51,7 @@ published. That is not a third actor; it is the same person using the same read.
 
 ## UC Catalogue · [G3]
 
-| id | Use case | Actor | Satisfies | critical |
-| --- | --- | --- | --- | --- |
-| UC-20 | I put a review somewhere the agent on my server can reach it | Reviewer | FR-23 | yes |
-| UC-21 | I read a review that was put up for me, from a machine that has nothing else on it | Remote coding agent | FR-24 | no |
-| UC-22 | I take a published review back off the internet | Reviewer | FR-25 | no |
-| UC-23 | I check whether a review of mine is still readable from outside | Reviewer | FR-26 | no |
+UC Catalogue — see `.control/registry/usecases.yaml`, rows where `component: sharing`.
 
 One of four is `critical`: publishing puts images that may contain personal data on the public
 internet and cannot be undone in the sense that matters. UC-22 is not marked — it reduces exposure

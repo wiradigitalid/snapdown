@@ -65,15 +65,11 @@ Windows 11 is the platform, not a container, and appears at L1.
 
 ## Product Components per container
 
-Rendering of each Product Component's `containers:` in `components.yaml`.
-
-| Container | Product Components living in it |
-| --- | --- |
-| `desktop-app` | `finding`, `bundle`, `settings`, `sharing` |
-| `web-api` | `sharing` |
+Product Components per container — see `.control/registry/components.yaml`, each component's
+`containers:`.
 
 `desktop-app` holds more than one Product Component, so `c4-l3-desktop-app.md` exists. The other two
-hold one each, and the matrix already places them.
+hold one each.
 
 **A fourth container, `web-ui`, was drawn on this diagram, listed in the element table, given an HTTPS
 arrow to `web-api`, and mapped to `sharing` — until 2026-09-01, when `DEC-015` withdrew it.** It never

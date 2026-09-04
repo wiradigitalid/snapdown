@@ -4,7 +4,7 @@ parent: prd
 initiative: agent-handoff
 status: draft
 created: "2026-08-22"
-updated: "2026-08-22"
+updated: "2026-09-04"
 ---
 
 # Addendum — PRD: Agent Handoff
@@ -115,3 +115,42 @@ has to reach both without being prepared twice. That single fact is why there ar
 here instead of one.
 
 No external research was run for this PRD and `_bmad-output/` holds no run folder for it.
+
+## Technical how — testable consequences per FR
+
+### FR-23 — Publish a Bundle
+
+- Publishing requires an explicit confirmation that states the Bundle's name and what publishing exposes.
+- Publishing is per Bundle and per act. A single Finding is published by composing a Bundle that holds only it — the granularity exists, at the cost of one composition step.
+- Publishing happens only on a Bundle the Reviewer named; nothing is ever published automatically or in the background.
+- A failed publish leaves nothing readable on the service and leaves the Bundle unpublished locally.
+- Publishing an already published Bundle replaces its content at the same URL rather than creating a second one.
+- The images published are the reduced images, never an unreduced original.
+- Publishing is refused, with the reason, when no web service is configured.
+
+### FR-24 — Serve a published Bundle
+
+- The document is retrievable as raw Markdown, so an agent does not have to parse a web page.
+- Image references resolve relative to the document's own URL.
+- An unknown slug is refused indistinguishably from a revoked one.
+- No path on the service lists, indexes, searches, or enumerates published Bundles.
+- The service serves a human-readable rendering at the same URL for a browser, and raw Markdown for a client that asks for it.
+
+**Out of Scope:**
+- Accounts, sign-in, or per-viewer permissions on the service.
+- Comments, edits, or any write from a viewer.
+
+### FR-25 — Unpublish a Bundle
+
+- Unpublishing removes the Markdown and the images from the service, not just the mapping.
+- The URL is never reused for a different Bundle.
+- Unpublishing a Bundle that is not published is harmless and says so.
+- Deleting a published Bundle unpublishes it as part of the same action.
+- An unpublish that cannot reach the service is reported and the Bundle stays marked published, so the Reviewer is never told something is private when it is not.
+
+### FR-26 — See and copy a Bundle's Publication
+
+- Publication state is visible in the Bundle list without opening the Bundle.
+- The publish timestamp and the URL are both shown.
+- Copying tells the Reviewer it succeeded.
+- A Bundle whose last unpublish failed is shown as still published, with the failure named.

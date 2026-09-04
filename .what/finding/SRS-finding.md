@@ -50,19 +50,7 @@ BR-14 keeps an unbundled Finding invisible to both. (`agent-access` was a third 
 
 ## UC Catalogue · [G3]
 
-| id | Use case | Actor | Satisfies | critical |
-| --- | --- | --- | --- | --- |
-| UC-1 | I press a key, box the thing that is wrong, and say what is wrong with it | Reviewer | FR-1, FR-2 | no |
-| UC-2 | I take five of these in a row without stopping | Reviewer | FR-3 | no |
-| UC-3 | I look at everything I have captured so far | Reviewer | FR-6 | no |
-| UC-4 | I reword a note now that I have read it back | Reviewer | FR-7 | no |
-| UC-5 | I point at three separate spots inside one screenshot | Reviewer | FR-8 | no |
-| UC-6 | I pick out several findings at once | Reviewer | FR-9 | no |
-| UC-7 | I throw away the findings I am done with | Reviewer | FR-13 | yes |
-| UC-8 | I find out what has gone missing or been left behind | Reviewer | FR-15 | no |
-| UC-27 | I annotate a screenshot with visual shapes, arrows, callouts, text, or blur redaction | Reviewer | FR-30, FR-31, FR-32, FR-33 | no |
-| UC-30 | I get rid of the screenshots behind a review I am finished with, but keep the review | Reviewer | FR-41 | yes |
-| UC-31 | I find out which reviews are still holding my screenshots, and get that disk back | Reviewer | FR-42 | yes |
+UC Catalogue — see `.control/registry/usecases.yaml`, rows where `component: finding`.
 
 Three of eleven are `critical` — UC-7, UC-30 and UC-31 — and all three for one reason: each removes a
 capture and its file from disk, and none can be undone. FR-4 has no use case of its own and says so in

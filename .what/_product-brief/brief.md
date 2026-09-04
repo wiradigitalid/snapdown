@@ -2,12 +2,19 @@
 title: "Product Brief: Snapdown"
 status: draft
 created: "2026-08-22"
-updated: "2026-08-23"
+updated: "2026-09-04"
 ---
 
 # Product Brief: Snapdown
 
-## Executive Summary
+> **This is the working brief.** It points at the registry instead of repeating it, so `Goals` is one
+> line and there is no Assumptions or Prerequisites section here.
+>
+> **To read or hand over one complete, self-contained document, run `/wdi-report render brief`.**
+> It writes `.what-rendered/_product-brief/brief.md` with the goals, the open assumptions, and the open
+> prerequisites filled in from their own homes. That file is regenerated, never hand-edited.
+
+## Why
 
 Snapdown is a Windows desktop tool that turns visual review into something a coding agent can act
 on. Press a hotkey, drag a region, type what is wrong with it. Do that five more times. Then select
@@ -20,11 +27,22 @@ neither the reviewer nor the agent can still say which note belonged to which pi
 attachment between an observation and its evidence is the thing being lost, and it is the only
 thing that made the observation useful.
 
+<!-- wdi-upgrade, 2026-09-04: this paragraph still names an "MCP server the agent reads on the same
+machine after the user hands it a key" as one of the handoff shapes. `DEC-016` (2026-09-04) removed
+that channel outright — the handoff is now the copied Markdown and the unlisted web URL only. This
+is a content correction, not a structural one, so it is left for the owning skill (`wdi-problem`)
+rather than rewritten here; flagged in the wdi-upgrade report. -->
 Snapdown keeps that attachment as a first-class fact, from the moment of capture through to the
 handoff. The handoff has three shapes and they carry the same content: a Markdown file to paste, an
 MCP server the agent reads on the same machine after the user hands it a key, and an unlisted web
 URL for an agent that runs somewhere else. Because agents are billed by what they read, every image
 is downscaled and re-encoded on the way in, under a budget the user sets once.
+
+Visual review stops being something that happens inside a chat window and becomes an artifact with a
+shape. A reviewer accumulates findings the way they accumulate commits: cheaply, in passing, without
+deciding up front what they are for. Bundles become the unit that gets handed around — to an agent,
+to a second agent checking the first, to a colleague, to a ticket. The desktop app stays small and
+the formats stay boring, so that whatever reads reviews in two years can still read these.
 
 ## The Problem
 
@@ -116,21 +134,12 @@ them that way.
 
 ## Goals
 
-- **BG-1** — core value: a reviewer hands an agent several findings at once, and every note is
-  unambiguously attached to the image it describes.
-- **BG-2** — capture to handoff happens in one pass, with no file management and no re-describing an
-  image in order to point at it.
-- **BG-3** — a handoff costs as few agent tokens as it can while its images stay legible.
-- **BG-4** — the same review reaches an agent that is not running on the capture machine.
-- **BG-5** — a review is disposable on purpose: a finding, or a whole bundle, leaves together with
-  its image files and leaves nothing orphaned.
-- **BG-6** — the tool never becomes the thing being managed: hotkeys, target folder, compression, and
-  startup behaviour are set once and stay out of the way.
-- **BG-7** — Snapdown's own surface costs the Reviewer no attention. Every screen is legible at a
-  glance, every control is answerable without a manual, and no screen asks the Reviewer for a number
-  they have no way to judge.
-- **BG-8** — a review is readable by someone who does not have Snapdown: the document exported from a
-  Bundle carries every Finding, in the composer's order, with its image and its note intact.
+Goals — see `.control/registry/goals.yaml` → `goals:`.
+
+<!-- wdi-upgrade, 2026-09-04: the two paragraphs below explained BG-7's split (OQ-20) and the
+BG-6/BG-7 distinction. Both compare two goals at once rather than stating one goal's own reason, so
+they have no single `why:` row to move into without guessing — left here for the owner to place,
+reported in the wdi-upgrade output.
 
 **BG-7's bar is split, and the split is the point.** It used to end *"the bar is the experience of
 Snagit and of Cobalt Capture, on a product that does less than either"*, applied to the whole product.
@@ -144,6 +153,7 @@ cannot, and `DEC-005` lifts only on a bar that is **met and verified** by its ow
 BG-6 and BG-7 look adjacent and are not the same goal. BG-6 is about **frequency** — a setting the
 Reviewer touches once. BG-7 is about **cost per encounter** — what that one touch, and every capture
 after it, actually demands of them. A product can fully satisfy BG-6 with a screen nobody can read.
+-->
 
 ## Success Criteria
 
@@ -228,42 +238,3 @@ nobody can measure, and its own Cost section admits as much.
   editor, and forbids the product and its window disagreeing about their own name. Recorded as
   `DEC-003`. The `mcp-bridge` is not an exception to this: an MCP client launches it, the Reviewer
   never does, and it owns no window.
-
-## Assumptions
-
-- A coding agent handed a Markdown file with relative image paths can open those images. If it
-  cannot, the primary handoff path is worthless and MCP becomes the only one.
-- Agent reading cost tracks image pixel area closely enough that downscaling is the dominant lever,
-  ahead of encoder choice.
-- A UI screenshot downscaled to roughly 1600 px wide and re-encoded lossily stays legible enough
-  that the reviewer does not reach for the original.
-- Numbered markers are sufficient annotation for a machine audience, and the arrows and callouts of
-  a human-audience tool add nothing an agent can use.
-- Windows global hotkeys can be registered from a user-level process without administrator rights.
-- The reviewer is willing to paste a key into an agent chat to grant access, and prefers that to the
-  agent having standing access.
-- An agent on a remote host can fetch an HTTPS URL and the images it references.
-- Snagit and Cobalt Capture are the right experience benchmark for BG-7. Both are built for a human
-  reader; Snapdown's reader is a machine. If the benchmark is wrong, effort goes into affordances no
-  agent can use, and BG-7 is met against the wrong standard. Filed as `OQ-20`.
-- Four named Quality Budget presets are distinguishable enough that a Reviewer picks between them
-  rather than leaving Auto forever. If not, Advanced and Custom are cost with no buyer. Filed as
-  `OQ-18` and recorded as the reversal trigger in `DEC-004`.
-- The Reviewer's want from MCP is unformed rather than unstated, so holding agent access still costs
-  delay and not rework. Filed as `OQ-17`.
-
-## Prerequisites
-
-- A Rust toolchain and Node on the build machine. Satisfied.
-- A host to run the web service on, reachable over HTTPS. Not satisfied.
-- A domain or subdomain for published bundle URLs. Not satisfied.
-- A Windows 11 machine for capture testing, because capture cannot be verified headlessly.
-  Satisfied.
-
-## Vision
-
-Visual review stops being something that happens inside a chat window and becomes an artifact with a
-shape. A reviewer accumulates findings the way they accumulate commits: cheaply, in passing, without
-deciding up front what they are for. Bundles become the unit that gets handed around — to an agent,
-to a second agent checking the first, to a colleague, to a ticket. The desktop app stays small and
-the formats stay boring, so that whatever reads reviews in two years can still read these.

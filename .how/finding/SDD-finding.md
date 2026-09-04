@@ -83,15 +83,13 @@ Capture is.
 
 ## Inherited Constraints · [guarded]
 
-Quoted verbatim from `.how/_platform/ARCHITECTURE-SPINE.md` under their original ids.
-
-| AD | Quoted rule | How it lands here |
-| --- | --- | --- |
-| AD-1 | "A Finding's Markers and its Note's numbered lines MUST be stored as one ordered collection. Adding, moving, removing, or renumbering MUST be a single operation over that collection. No code path may write a Marker without writing its line, or a line without its Marker." | One `marker` table carrying both the position and the line text, `ordinal` serving as both numbers. `LC-004` exposes add, move, remove, and renumber as single transactions; nothing else may write `marker` |
-| AD-2 | "Any operation that creates or removes a Finding, a Bundle, or a BundleItem MUST create or remove that record's files in the same unit of work, and MUST leave the prior state intact if any part of it fails. A record MUST NOT be committed before its files exist, and files MUST NOT be removed before the record is." | Create: `LC-005` reserves the blob, then `LC-004` commits the row — so the file exists first. Delete: `LC-005` removes every file, and only on confirmation does `LC-004` commit the row's removal. The second half of the quoted rule is deliberately inverted for deletion and that inversion is argued in Design Notes |
-| AD-3 | "A Marker's position MUST be stored as a fraction of the image's width and height, in the closed range 0 to 1. No stored coordinate may be in pixels, and no renderer may assume the image is at its capture resolution." | `marker.x` and `marker.y` are floats in `[0,1]`. `LC-007` converts on the way in and out; `LC-004` rejects a value outside the range rather than clamping it |
-| AD-4 | "The capture adapter MUST apply the Quality Budget before the image reaches the Vault, and MUST NOT retain the unreduced pixels. No later stage — composition, publishing, or serving — may re-encode or re-scale a stored image. A Bundle's image is a copy of the Finding's image with Markers drawn on it, at the same dimensions." | `LC-003` is the only holder of unreduced pixels and drops them when it returns. It is the only code in the component that encodes. `LC-005` has no encoder |
-| AD-6 | "No component may open an outbound network connection carrying Finding, Note, Marker, or Bundle content, except the publish client, executing a publish the Reviewer confirmed on a named Bundle. There is no telemetry, no analytics, and no crash reporter that carries content." | No LC in this component has a network dependency at all. NFR-4's test runs the whole capture path with outbound calls failing and asserts none was attempted |
+| AD | How it lands here |
+| --- | --- |
+| AD-1 | One `marker` table carrying both the position and the line text, `ordinal` serving as both numbers. `LC-004` exposes add, move, remove, and renumber as single transactions; nothing else may write `marker` |
+| AD-2 | Create: `LC-005` reserves the blob, then `LC-004` commits the row — so the file exists first. Delete: `LC-005` removes every file, and only on confirmation does `LC-004` commit the row's removal. The second half of the quoted rule is deliberately inverted for deletion and that inversion is argued in Design Notes |
+| AD-3 | `marker.x` and `marker.y` are floats in `[0,1]`. `LC-007` converts on the way in and out; `LC-004` rejects a value outside the range rather than clamping it |
+| AD-4 | `LC-003` is the only holder of unreduced pixels and drops them when it returns. It is the only code in the component that encodes. `LC-005` has no encoder |
+| AD-6 | No LC in this component has a network dependency at all. NFR-4's test runs the whole capture path with outbound calls failing and asserts none was attempted |
 
 ## Failure Behaviour · [guarded]
 

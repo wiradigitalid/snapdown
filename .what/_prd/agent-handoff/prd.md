@@ -7,29 +7,29 @@ updated: "2026-09-04"
 
 # PRD: Agent Handoff
 
+> **This is the working PRD.** It cites requirement ids instead of repeating their text, so §3 lists
+> `FR`/`NFR` by id, and there is no Glossary, Non-Goals, Open Questions, or Assumptions Index section
+> here — each of those facts has its own home.
+>
+> **To read or hand over one complete, self-contained document, run `/wdi-report render prd`.**
+> It writes `.what-rendered/_prd/agent-handoff/prd.md` with the capabilities, the requirement
+> statements and proofs of done, the glossary terms this PRD uses, the non-goals, and the open
+> questions filled in from their own homes. That file is regenerated, never hand-edited.
+
 ## Revision History
 
 | Date | What changed | Why | Releases affected |
 |---|---|---|---|
 | 2026-08-22 | Initial version | Copying Markdown reaches an agent on this machine and nothing else; two more paths are needed before a Bundle is usable where the agents actually run | r2 |
 | 2026-09-04 | §4.1 (CAP-7, FR-19..FR-22, UJ-5), the Access Key throughout, and every cross-reference to them are withdrawn. §4.2 (CAP-8) is unchanged | `DEC-016` — the owner instructed that the Agent bridge/MCP feature be removed, because the copy-Markdown-and-paste workflow already covers what it was for. There is no replacement running channel for an agent on this machine; the Reviewer pastes Markdown by hand, the way `capture-to-markdown`'s Copy Markdown and Bundle composition already produce it | r2 |
+| 2026-09-04 | `wdi-upgrade` (0.5.15 → 0.6.1): §0 Document Purpose, §3 Glossary, §8 Open Questions, and §9 Assumptions Index removed — each fact now lives in its own home (`product-glossary.md`, `.control/questions/assumptions.md` — three new rows, `OQ-35`..`OQ-37`). `FR-23`..`FR-26`'s Proof of done and Consequences moved to `requirements-agent-handoff.yaml` (`proof:`) and `addendum.md`'s new "Technical how" section; the feature now cites `FR`/`NFR` ids only, under **Realizes:**. Five §5 Non-Goals with no existing home landed in §4.2 MVP Out of Scope; the sixth (sync) was already covered by the brief's Scope Out. Sections renumbered 1–7 | Mechanical structural migration; no promise, proof, or consequence text changed | — |
 
-## 0. Document Purpose
+## 1. Why This Initiative
 
-This PRD is for the Product Owner and for the downstream blueprint and component work. It covers
-what happens after a Bundle exists and needs to reach an agent on another host: publishing it to an
-unlisted URL over HTTPS.
-
-It does not cover capturing, noting, marking, composing, or handing a Bundle to an agent on the same
-machine — that handoff is the Markdown a Reviewer copies with *Copy Markdown* or gets automatically on
-a successful Assemble & Save / Review & Update Save, and pastes themselves; it belongs to
-`capture-to-markdown`'s `bundle` component, not to this PRD. `DEC-016` withdrew the running channel
-this PRD used to promise for that case.
-
-Vocabulary is anchored in `.control/product-glossary.md` and used verbatim. Where something was
-inferred rather than confirmed it carries an inline `[ASSUMPTION]` tag and appears again in §9.
-
-## 1. Vision
+<!-- wdi-upgrade, 2026-09-04: this section was `## 1. Vision` and read as a full restatement rather
+than a delta against the brief's `Why`. No sentence below appears word for word in the brief, so
+nothing was deleted — the migration rule for this section forbids guessing which paraphrases are
+copies. Left whole for the owner (wdi-product) to sharpen into a stated delta. -->
 
 The Reviewer has a Bundle, and an agent on a server somewhere else needs to read it. The Reviewer
 publishes the Bundle to an unlisted URL and pastes the URL. The agent fetches Markdown and images
@@ -86,16 +86,7 @@ this one.
   - **Edge case:** the web service is unreachable. Publishing fails with the reason, the Bundle stays
     unpublished, and nothing partial is left on the server.
 
-## 3. Glossary
-
-Every domain noun this document uses is defined once in `.control/product-glossary.md` and used
-verbatim: **Bundle**, **Capture**, **Editor**, **Finding**, **Handoff**, **Library**, **Note**,
-**Publication**, **Reviewer**, **Vault**. **Access Key**, **Local API**, and **MCP Bridge** were
-glossary entries this document used too, until `DEC-016` withdrew what they named.
-
-No synonym for any of them appears in this PRD.
-
-## 4. Features
+## 3. Features
 
 A **§4.1 Reading a Bundle from this machine** feature stood here until 2026-09-04 — CAP-7, serving
 BG-2, realising UJ-5 through FR-19 (issue and copy an Access Key), FR-20 (serve the Library over a
@@ -105,7 +96,7 @@ of the five ids is reused. The job the section served — handing a Bundle to an
 machine without pasting images by hand — is now done by Copy Markdown, which belongs to
 `capture-to-markdown` and needed no running channel to begin with.
 
-### 4.2 Reading a Bundle from somewhere else
+### 3.1 Reading a Bundle from somewhere else
 
 **Capability:** CAP-8 — serves BG-4.
 
@@ -116,102 +107,17 @@ Unpublishing makes it stop resolving. Realizes UJ-6.
 `[ASSUMPTION: an unguessable slug, optionally plus a read token, is access control the Reviewer accepts.]`
 `[ASSUMPTION: an agent on a remote host can fetch an HTTPS URL and the images it references.]`
 
-**Functional Requirements:**
+**Realizes:** FR-23, FR-24, FR-25, FR-26
 
-#### FR-23: Publish a Bundle
+## 4. MVP Scope
 
-The Reviewer can publish a selected Bundle to their web service and receive an unlisted URL for it.
-Realizes UJ-6.
-
-**Proof of done:** Publishing a Bundle yields a URL that, fetched from another machine, returns that
-Bundle's Markdown with working image links.
-
-**Consequences (testable):**
-- Publishing requires an explicit confirmation that states the Bundle's name and what publishing
-  exposes.
-- Publishing is per Bundle and per act. A single Finding is published by composing a Bundle that
-  holds only it — the granularity exists, at the cost of one composition step.
-- Publishing happens only on a Bundle the Reviewer named; nothing is ever published automatically or
-  in the background.
-- A failed publish leaves nothing readable on the service and leaves the Bundle unpublished locally.
-- Publishing an already published Bundle replaces its content at the same URL rather than creating a
-  second one.
-- The images published are the reduced images, never an unreduced original.
-- Publishing is refused, with the reason, when no web service is configured.
-
-#### FR-24: Serve a published Bundle
-
-The web service serves a published Bundle at its unlisted URL as Markdown, with its images fetchable
-from that document, to any client that has the URL. Realizes UJ-6.
-
-**Proof of done:** A plain HTTP client given the URL retrieves the Markdown, and every image reference
-in it retrieves an image.
-
-**Consequences (testable):**
-- The document is retrievable as raw Markdown, so an agent does not have to parse a web page.
-- Image references resolve relative to the document's own URL.
-- An unknown slug is refused indistinguishably from a revoked one.
-- No path on the service lists, indexes, searches, or enumerates published Bundles.
-- The service serves a human-readable rendering at the same URL for a browser, and raw Markdown for a
-  client that asks for it.
-
-**Out of Scope:**
-- Accounts, sign-in, or per-viewer permissions on the service.
-- Comments, edits, or any write from a viewer.
-
-#### FR-25: Unpublish a Bundle
-
-The Reviewer can unpublish a Bundle, after which its URL stops resolving and its content is removed
-from the service.
-
-**Proof of done:** After unpublishing, fetching the previously working URL from another machine
-returns nothing, and the Bundle is still intact in the Library.
-
-**Consequences (testable):**
-- Unpublishing removes the Markdown and the images from the service, not just the mapping.
-- The URL is never reused for a different Bundle.
-- Unpublishing a Bundle that is not published is harmless and says so.
-- Deleting a published Bundle unpublishes it as part of the same action.
-- An unpublish that cannot reach the service is reported and the Bundle stays marked published, so
-  the Reviewer is never told something is private when it is not.
-
-#### FR-26: See and copy a Bundle's Publication
-
-The Reviewer can see, for every Bundle, whether it is published, when it was published, and at what
-URL — and can copy that URL in one action. Realizes UJ-6.
-
-**Proof of done:** The Bundle list distinguishes published from unpublished Bundles at a glance, and
-copying the URL of a published one puts a working URL on the clipboard.
-
-**Consequences (testable):**
-- Publication state is visible in the Bundle list without opening the Bundle.
-- The publish timestamp and the URL are both shown.
-- Copying tells the Reviewer it succeeded.
-- A Bundle whose last unpublish failed is shown as still published, with the failure named.
-
-## 5. Non-Goals (Explicit)
-
-- Snapdown is not a sync client. Nothing is uploaded that the Reviewer did not publish, on a Bundle
-  they named, in an action they confirmed.
-- The Library is never exposed beyond this machine. Only a published Bundle leaves it, and only as a
-  copy.
-- Nothing here is writable by an agent. There is no MCP operation and no web endpoint that changes a
-  Note, a Marker, a Bundle, or takes a Capture.
-- The web service is not a product. It has no accounts, no billing, no gallery, no search, and no
-  landing page.
-- Snapdown does not host anything itself. The web service runs where the Reviewer puts it.
-- No third-party service is required. Publishing goes to a host the Reviewer controls, not to an
-  account they signed up for.
-
-## 6. MVP Scope
-
-### 6.1 In Scope
+### 4.1 In Scope
 
 - Publish and unpublish one named Bundle, with confirmation and honest failure.
 - A web service serving a published Bundle as raw Markdown and as a plain rendering, plus its images.
 - Publication state and URL visible per Bundle in the Editor.
 
-### 6.2 Out of Scope for MVP
+### 4.2 Out of Scope for MVP
 
 - Publishing more than one Bundle in one action.
 - Publishing a Finding directly, without composing it into a Bundle first. BR-14 keeps unbundled
@@ -227,8 +133,17 @@ copying the URL of a published one puts a working URL on the clipboard.
 - Any push from Snapdown to an agent. Publishing is pull.
 - Server-side rendering of Markers. The Bundle's images already carry them.
 - A managed hosted service the Reviewer does not run themselves.
+- Exposing the Library itself beyond this machine. Only a published Bundle leaves it, and only as a
+  copy.
+- Any write from an agent. There is no MCP operation and no web endpoint that changes a Note, a
+  Marker, a Bundle, or takes a Capture.
+- The web service being a product in its own right. It has no accounts, no billing, no gallery, no
+  search, and no landing page.
+- Snapdown hosting the web service itself. It runs where the Reviewer puts it.
+- A third-party service standing in for the web service. Publishing goes to a host the Reviewer
+  controls, not to an account they signed up for.
 
-## 7. Success Metrics
+## 5. Success Metrics
 
 **Primary**
 
@@ -252,33 +167,7 @@ copying the URL of a published one puts a working URL on the clipboard.
 how long an Access Key lived, until `DEC-016` withdrew the key and the channel `SM-6` measured on
 2026-09-04. Neither id is reused.
 
-## 8. Open Questions
-
-1. Does the remote agent need the images at all, or is the Markdown enough for most reviews? If
-   images are rarely fetched, the publish payload could shrink considerably.
-2. Should a Publication carry an optional read token from the start, rather than being designed for
-   and added later?
-3. What happens to a Publication when the Bundle's Findings are deleted from the Library? Currently
-   nothing — the Publication is a copy — and that is either the right answer or a surprise.
-
-A fourth question stood here — whether the Local API and the MCP Bridge should be one process rather
-than two — until `DEC-016` withdrew both on 2026-09-04, and the PRD open question 2 it pointed at in
-`SRS-agent-access.md` went with them.
-
-## 9. Assumptions Index
-
-- §4.2 — an unguessable slug, optionally plus a read token, is access control the Reviewer accepts.
-  Filed as OQ-8.
-- §4.2 — an agent on a remote host can fetch an HTTPS URL and the images it references. Filed as
-  OQ-7.
-- Carried from the brief and still load-bearing here: a coding agent can open relative image paths
-  (OQ-1).
-
-A §4.1 assumption stood here too — the Reviewer prefers pasting a key per session over the agent
-holding standing access, filed as OQ-6 — until `DEC-016` closed OQ-6 on 2026-09-04: the friction it
-asked about no longer exists, because the thing that caused it is gone.
-
-## Cross-Cutting NFRs
+## 6. Cross-Cutting NFRs
 
 - **NFR-10** — serves BG-4. A Publication's URL slug carries at least 128 bits of entropy from a
   cryptographically secure source. Enforced by an assertion on slug generation.
@@ -300,7 +189,7 @@ asked about no longer exists, because the thing that caused it is gone.
 `NFR-9`, binding the Local API to loopback and a valid Access Key, stood here too until `DEC-016`
 withdrew both on 2026-09-04; not reused.
 
-## Constraints and Guardrails
+## 7. Constraints and Guardrails
 
 ### Safety
 

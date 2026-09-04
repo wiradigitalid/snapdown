@@ -94,14 +94,7 @@ Correcting a title and exporting a PDF are the two rights added.
 
 ## UC Catalogue · [G3]
 
-| id | Use case | Actor | Satisfies | critical |
-| --- | --- | --- | --- | --- |
-| UC-9 | I turn the findings I picked into one review document | Reviewer | FR-10 | no |
-| UC-10 | I look back at the reviews I have already put together | Reviewer | FR-11 | no |
-| UC-11 | I drop a whole review straight into the conversation I am having with my agent | Reviewer | FR-12 | no |
-| UC-12 | I get rid of a review and everything in it | Reviewer | FR-14 | yes |
-| UC-28 | I turn a review into something I can send to a person who does not have Snapdown | Reviewer | FR-39 | no |
-| UC-29 | I fix a typo in a review I have already put together | Reviewer | FR-40 | no |
+UC Catalogue — see `.control/registry/usecases.yaml`, rows where `component: bundle`.
 
 One of six is `critical`: UC-12 removes files from disk irreversibly, and it may also end a
 Publication (BR-23), which is the one action in this component that reaches outside the machine.

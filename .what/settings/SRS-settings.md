@@ -48,15 +48,7 @@ have to reach across a seam to get it.
 
 ## UC Catalogue · [G3]
 
-| id | Use case | Actor | Satisfies | critical |
-| --- | --- | --- | --- | --- |
-| UC-13 | I decide how much picture quality a screenshot is worth | Reviewer | FR-5 | no |
-| UC-14 | I decide where my screenshots are kept | Reviewer | FR-16 | no |
-| UC-15 | I change the keys that set Snapdown off, because one of them clashes | Reviewer | FR-17 | no |
-| UC-16 | I have Snapdown ready the moment I sign in | Reviewer | FR-18 | no |
-| UC-24 | I can tell what I have opened and which part of it I am in | Reviewer | FR-27 | no |
-| UC-25 | I can get to any part of Snapdown from wherever I happen to be | Reviewer | FR-28 | no |
-| UC-26 | I can see everything a screen offers me without hunting for it | Reviewer | FR-29 | no |
+UC Catalogue — see `.control/registry/usecases.yaml`, rows where `component: settings`.
 
 None is `critical`. Moving the Vault comes closest, and BR-29 makes it all-or-nothing rather than
 irreversible: no file is lost, they are either all in the new place or all in the old one. UC-24 to

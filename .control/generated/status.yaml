@@ -1,63 +1,30 @@
-promise_progress: 54%
+promise_progress: 0%
 rtm_rows:
-  green: 19
-  counted: 35
+  green: 0
+  counted: 32
   excluded_no_uc: 7
-work_progress:
-- wave: W1
-  status: closed
-  stories_done: 5
-  stories_total: 5
-  work_progress: 100%
-- wave: W2
-  status: closed
-  stories_done: 0
-  stories_total: 0
-  work_progress: n/a
-- wave: W3
-  status: closed
-  stories_done: 0
-  stories_total: 0
-  work_progress: n/a
-- wave: W4
-  status: closed
-  stories_done: 0
-  stories_total: 0
-  work_progress: n/a
-- wave: W5
-  status: closed
-  stories_done: 0
-  stories_total: 0
-  work_progress: n/a
-- wave: W6
-  status: closed
-  stories_done: 11
-  stories_total: 11
-  work_progress: 100%
-- wave: W7
-  status: closed
-  stories_done: 3
-  stories_total: 3
-  work_progress: 100%
-- wave: W8
-  status: closed
-  stories_done: 6
-  stories_total: 6
-  work_progress: 100%
-gate_readiness: 81%
+work_progress: []
+gate_readiness: 92%
 validators_red:
-- V12
-- V13
-- V16
-- V3
-- V6
+- memlog-home
+- refs-resolve
 validators_skipped:
-  V19: 'advisory — wave S/M closed without an RTR-: W7'
+  review-trace: 'advisory — trace stale, re-run before the next gate or spec close: .how/_platform/ARCHITECTURE-SPINE.md
+    (changed at e610993, reviewed at a36de2c), .how/bundle/SDD-bundle.md (changed at e8b8350, reviewed
+    at abc5a6f), .what/bundle/SRS-bundle.md (changed at e8b8350, reviewed at abc5a6f), .what/finding/SRS-finding.md
+    (changed at e8b8350, reviewed at abc5a6f)'
+  uc-scheduled: no spec yet, so no ticket yet — every unscheduled UC is the correct state. Full catalogue
+    coverage is checked at G5
 open_questions:
   blocking: 0
-  assumptions: 20
+  assumptions: 23
   external: 3
   answered: 10
+  open_by_whose:
+    owner: 0
+    run: 0
+    frozen: 0
+    unstated: 23
   blocking_budget: 12
   blocking_over_budget: false
   assumptions_budget_per_gate: 15

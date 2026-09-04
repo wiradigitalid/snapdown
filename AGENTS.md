@@ -222,7 +222,7 @@ derived from the other: one component MAY be thin on purpose and reviewed the ha
 `.constitution/method/document/delivery-flow-guide.md` owns both;
 `.constitution/method/why/rationale.md` says why they are separate.
 
-## The five gates and the fifteen skills
+## The five gates and the seventeen skills
 
 | Gate | Decides | Skill |
 |---|---|---|
@@ -235,7 +235,7 @@ derived from the other: one component MAY be thin on purpose and reviewed the ha
 Before G1 and at the tail of G2: `wdi-init`, five intents — `setup` · `component` · `mode` · `risk` ·
 `structure`.
 
-Any time: `wdi-decision` · `wdi-question` · `wdi-log` · `wdi-help` · `wdi-reconcile` · `wdi-review` ·
+Any time: `wdi-decision` · `wdi-question` · `wdi-log` · `wdi-help` · `wdi-explain-to-me` · `wdi-reconcile` · `wdi-review` ·
 `wdi-report` · `wdi-systematic-debugging`.
 
 **No BMad skill is invoked directly.** Each has a wrapper, and the wrapper is what checks position,
@@ -247,7 +247,7 @@ verifies the result, and lands the memlog.
   fixed in the WDI Method package, then brought here with `npx wdi-method update`.
 - A file in `_bmad-output/prior-knowledge/` MUST NOT be copied into `.what/` or `.how/`. It enters
   the corpus only through the skill that owns the slot.
-- `.control/generated/` MUST NOT be written by hand — it is the output of `validate.py` and
+- `.control/generated/`, `.what-rendered/`, and `.how-rendered/` MUST NOT be written by hand — they are the output of `validate.py` and
   `timeline.py`.
 - The two structure maps in `.control/` MUST NOT be edited by hand — `wdi-init` intent `structure`
   re-derives them.
@@ -276,6 +276,7 @@ verifies the result, and lands the memlog.
 | Looking for a non-technical fact — a domain, an account, a legal entity, a locked date | `.control/project-non-technical-log.md` |
 | Naming anything — a code identifier, a file, a database column | `.constitution/method/language-guide.md` |
 | Asking "which gate now, what next" | `.constitution/method/document/delivery-flow-guide.md` · skill `wdi-help` |
+| Having to decide something, and wanting the reading done first | skill `wdi-explain-to-me` — it briefs, and changes nothing |
 | Setting or changing `mode` or `risk_accepted` | `.constitution/method/document/delivery-flow-guide.md` · skill `wdi-init` |
 | Invoking a BMad skill | `.constitution/method/document/bmad-guide.md` · `.constitution/method/document/bmad-skill-register.md` |
 | Writing or reviewing a product brief | `.constitution/method/document/brief-guide.md` |
@@ -289,14 +290,9 @@ verifies the result, and lands the memlog.
 | Looking for where code lives, or placing new code | `.control/structure-codebase.md` |
 | Looking for where a document lives | `.control/structure-document.md` |
 | Writing or reviewing code | `.constitution/project/codebase-stack-guide.md` · `.constitution/project/codebase-conventions-guide.md` · `.constitution/project/codebase-brownfield-guide.md` |
-| Building or changing any UI, in either window | `.constitution/project/design-system-guide.md` |
 
-The three `.constitution/project/codebase-*-guide.md` were **not** all `Draft`, and this line said they were until
-2026-09-01. Read each file's own frontmatter; as of that date: `codebase-conventions-guide.md` is **Accepted**, filled
-and ratified by `a06a8f3` — it binds. `codebase-stack-guide.md` has been **Accepted** since W1 — it binds too, and its
-§1 and §2 were corrected on 2026-09-01 because they still described the Tauri/React/Node stack `DEC-007` retired, which
-is the worst combination there is: a guide that binds and is wrong. `codebase-brownfield-guide.md` is the only one still
-**Draft**, and while it is, its contents MAY be read as guidance but MUST NOT be used to reject a change.
+All three `.constitution/project/codebase-*-guide.md` start as `status: Draft`. While they are, their contents MAY be read
+as guidance but MUST NOT be used to reject a change.
 
 The two structure maps MUST NOT be installed as `doc_standards` — they are facts, not standards. Nor
 MUST anything in `.constitution/method/why/`; `status: Reference` forbids it. A guide in

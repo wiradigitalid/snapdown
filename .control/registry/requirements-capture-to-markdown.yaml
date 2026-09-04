@@ -1,47 +1,9 @@
-# requirements.yaml — SSOT for BG · CAP · FR · NFR · UJ
+# requirements-capture-to-markdown.yaml — SSOT for CAP · FR · NFR · UJ belonging to the
+# `capture-to-markdown` PRD.
 #
 # Keys are English; prose values follow the product's chosen `doc_language`.
-# Numbers are allocated FROM HERE and MUST NOT restart per document, per component, or per release.
-# The sequence is global to one product.
-
-goals:
-  - id: BG-1
-    title: A note is unambiguously attached to the image it describes
-    measure: Zero notes attached to the wrong image, on every handoff
-  - id: BG-2
-    title: Capture to handoff happens in one pass, with no file management
-    measure: Median handoff time for a five-Finding review under 120 seconds
-  - id: BG-3
-    title: A handoff costs as few agent tokens as it can while staying legible
-    measure: Stored bytes per Finding a small fraction of the unreduced capture, at a quality the
-      Reviewer does not override
-  - id: BG-4
-    title: The same review reaches an agent that is not on the capture machine
-    measure: Every published Bundle is fetchable by the remote agent on the first try
-  - id: BG-5
-    title: A review is disposable — findings and their files leave together
-    measure: Zero files in the Vault that nothing points at, and zero records pointing at a file
-      that is gone
-  - id: BG-6
-    title: The tool never becomes the thing being managed
-    measure: Cold start to a usable tray icon under 3 seconds, and no setting touched after the
-      first run
-  - id: BG-7
-    title: Snapdown's own surface costs the Reviewer no attention
-    measure: A Reviewer who has never seen Snapdown reaches their first handed-over Bundle without
-      being told how; every text element meets WCAG AA contrast in both Windows themes; no primary
-      surface requires scrolling to discover that a control exists
-  # BG-8 born 2026-09-01, closing OQ-31. CAP-12 (Export PDF) hung off BG-2 and the misfit was recorded
-  # as known: BG-2's measure is a handoff TIME, which cannot report on an exporter, and BG-2 promises
-  # "no file management" while an export exists precisely to produce a file a person manages - so the
-  # capability was serving a goal whose own words it contradicts. Stretching that phrase to admit an
-  # exporter would have weakened a promise the product holds elsewhere. A different audience earns its
-  # own goal. NOT numbered BG-6: that id has been taken since G1, and so has BG-7 - the OQ-31 row said
-  # "a sixth goal" and was already wrong when written, which is recorded in answered.md.
-  - id: BG-8
-    title: A review is readable by someone who does not have Snapdown
-    measure: Zero Findings lost, reordered, or stripped of their image or note between a Bundle's
-      stored Markdown and the document exported from it
+# Numbers are allocated from the product's global sequence and MUST NOT restart here — see
+# `.control/registry/goals.yaml` for where BG lives and why CAP is not there.
 
 capabilities:
   - id: CAP-1
@@ -81,17 +43,6 @@ capabilities:
     component: settings
     target_release: r1
     prd: capture-to-markdown
-  # CAP-7 "Let an agent on this machine read a Bundle, after the Reviewer hands it a key" stood
-  # here, `component: agent-access`, until 2026-09-04. `DEC-016` withdrew it along with the
-  # component: the running channel it named is removed in full, and FR-19..FR-22 are withdrawn
-  # with it below. Not reused.
-  - id: CAP-8
-    title: Let an agent on another host read a Bundle over HTTPS
-    goal: BG-4
-    component: sharing
-    target_release: r2
-    prd: agent-handoff
-    depends_on: [CAP-4]
   - id: CAP-9
     title: The surface itself — name it, reach it, fit it, read it
     goal: BG-7
@@ -138,6 +89,9 @@ functional:
   # --- CAP-1 & CAP-10 Capture --------------------------------------------------------
   - id: FR-1
     title: Capture a screen region from a global hotkey with precision guides and auto-detection
+    statement: The Reviewer can press a system-wide hotkey, from inside any application, and get a
+      Capture Overlay on every connected monitor on which they can select or drag out a rectangular
+      region. Realizes UJ-1.
     capability: CAP-1
     component: finding
     writes: [Finding]
@@ -146,6 +100,8 @@ functional:
       and allows 1-click container selection or drag selection.
   - id: FR-2
     title: Write the Note at capture time
+    statement: The Reviewer can type a Note into a field that appears at the selected region on
+      release, and save the Finding with that Note in one keystroke. Realizes UJ-1.
     capability: CAP-1
     component: finding
     writes: [Finding, Note]
@@ -153,6 +109,9 @@ functional:
       time against exactly the region that was dragged.
   - id: FR-3
     title: Capture repeatedly without leaving the loop
+    statement: The Reviewer can perform a Capture immediately after the previous one, with focus
+      returned to the application they were reviewing and no Snapdown window in the way. Realizes
+      UJ-1.
     capability: CAP-1
     component: finding
     writes: [Finding]
@@ -161,6 +120,8 @@ functional:
   # --- CAP-2 Image reduction ---------------------------------------------------------
   - id: FR-4
     title: Reduce every captured image automatically
+    statement: The system reduces each captured image to the Quality Budget before storing it, with
+      no action from the Reviewer.
     capability: CAP-2
     component: finding
     writes: [Finding]
@@ -171,6 +132,11 @@ functional:
       enough to read the UI text in it.
   - id: FR-5
     title: Choose a Quality Budget by naming the intent
+    statement: The Reviewer chooses a Quality Budget by naming what they want of it — **Auto**,
+      **Sharp**, **Balanced**, or **Small** — and Auto, the shipped default, derives the long edge
+      and the encoder quality from each captured region rather than from a stored constant. The
+      underlying numbers remain settable behind an **Advanced** disclosure, and setting either moves
+      the budget to a fifth named state, **Custom**. Realizes UJ-4. Recorded as `DEC-004`.
     capability: CAP-2
     component: settings
     writes: [Setting]
@@ -180,18 +146,25 @@ functional:
   # --- CAP-3 Library and Editor ------------------------------------------------------
   - id: FR-6
     title: See every Finding with its Note
+    statement: The Reviewer can open the Editor and see every Finding in the Library, each with its
+      image, its Note, and when it was captured. Realizes UJ-3.
     capability: CAP-3
     component: finding
     proof: After six Captures, the Editor lists exactly those six Findings with the six Notes that
       were typed, each against the right image.
   - id: FR-7
     title: Edit a Note
+    statement: The Reviewer can change the text of any Finding's Note after capture, and the change
+      persists.
     capability: CAP-3
     component: finding
     writes: [Note]
     proof: Editing a Note, closing the Editor, and reopening it shows the edited text.
   - id: FR-8
     title: Place numbered Markers bound to numbered Note lines
+    statement: The Reviewer can place a numbered Marker anywhere on a Finding's image; doing so
+      creates the matching numbered line in that Finding's Note, ready for a sub-comment. Realizes
+      UJ-2.
     capability: CAP-3
     component: finding
     writes: [Marker, Note]
@@ -199,12 +172,17 @@ functional:
       and the badge numbers on the image match the line numbers exactly.
   - id: FR-9
     title: Select several Findings at once
+    statement: The Reviewer can select any number of Findings, with the keyboard or the mouse, and
+      act on the selection as a whole. Realizes UJ-3.
     capability: CAP-3
     component: finding
     proof: Selecting four of eleven Findings and choosing an action applies it to exactly those four.
   # --- CAP-4 Bundles -----------------------------------------------------------------
   - id: FR-10
     title: Compose selected Findings into a named Bundle
+    statement: The Reviewer can turn a selection of Findings into a Bundle with a name they choose,
+      producing one Markdown document in which each Note appears under the image it describes.
+      Realizes UJ-3.
     capability: CAP-4
     component: bundle
     writes: [Bundle, BundleItem]
@@ -212,12 +190,16 @@ functional:
       five Notes appear under their own five images, in the order the Reviewer selected.
   - id: FR-11
     title: List and reopen Bundles
+    statement: The Reviewer can see every Bundle in the Library with its name, its Finding count, and
+      when it was composed, and can open one to read what it contains.
     capability: CAP-4
     component: bundle
     proof: After composing two Bundles, both appear in the Bundle list with the right names and
       counts, and opening either shows the Findings it holds.
   - id: FR-12
     title: Copy a Bundle's Markdown
+    statement: The Reviewer can put a Bundle's Markdown on the clipboard in one action, ready to
+      paste into an agent conversation. Realizes UJ-3.
     capability: CAP-4
     component: bundle
     # Amended 2026-08-31. This row's proof used to end "yields the Bundle's complete Markdown,
@@ -245,6 +227,8 @@ functional:
       the Reviewer is told that what was copied carries absolute image paths.
   - id: FR-14
     title: Delete a Bundle with its images
+    statement: The Reviewer can delete a Bundle, and its Markdown file and its copied images leave the
+      Vault with it.
     capability: CAP-4
     component: bundle
     writes: [Bundle, BundleItem, Publication]
@@ -259,6 +243,8 @@ functional:
       images in the Vault folder.
   - id: FR-43
     title: Open a Bundle's folder in the file manager
+    statement: The Reviewer can open the folder holding a Bundle's Markdown and its images, in the
+      operating system's own file manager.
     capability: CAP-4
     component: bundle
     writes: []
@@ -276,6 +262,8 @@ functional:
       manager, with the Bundle's Markdown and its images visible in it.
   - id: FR-40
     title: Edit a composed Bundle's title and notes
+    statement: The Reviewer can reopen a Bundle they have already composed and correct its title, its
+      Bundle-level notes, and the note text on the Findings inside it, saving the result as one act.
     capability: CAP-4
     component: bundle
     writes: [Bundle]
@@ -290,6 +278,8 @@ functional:
   # --- CAP-5 Removal -----------------------------------------------------------------
   - id: FR-13
     title: Delete Findings, and their image files with them
+    statement: The Reviewer can delete one Finding or a selection of them, and each deleted Finding's
+      image file leaves the Vault at the same time.
     capability: CAP-5
     component: finding
     # `VisualAnnotation` added 2026-08-28: deleting a Finding cascades to its annotations, so this
@@ -299,6 +289,8 @@ functional:
       image files in the Vault folder.
   - id: FR-15
     title: Report orphans
+    statement: The system tells the Reviewer about files in the Vault that no Finding or Bundle points
+      at, and about Findings or Bundles whose files are missing, and lets them resolve each.
     capability: CAP-5
     component: finding
     proof: After a file is deleted from the Vault outside Snapdown, the Reviewer is shown that the
@@ -310,6 +302,11 @@ functional:
   # other way round; either shape is legitimate, and this one is simpler.
   - id: FR-41
     title: Discard the source Findings behind a Bundle, keeping the Bundle
+    statement: The Reviewer can destroy the captures behind a Bundle they consider final, reclaiming
+      the disk those originals hold, while the Bundle itself stays readable on its own copies. Because a
+      Finding can sit behind more than one Bundle (`BR-12`), the Reviewer is told beforehand when this
+      act will also seal another Bundle that shares one of the same Findings — that Bundle loses the
+      option to disassemble too, not just the one the Reviewer opened the menu on.
     capability: CAP-5
     component: finding
     writes: [Finding, Note, Marker, VisualAnnotation]
@@ -325,6 +322,8 @@ functional:
       disassembled either once the act completes.
   - id: FR-42
     title: See which Bundles still hold original captures, and reclaim their disk in bulk
+    statement: The Reviewer can see, in one place, every Bundle still holding its source captures and
+      how much disk each one is holding, and discard the originals behind several of them in one pass.
     capability: CAP-5
     component: finding
     writes: [Finding, Note, Marker, VisualAnnotation]
@@ -335,6 +334,8 @@ functional:
   # --- CAP-6 Settings ----------------------------------------------------------------
   - id: FR-16
     title: Choose the Vault folder
+    statement: The Reviewer can choose which folder holds Finding and Bundle files, and change it
+      later. Realizes UJ-4.
     capability: CAP-6
     component: settings
     writes: [Setting]
@@ -342,6 +343,8 @@ functional:
       different folder and taking another Capture puts the new image in the new folder.
   - id: FR-17
     title: Edit the hotkeys
+    statement: The Reviewer can see and change every global hotkey Snapdown registers, and is told
+      immediately when a chosen combination is unavailable. Realizes UJ-4.
     capability: CAP-6
     component: settings
     writes: [Setting]
@@ -349,6 +352,8 @@ functional:
       without restarting Snapdown.
   - id: FR-18
     title: Run at Windows startup, on by default after first run
+    statement: The Reviewer can have Snapdown start when they sign in to Windows, and turn that off
+      again. Realizes UJ-4.
     capability: CAP-6
     component: settings
     writes: [Setting]
@@ -358,6 +363,9 @@ functional:
   # --- CAP-9 The surface itself -------------------------------------------------------
   - id: FR-27
     title: Name the surface the Reviewer is looking at
+    statement: "Snapdown always identifies itself, and identifies which of its two personas is on
+      screen: the tray and the installed executable are **Snapdown**, and the workspace window
+      titles itself **Snapdown Editor**. Realizes UJ-4. Recorded as `DEC-003`."
     capability: CAP-9
     component: settings
     writes: []
@@ -365,6 +373,9 @@ functional:
       application is called and which part of it they are in, from the window alone.
   - id: FR-28
     title: Reach every surface from every surface
+    statement: Every primary surface of the Editor — Findings, Bundles, Settings, and Agent access —
+      is reachable from every other one, without the Reviewer knowing it exists beforehand. Realizes
+      UJ-4.
     capability: CAP-9
     component: settings
     writes: []
@@ -372,6 +383,8 @@ functional:
       of the other three without being told how.
   - id: FR-29
     title: A primary surface fits the window it opens in
+    statement: Nothing on a primary surface has to be scrolled to before the Reviewer knows it is
+      there. Realizes UJ-4.
     capability: CAP-9
     component: settings
     writes: []
@@ -380,6 +393,9 @@ functional:
   # --- CAP-11 Rich visual annotations ------------------------------------------------
   - id: FR-30
     title: Draw transparent outlined shapes and directional arrows on canvas
+    statement: The Reviewer can select a Shape tool (transparent fill with theme-accent outline) or an
+      Arrow tool from the canvas toolbar, click-drag on the screenshot canvas to create it, and
+      reposition or resize it.
     capability: CAP-11
     component: finding
     writes: [Finding]
@@ -388,6 +404,8 @@ functional:
       These elements can be moved, resized, and deleted, but do not produce lines in Markdown notes.
   - id: FR-31
     title: Draw blur redaction boxes over sensitive image regions
+    statement: The Reviewer can drag blur redaction boxes over confidential screen contents
+      (credentials, PII, tokens).
     capability: CAP-11
     component: finding
     writes: [Finding]
@@ -395,6 +413,8 @@ functional:
       the blur box can be moved, resized, and deleted; burnt image output contains redacted pixels.
   - id: FR-32
     title: Place floating text and callout bubbles with font and tail controls
+    statement: The Reviewer can add floating text labels or callout bubbles onto the canvas, edit the
+      text content inline, and change font family and size.
     capability: CAP-11
     component: finding
     writes: [Finding]
@@ -403,6 +423,8 @@ functional:
       remain excluded from the Markdown note lines.
   - id: FR-33
     title: Transform and manipulate canvas annotation elements with interactive handles
+    statement: The Reviewer can manipulate any placed canvas annotation element using visual control
+      points.
     capability: CAP-11
     component: finding
     writes: [Finding]
@@ -416,6 +438,7 @@ functional:
     # excluded on purpose rather than missing. Code wins; the proof line catches up to it.
   - id: FR-38
     title: Change the front-to-back order of canvas annotations
+    statement: The Reviewer can move any placed annotation forward or backward through the others.
     capability: CAP-11
     component: finding
     writes: [Finding]
@@ -435,6 +458,7 @@ functional:
   # `## Not promised` at the foot of this file.
   - id: FR-34
     title: Zoom the canvas to inspect a capture at more or less than natural size
+    statement: The Reviewer can zoom the canvas in and out and return it to natural size.
     capability: CAP-3
     component: finding
     writes: []
@@ -446,6 +470,8 @@ functional:
       changes.
   - id: FR-35
     title: Paste an image from the clipboard as a new Finding
+    statement: The Reviewer can paste an image held on the Windows clipboard and get a Finding from
+      it.
     capability: CAP-1
     component: finding
     writes: [Finding]
@@ -457,6 +483,7 @@ functional:
       reduced under the same Quality Budget a Capture would use, and it appears in the filmstrip.
   - id: FR-36
     title: Copy a Finding's burned image to the clipboard
+    statement: The Reviewer can copy the image the way an agent would receive it.
     capability: CAP-3
     component: finding
     writes: []
@@ -467,6 +494,8 @@ functional:
       bytes a Bundle would carry - so pasting it into a chat shows what the Reviewer marked up.
   - id: FR-37
     title: Reach a canvas or filmstrip action from a right-click context menu
+    statement: The Reviewer can right-click the canvas or a filmstrip card and reach the actions that
+      apply to it.
     capability: CAP-9
     component: finding
     writes: []
@@ -477,44 +506,12 @@ functional:
       right-clicking a filmstrip card offers that Finding's own; every entry does what the toolbar
       button of the same name does, and no entry exists that has no other route.
 
-  # --- CAP-7 Local agent access (withdrawn) -------------------------------------------
-  # FR-19 "Issue and copy an Access Key", FR-20 "Serve the Library over the Local API", FR-21 "Read
-  # a Bundle through MCP", and FR-22 "Revoke access" stood here, all `capability: CAP-7`,
-  # `component: agent-access`, until 2026-09-04. `DEC-016` withdrew all four along with CAP-7 and
-  # the component: Snapdown no longer opens a running channel into the Library for an agent, and the
-  # only way a Bundle reaches one is the Markdown a Reviewer copies or pastes themselves. None of
-  # the four ids is reused.
-  # --- CAP-8 Web sharing -------------------------------------------------------------
-  - id: FR-23
-    title: Publish a Bundle
-    capability: CAP-8
-    component: sharing
-    writes: [Publication]
-    proof: Publishing a Bundle yields a URL that, fetched from another machine, returns that Bundle's
-      Markdown with working image links.
-  - id: FR-24
-    title: Serve a published Bundle
-    capability: CAP-8
-    component: sharing
-    proof: A plain HTTP client given the URL retrieves the Markdown, and every image reference in it
-      retrieves an image.
-  - id: FR-25
-    title: Unpublish a Bundle
-    capability: CAP-8
-    component: sharing
-    writes: [Publication]
-    proof: After unpublishing, fetching the previously working URL from another machine returns
-      nothing, and the Bundle is still intact in the Library.
-  - id: FR-26
-    title: See and copy a Bundle's Publication
-    capability: CAP-8
-    component: sharing
-    proof: The Bundle list distinguishes published from unpublished Bundles at a glance, and copying
-      the URL of a published one puts a working URL on the clipboard.
-
   # --- CAP-12 Export -----------------------------------------------------------------
   - id: FR-39
     title: Export a Bundle as a PDF
+    statement: The Reviewer can turn a Bundle into a single PDF file that reads as a document — one
+      section per Finding, its image above the note about it — which anyone can open without
+      Snapdown.
     capability: CAP-12
     component: bundle
     writes: []
@@ -575,49 +572,6 @@ nonfunctional:
     goal: BG-1
     component: bundle
     enforced_by: A rendering test over a composed Bundle
-  # NFR-9 "The Local API binds 127.0.0.1 only and refuses every request without a currently valid
-  # Access Key, comparing keys in constant time" stood here, `component: agent-access`, until
-  # 2026-09-04. `DEC-016` withdrew it along with the Local API and the component; not reused.
-  - id: NFR-10
-    title: A Publication's URL slug carries at least 128 bits of entropy from a cryptographically
-      secure source
-    goal: BG-4
-    component: sharing
-    enforced_by: An assertion on slug generation
-  - id: NFR-11
-    title: No Finding, Note, or Bundle leaves this machine except through a publish the Reviewer
-      confirmed on a named Bundle
-    goal: BG-4
-    component: sharing
-    enforced_by: A test exercising capture, composition, and idle operation with outbound calls
-      failing, asserting none was attempted
-  - id: NFR-12
-    title: Only reduced images are ever transmitted or published; an unreduced capture never leaves
-      the machine
-    goal: BG-3
-    component: sharing
-    enforced_by: An assertion on the publish payload
-  - id: NFR-13
-    title: An unpublish takes effect on the next request, with no cache or grace period
-    # Narrowed 2026-09-04. Read "A revoke and an unpublish each take effect..." until `DEC-016`
-    # withdrew the Access Key and the revoke it described; the invariant is unchanged for the half
-    # that survives it.
-    goal: BG-5
-    component: sharing
-    enforced_by: A test calling immediately after an unpublish
-  - id: NFR-14
-    title: The web service runs as one executable with one configuration file, needs no database
-      server, and its whole state is one directory
-    goal: BG-6
-    component: sharing
-    enforced_by: An integration test starting it from a clean directory and serving a published
-      Bundle
-  - id: NFR-15
-    title: The web service exposes no route that lists, searches, or enumerates Publications, and
-      returns the same refusal for an unknown slug as for a revoked one
-    goal: BG-4
-    component: sharing
-    enforced_by: A route-inventory test and a response-equality test
   - id: NFR-16
     title: Every text element meets WCAG AA contrast against its own background, in both the Windows
       light and the Windows dark theme
@@ -672,12 +626,6 @@ journeys:
   - id: UJ-4
     title: First run
     prd: capture-to-markdown
-  - id: UJ-5
-    title: The Reviewer hands a Bundle to the agent in the next window
-    prd: agent-handoff
-  - id: UJ-6
-    title: The Reviewer hands a Bundle to an agent on a server
-    prd: agent-handoff
   # UJ-7 born 2026-09-03 by wdi-product, closing a UJ-5 collision found separately: this journey's
   # prose (prd.md 2.3) had been calling itself "UJ-5" since it was written, never registered as its
   # own row, and that id was already spoken for by the two rows above. UJ-5 and UJ-6 stayed untouched

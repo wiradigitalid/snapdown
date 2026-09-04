@@ -126,26 +126,14 @@ read-only, and one call into `LC-020 publish-client` when a published Bundle is 
 ## Inherited Constraints · [guarded]
 
 New at this gate: `bundle` was raised from an inherited `outline` to `deep` on 2026-08-23, so this
-section had never been written. Quoted verbatim from `.how/_platform/ARCHITECTURE-SPINE.md`.
+section had never been written.
 
 **AD-2 — A record and its files live or die together**
-> Any operation that creates or removes a Finding, a Bundle, or a BundleItem MUST create or remove
-> that record's files in the same unit of work, and MUST leave the prior state intact if any part of
-> it fails. A record MUST NOT be committed before its files exist, and files MUST NOT be removed
-> before the record is.
 
 Reaches this component twice: composition writes image copies and the Markdown before the Bundle row
 (`FR-10`, all-or-nothing), and deletion removes them with it (`FR-14`).
 
 **AD-9 — One Bundle, one authored document, on every path**
-
-> A Bundle's Markdown MUST be composed once, by the core, and stored. Every handoff path MUST serve
-> that same authored document. A path MAY substitute the base of the document's image links so that
-> they resolve for its own reader, and MUST change nothing else — no re-ordering, no decoration, no
-> summarising, and not one character of what the composer wrote. That substitution is made BY THE
-> COMPOSER, which takes the base path as a parameter; no surface may re-render, re-order, decorate, or
-> summarise a Bundle on the way out, and no surface may rewrite a document the composer has already
-> produced. A surface that needs a different shape is asking for a change to the composer.
 
 The Markdown is composed once and **stored**, not regenerated. `bundle.markdown` is a column, which is
 what lets every handoff path serve one authored document without three code paths agreeing, and it is
