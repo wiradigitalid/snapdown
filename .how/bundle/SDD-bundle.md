@@ -34,11 +34,12 @@ Finding's Markers drawn into it.
 Two choices cost the most to reverse.
 
 **The composed Markdown is a column, not a rendering.** `bundle.markdown` holds the finished bytes,
-and every handoff path reads that column. Of the three paths `AD-9` governs, **one exists**: the
-published page. The clipboard-Markdown path has no implementation and the Local API does not exist
-(`BUG-59`), so this choice is currently serving one reader and is stated in the present tense because
-it binds the paths as they arrive, not because three of them are there. This document named all three
-as present until 2026-08-31. The alternative, rendering
+and every handoff path reads that column. Of the two paths `AD-9` now governs, **one exists**: the
+published page. The clipboard-Markdown path has no implementation, so this choice is currently serving
+one reader and is stated in the present tense because it binds the paths as they arrive, not because
+both of them are there. This document named all three of the paths that existed at the time as present
+until 2026-08-31; a third, the Local API `BUG-59` tracked as never built, was withdrawn outright by
+`DEC-016` on 2026-09-04 rather than ever being finished. The alternative, rendering
 on demand from the Findings, is cheaper to write and makes AD-9 unenforceable: the moment a Note is
 edited, the same Bundle produces different bytes on different days, and two agents reading "the same
 review" disagree. Storing it is what makes a Bundle citable.
@@ -106,12 +107,12 @@ that matters:
 - There is **one** golden-file test — `crates/snapdown-store/tests/test_golden_markdown.rs:137` — not a
   set of three.
 - It pins the composer's output against a stored reference, not three surfaces against each other.
-- **Two of the three handoff paths have no code.** The clipboard-Markdown path is unimplemented: every
-  clipboard call in the tree is a bitmap write serving `FR-36`, and `apps/desktop/ui/appwindow.slint`
-  has no copy-markdown callback, only a `bundle-preview-markdown` display property at `:1342`. The
-  Local API does not exist at all — that is `BUG-59`'s own title, and
-  `crates/snapdown-bridge/src/client.rs:27` builds `http://127.0.0.1:{port}` against a server never
-  rebuilt after `DEC-007`. Only the published page runs.
+- **One of the two remaining handoff paths has no code.** The clipboard-Markdown path is unimplemented:
+  every clipboard call in the tree is a bitmap write serving `FR-36`, and
+  `apps/desktop/ui/appwindow.slint` has no copy-markdown callback, only a `bundle-preview-markdown`
+  display property at `:1342`. Only the published page runs. A third path, the Local API an MCP Bridge
+  read from, stood here too — `BUG-59` tracked it never having been built — until `DEC-016` withdrew
+  the channel itself on 2026-09-04, closing the gap by removing what it was a gap in.
 
 So the sentence described a guard that was never in place. `[MISSING]` — a rendering-parity test across
 paths has never existed, and it cannot be written until a second path does. It is owed with `FR-12`'s
@@ -136,13 +137,13 @@ Reaches this component twice: composition writes image copies and the Markdown b
 **AD-9 — One Bundle, one authored document, on every path**
 
 The Markdown is composed once and **stored**, not regenerated. `bundle.markdown` is a column, which is
-what lets every handoff path serve one authored document without three code paths agreeing, and it is
+what lets every handoff path serve one authored document without two code paths agreeing, and it is
 why `BUG-1` damages the item list without damaging the document.
 
 **This component owns the substitution, and that is a new obligation on it.** `bundle` is the component
 that runs the composer, so `AD-9`'s permission to rebase an image link is exercised here or nowhere. If
 a rebased rendering is ever produced anywhere but inside `snapdown-core`'s composer — in the clipboard
-path, in the Local API, in a publish client — this component has broken `AD-9`, whichever component
+path or in a publish client — this component has broken `AD-9`, whichever component
 wrote the offending line. The composer already takes the parameter this needs: `serialize_bundle` has a
 `markdown_path: &str` argument (verified — `crates/snapdown-core/src/domain/markdown.rs:25`), added by
 `BUG-86` on 2026-08-31.
@@ -220,7 +221,7 @@ one thing about the exporter that is already certain.
 
 `MarkdownWriter` being pure is the load-bearing choice: `AD-9` requires every handoff path to serve
 the same authored **document**, and a pure function called once, whose output is stored, makes that
-true by construction rather than by three code paths being kept in step. Purity is also what makes the
+true by construction rather than by two code paths being kept in step. Purity is also what makes the
 rebasing `DEC-012` permits testable at all — a second rendering of the same document is a second call
 to the same pure function, comparable against the first.
 

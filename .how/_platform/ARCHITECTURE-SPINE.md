@@ -271,18 +271,16 @@ left in the active workspace: `DEC-007` took it out of the desktop app, `OQ-27` 
 | --- | --- | --- |
 | Rust | 1.96 | `apps/desktop`, every `crates/*` |
 | Slint | 1.9.x, `i-slint-backend-winit` on Windows | `apps/desktop` — replaced Tauri + React per `DEC-007` |
-| React | 19.x | `web/ui` only |
-| Vite | 7.x | `web/ui` only |
-| TypeScript | 5.x | `web/ui` only |
-| Go | 1.25 | `web/api` |
-| chi | 5.x | `web/api` |
-| SQLite | 3.x, embedded — `rusqlite` on the desktop, `modernc.org/sqlite` in `web-api` | `apps/desktop`, `web/api` |
-| Node | 24.x, build-time only | `web/ui` only |
+| Go | 1.25 | `apps/web-service` |
+| chi | 5.x | `apps/web-service` |
+| SQLite | 3.x, embedded — `rusqlite` on the desktop, `modernc.org/sqlite` in `apps/web-service` | `apps/desktop`, `apps/web-service` |
 
-Tauri 2.x, and the React + Vite + TypeScript webview that went with it on the desktop, were the
-original desktop stack; `DEC-007` moved `apps/desktop` to native Slint and the previous
-implementation is kept for reference at `archive/desktop-tauri`. `web/ui` is a separate container
-and was never Tauri — its React/Vite/TypeScript row is unaffected by that decision.
+Tauri 2.x, and the React + Vite + TypeScript webview that went with it, were the original desktop
+stack; `DEC-007` moved `apps/desktop` to native Slint and the previous implementation is kept for
+reference at `archive/desktop-tauri`. React, Vite, TypeScript, and Node stood in this table too,
+scoped to a separate `web/ui` container that was never Tauri and so was unaffected by `DEC-007` —
+until `OQ-27` deleted that package on 2026-09-01, closing the question of whether it had a reader.
+**There is no Node anywhere in the active workspace now.**
 
 Deliberately excluded by the owner, and therefore not a candidate at any later point without a
 `DEC-`: Next.js and Express.
@@ -308,17 +306,19 @@ snapdown/
     snapdown-core/       # domain, ports, the Markdown composer. No I/O
     snapdown-store/      # SQLite + Vault filesystem adapters
     snapdown-capture/    # screen capture, overlay geometry, image reduction
-    snapdown-bridge/     # the MCP Bridge binary
   apps/
     desktop/             # snapdown-desktop: one Rust binary, native Slint UI (DEC-007)
-      src/               # Rust: commands, tray, hotkeys, the Local API
+      src/               # Rust: commands, tray, hotkeys
       ui/                # .slint files — theme, appwindow, components/
-  web/
-    api/                 # Go: net/http + chi, SQLite, blob dir
-    ui/                  # React + Vite SPA served by api
+    web-service/         # Go: net/http + chi, SQLite, blob dir
   archive/
     desktop-tauri/       # the Tauri v2 + React implementation DEC-007 replaced, kept for reference
 ```
+
+`crates/snapdown-bridge/` — the MCP Bridge binary — and `apps/desktop/src`'s Local API stood here
+until `DEC-016` withdrew both on 2026-09-04; neither exists on disk any more. `web/api/` and
+`web/ui/` also stood here, until the Go service was found already living at `apps/web-service/`
+(never `web/api/`) and `OQ-27` deleted `web/ui` on 2026-09-01.
 
 ## Capability → Architecture Map
 
@@ -330,8 +330,8 @@ snapdown/
 | CAP-4 Bundles | `snapdown-core` composer, `snapdown-store` | AD-1, AD-2, AD-3, AD-9 |
 | CAP-5 Removal | `snapdown-core`, `snapdown-store` | AD-2 |
 | CAP-6 Settings | `apps/desktop/src`, `apps/desktop/ui` | AD-6 |
-| CAP-8 Web sharing | `apps/desktop` publish client, `web/api`, `web/ui` | AD-5, AD-6, AD-7, AD-8, AD-9 |
-| CAP-9 The surface itself | `apps/desktop/ui`, `web/ui/src` | AD-10, AD-11 |
+| CAP-8 Web sharing | `apps/desktop` publish client, `apps/web-service` | AD-5, AD-6, AD-7, AD-8, AD-9 |
+| CAP-9 The surface itself | `apps/desktop/ui` | AD-10, AD-11 |
 | CAP-10 Precision guides & auto-detection | `snapdown-capture`, `apps/desktop/ui` | AD-2, AD-10 |
 | CAP-11 Canvas annotations & privacy redactions | `snapdown-capture`, `apps/desktop/ui` | AD-3, AD-4, AD-10 |
 | CAP-12 Export a Bundle as a PDF | undesigned; `bundle` owns the composer | AD-2 · **not** AD-9, per `DEC-014` |

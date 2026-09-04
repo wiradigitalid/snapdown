@@ -25,11 +25,12 @@ Finding's Markers drawn into it.
 Two choices cost the most to reverse.
 
 **The composed Markdown is a column, not a rendering.** `bundle.markdown` holds the finished bytes,
-and every handoff path reads that column. Of the three paths `AD-9` governs, **one exists**: the
-published page. The clipboard-Markdown path has no implementation and the Local API does not exist
-(`BUG-59`), so this choice is currently serving one reader and is stated in the present tense because
-it binds the paths as they arrive, not because three of them are there. This document named all three
-as present until 2026-08-31. The alternative, rendering
+and every handoff path reads that column. Of the two paths `AD-9` now governs, **one exists**: the
+published page. The clipboard-Markdown path has no implementation, so this choice is currently serving
+one reader and is stated in the present tense because it binds the paths as they arrive, not because
+both of them are there. This document named all three of the paths that existed at the time as present
+until 2026-08-31; a third, the Local API `BUG-59` tracked as never built, was withdrawn outright by
+`DEC-016` on 2026-09-04 rather than ever being finished. The alternative, rendering
 on demand from the Findings, is cheaper to write and makes AD-9 unenforceable: the moment a Note is
 edited, the same Bundle produces different bytes on different days, and two agents reading "the same
 review" disagree. Storing it is what makes a Bundle citable.
@@ -113,12 +114,12 @@ that matters:
 - There is **one** golden-file test — `crates/snapdown-store/tests/test_golden_markdown.rs:137` — not a
   set of three.
 - It pins the composer's output against a stored reference, not three surfaces against each other.
-- **Two of the three handoff paths have no code.** The clipboard-Markdown path is unimplemented: every
-  clipboard call in the tree is a bitmap write serving `FR-36`, and `apps/desktop/ui/appwindow.slint`
-  has no copy-markdown callback, only a `bundle-preview-markdown` display property at `:1342`. The
-  Local API does not exist at all — that is `BUG-59`'s own title, and
-  `crates/snapdown-bridge/src/client.rs:27` builds `http://127.0.0.1:{port}` against a server never
-  rebuilt after `DEC-007`. Only the published page runs.
+- **One of the two remaining handoff paths has no code.** The clipboard-Markdown path is unimplemented:
+  every clipboard call in the tree is a bitmap write serving `FR-36`, and
+  `apps/desktop/ui/appwindow.slint` has no copy-markdown callback, only a `bundle-preview-markdown`
+  display property at `:1342`. Only the published page runs. A third path, the Local API an MCP Bridge
+  read from, stood here too — `BUG-59` tracked it never having been built — until `DEC-016` withdrew
+  the channel itself on 2026-09-04, closing the gap by removing what it was a gap in.
 
 So the sentence described a guard that was never in place. `[MISSING]` — a rendering-parity test across
 paths has never existed, and it cannot be written until a second path does. It is owed with `FR-12`'s

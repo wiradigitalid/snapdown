@@ -195,7 +195,7 @@ a different base, so *unchanged* is no longer the signal — *the same document*
 
 ### Risks
 
-- **The composer becoming three composers.** AD-9 exists because the pressure to render a Bundle
+- **The composer becoming two composers.** AD-9 exists because the pressure to render a Bundle
   slightly differently per surface is constant and each instance looks reasonable. `DEC-012` makes
   this risk sharper rather than smaller: a base-path substitution is now permitted, so the line
   between "the same document rendered for its reader" and "a second rendering" has to be held by
