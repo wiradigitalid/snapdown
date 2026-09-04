@@ -14,6 +14,8 @@ validators_red:
 - memlog-home
 - refs-resolve
 validators_skipped:
+  review-trace: 'advisory — trace stale, re-run before the next gate or spec close: .how/bundle/SDD-bundle.md
+    (changed at c1cb8ca, reviewed at 9358a4a)'
   uc-scheduled: no spec yet, so no ticket yet — every unscheduled UC is the correct state. Full catalogue
     coverage is checked at G5
 open_questions:
