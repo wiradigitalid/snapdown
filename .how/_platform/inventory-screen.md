@@ -4,7 +4,7 @@ kind: screen
 scope: _platform
 status: draft
 created: "2026-08-22"
-updated: "2026-08-23"
+updated: "2026-09-04"
 derived_from: plan
 verified: ""
 ---
@@ -73,7 +73,7 @@ produce. The honest state is a table that says what it planned, beside a finding
 | 10 | Bundle detail | `/bundles/:id` | `bundle` | Reviewer | UC-11, UC-12, UC-23, UC-28, UC-29 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 | 11 | Publish and unpublish a Bundle | `/bundles/:id/publish` (modal) | `sharing` | Reviewer | UC-20, UC-22 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 | 12 | Settings — General & Quality | `/settings` | `settings` | Reviewer | UC-13, UC-14, UC-15, UC-16 | [`.how/settings/01-ux/assets/06a-settings-general.html`](../settings/01-ux/assets/06a-settings-general.html)<br>[`.how/settings/01-ux/assets/06b-settings-hotkeys.html`](../settings/01-ux/assets/06b-settings-hotkeys.html)<br>[`.how/settings/01-ux/assets/06d-settings-about.html`](../settings/01-ux/assets/06d-settings-about.html) |
-| 13 | Settings — Agent access | `/settings/agent-access` | `agent-access` | Reviewer | UC-17, UC-19 | [`.how/settings/01-ux/assets/06c-settings-agent-bridge.html`](../settings/01-ux/assets/06c-settings-agent-bridge.html) |
+| 13 | Settings — Agent access | `/settings/agent-access` | `agent-access` | Reviewer | UC-17, UC-19 | withdrawn by `DEC-016` — status: removed |
 | 14 | Published Bundle reader | `/b/:slug` | `sharing` | Remote coding agent, Reviewer | UC-21 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 | 16 | Reclaim space | — (a desktop surface; PLAN ONLY, no code and no route) | `finding` | Reviewer | UC-31 | _none yet_ |
 | 15 | Publication not available | `/b/:slug` (the refused state) | `sharing` | Remote coding agent, Reviewer | UC-22 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |

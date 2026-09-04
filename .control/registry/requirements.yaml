@@ -81,13 +81,10 @@ capabilities:
     component: settings
     target_release: r1
     prd: capture-to-markdown
-  - id: CAP-7
-    title: Let an agent on this machine read a Bundle, after the Reviewer hands it a key
-    goal: BG-2
-    component: agent-access
-    target_release: r2
-    prd: agent-handoff
-    depends_on: [CAP-4]
+  # CAP-7 "Let an agent on this machine read a Bundle, after the Reviewer hands it a key" stood
+  # here, `component: agent-access`, until 2026-09-04. `DEC-016` withdrew it along with the
+  # component: the running channel it named is removed in full, and FR-19..FR-22 are withdrawn
+  # with it below. Not reused.
   - id: CAP-8
     title: Let an agent on another host read a Bundle over HTTPS
     goal: BG-4
@@ -470,33 +467,13 @@ functional:
       right-clicking a filmstrip card offers that Finding's own; every entry does what the toolbar
       button of the same name does, and no entry exists that has no other route.
 
-  # --- CAP-7 Local agent access ------------------------------------------------------
-  - id: FR-19
-    title: Issue and copy an Access Key
-    capability: CAP-7
-    component: agent-access
-    writes: [AccessKey]
-    proof: Clicking Copy access key puts a key on the clipboard, and an agent given that key can read
-      the Library while an agent given no key cannot.
-  - id: FR-20
-    title: Serve the Library over the Local API
-    capability: CAP-7
-    component: agent-access
-    proof: With a valid Access Key, a request from this machine returns a Bundle's Markdown; the same
-      request without the key, or from another machine, is refused.
-  - id: FR-21
-    title: Read a Bundle through MCP
-    capability: CAP-7
-    component: agent-access
-    proof: A coding agent with the Bridge configured and the key pasted can name the Findings in a
-      Bundle and describe what is in their images, without the Reviewer pasting any content.
-  - id: FR-22
-    title: Revoke access
-    capability: CAP-7
-    component: agent-access
-    writes: [AccessKey]
-    proof: After a revoke, an agent that had been reading Bundles a moment earlier is refused on its
-      next call.
+  # --- CAP-7 Local agent access (withdrawn) -------------------------------------------
+  # FR-19 "Issue and copy an Access Key", FR-20 "Serve the Library over the Local API", FR-21 "Read
+  # a Bundle through MCP", and FR-22 "Revoke access" stood here, all `capability: CAP-7`,
+  # `component: agent-access`, until 2026-09-04. `DEC-016` withdrew all four along with CAP-7 and
+  # the component: Snapdown no longer opens a running channel into the Library for an agent, and the
+  # only way a Bundle reaches one is the Markdown a Reviewer copies or pastes themselves. None of
+  # the four ids is reused.
   # --- CAP-8 Web sharing -------------------------------------------------------------
   - id: FR-23
     title: Publish a Bundle
@@ -588,13 +565,9 @@ nonfunctional:
     goal: BG-1
     component: bundle
     enforced_by: A rendering test over a composed Bundle
-  - id: NFR-9
-    title: The Local API binds 127.0.0.1 only and refuses every request without a currently valid
-      Access Key, comparing keys in constant time
-    goal: BG-4
-    component: agent-access
-    enforced_by: Tests attempting the interface from a non-loopback address and with absent, wrong,
-      and revoked keys
+  # NFR-9 "The Local API binds 127.0.0.1 only and refuses every request without a currently valid
+  # Access Key, comparing keys in constant time" stood here, `component: agent-access`, until
+  # 2026-09-04. `DEC-016` withdrew it along with the Local API and the component; not reused.
   - id: NFR-10
     title: A Publication's URL slug carries at least 128 bits of entropy from a cryptographically
       secure source
@@ -615,11 +588,13 @@ nonfunctional:
     component: sharing
     enforced_by: An assertion on the publish payload
   - id: NFR-13
-    title: A revoke and an unpublish each take effect on the next request, with no cache or grace
-      period
+    title: An unpublish takes effect on the next request, with no cache or grace period
+    # Narrowed 2026-09-04. Read "A revoke and an unpublish each take effect..." until `DEC-016`
+    # withdrew the Access Key and the revoke it described; the invariant is unchanged for the half
+    # that survives it.
     goal: BG-5
     component: sharing
-    enforced_by: Tests calling immediately after each
+    enforced_by: A test calling immediately after an unpublish
   - id: NFR-14
     title: The web service runs as one executable with one configuration file, needs no database
       server, and its whole state is one directory

@@ -1,8 +1,46 @@
 ---
 type: decision
 id: DEC-016
-status: accepted
-touches: []
+status: applied
+touches:
+  - .what/agent-access/SRS-agent-access.md
+  - .what/agent-access/02-rules/rules-agent-access.md
+  - .what/agent-access/03-domain/domain-model.md
+  - .what/agent-access/04-usecases/UC-17-let-the-agent-in-front-of-me-read-my-reviews.md
+  - .what/agent-access/04-usecases/UC-18-read-a-review-from-inside-my-agent.md
+  - .how/agent-access/SDD-agent-access.md
+  - .how/_platform/ARCHITECTURE-SPINE.md
+  - .how/_platform/c4-l1-system-context.md
+  - .how/_platform/c4-l2-containers.md
+  - .how/_platform/c4-l3-desktop-app.md
+  - .how/_platform/cross-cutting.md
+  - .how/_platform/inventory-api.md
+  - .how/_platform/inventory-db.md
+  - .how/_platform/inventory-screen.md
+  - .control/registry/components.yaml
+  - .control/registry/requirements.yaml
+  - .control/registry/usecases.yaml
+  - .control/structure-codebase.md
+  - .control/structure-document.md
+  - .control/product-glossary.md
+  - .control/questions/assumptions.md
+  - .control/questions/answered.md
+  - .what/_prd/agent-handoff/prd.md
+  - .what/_prd/agent-handoff/addendum.md
+  - .what/_prd/capture-to-markdown/prd.md
+  - .what/business-rules.md
+  - .what/bundle/SRS-bundle.md
+  - .how/bundle/SDD-bundle.md
+  - .what/sharing/SRS-sharing.md
+  - .how/sharing/SDD-sharing.md
+  - .what/finding/SRS-finding.md
+  - .what/settings/SRS-settings.md
+  - .what/settings/03-domain/domain-model.md
+  - .what/settings/04-usecases/EXPERIENCE.md
+  - .how/settings/03-integrations/windows-shell.md
+  - .how/settings/04-components/LC-028-editor-shell.md
+  - .github/validate-baseline.txt
+  - AGENTS.md
 supersedes: DEC-002
 superseded_by: null
 created: "2026-09-04"

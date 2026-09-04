@@ -34,8 +34,9 @@ The named choices that exist, and who reads each:
 | Run at Windows startup | Whether Snapdown is running after sign-in | `settings` itself |
 | Web service address | Where a publish goes | `sharing` |
 
-The Access Key and the publish credential are **not** Settings. They are secrets, they live in the
-Windows credential store, and they belong to `agent-access` and `sharing` respectively.
+The publish credential is **not** a Setting. It is a secret, it lives in the Windows credential store,
+and it belongs to `sharing`. The Access Key was a second such secret, belonging to `agent-access`,
+until `DEC-016` withdrew both on 2026-09-04.
 
 ## Relationships
 

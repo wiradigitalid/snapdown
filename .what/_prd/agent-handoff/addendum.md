@@ -12,6 +12,13 @@ updated: "2026-08-22"
 Depth that earned a place beside the PRD but would derail it. Nothing here is a promise, and nothing
 here may be cited as a design.
 
+**Most of this file records the reasoning behind CAP-7 (§4.1's Local API and MCP Bridge), which
+`DEC-016` withdrew on 2026-09-04.** It is left as a record of why that design was chosen when it was
+promised, per this repo's own rule that a record of the past is not rewritten to match the present —
+none of it MUST be read as describing the current product. Only "Access control on a published
+Bundle", "What the publish payload contains", and the parts of "Sizing" and "Personas and research
+detail" that concern CAP-8 still describe something the product promises today.
+
 ## Rejected alternatives
 
 | Option | Why it lost |

@@ -132,9 +132,10 @@ images cheap enough that a machine can afford to read them.
 ## 3. Glossary
 
 Every domain noun this document uses is defined once in `.control/product-glossary.md` and used
-verbatim here: **Access Key**, **Bundle**, **Capture**, **Capture Overlay**, **Editor**, **Finding**,
-**Handoff**, **Library**, **Local API**, **Marker**, **MCP Bridge**, **Note**, **Publication**,
-**Quality Budget**, **Reviewer**, **Vault**.
+verbatim here: **Bundle**, **Capture**, **Capture Overlay**, **Editor**, **Finding**, **Handoff**,
+**Library**, **Marker**, **Note**, **Publication**, **Quality Budget**, **Reviewer**, **Vault**.
+**Access Key**, **Local API**, and **MCP Bridge** were glossary entries this document used too, until
+`DEC-016` withdrew what they named on 2026-09-04.
 
 No synonym for any of them appears anywhere in this PRD. A new noun introduced here is added to that
 file in the same pass.

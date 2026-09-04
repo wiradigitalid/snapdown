@@ -19,7 +19,7 @@ behaviour a reviewer checks.
 
 | id | Rule | Binds | Source | Status |
 | --- | --- | --- | --- | --- |
-| BR-1 | A Marker's number is the number of its line in the Note. There is never a Marker without a line, or a numbered line without a Marker. | `finding`, `bundle`, `agent-access`, `sharing` | AD-1 · FR-8 | active |
+| BR-1 | A Marker's number is the number of its line in the Note. There is never a Marker without a line, or a numbered line without a Marker. | `finding`, `bundle`, `sharing` | AD-1 · FR-8 | active |
 | BR-2 | Marker numbers run from 1 upward with no gaps. Removing one renumbers every Marker after it, and its line with it. | `finding`, `bundle` | FR-8 · UC-5 | active |
 | BR-3 | A Marker's comment may be empty. Its numbered line still exists. | `finding`, `bundle` | FR-8 | active |
 | BR-4 | A Note may be empty. A Finding with no words is still a Finding. | `finding`, `bundle` | FR-2 · FR-7 | active |
@@ -28,14 +28,14 @@ behaviour a reviewer checks.
 | BR-7 | Nothing is soft-deleted. There is no bin, no archive, and no state in which a deleted thing is still readable. | `finding`, `bundle`, `sharing` | BG-5 · AD-2 | active |
 | BR-8 | An image is reduced once, when it is captured. No later step re-encodes or re-scales it. | `finding`, `bundle`, `sharing` | AD-4 · FR-4 | active |
 | BR-9 | A change to the Quality Budget applies only to Captures taken after it. No stored image is ever re-encoded. | `finding`, `settings` | FR-5 · UC-13 | active |
-| BR-10 | A Bundle is a snapshot. Editing a Finding, its Note, or its Markers after composition changes nothing in a Bundle that already holds it. | `bundle`, `finding`, `agent-access`, `sharing` | AD-9 · FR-10 | active |
-| BR-11 | A Bundle's stored document is changed only by the composer writing it again over the Bundle's own copy. No surface edits a Bundle's document directly, and no change to a Bundle ever reads or writes a Finding. | `bundle`, `agent-access`, `sharing` | AD-9 · FR-40 | active |
+| BR-10 | A Bundle is a snapshot. Editing a Finding, its Note, or its Markers after composition changes nothing in a Bundle that already holds it. | `bundle`, `finding`, `sharing` | AD-9 · FR-10 | active |
+| BR-11 | A Bundle's stored document is changed only by the composer writing it again over the Bundle's own copy. No surface edits a Bundle's document directly, and no change to a Bundle ever reads or writes a Finding. | `bundle`, `sharing` | AD-9 · FR-40 | active |
 | BR-12 | The store permits one Finding to belong to several Bundles, and each such Bundle keeps its own image copy. No surface offers it: a Finding that a Bundle already holds leaves the filmstrip, and the filmstrip is the only place assembly selects from. | `bundle`, `finding` | FR-10 · FR-13 | active |
 | BR-13 | Composition refuses, naming the Finding, if any selected Finding's image file is missing. It never writes a Bundle with a broken image reference. | `bundle`, `finding` | AD-2 · FR-10 · UC-9 | active |
-| BR-14 | Only a Bundle is ever readable by an agent. An unbundled Finding is invisible on every agent-facing surface. | `agent-access`, `sharing`, `bundle` | FR-20 · FR-24 | active |
-| BR-15 | Every agent-facing surface is read-only. None of them creates, changes, or deletes anything. | `agent-access`, `sharing` | AD-5 | active |
-| BR-16 | Exactly one Access Key is valid at a time. Issuing a new one revokes the previous one immediately. | `agent-access` | FR-19 · FR-22 | active |
-| BR-17 | A refusal is always distinguishable from an empty result. "No Access Key" and "no Bundles" are never the same answer. | `agent-access`, `sharing` | AD-7 · FR-20 | active |
+| BR-14 | Only a Bundle is ever readable by an agent. An unbundled Finding is invisible on every agent-facing surface. | `sharing`, `bundle` | FR-24 | active |
+| BR-15 | Every agent-facing surface is read-only. None of them creates, changes, or deletes anything. | `sharing` | AD-5 | active |
+| BR-16 | Exactly one Access Key is valid at a time. Issuing a new one revokes the previous one immediately. | `agent-access` | FR-19 · FR-22 | retired — `DEC-016` withdrew `agent-access` and the `AccessKey` it governed on 2026-09-04. Not reused |
+| BR-17 | A refusal is always distinguishable from an empty result. "No Bundles" and a refusal are never the same answer. | `sharing` | AD-7 | active |
 | BR-18 | Nothing leaves the machine unless the Reviewer confirmed a publish on a named Bundle. | all | AD-6 · NFR-11 | active |
 | BR-19 | A publish that fails leaves nothing readable on the service, and leaves the Bundle unpublished locally. | `sharing` | FR-23 | active |
 | BR-20 | An unpublish that fails leaves the Bundle marked published. The Reviewer is never told something is private when it may not be. | `sharing` | FR-25 · FR-26 | active |
@@ -55,7 +55,7 @@ behaviour a reviewer checks.
 | BR-106 | Snapdown is one installed executable with two personas. The tray, the executable, and the window title never disagree about the product's name, and no second desktop executable is produced by a build. | `settings`, all | DEC-003 · FR-27 | active |
 | BR-107 | No colour is defined for only one Windows theme, and no literal colour exists outside the token stylesheet. Every text element meets WCAG AA contrast against its own background in both themes. | all | NFR-16 · NFR-17 | active |
 | BR-108 | A control that reports state owned by the operating system shows that it does not yet know, rather than showing an assumed value, until that state has been read. | `settings` | FR-18 · NFR-16 | active |
-| BR-109 | Every primary surface of the Editor is reachable from every other primary surface, including a surface whose component is frozen and gaining no new behaviour. | `settings`, `finding`, `bundle`, `sharing`, `agent-access` | FR-28 · DEC-005 | active |
+| BR-109 | Every primary surface of the Editor is reachable from every other primary surface, including a surface whose component is frozen and gaining no new behaviour. | `settings`, `finding`, `bundle`, `sharing` | FR-28 · DEC-005 | active |
 | BR-122 | A Bundle whose source Findings still exist can give them back; one whose source Findings are gone cannot. Which of the two holds is read from whether those Findings exist, never from a stored flag on the Bundle. | `bundle`, `finding` | FR-14 · FR-41 · BR-12 | active |
 
 ## Amended

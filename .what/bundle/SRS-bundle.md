@@ -75,8 +75,9 @@ different job even if both lived in one screen.
 | --- | --- | --- |
 | Reviewer | The person operating Snapdown. The only human actor and the only writer | Compose a Bundle from a selection, name it, list Bundles, open one, copy its Markdown, correct its title and its notes, export it as a PDF, and delete it with its files |
 
-An agent reads Bundles, but never through this component: `agent-access` and `sharing` are the surfaces
-that expose them, and both are read-only per AD-5.
+An agent reads Bundles, but never through this component: the Reviewer copies a Bundle's Markdown and
+pastes it, or `sharing` serves it over a Publication, and both are read-only per AD-5. (`agent-access`
+was a third such surface until `DEC-016` withdrew it on 2026-09-04.)
 
 **Amended 2026-08-31.** The Reviewer's rights used to end *"delete it with its files, and choose in the
 same act whether its source Findings go too"*. That last clause is gone: `FR-14` no longer offers a
@@ -138,7 +139,8 @@ a capture, and `bundle` has no authority to write one.
   whose Findings are gone can no longer give them back (`BR-122`).
 - **Publishing.** `sharing` owns the Publication; this component only knows that deleting a published
   Bundle must end one.
-- **Exposing a Bundle to an agent.** `agent-access` and `sharing`.
+- **Exposing a Bundle to an agent.** `sharing`, and the Reviewer's own Copy Markdown. (`agent-access`
+  was named here too until `DEC-016` withdrew it on 2026-09-04.)
 
 **Three entries left this list on 2026-08-31**, each superseded by a promise that now exists. What
 they said is recorded rather than deleted, because each was cited as a reason:

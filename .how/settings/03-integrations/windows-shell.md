@@ -86,5 +86,6 @@ a question for `wdi-question` or `wdi-decision`, not something this cleanup pass
 **The tray icon**, beyond noting it exists. It is `desktop-app`'s shell affordance, holds no state,
 and `inventory-screen.md` says explicitly that it is not a screen.
 
-**The Windows credential store.** It is a Windows integration and it belongs to `agent-access` and
-`sharing`, which own the secrets in it. `BR-119` keeps it out of this component entirely.
+**The Windows credential store.** It is a Windows integration and it belongs to `sharing`, which owns
+the secret in it. `BR-119` keeps it out of this component entirely. (`agent-access` owned a second
+secret there too, until `DEC-016` withdrew it on 2026-09-04.)

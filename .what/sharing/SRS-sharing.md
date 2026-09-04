@@ -32,10 +32,12 @@ internet and cannot be undone: an unpublish cannot recall what was already fetch
 
 ## Why · [G3]
 
-Because the Reviewer's agents are not all in one place. `agent-access` reaches the one in the next
-window and cannot reach the one on a server; nothing about a loopback interface can be stretched to
-cover it. This component exists for that gap, and it is deliberately the only path out of the machine —
-which is what makes AD-6 checkable at all.
+Because the Reviewer's agents are not all in one place. Copying a Bundle's Markdown reaches the one in
+the next window and cannot reach the one on a server; nothing about a local, in-person action can be
+stretched to cover it. (Until 2026-09-04 a running channel — `agent-access` — reached the local agent
+instead; `DEC-016` withdrew it, and the gap this component fills is unchanged either way.) This
+component exists for that gap, and it is deliberately the only path out of the machine — which is what
+makes AD-6 checkable at all.
 
 ## Actor Register · [G3]
 

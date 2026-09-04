@@ -1,7 +1,7 @@
-promise_progress: 49%
+promise_progress: 54%
 rtm_rows:
   green: 19
-  counted: 39
+  counted: 35
   excluded_no_uc: 7
 work_progress:
 - wave: W1
@@ -44,17 +44,20 @@ work_progress:
   stories_done: 6
   stories_total: 6
   work_progress: 100%
-gate_readiness: 92%
+gate_readiness: 81%
 validators_red:
+- V12
 - V13
+- V16
 - V3
+- V6
 validators_skipped:
   V19: 'advisory — wave S/M closed without an RTR-: W7'
 open_questions:
   blocking: 0
-  assumptions: 28
+  assumptions: 20
   external: 3
-  answered: 2
-  blocking_budget: 15
+  answered: 10
+  blocking_budget: 12
   blocking_over_budget: false
   assumptions_budget_per_gate: 15

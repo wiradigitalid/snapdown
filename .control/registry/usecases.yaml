@@ -162,25 +162,12 @@ usecases:
     component: settings
     satisfies: [FR-29]
     critical: false
-  # --- agent-access -----------------------------------------------------------------
-  - id: UC-17
-    title: I let the agent in front of me read my reviews
-    actor: Reviewer
-    component: agent-access
-    satisfies: [FR-19]
-    critical: true
-  - id: UC-18
-    title: I read a review from inside my agent instead of pasting it in
-    actor: Local coding agent
-    component: agent-access
-    satisfies: [FR-20, FR-21]
-    critical: false
-  - id: UC-19
-    title: I take the agent's access away again
-    actor: Reviewer
-    component: agent-access
-    satisfies: [FR-22]
-    critical: false
+  # --- agent-access (withdrawn) -------------------------------------------------------
+  # UC-17 "I let the agent in front of me read my reviews" (satisfies FR-19), UC-18 "I read a
+  # review from inside my agent instead of pasting it in" (satisfies FR-20, FR-21), and UC-19 "I
+  # take the agent's access away again" (satisfies FR-22) stood here, all `component: agent-access`,
+  # until 2026-09-04. `DEC-016` withdrew all three along with the component and the FRs they
+  # satisfied. None of the three ids is reused.
   # --- sharing ----------------------------------------------------------------------
   - id: UC-20
     title: I put a review somewhere the agent on my server can reach it
