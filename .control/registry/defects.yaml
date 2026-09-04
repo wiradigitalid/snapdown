@@ -3810,6 +3810,44 @@ defects:
 
       `/bundles` and `/bundles/:id` are the two that `.scratch/bundle-library/` is designing, so they
       have an owner and are not loose. `/findings/orphans` does not.
+    note_2026_09_04: |
+      RE-VERIFIED under `DEC-019`, against the code as it now stands: `.scratch/bundle-library/`
+      (tickets 10-19, PR #38) MERGED on 2026-09-02, and this note had not been updated since. Checked
+      by counting call sites directly, not by trusting either the old note or the ticket statuses.
+
+      Landed since the 2026-09-01 note:
+        /bundles         BUILT. `list_bundles` now has call sites building the Library's real bundle
+                          rows (`main.rs:390`, `794`, `1121`, `1198`, `1261`), not only a filter set.
+        /bundles/:id     BUILT. `get_bundle` has call sites opening a bundle into Review & Update
+                          (`main.rs:741`, `2441`, `5427`, `5461`, `5500`, and more).
+        (bundle delete)  BUILT. `delete_bundle` is called (`main.rs:463`).
+        (bundle edit)    BUILT, under a different name than this row expected. `update_bundle_markdown`
+                          was subsumed by `update_bundle_name_and_markdown` (the port comment says so
+                          directly: "Subsumes the document-only `update_bundle_markdown` that ticket
+                          05's audit found nothing calling"), which IS called (`main.rs:585`, `982`).
+
+      So of "Store operations still with no caller" from the 2026-09-01 list, only two remain true:
+      `reorder_markers` and `update_finding_image` — both defined in `crates/snapdown-core/src/ports/`
+      and implemented in `snapdown-store`, neither called anywhere in `apps/desktop/src/`.
+
+      Also corrected: `SqliteAccessKeyStore` no longer names anything. `DEC-016`'s removal (PR #40,
+      merged) deleted the whole `AccessKey`/`AccessKeyStore` domain layer, not just its caller — this
+      row's evidence section still lists it as "no caller" when the honest state is "does not exist."
+      The 2026-09-01 note's claim that `/settings/agent-access` "landed" as a read-only `Agent Bridge`
+      tab is now itself stale for the same reason: that tab was one of the two things `DEC-016`'s
+      removal found and deleted beyond its own brief (the ledger at
+      `.control/memlog/autopilot-2026-09-04.md`, iteration 18, names it). `agent-access` is retired,
+      not a surface owed by this row.
+
+      Still genuinely absent, unchanged from 2026-09-01:
+        /findings              partial - the filmstrip shows, nothing manages
+        /findings/orphans      no Slint file, and `OrphanSweeper` (renamed from `VaultSweeper` at some
+                                point since this row was opened) has no caller in `apps/desktop/src/`
+        /bundles/:id/publish   behind `DEC-005`
+
+      `reorder_markers`, `update_finding_image`, `/findings/orphans`, and the publish surface are what
+      remains of this row's original nine. Ordering which to build next is still the owner's call, per
+      this row's own `fix:` — `DEC-019` did not decide it, only re-verified the inventory.
     status: open
 
   - id: BUG-62
