@@ -18,8 +18,10 @@ import { Theme } from "../theme.slint";
 // normalizes a box so x1<x2 before storing, so the handles below can trust the order.
 //
 // Every coordinate is normalized to the image, never to the canvas. `font-size` is the exception and
-// is in IMAGE pixels - the canvas draws a Finding at its natural size, so one canvas pixel is one
-// image pixel and the same number means the same height here and in the burned PNG.
+// is in IMAGE pixels - one canvas pixel is one image pixel, and the same number means the same
+// height here and in the burned PNG, whenever the canvas is at natural size (`canvas-zoom == 1.0`,
+// `FR-34`). Zoom scales this component along with everything else on `canvas-viewport`; nothing
+// here needs to know zoom exists, because every field above is already a fraction of the parent.
 export struct AnnotationData {
     id: string,
     kind: string,

@@ -1403,6 +1403,9 @@ fn load_active_detail(window: &AppWindow, ctx: &AppContext, active_id: &str) {
 
     window.set_current_filename(filename.into());
     window.set_active_finding_id(f.id.clone().into());
+    // `FR-34`. View state belongs to the view being looked at, not to a Library-wide preference:
+    // opening a different Finding always starts back at natural size.
+    window.set_canvas_zoom(1.0);
 
     // Says what was saved, and - when the Quality Budget shrank it - what it was saved FROM.
     //
@@ -4209,6 +4212,62 @@ fn prewarm_capture_overlay() {
     });
 }
 
+/// `FR-34`. The clamp and step for canvas zoom, kept as pure arithmetic with no Slint runtime
+/// involved, so it can be unit-tested directly. `1.0` is "natural size" - one canvas pixel is one
+/// image pixel. `canvas-zoom` is pure view state: nothing here reads or writes `finding_store`,
+/// `library.db`, or a `Setting`, and nothing in `crates/snapdown-core` knows this exists.
+const CANVAS_ZOOM_MIN: f32 = 0.25;
+const CANVAS_ZOOM_MAX: f32 = 4.0;
+const CANVAS_ZOOM_STEP: f32 = 0.25;
+
+fn zoomed_in(current: f32) -> f32 {
+    (current + CANVAS_ZOOM_STEP).min(CANVAS_ZOOM_MAX)
+}
+
+fn zoomed_out(current: f32) -> f32 {
+    (current - CANVAS_ZOOM_STEP).max(CANVAS_ZOOM_MIN)
+}
+
+#[cfg(test)]
+mod canvas_zoom_tests {
+    use super::*;
+
+    #[test]
+    fn zooming_in_then_out_the_same_number_of_steps_returns_to_the_start() {
+        let start = 1.0_f32;
+        let after_in = zoomed_in(zoomed_in(zoomed_in(start)));
+        let back = zoomed_out(zoomed_out(zoomed_out(after_in)));
+        assert_eq!(
+            back, start,
+            "a round trip with no clamp hit must be exact, not merely close"
+        );
+    }
+
+    #[test]
+    fn zoom_in_never_exceeds_the_maximum() {
+        let mut zoom = CANVAS_ZOOM_MIN;
+        for _ in 0..500 {
+            zoom = zoomed_in(zoom);
+        }
+        assert_eq!(
+            zoom, CANVAS_ZOOM_MAX,
+            "repeated zoom-in past the ceiling must stay AT it"
+        );
+    }
+
+    #[test]
+    fn zoom_out_never_drops_below_the_minimum() {
+        let mut zoom = CANVAS_ZOOM_MAX;
+        for _ in 0..500 {
+            zoom = zoomed_out(zoom);
+        }
+        assert_eq!(
+            zoom, CANVAS_ZOOM_MIN,
+            "repeated zoom-out past the floor must stay AT it"
+        );
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Keep the mutex handle alive for the whole process; a second launch finds it already
     // held and exits instead of opening a duplicate tray icon and window.
@@ -4818,6 +4877,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(message) => toast(&win, message, false),
             Err(message) => toast(&win, message, true),
         }
+    });
+
+    // ZOOM - `FR-34`. Pure view state: the arithmetic lives in `zoomed_in`/`zoomed_out` above (unit
+    // tested with no Slint runtime involved), and these three handlers only read the current value,
+    // compute the next one, and push it straight back. Nothing here touches `finding_store`.
+    let win_weak_zoom_in = main_window.as_weak();
+    main_window.on_zoom_in_clicked(move || {
+        let Some(win) = win_weak_zoom_in.upgrade() else {
+            return;
+        };
+        win.set_canvas_zoom(zoomed_in(win.get_canvas_zoom()));
+    });
+
+    let win_weak_zoom_out = main_window.as_weak();
+    main_window.on_zoom_out_clicked(move || {
+        let Some(win) = win_weak_zoom_out.upgrade() else {
+            return;
+        };
+        win.set_canvas_zoom(zoomed_out(win.get_canvas_zoom()));
+    });
+
+    let win_weak_zoom_reset = main_window.as_weak();
+    main_window.on_zoom_reset_clicked(move || {
+        let Some(win) = win_weak_zoom_reset.upgrade() else {
+            return;
+        };
+        // `1.0` directly, not through `zoomed_in`/`zoomed_out`: reset is "go to natural size", not
+        // "take one more step".
+        win.set_canvas_zoom(1.0);
     });
 
     let win_weak_rev = main_window.as_weak();

@@ -1180,6 +1180,12 @@ export component AppWindow inherits Window {
     in-out property <string> resolution-text: "1020 × 885  px";
     in-out property <string> size-text: "119.5  KB";
     in-out property <image> active-image;
+    // `FR-34`. A pure view transform: it changes how big the canvas draws, never the stored image
+    // and never a Marker's or an annotation's stored coordinate — both are already fractions of the
+    // canvas (`AD-3`), so scaling `canvas-viewport` alone rescales everything on it for free.
+    // `1.0` is "natural size" — one canvas pixel is one image pixel. Reset by Rust to `1.0` whenever
+    // a different Finding becomes active; never read by `finding_store`, never a `Setting`.
+    in-out property <float> canvas-zoom: 1.0;
     // No demo Markers. Two fake ones used to ship as the default, for the same reason the
     // Observation Summary once shipped placeholder prose - and with the same consequence: a reader
     // cannot tell invented content from stored content, so a binding that never delivered looked
@@ -1242,8 +1248,9 @@ export component AppWindow inherits Window {
     // Jangan ada default ukuran."* An annotation is a statement about a REGION, and a tap does not
     // name one - a default size would be the product guessing which region was meant.
     //
-    // 8 image pixels in the longer direction. The canvas draws a Finding at natural size, so this is
-    // measured in the image's own pixels and does not change with the window.
+    // 8 image pixels in the longer direction. Measured in the image's own pixels, so this threshold
+    // does not change with the window OR with `canvas-zoom` (`FR-34`) — a drag that is real at one
+    // zoom level is real at every zoom level.
     private property <bool> drag-is-real:
         Math.max(Math.abs(root.draw-x2 - root.draw-x1) * root.active-image.width,
                  Math.abs(root.draw-y2 - root.draw-y1) * root.active-image.height) >= 8;
@@ -1467,6 +1474,11 @@ export component AppWindow inherits Window {
     callback paste-clicked();
     callback assemble-bundle-clicked();
     callback copy-image-clicked();
+    // `FR-34`. Rust owns the step size and the clamp; the canvas only ever asks for a direction, or
+    // for exactly natural size.
+    callback zoom-in-clicked();
+    callback zoom-out-clicked();
+    callback zoom-reset-clicked();
     callback marker-placed(float, float);
     callback delete-marker-clicked(string);
     callback marker-comment-edited(string, string);
@@ -1995,6 +2007,35 @@ export component AppWindow inherits Window {
                     // not a choice.
                     HorizontalLayout {
                         alignment: end;
+                        spacing: 2px;
+
+                        // `FR-34`. Three buttons, not a slider: the proof line asks only that the
+                        // canvas can be zoomed in, out, and returned to natural size, and Undo/Redo
+                        // already set the precedent of a plain button pair for a stepped control in
+                        // this same group.
+                        IconButton {
+                            width: 40px;
+                            height: 44px;
+                            icon: @image-url("../assets/icons/zoom-out.svg");
+                            text: "Zoom out";
+                            clicked => { root.zoom-out-clicked(); }
+                        }
+                        IconButton {
+                            width: 40px;
+                            height: 44px;
+                            icon: @image-url("../assets/icons/zoom-reset.svg");
+                            text: "Natural size";
+                            clicked => { root.zoom-reset-clicked(); }
+                        }
+                        IconButton {
+                            width: 40px;
+                            height: 44px;
+                            icon: @image-url("../assets/icons/zoom-in.svg");
+                            text: "Zoom in";
+                            clicked => { root.zoom-in-clicked(); }
+                        }
+
+                        Rectangle { width: 1px; height: 24px; background: Theme.border-strong; y: 10px; }
 
                         Rectangle {
                             width: 84px;
@@ -2075,8 +2116,12 @@ export component AppWindow inherits Window {
                             canvas-viewport := Rectangle {
                                 x: max(24px, (parent.width - self.width) / 2);
                                 y: max(24px, (parent.height - self.height) / 2);
-                                width: root.active-image.width * 1px;
-                                height: root.active-image.height * 1px;
+                                // `FR-34`. `canvas-zoom` is the ONLY thing zoom changes. Every
+                                // annotation and Marker below reads a fraction of THIS rectangle's own
+                                // width/height, so scaling it here rescales all of them together —
+                                // nothing downstream needs to know zoom exists.
+                                width: root.active-image.width * 1px * root.canvas-zoom;
+                                height: root.active-image.height * 1px * root.canvas-zoom;
                                 background: Theme.canvas-ground;
                                 border-radius: Theme.radius-sharp;
                                 drop-shadow-blur: 20px;
@@ -3011,9 +3056,10 @@ export component AppWindow inherits Window {
                                         // screenshot; the field is for "18, the same as the last
                                         // one". The five-step ladder that was here could do neither.
                                         //
-                                        // Both are in IMAGE pixels. The canvas draws a Finding at
-                                        // natural size, so the number means the same thing here and
-                                        // in the burned PNG.
+                                        // Both are in IMAGE pixels, so the number always means the
+                                        // same thing in the burned PNG. On screen it matches only at
+                                        // `canvas-zoom == 1.0` ("natural size") — `FR-34` scales the
+                                        // whole canvas, this font size among everything else on it.
                                         HorizontalLayout {
                                             spacing: 8px;
 
