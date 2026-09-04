@@ -978,9 +978,7 @@ The submit button has incorrect margin on narrow viewports.\n\
             rebased, expected,
             "rebasing must change only the image link destinations"
         );
-        assert!(
-            rebased.contains("<C:/Users/test/Snapdown Vault/bundles/b-1/finding_1_burned.png>")
-        );
+        assert!(rebased.contains("<C:/Users/test/Snapdown Vault/bundles/b-1/finding_1_burned.png>"));
     }
 
     #[test]
