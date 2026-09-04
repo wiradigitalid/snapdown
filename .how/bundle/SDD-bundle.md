@@ -173,8 +173,9 @@ reads `backgroundColor: 'var(--color-bg)'`.
 ## Failure Behaviour · [guarded]
 
 Never written before. The boundary list is this component's rows in `inventory-screen.md` — 8, 9, 10 —
-plus the two stores. `bundle` owns no endpoint in `inventory-api.md`; `agent-access` serves Bundles
-over the Local API and owns those rows.
+plus the two stores. `bundle` owns no endpoint in `inventory-api.md`; `sharing` serves Bundles over
+`web-api` and owns those rows. (`agent-access` served Bundles over a Local API and owned rows 1-8
+there too, until `DEC-016` withdrew both on 2026-09-04.)
 
 | Boundary | Other side is slow | Other side is absent | Other side is lying |
 |---|---|---|---|

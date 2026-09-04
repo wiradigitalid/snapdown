@@ -44,8 +44,9 @@ span a seam.
 | --- | --- | --- |
 | Reviewer | The person operating Snapdown. The only human actor and the only writer in the product | Press the Capture hotkey, drag a region, cancel a Capture, type and reword a Note, place, move and remove Markers, select Findings, delete Findings, discard the Findings behind a finished Bundle, act on an orphan report |
 
-No second actor. An agent never reaches this component: `agent-access` and `sharing` read Bundles, and
-BR-14 keeps an unbundled Finding invisible to both.
+No second actor. An agent never reaches this component: Copy Markdown and `sharing` read Bundles, and
+BR-14 keeps an unbundled Finding invisible to both. (`agent-access` was a third such reader until
+`DEC-016` withdrew it on 2026-09-04.)
 
 ## UC Catalogue · [G3]
 
@@ -98,7 +99,8 @@ stated count is the one thing in this section a reader cannot check without reco
   Bundles exist.
 - **Owning the settings it obeys.** The Quality Budget, the Vault location, and the hotkey bindings
   belong to `settings`. This component reads them.
-- **Exposing anything to an agent.** `agent-access` and `sharing` do that, and only for Bundles.
+- **Exposing anything to an agent.** `sharing` and the Reviewer's own Copy Markdown do that, and only
+  for Bundles. (`agent-access` was a third such exposer until `DEC-016` withdrew it on 2026-09-04.)
 - **Annotation beyond numbered Markers.** No arrows, callouts, blur, redaction, or freehand. Not in
   this release and not later; it is a product Non-Goal.
 - **Editing captured pixels.** No crop, rotate, or resize after capture.

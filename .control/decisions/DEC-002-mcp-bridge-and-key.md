@@ -1,7 +1,7 @@
 ---
 type: decision
 id: DEC-002
-status: applied
+status: superseded
 touches:
   - .how/_platform/ARCHITECTURE-SPINE.md
   - .how/_platform/c4-l2-containers.md
@@ -9,7 +9,7 @@ touches:
   - .what/agent-access/SRS-agent-access.md
   - .what/agent-access/03-domain/domain-model.md
 supersedes: null
-superseded_by: null
+superseded_by: DEC-016
 created: "2026-08-22"
 ---
 

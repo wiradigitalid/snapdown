@@ -4,14 +4,15 @@ type: architecture-spine
 purpose: build-substrate
 altitude: initiative
 paradigm: hexagonal — a Rust domain core with ports for capture, storage, and publishing; every UI and every agent-facing surface is an adapter
-scope: The whole product — the desktop app, the MCP bridge, the web service, and the browser reader
+scope: The whole product — the desktop app, the web service, and the browser reader
 status: draft
 created: "2026-08-22"
-updated: "2026-08-31"
+updated: "2026-09-04"
 # `binds:` read CAP-1..CAP-8 until 2026-08-31, when `wdi-review` found this file carrying THREE
 # disagreeing capability lists: this field stopped at CAP-8, the Capability -> Architecture Map
 # below reached CAP-10, and the registry holds CAP-12. All three now agree.
-binds: [CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-7, CAP-8, CAP-9, CAP-10, CAP-11, CAP-12]
+# `CAP-7` dropped 2026-09-04: `DEC-016` withdrew it along with `agent-access`.
+binds: [CAP-1, CAP-2, CAP-3, CAP-4, CAP-5, CAP-6, CAP-8, CAP-9, CAP-10, CAP-11, CAP-12]
 sources:
   - .what/_product-brief/brief.md
   - .what/_prd/capture-to-markdown/prd.md
@@ -40,7 +41,7 @@ the outside:
 | --- | --- | --- |
 | Domain core | `crates/snapdown-core` | Entities, invariants, the composition rules. No I/O, no OS calls |
 | Ports | `crates/snapdown-core/ports` | Traits the core calls out through: capture, blob store, metadata store, clock, publisher |
-| Adapters | `crates/snapdown-*`, `apps/*` | Screen capture, SQLite, the Vault filesystem, the Local API, the MCP bridge, the publish client, the Slint desktop UI |
+| Adapters | `crates/snapdown-*`, `apps/*` | Screen capture, SQLite, the Vault filesystem, the publish client, the Slint desktop UI |
 
 The rule the paradigm buys: **a promise is implemented once, in the core, and every surface is a
 translation of it.** Three handoff paths existing is a fact about adapters, not about the domain.
@@ -52,16 +53,16 @@ Eleven. Each one is here because breaking it in one component breaks another.
 ```mermaid
 graph TD
     UI["Slint UI<br/>(desktop, in-process)"] --> CORE["snapdown-core<br/>domain + ports"]
-    API["Local API<br/>(loopback, read-only)"] --> CORE
     PUB["Publish client"] --> CORE
     CORE --> STORE["SQLite adapter"]
     CORE --> BLOB["Vault filesystem adapter"]
     CORE --> CAP["Screen capture adapter"]
-    BRIDGE["MCP Bridge<br/>(separate process)"] --> API
     PUB -->|"HTTPS, confirmed act only"| WEB["web-api (Go)"]
     CORE -.->|"never"| UI
-    CORE -.->|"never"| API
 ```
+
+A `Local API` node, read from by an `MCP Bridge` node in a separate process, stood here until
+2026-09-04. `DEC-016` withdrew both: there is no running channel left for a bridge to front.
 
 Dependency direction is one-way into the core. No adapter is imported by another adapter, and the
 core imports none of them. `web-api` is a separate program in a separate language and depends on
@@ -71,7 +72,9 @@ person opens is rendered by `web-api` itself.
 
 ### AD-1 — Markers and Note lines are one sequence, not two
 
-- **Binds:** `finding`, `bundle`, `agent-access`, `sharing` — all four read or render the pairing.
+- **Binds:** `finding`, `bundle`, `sharing` — all three read or render the pairing.
+- **Shortened** 2026-09-04 by `DEC-016`. Binds read *"…`agent-access`, `sharing`…"* until that
+  component was withdrawn along with the running channel it granted.
 - **Prevents:** a Marker deleted from an image while its numbered line stays in the Note, so line 3
   describes what badge 2 now points at. The Reviewer cannot see the mismatch and the agent cannot
   either, which makes it the one defect that destroys the product's only promise.
@@ -119,18 +122,24 @@ person opens is rendered by `web-api` itself.
 
 ### AD-5 — Every surface outside the desktop process is read-only
 
-- **Binds:** `agent-access`, `sharing`, and the `mcp-bridge` and `web-api` containers.
-- **Prevents:** an agent holding an Access Key, or anyone holding a Publication URL, changing or
-  deleting a review — on a machine where the Reviewer's judgement is the only thing of value.
-- **Rule:** The Local API, the MCP Bridge, and `web-api` MUST expose no operation that
-  creates, changes, or deletes anything in the Library. Write authority lives in the desktop process
-  and reaches it only from the Reviewer's own actions. A new route or tool on any of those surfaces
-  that is not a read is a violation, not a feature.
+- **Binds:** `sharing`, and the `web-api` container.
+- **Prevents:** anyone holding a Publication URL changing or deleting a review — on a machine where
+  the Reviewer's judgement is the only thing of value.
+- **Rule:** `web-api` MUST expose no operation that creates, changes, or deletes anything in the
+  Library. Write authority lives in the desktop process and reaches it only from the Reviewer's own
+  actions. A new route on that surface that is not a read is a violation, not a feature.
 - **Narrowed in scope** 2026-09-01 by `DEC-015`, which withdrew the `web-ui` container: it left this
   Binds list and this Rule, and `AD-3`'s Binds with it. Prevents is unchanged and the invariant is
   not weakened — `web-api` is the process that actually serves the published page and it is still
   bound. But the net is one name shorter, and **if a browser client is ever built it MUST be added
   back to both.** Nothing will remind anyone.
+- **Narrowed again** 2026-09-04 by `DEC-016`, which withdrew `agent-access` and the `mcp-bridge`
+  container along with it: there is no more Local API and no more Access Key for an agent to hold.
+  Binds read *"`agent-access`, `sharing`, and the `mcp-bridge` and `web-api` containers"* and the
+  Rule opened *"The Local API, the MCP Bridge, and `web-api` MUST expose…"* until this pass. Prevents
+  is narrower in fact, not just in wording — the harm it names can no longer happen through a channel
+  that no longer exists. What remains is exactly what `sharing` still owes: a Publication is read-only
+  the same way it always was.
 
 ### AD-6 — Nothing leaves the machine except a confirmed publish of a named Bundle
 
@@ -144,10 +153,13 @@ person opens is rendered by `web-api` itself.
 
 ### AD-7 — One error envelope across every process boundary
 
-- **Binds:** `agent-access`, `sharing`, and the `mcp-bridge`, `web-api` containers.
-- **Prevents:** an agent receiving an empty Bundle list when the real answer was "no Access Key", and
-  reporting to the Reviewer that their Library is empty. Three surfaces inventing three error shapes
-  is how that happens.
+- **Binds:** `sharing`, and the `web-api` container.
+- **Shortened** 2026-09-04 by `DEC-016`, which withdrew `agent-access` and the `mcp-bridge`
+  container: an agent can no longer receive an empty Bundle list when the real answer was "no
+  Access Key", because there is no channel left for it to ask over. The harm this invariant guards
+  against — a refusal disguised as an empty result — is now `sharing`'s alone to avoid.
+- **Prevents:** a remote agent or a browser receiving an empty result from `web-api` when the real
+  answer is a refusal, and mistaking a Publication that failed for one that never existed.
 - **Rule:** Every failure crossing a process boundary MUST be returned in the envelope defined in
   `cross-cutting.md`, carrying a code from that file's catalogue. A refusal MUST be distinguishable
   from an empty result by its code, never only by its body being empty.
@@ -163,9 +175,12 @@ person opens is rendered by `web-api` itself.
 
 ### AD-9 — One Bundle, one authored document, on every path
 
-- **Binds:** `bundle`, `agent-access`, `sharing`.
-- **Prevents:** the clipboard, MCP, and web paths drifting into three renderings of one Bundle, so
-  that two agents reading the same review disagree about it and nobody can say which is right.
+- **Binds:** `bundle`, `sharing`.
+- **Shortened** 2026-09-04 by `DEC-016`, which withdrew `agent-access`: MCP is no longer a handoff
+  path, and Prevents is narrower in fact along with it — there are two paths left to drift apart, not
+  three.
+- **Prevents:** the clipboard and web paths drifting into two renderings of one Bundle, so that two
+  agents reading the same review disagree about it and nobody can say which is right.
 - **Rule:** A Bundle's Markdown MUST be composed once, by the core, and stored. Every handoff path
   MUST serve that same authored document. A path MAY substitute the base of the document's image
   links so that they resolve for its own reader, and MUST change nothing else — no re-rendering, no
@@ -173,7 +188,7 @@ person opens is rendered by `web-api` itself.
   substitution is made **by the composer**, which takes the base path as a parameter; a surface MUST
   NOT rewrite a document the composer has already produced. A surface that needs a different shape is
   asking for a change to the composer. **This Rule governs the handoff paths an agent reads — the
-  clipboard, MCP, and the published web copy. It does NOT reach an artifact produced for a person to
+  clipboard and the published web copy. It does NOT reach an artifact produced for a person to
   read away from Snapdown**, and `CAP-12`'s PDF export is such an artifact.
 - **Scoped** 2026-09-01 by `DEC-014`, which is where the reasoning, the cost and the reversal trigger
   live. Binds, Prevents, and every clause governing an agent path are unchanged. Read that decision
@@ -191,7 +206,10 @@ person opens is rendered by `web-api` itself.
 
 ### AD-10 — Colour has exactly one authority, and every colour exists in both themes
 
-- **Binds:** `finding`, `bundle`, `settings`, `sharing`, `agent-access` — every component that draws.
+- **Binds:** `finding`, `bundle`, `settings`, `sharing` — every component that draws.
+- **Shortened** 2026-09-04 by `DEC-016`, which withdrew `agent-access`. It drew no colour of its own —
+  its one screen was chrome around a key, not a rendering of Reviewer content — so nothing else about
+  this invariant changes.
 - **Prevents:** the failure this product already shipped. `finding` and `bundle` paint panels from
   literal light-theme values while the shell paints text from tokens that follow
   `prefers-color-scheme`. Under the Windows dark theme the shell's white text lands on those white
@@ -216,15 +234,18 @@ person opens is rendered by `web-api` itself.
   `desktop.exe` beside `Snapdown.exe` led the Reviewer to conclude the product had no navigation.
 - **Rule:** Exactly one desktop process MUST own the Library. The tray, the global hotkeys, the
   capture overlay, and the Editor window MUST all live in it. A second desktop executable MUST NOT be
-  produced by a build. The `mcp-bridge` is not an exception: it holds no Library state, writes
-  nothing, and reaches the Library only through the Local API, which AD-5 already makes read-only.
-  Recorded as `DEC-003`.
+  produced by a build. Recorded as `DEC-003`.
+- **Trimmed** 2026-09-04 by `DEC-016`, which withdrew the `mcp-bridge` container. The Rule used to add
+  *"The `mcp-bridge` is not an exception: it holds no Library state, writes nothing, and reaches the
+  Library only through the Local API, which AD-5 already makes read-only"* — a second process existed
+  then, and this said why it did not violate the Rule. With no second process left, there is nothing
+  for that clause to except.
 
 ## Consistency Conventions
 
 | Concern | Convention |
 | --- | --- |
-| Naming — entities | The glossary's nouns, verbatim, in `PascalCase`: `Finding`, `Note`, `Marker`, `Bundle`, `BundleItem`, `Publication`, `AccessKey`, `Setting` |
+| Naming — entities | The glossary's nouns, verbatim, in `PascalCase`: `Finding`, `Note`, `Marker`, `Bundle`, `BundleItem`, `Publication`, `Setting`. `AccessKey` stood here until `DEC-016` withdrew it |
 | Naming — Rust | `snake_case` items, `PascalCase` types, one crate per adapter named `snapdown-<adapter>` |
 | Naming — Go | Standard Go style; package per concern, no `util` package |
 | Naming — Slint (`apps/desktop/ui`) | `kebab-case` file names, `PascalCase` component names, `Sd`-prefixed where the component is this product's own rather than a Slint builtin |
@@ -234,7 +255,7 @@ person opens is rendered by `web-api` itself.
 | Error shape | The envelope in `cross-cutting.md`. Nothing invents its own |
 | Markdown | CommonMark. Image references relative to the document's own folder. No HTML, no extensions |
 | Config | One TOML file per program, plus environment variables that override it. No config in code |
-| Secrets | The Access Key and the publish credential are held in the OS credential store on the desktop and in the environment on the server. Neither is written to a config file, a log, or this repository |
+| Secrets | The publish credential is held in the OS credential store on the desktop and in the environment on the server. It is not written to a config file, a log, or this repository. The Access Key was the other secret here until `DEC-016` withdrew it |
 | Logging | Structured, one event per line, no Finding, Note, or Bundle content in any field |
 
 A **TypeScript** row stood in this table until 2026-09-01, scoped to `web-ui`. There is no TypeScript
@@ -309,12 +330,15 @@ snapdown/
 | CAP-4 Bundles | `snapdown-core` composer, `snapdown-store` | AD-1, AD-2, AD-3, AD-9 |
 | CAP-5 Removal | `snapdown-core`, `snapdown-store` | AD-2 |
 | CAP-6 Settings | `apps/desktop/src`, `apps/desktop/ui` | AD-6 |
-| CAP-7 Local agent access | `apps/desktop/src` Local API, `snapdown-bridge` | AD-5, AD-7, AD-9 |
 | CAP-8 Web sharing | `apps/desktop` publish client, `web/api`, `web/ui` | AD-5, AD-6, AD-7, AD-8, AD-9 |
 | CAP-9 The surface itself | `apps/desktop/ui`, `web/ui/src` | AD-10, AD-11 |
 | CAP-10 Precision guides & auto-detection | `snapdown-capture`, `apps/desktop/ui` | AD-2, AD-10 |
 | CAP-11 Canvas annotations & privacy redactions | `snapdown-capture`, `apps/desktop/ui` | AD-3, AD-4, AD-10 |
 | CAP-12 Export a Bundle as a PDF | undesigned; `bundle` owns the composer | AD-2 · **not** AD-9, per `DEC-014` |
+
+**A `CAP-7 Local agent access` row stood above `CAP-8` until 2026-09-04**, reading
+*"`apps/desktop/src` Local API, `snapdown-bridge` | AD-5, AD-7, AD-9"*. `DEC-016` withdrew the
+capability along with the `agent-access` component; not reused.
 
 **Two rows added 2026-08-31**, both found missing by `wdi-review`. `CAP-11` had existed since the G2
 re-run of 2026-08-23 and `CAP-12` since 2026-08-31, and this table had neither.
@@ -335,8 +359,6 @@ this table**. `FR-39` was blocked from being specced while the question stood, a
   Windows one is proven.
 - **A read token on a Publication.** AD-8 makes the slug independent, which is what makes adding a
   token later a change to one surface rather than a redesign. Not promised in r2.
-- **Access Key expiry.** Revocation is the control in r2. An expiry policy needs a clock in the
-  authorisation path and buys nothing revocation does not already give.
 - **Multi-Vault.** One Vault at a time. The store adapter takes a root; nothing else assumes one
   exists forever.
 - **Search over the Library.** The first thing that will hurt past a few hundred Findings, and it

@@ -16,17 +16,25 @@ restated here.
 
 Derived from the tree on disk on **2026-08-22**, at commit **72bf291**.
 
+**Partially re-derived on 2026-09-04**, on branch `docs/apply-dec-016`, applying `DEC-016`: the
+`agent-access` row below is removed, along with `.what/agent-access/` and `.how/agent-access/`
+themselves, and their mentions elsewhere in this file. Every other section still carries the
+2026-08-22 derivation and its own drift — a full `wdi-init` intent `structure` run is owed and is
+**not** what happened here, same as `structure-codebase.md`'s own partial passes.
+
 ## Product Component folders
 
-Five Product Components, each present on both sides. No one-sided folder, so no drift.
+Four Product Components, each present on both sides. No one-sided folder, so no drift.
 
 | Product Component | `.what/` | `.how/` | `mode` | Slots split out of the kernel |
 | --- | --- | --- | --- | --- |
 | `finding` | SRS + `03-domain/` | SDD skeleton | `guarded` | none — `02-rules/` and `04-usecases/` exist and are empty, awaiting G4 |
 | `bundle` | SRS + `03-domain/` | SDD skeleton | `outline` | none — same |
 | `settings` | SRS + `03-domain/` | SDD skeleton | `catalog` | none, and none is coming: at `catalog` the empty slots are the finished state |
-| `agent-access` | SRS + `03-domain/` | SDD skeleton | `guarded` | none — awaiting G4 |
 | `sharing` | SRS + `03-domain/` | SDD skeleton | `guarded` | none — awaiting G4 |
+
+`agent-access` stood here too until `DEC-016` withdrew the component on 2026-09-04, taking
+`.what/agent-access/` and `.how/agent-access/` with it.
 
 ## `.constitution/`
 
@@ -97,7 +105,8 @@ Product Component folders are in the table above and are deliberately not expand
     capture-to-markdown/   ★ G2. The desktop loop: CAP-1..6, FR-1..18
       prd.md
       addendum.md
-    agent-handoff/         ★ G2. MCP and web publishing: CAP-7..8, FR-19..26
+    agent-handoff/         ★ G2. Web publishing: CAP-8, FR-23..26. CAP-7 and FR-19..22 (MCP) stood
+                           here too until `DEC-016` withdrew them on 2026-09-04
       prd.md
       addendum.md
   business-rules.md  ★ G3. BR-1..30, every one binding more than one component

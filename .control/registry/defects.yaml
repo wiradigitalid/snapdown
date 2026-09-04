@@ -5486,7 +5486,7 @@ defects:
   - id: BUG-90
     title: "BUG-86's fix never repaired a Bundle composed before it - every pre-fix Bundle's image link still resolves to nothing"
     found: "2026-09-03"
-    found_by: kodesh87, manually testing the just-merged Bundle Library feature (tickets 10-19) - "kenapa gak ada gambar yang dirender ketika: view bundle, edit bundle?"
+    found_by: 'kodesh87, manually testing the just-merged Bundle Library feature (tickets 10-19) - "kenapa gak ada gambar yang dirender ketika: view bundle, edit bundle?"'
     component: bundle
     severity: high
     contradicts: [NFR-8, FR-12]

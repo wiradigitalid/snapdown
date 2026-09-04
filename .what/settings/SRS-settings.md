@@ -84,15 +84,16 @@ opening section, and is not repeated here.
 | A Quality Budget change applies only to later Captures; no stored image is re-encoded | BR-9 |
 | Hotkey and startup registration succeed without administrator rights | NFR-7 |
 | The setting for run-at-sign-in reflects the actual OS registration, not a remembered intention | FR-18 |
-| Secrets are not settings. The publish credential and the Access Key live in the Windows credential store | cross-cutting.md § Secrets |
+| Secrets are not settings. The publish credential lives in the Windows credential store | cross-cutting.md § Secrets |
 | No network call originates here | AD-6 |
 
 ## Non-Goals · [G3]
 
 - **Doing anything with the values.** Capturing, reducing, composing, and publishing all belong to
   their own components. This one stores and validates.
-- **Holding secrets.** The publish credential and the Access Key are in the OS credential store;
-  `agent-access` and `sharing` own them.
+- **Holding secrets.** The publish credential is in the OS credential store; `sharing` owns it. (The
+  Access Key was a second such secret, owned by `agent-access`, until `DEC-016` withdrew both on
+  2026-09-04.)
 - **A second Vault, or switching between Vaults.** One at a time — OQ-11.
 - **Per-project or per-workspace settings.** One Library, one set.
 - **Theming, layout, or any appearance option.** Not a setting because leaving it fixed breaks

@@ -4,7 +4,7 @@ kind: db
 scope: _platform
 status: draft
 created: "2026-08-22"
-updated: "2026-08-22"
+updated: "2026-09-04"
 derived_from: plan
 verified: ""
 ---
@@ -29,7 +29,7 @@ neither is a container, and a row's owning component is what decides which store
 | 4 | `bundle` | `bundle` | One composed Bundle, including the composed Markdown itself so that every handoff path serves the same authored document rather than each surface composing its own (AD-9, DEC-012) | `id` pk · `name` · `markdown` · `markdown_path` relative to the Vault · `composed_at` | draft |
 | 5 | `bundle_item` | `bundle` | The membership of one Finding in one Bundle, and the path of the Marker-burned image copy written for it | `id` pk · `bundle_id` fk · `finding_id` fk · `position` · `image_path` · unique on (`bundle_id`, `finding_id`) | draft |
 | 6 | `publication` | `sharing` | Where a Bundle is published and whether it is still live. `slug` is generated independently of every id here (AD-8) | `id` pk · `bundle_id` fk unique · `slug` unique · `base_url` · `published_at` · `unpublished_at` nullable · `last_error` nullable | draft |
-| 7 | `access_key` | `agent-access` | The one Access Key that may be valid, stored as a hash. The key itself lives in the Windows credential store, never here | `id` pk · `key_hash` · `issued_at` · `revoked_at` nullable | draft |
+| 7 | `access_key` | `agent-access` | The one Access Key that may be valid, stored as a hash. The key itself lives in the Windows credential store, never here | `id` pk · `key_hash` · `issued_at` · `revoked_at` nullable | removed |
 | 8 | `setting` | `settings` | One persisted preference per key: Vault location, each hotkey binding, the Quality Budget pair, startup, open-editor-after-capture, the web service address | `key` pk · `value` · `updated_at` | draft |
 | 9 | `schema_version` | `settings` | The migration level of `library.db`, so a newer binary knows what it is opening | `version` pk · `applied_at` | draft |
 | 10 | `published_bundle` | `sharing` | `web-api`'s own record of one served Publication: its slug, its Markdown, and where its blobs are. Holds no Library id (AD-8) | `slug` pk · `markdown` · `blob_dir` · `created_at` · `deleted_at` nullable | draft |
