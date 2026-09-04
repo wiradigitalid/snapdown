@@ -1,7 +1,7 @@
 ---
 topic: Agent Handoff — MCP and web publishing
 artifact: .what/_prd/agent-handoff/prd.md
-updated: 2026-08-22T23:03
+updated: 2026-09-04T17:09
 ---
 
 - (event) headless run, intent create. Second initiative: everything after a Bundle exists
@@ -20,3 +20,4 @@ updated: 2026-08-22T23:03
 - (change) stack answered mid-run by the owner: web service in Go with net/http plus chi, web UI React on Vite. Next.js and Express are excluded by the owner. Lands as AD-N at G3
 - (event) PRD and addendum written; review lenses structure+prose applied at write time
 - (decision) owner confirmed mid-run: publishing is selective per Bundle and never automatic. A single screenshot is published as a one-Finding Bundle; publishing a Finding directly stays out, because BR-14 keeps unbundled Findings invisible on every agent surface. Filed as OQ-16
+- (change by owner) wdi-upgrade (2026-09-04) had flagged section 1 (Why This Initiative, formerly Vision) as a full restatement rather than a delta against the brief's Why, since no sentence matched word-for-word and it declined to guess which paraphrases were copies. Sharpened per prd-guide.md's delta rule: takes the brief's already-stated unlisted-URL handoff as given, keeps only the publish-to-URL/HTTPS-fetch mechanism and the same-machine-path boundary (belongs to capture-to-markdown), and drops the sync/background/default clause already covered by this PRD's own SS7 Privacy section and the brief's Constraints. Wording-only per wdi-product Step 2 — no FR/NFR/scope changed, so no registry landing or impact analysis.

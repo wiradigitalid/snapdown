@@ -23,23 +23,17 @@ updated: "2026-09-04"
 | 2026-08-22 | Initial version | Copying Markdown reaches an agent on this machine and nothing else; two more paths are needed before a Bundle is usable where the agents actually run | r2 |
 | 2026-09-04 | §4.1 (CAP-7, FR-19..FR-22, UJ-5), the Access Key throughout, and every cross-reference to them are withdrawn. §4.2 (CAP-8) is unchanged | `DEC-016` — the owner instructed that the Agent bridge/MCP feature be removed, because the copy-Markdown-and-paste workflow already covers what it was for. There is no replacement running channel for an agent on this machine; the Reviewer pastes Markdown by hand, the way `capture-to-markdown`'s Copy Markdown and Bundle composition already produce it | r2 |
 | 2026-09-04 | `wdi-upgrade` (0.5.15 → 0.6.1): §0 Document Purpose, §3 Glossary, §8 Open Questions, and §9 Assumptions Index removed — each fact now lives in its own home (`product-glossary.md`, `.control/questions/assumptions.md` — three new rows, `OQ-35`..`OQ-37`). `FR-23`..`FR-26`'s Proof of done and Consequences moved to `requirements-agent-handoff.yaml` (`proof:`) and `addendum.md`'s new "Technical how" section; the feature now cites `FR`/`NFR` ids only, under **Realizes:**. Five §5 Non-Goals with no existing home landed in §4.2 MVP Out of Scope; the sixth (sync) was already covered by the brief's Scope Out. Sections renumbered 1–7 | Mechanical structural migration; no promise, proof, or consequence text changed | — |
+| 2026-09-04 | §1 sharpened from a full restatement (`wdi-upgrade`'s flagged item) into a delta against the brief's `Why`: takes the unlisted-URL handoff as already established there, states only the publish-to-URL/HTTPS-fetch mechanism and the same-machine-path boundary, drops the sync/background/default clause already covered by §7 Privacy and the brief's Constraints | No promise, proof, or consequence text changed | — |
 
 ## 1. Why This Initiative
 
-<!-- wdi-upgrade, 2026-09-04: this section was `## 1. Vision` and read as a full restatement rather
-than a delta against the brief's `Why`. No sentence below appears word for word in the brief, so
-nothing was deleted — the migration rule for this section forbids guessing which paraphrases are
-copies. Left whole for the owner (wdi-product) to sharpen into a stated delta. -->
+The brief's `Why` already names the unlisted-URL handoff as one of the two shapes a review takes;
+this initiative is what makes that shape real. Publishing turns one named Bundle into a URL, and the
+agent elsewhere fetches Markdown and images over HTTPS the way it would fetch any other document.
 
-The Reviewer has a Bundle, and an agent on a server somewhere else needs to read it. The Reviewer
-publishes the Bundle to an unlisted URL and pastes the URL. The agent fetches Markdown and images
-over HTTPS the way it would fetch any other document. Publishing is an act the Reviewer performs on
-one named Bundle — never a sync, never a background upload, and never the default — because a
-Capture can contain anything that was on the screen.
-
-An agent in the next window on the same machine reads the same Bundle a different way: the Reviewer
-copies its Markdown and pastes it in directly. That path needs nothing from this PRD — it is
-`capture-to-markdown`'s own promise, not a second format of this one.
+The other shape — the Reviewer pasting Markdown to an agent sharing their own machine — needs nothing
+from this initiative. That binding is `capture-to-markdown`'s own promise, not a second format of
+this one.
 
 ## 2. Target User
 
