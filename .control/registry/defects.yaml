@@ -3547,6 +3547,36 @@ defects:
       Also corrected: the evidence says "a Tauri release binary on Windows has no console". `DEC-007`
       retired Tauri. The sentence is still true of the Slint release binary for the same reason, and
       the reason is what mattered.
+    note_2026_09_04: |
+      Re-checked under `DEC-019`, because the 2026-09-01 note above named two remaining stubs and the
+      bundle-library work (`.scratch/bundle-library/`, PR #38, merged 2026-09-02) landed after that
+      note was written - the same shape of staleness already found once for `BUG-61` on this run.
+
+      `library-clicked` is NOT one of the two anymore, and this repository did not need to fix it: it
+      was wired to the real Library screen by ticket 11 of that same spec, commit `36048a7`
+      ("the Library opens and lists every Bundle, closes ticket 11"), merged 2026-09-02.
+      `on_library_clicked` in `main.rs` calls `open_library()`, which loads Bundle rows from the store
+      through `build_library_rows` and drives `library-state`/`library-rows`/`library-error-message` -
+      a real screen, not a print. That same commit already dropped `library-clicked` out of
+      `KNOWN_STUBS` in `test_ui_callbacks_reach_rust.rs`; today's read of that file confirms it holds
+      only one entry now:
+
+        bundles-drawer-clicked   "the drawer is always open; nothing toggles it"
+
+      `bundles-drawer-clicked` is still genuinely a stub, confirmed by reading the code fresh rather
+      than trusting the row: `appwindow.slint:1604` declares `callback bundles-drawer-clicked();` and
+      nothing else - no drawer element, no drawer state, anywhere in the file. `main.rs`'s handler for
+      it is still `println!("Toggle Bundles Drawer clicked")`, with its own comment saying it was
+      "Deliberately untouched by this ticket - the spec's own 'Out of Scope' names it as a separate,
+      undescribed pattern nothing has asked for yet." There is nothing built for this callback to open,
+      so wiring it now would mean inventing the surface, not connecting a button to one - outcome (a)
+      from the diagnose-first brief, not (b). No code change made.
+
+      This row's own `fix:` already named the honest interim for a stub with nothing behind it -
+      disable the button or say "not built yet" on screen - and already left that choice to the owner.
+      That guidance still stands and this note does not change it. `status` stays `open`: one visible
+      control still accepts a click and does nothing, which the row's own `impact:` already says is
+      worse than an absent one.
     status: open
 
   - id: BUG-58
