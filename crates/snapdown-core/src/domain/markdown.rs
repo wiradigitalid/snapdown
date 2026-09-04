@@ -968,52 +968,52 @@ The submit button has incorrect margin on narrow viewports.\n\
     #[test]
     fn rebase_changes_only_image_link_destinations_for_a_vault_path_with_a_space() {
         let (stored, ..) = two_finding_document("unused");
-        let vault_root = r"C:\Users\tester\Snapdown Vault";
+        let vault_root = r"C:\Users\test\Snapdown Vault";
         let rebased =
             MarkdownSerializer::rebase_image_links(&stored, vault_root, "bundles/b-1/bundle.md")
                 .expect("must rebase");
 
-        let expected = expected_rebase(&stored, "C:/Users/tester/Snapdown Vault");
+        let expected = expected_rebase(&stored, "C:/Users/test/Snapdown Vault");
         assert_eq!(
             rebased, expected,
             "rebasing must change only the image link destinations"
         );
         assert!(
-            rebased.contains("<C:/Users/tester/Snapdown Vault/bundles/b-1/finding_1_burned.png>")
+            rebased.contains("<C:/Users/test/Snapdown Vault/bundles/b-1/finding_1_burned.png>")
         );
     }
 
     #[test]
     fn rebase_changes_only_image_link_destinations_for_a_vault_path_with_parentheses() {
         let (stored, ..) = two_finding_document("unused");
-        let vault_root = r"C:\Users\tester\Snapdown Vault (2024)";
+        let vault_root = r"C:\Users\test\Snapdown Vault (2024)";
         let rebased =
             MarkdownSerializer::rebase_image_links(&stored, vault_root, "bundles/b-1/bundle.md")
                 .expect("must rebase");
 
-        let expected = expected_rebase(&stored, "C:/Users/tester/Snapdown Vault (2024)");
+        let expected = expected_rebase(&stored, "C:/Users/test/Snapdown Vault (2024)");
         assert_eq!(
             rebased, expected,
             "rebasing must change only the image link destinations"
         );
         assert!(rebased
-            .contains("<C:/Users/tester/Snapdown Vault (2024)/bundles/b-1/finding_1_burned.png>"));
+            .contains("<C:/Users/test/Snapdown Vault (2024)/bundles/b-1/finding_1_burned.png>"));
     }
 
     #[test]
     fn rebase_changes_only_image_link_destinations_for_a_vault_path_with_an_apostrophe() {
         let (stored, ..) = two_finding_document("unused");
-        let vault_root = r"C:\Users\tester\Wira's Vault";
+        let vault_root = r"C:\Users\test\Wira's Vault";
         let rebased =
             MarkdownSerializer::rebase_image_links(&stored, vault_root, "bundles/b-1/bundle.md")
                 .expect("must rebase");
 
-        let expected = expected_rebase(&stored, "C:/Users/tester/Wira's Vault");
+        let expected = expected_rebase(&stored, "C:/Users/test/Wira's Vault");
         assert_eq!(
             rebased, expected,
             "rebasing must change only the image link destinations"
         );
-        assert!(rebased.contains("<C:/Users/tester/Wira's Vault/bundles/b-1/finding_1_burned.png>"));
+        assert!(rebased.contains("<C:/Users/test/Wira's Vault/bundles/b-1/finding_1_burned.png>"));
     }
 
     #[test]
