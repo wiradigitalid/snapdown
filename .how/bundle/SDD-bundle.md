@@ -50,6 +50,14 @@ from the Findings would cause — so the reason to store the document is stronge
 written. Rebasing an image link is not regeneration: the composer runs once per change, and what it
 wrote is what every path serves.
 
+**`bundle.updated_at` holds the last-edited time `FR-40`'s promise needs, kept apart from
+`bundle.composed_at`.** Migration 9 adds the column and backfills every existing row from its own
+`composed_at`, in the same transaction the migration runs in — a pre-migration Bundle therefore reads
+as never edited, which is true of it. A freshly composed Bundle sets both fields equal at construction
+for the same reason. Only a Save whose blocks or title actually change moves `updated_at`; a no-op Save
+leaves it, which is what lets Save stay always-clickable without the Library claiming an edit that did
+not happen.
+
 **Markers are burned at compose time, into a copy.** The Finding's own image stays clean, and each
 `bundle_item` gets its own file with the badges drawn in at that image's stored dimensions. This is
 what makes FR-8's repositioning possible at all — a badge already burned into the Finding's image
@@ -173,8 +181,9 @@ reads `backgroundColor: 'var(--color-bg)'`.
 ## Failure Behaviour · [guarded]
 
 Never written before. The boundary list is this component's rows in `inventory-screen.md` — 8, 9, 10 —
-plus the two stores. `bundle` owns no endpoint in `inventory-api.md`; `agent-access` serves Bundles
-over the Local API and owns those rows.
+plus the two stores. `bundle` owns no endpoint in `inventory-api.md`; `sharing` serves Bundles over
+`web-api` and owns those rows. (`agent-access` served Bundles over a Local API and owned rows 1-8
+there too, until `DEC-016` withdrew both on 2026-09-04.)
 
 | Boundary | Other side is slow | Other side is absent | Other side is lying |
 |---|---|---|---|

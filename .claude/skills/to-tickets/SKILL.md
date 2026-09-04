@@ -1,7 +1,8 @@
 ---
 name: to-tickets
 description: Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker (edges as text in one file per ticket locally, or native blocking links on a real tracker).
-disable-model-invocation: true
+# Unlocked 2026-09-04 on the owner's instruction, for unattended runs - see DEC-017 and DEC-018.
+disable-model-invocation: false
 ---
 
 # To Tickets

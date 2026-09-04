@@ -3,7 +3,6 @@ resolver = "2"
 members = [
     "crates/snapdown-core",
     "crates/snapdown-store",
-    "crates/snapdown-bridge",
     "crates/snapdown-capture",
     "apps/desktop",
 ]

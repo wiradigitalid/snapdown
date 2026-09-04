@@ -1051,11 +1051,22 @@ fn bundle_original_bytes(ctx: &AppContext, detail: &BundleDetail) -> u64 {
 
 /// "373.1 MB" - one decimal place, the exact wording `spec.md`'s own artboard uses
 /// (`ReclaimSpace.dc.html`). An exact zero prints bare ("0 MB"), matching `ReclaimEmpty.dc.html`.
+///
+/// `BUG-98`: anything under roughly 50 KB (a single small screenshot, easily) rounded to "0.0 MB" -
+/// a real, non-zero size reading as indistinguishable from nothing to reclaim. Below 0.1 MB this
+/// switches to whole kilobytes instead, which is precise at the sizes screenshots actually are; MB
+/// with one decimal stays exactly as it was for everything at or above that.
 fn format_mb(bytes: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
     if bytes == 0 {
         "0 MB".to_string()
+    } else if (bytes as f64) < 0.1 * MB {
+        // `.max(1)`: a non-zero byte count must never round down to a bare "0 KB", which would
+        // repeat the exact complaint this fix exists to solve, one unit smaller.
+        format!("{} KB", ((bytes as f64 / KB).round() as u64).max(1))
     } else {
-        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+        format!("{:.1} MB", bytes as f64 / MB)
     }
 }
 
@@ -1403,6 +1414,9 @@ fn load_active_detail(window: &AppWindow, ctx: &AppContext, active_id: &str) {
 
     window.set_current_filename(filename.into());
     window.set_active_finding_id(f.id.clone().into());
+    // `FR-34`. View state belongs to the view being looked at, not to a Library-wide preference:
+    // opening a different Finding always starts back at natural size.
+    window.set_canvas_zoom(1.0);
 
     // Says what was saved, and - when the Quality Budget shrank it - what it was saved FROM.
     //
@@ -2364,13 +2378,31 @@ fn open_file_location(_ctx: &AppContext, _image_path: &str) -> Result<(), String
 /// `/select,<path>` opens the PARENT of whatever path it is given with that path merely
 /// highlighted. Given the Vault root itself, `/select` would open the Vault's parent folder with
 /// the Vault highlighted, not what "Show in Explorer" on a Vault means.
+///
+/// `BUG-96`: this used to pass `path` straight through as a Rust `PathBuf` argument. That silently
+/// failed to open a Bundle's folder specifically, because `bundle_folder_path` builds it as
+/// `vault_path.join(markdown_path's parent)` - the Vault root in native `\` form joined to
+/// `markdown_path`'s own forward-slash Vault-relative form (`"bundles/<id>"`, never rewritten,
+/// since it is a storage key, not a Windows path) - producing a MIXED-separator string like
+/// `C:\Vault\bundles/01a0...`. `open_file_location`, right above, already found and documented
+/// this exact failure mode for the select-a-file case ("Explorer also rejects" mixed separators);
+/// this function needed the identical treatment for the open-a-folder case and never got it.
+/// A path exactly as Explorer's command line needs it: backslashes throughout, never a mix.
+/// `Path`/`PathBuf` equality is component-wise and does not care which separator a path was built
+/// with, so a test comparing `PathBuf`s cannot catch a mixed-separator string - only a test against
+/// this function's own string output can. Shared by `open_folder`; `open_file_location` above needs
+/// the identical conversion and already applies it inline (found first, on the select-a-file path).
+fn native_path_string(path: &Path) -> String {
+    path.to_string_lossy().replace('/', "\\")
+}
+
 #[cfg(windows)]
 fn open_folder(path: &Path) -> Result<(), String> {
     if !path.is_dir() {
         return Err("That folder no longer exists.".to_string());
     }
     std::process::Command::new("explorer.exe")
-        .arg(path)
+        .arg(native_path_string(path))
         .spawn()
         .map_err(|e| format!("Could not open the file manager: {e}"))?;
     Ok(())
@@ -3079,16 +3111,6 @@ fn load_settings_into_window(
     window.set_hotkey_meta_key_label(META_KEY_DISPLAY.into());
 
     window.set_app_version(format!("Snapdown {}", env!("CARGO_PKG_VERSION")).into());
-
-    // Stated plainly rather than shown as a working panel. `BUG-59`: the Bridge executable exists
-    // and the Local API it talks to does not, so there is nothing here to configure yet.
-    window.set_bridge_status(
-        "Not available yet. The Bridge lets an agent read your Findings directly, and the part \
-         of Snapdown it connects to has not been built - so there is nothing to configure here \
-         yet.\n\nUntil it exists, Assemble a Bundle and use Copy Markdown: an agent can read \
-         that file and the images beside it."
-            .into(),
-    );
 }
 
 /// Puts one sentence on screen, in the Editor's result line.
@@ -4057,6 +4079,76 @@ fn copy_region_to_clipboard(
     Err("Copying an image to the clipboard is implemented on Windows only.".to_string())
 }
 
+/// Bytes already fetched off the Windows clipboard - a BMP, the exact shape `raw::get_bitmap`
+/// produces and the exact shape `encode_region_for_clipboard` above already writes - decoded to
+/// RGBA8. `FR-35`.
+///
+/// The mirror of `encode_region_for_clipboard`: this half never touches the OS clipboard itself, so
+/// it is unit-testable with fabricated BMP bytes, for the same reason that function's own test
+/// fabricates bytes rather than depending on whatever a CI machine's real clipboard happens to hold.
+#[cfg(any(windows, test))]
+fn decode_clipboard_image_bytes(bmp: &[u8]) -> Result<(Vec<u8>, u32, u32), String> {
+    let decoded = image::load_from_memory(bmp)
+        .map_err(|e| format!("Could not decode the clipboard image: {e}"))?;
+    let rgba = decoded.to_rgba8();
+    let (width, height) = (rgba.width(), rgba.height());
+    Ok((rgba.into_raw(), width, height))
+}
+
+/// What `paste_clipboard_image` does once it already knows whether the clipboard holds a bitmap -
+/// `None` meaning it does not. Split out for the same reason `encode_region_for_clipboard` is: a
+/// test can supply `Some(fabricated bytes)` or `None` directly, without depending on what happens to
+/// be on the machine's real clipboard when `cargo test` runs. `FR-35`.
+///
+/// Goes through the SAME `persist_finding` a Capture or an Import already calls - never a second,
+/// independently written reduction path (`AD-4`: an image is reduced exactly once, at capture, and
+/// no original is kept).
+#[cfg(any(windows, test))]
+fn persist_clipboard_bitmap(ctx: &AppContext, bmp: Option<&[u8]>) -> Result<String, String> {
+    let Some(bmp) = bmp else {
+        return Err("The clipboard does not hold an image.".to_string());
+    };
+
+    let (rgba, width, height) = decode_clipboard_image_bytes(bmp)?;
+
+    persist_finding(
+        ctx,
+        &rgba,
+        (width, height),
+        (0, 0, width, height),
+        "Pasted",
+        "",
+    )
+    .ok_or_else(|| {
+        "Could not save the pasted image. The Vault write or the database insert failed."
+            .to_string()
+    })
+}
+
+/// Reads whatever image is on the Windows clipboard and turns it into a new Finding. `FR-35`.
+///
+/// `is_format_avail` is checked first, and deliberately outside any `Clipboard` guard of our own -
+/// `IsClipboardFormatAvailable` needs no open clipboard, unlike a read or a write - so a Reviewer who
+/// presses Paste with no image on the clipboard gets a clear, specific reason rather than a raw
+/// decode failure or, worse, nothing happening at all.
+#[cfg(windows)]
+fn paste_clipboard_image(ctx: &AppContext) -> Result<String, String> {
+    let bmp = if clipboard_win::raw::is_format_avail(clipboard_win::formats::CF_BITMAP) {
+        let bytes: Vec<u8> = clipboard_win::get_clipboard(clipboard_win::formats::Bitmap)
+            .map_err(|e| format!("Could not read the clipboard: {e}"))?;
+        Some(bytes)
+    } else {
+        None
+    };
+
+    persist_clipboard_bitmap(ctx, bmp.as_deref())
+}
+
+#[cfg(not(windows))]
+fn paste_clipboard_image(_ctx: &AppContext) -> Result<String, String> {
+    Err("Pasting an image from the clipboard is implemented on Windows only.".to_string())
+}
+
 /// Crops the capture canvas to the selected region, shrinks it to the active QualityBudget,
 /// writes it to the Vault, and records the Finding plus its note.
 ///
@@ -4207,6 +4299,62 @@ fn prewarm_capture_overlay() {
             canvas: None,
         }]
     });
+}
+
+/// `FR-34`. The clamp and step for canvas zoom, kept as pure arithmetic with no Slint runtime
+/// involved, so it can be unit-tested directly. `1.0` is "natural size" - one canvas pixel is one
+/// image pixel. `canvas-zoom` is pure view state: nothing here reads or writes `finding_store`,
+/// `library.db`, or a `Setting`, and nothing in `crates/snapdown-core` knows this exists.
+const CANVAS_ZOOM_MIN: f32 = 0.25;
+const CANVAS_ZOOM_MAX: f32 = 4.0;
+const CANVAS_ZOOM_STEP: f32 = 0.25;
+
+fn zoomed_in(current: f32) -> f32 {
+    (current + CANVAS_ZOOM_STEP).min(CANVAS_ZOOM_MAX)
+}
+
+fn zoomed_out(current: f32) -> f32 {
+    (current - CANVAS_ZOOM_STEP).max(CANVAS_ZOOM_MIN)
+}
+
+#[cfg(test)]
+mod canvas_zoom_tests {
+    use super::*;
+
+    #[test]
+    fn zooming_in_then_out_the_same_number_of_steps_returns_to_the_start() {
+        let start = 1.0_f32;
+        let after_in = zoomed_in(zoomed_in(zoomed_in(start)));
+        let back = zoomed_out(zoomed_out(zoomed_out(after_in)));
+        assert_eq!(
+            back, start,
+            "a round trip with no clamp hit must be exact, not merely close"
+        );
+    }
+
+    #[test]
+    fn zoom_in_never_exceeds_the_maximum() {
+        let mut zoom = CANVAS_ZOOM_MIN;
+        for _ in 0..500 {
+            zoom = zoomed_in(zoom);
+        }
+        assert_eq!(
+            zoom, CANVAS_ZOOM_MAX,
+            "repeated zoom-in past the ceiling must stay AT it"
+        );
+    }
+
+    #[test]
+    fn zoom_out_never_drops_below_the_minimum() {
+        let mut zoom = CANVAS_ZOOM_MAX;
+        for _ in 0..500 {
+            zoom = zoomed_out(zoom);
+        }
+        assert_eq!(
+            zoom, CANVAS_ZOOM_MIN,
+            "repeated zoom-out past the floor must stay AT it"
+        );
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -4820,6 +4968,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // ZOOM - `FR-34`. Pure view state: the arithmetic lives in `zoomed_in`/`zoomed_out` above (unit
+    // tested with no Slint runtime involved), and these three handlers only read the current value,
+    // compute the next one, and push it straight back. Nothing here touches `finding_store`.
+    let win_weak_zoom_in = main_window.as_weak();
+    main_window.on_zoom_in_clicked(move || {
+        let Some(win) = win_weak_zoom_in.upgrade() else {
+            return;
+        };
+        win.set_canvas_zoom(zoomed_in(win.get_canvas_zoom()));
+    });
+
+    let win_weak_zoom_out = main_window.as_weak();
+    main_window.on_zoom_out_clicked(move || {
+        let Some(win) = win_weak_zoom_out.upgrade() else {
+            return;
+        };
+        win.set_canvas_zoom(zoomed_out(win.get_canvas_zoom()));
+    });
+
+    let win_weak_zoom_reset = main_window.as_weak();
+    main_window.on_zoom_reset_clicked(move || {
+        let Some(win) = win_weak_zoom_reset.upgrade() else {
+            return;
+        };
+        // `1.0` directly, not through `zoomed_in`/`zoomed_out`: reset is "go to natural size", not
+        // "take one more step".
+        win.set_canvas_zoom(1.0);
+    });
+
     let win_weak_rev = main_window.as_weak();
     let ctx_rev = ctx.clone();
     main_window.on_open_file_location_clicked(move |finding_id| {
@@ -5343,6 +5520,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 win.set_library_pending_discard_warning(discard_warning_text(&others).into());
                 win.set_library_pending_discard(id);
             }
+            // `BUG-104`: a dedicated row now, not a second-step link inside the Disassemble
+            // dialog - reached through this same live-read path every other row action uses.
+            "delete-both-bundle" => win.set_library_pending_delete_both(id),
             _ => {}
         }
     });
@@ -5581,6 +5761,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 *edit_slot = None;
                 win.set_review_update_editing(false);
+                // `BUG-97`: the Library stays open the whole time Review & Update is (ticket 13's
+                // own design - it stacks on top, `library-open` is never touched by opening or
+                // closing this window), so its row list is whatever `build_library_rows` last
+                // built, before this Save. Without refreshing it here, ticket 15's "edited" suffix
+                // did not appear until the Reviewer closed and reopened the Library by hand.
+                if win.get_library_open() {
+                    open_library(&win, &ctx_review_update_save);
+                }
             }
             Err(message) => {
                 // `editing` stays true and `edit_slot` stays `Some` - BR-5's "an unsaved edit
@@ -5654,33 +5842,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ),
         };
         toast(&win, message, had_failure);
-    });
-
-    // DELETE BOTH's second-step request (ticket 17): swaps the Disassemble confirmation for the
-    // Delete both one, with a fresh live read of the Bundle's own name and Finding count - the same
-    // read every other confirmation opens with, never a value carried over from the dialog it
-    // replaces.
-    let win_delete_both_req = main_window.as_weak();
-    let ctx_delete_both_req = ctx.clone();
-    main_window.on_library_delete_both_requested(move |id| {
-        let Some(win) = win_delete_both_req.upgrade() else {
-            return;
-        };
-        win.set_library_pending_disassemble(SharedString::new());
-
-        let Some(store) = ctx_delete_both_req.bundle_store.as_ref() else {
-            toast(&win, "The Bundle library could not be opened.", true);
-            return;
-        };
-        match store.get_bundle(id.as_str()) {
-            Ok(Some(detail)) => {
-                win.set_library_pending_bundle_name(detail.bundle.name.clone().into());
-                win.set_library_pending_bundle_finding_count(detail.items.len() as i32);
-                win.set_library_pending_delete_both(id);
-            }
-            Ok(None) => open_library(&win, &ctx_delete_both_req),
-            Err(e) => toast(&win, format!("Could not read the Bundle: {e}"), true),
-        }
     });
 
     let win_delete_both_cancel = main_window.as_weak();
@@ -6578,6 +6739,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // Pasting an image already on the Windows clipboard as a new Finding. `FR-35`.
+    //
+    // `paste-clicked` has been declared since the toolbar was written and was listed in
+    // `DELIBERATELY_UNHANDLED` for exactly one reason: nothing read an image out of the clipboard
+    // yet. It goes through `persist_finding` the same way Import does just above - a pasted image is
+    // not a second kind of Finding with its own rules either.
+    let win_weak_paste = main_window.as_weak();
+    let ctx_paste = ctx.clone();
+    main_window.on_paste_clicked(move || {
+        let Some(win) = win_weak_paste.upgrade() else {
+            return;
+        };
+        match paste_clipboard_image(&ctx_paste) {
+            Ok(id) => {
+                load_findings_into_window(&win, &ctx_paste, Some(&id));
+                toast(&win, "Pasted from the clipboard as a new Finding.", false);
+            }
+            Err(message) => toast(&win, message, true),
+        }
+    });
+
     // --- Tray icon, global hotkeys, and startup registration ---
     let tray_icon_bytes = include_bytes!("../assets/app-icon.png");
     let tray_icon_rgba = image::load_from_memory(tray_icon_bytes)
@@ -7235,6 +7417,138 @@ mod tests {
                 .expect("to read the Library")
                 .is_empty(),
             "a copy must record no Finding"
+        );
+    }
+
+    /// `FR-35`. A minimal `AppContext` for the paste tests below, mirroring the one
+    /// `a_copy_writes_nothing_and_hands_over_a_decodable_image` builds above - no Bundle store
+    /// involved, since paste never touches one.
+    fn paste_test_ctx(vault_dir: &Path) -> AppContext {
+        AppContext {
+            vault_store: VaultBlobStore::new(vault_dir).expect("a vault at a temp path"),
+            vault_path: vault_dir.to_path_buf(),
+            finding_store: Arc::new(
+                SqliteFindingStore::open_in_memory().expect("a findings store"),
+            ),
+            settings_store: Arc::new(
+                SqliteSettingsStore::open_in_memory().expect("a settings store"),
+            ),
+            bundle_store: None,
+        }
+    }
+
+    /// A BMP exactly the shape `raw::get_bitmap` hands back and `encode_region_for_clipboard`
+    /// already produces: an uncompressed RGB bitmap, no alpha. Solid-coloured so the decoded pixel
+    /// can be asserted against, the same way `a_copy_writes_nothing_and_hands_over_a_decodable_image`
+    /// asserts a real pixel rather than trusting a signature and a size.
+    fn fabricate_clipboard_bmp(width: u32, height: u32, rgb: [u8; 3]) -> Vec<u8> {
+        let mut img = image::RgbImage::new(width, height);
+        for pixel in img.pixels_mut() {
+            *pixel = image::Rgb(rgb);
+        }
+        let mut bmp = Vec::new();
+        image::codecs::bmp::BmpEncoder::new(&mut bmp)
+            .encode(img.as_raw(), width, height, image::ExtendedColorType::Rgb8)
+            .expect("a fabricated BMP must encode");
+        bmp
+    }
+
+    #[test]
+    fn decode_clipboard_image_bytes_decodes_a_real_bitmap() {
+        let bmp = fabricate_clipboard_bmp(3, 2, [10, 20, 30]);
+        let (rgba, width, height) =
+            decode_clipboard_image_bytes(&bmp).expect("a valid BMP must decode");
+        assert_eq!((width, height), (3, 2));
+        // RGBA8, four bytes per pixel - decode the actual bytes rather than trusting the reported
+        // dimensions, per this repository's own rule against a signature-and-size test.
+        assert_eq!(&rgba[0..4], &[10, 20, 30, 255]);
+    }
+
+    #[test]
+    fn decode_clipboard_image_bytes_refuses_garbage_without_panicking() {
+        let err = decode_clipboard_image_bytes(b"not a bitmap")
+            .expect_err("garbage bytes must not decode");
+        assert!(!err.is_empty());
+    }
+
+    /// User Story 10: pressing Paste with nothing on the clipboard must say so clearly, not do
+    /// nothing and not create a Finding.
+    #[test]
+    fn persist_clipboard_bitmap_refuses_when_nothing_is_available() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = paste_test_ctx(vault_dir.path());
+
+        let err = persist_clipboard_bitmap(&ctx, None).expect_err("None must refuse");
+        assert_eq!(err, "The clipboard does not hold an image.");
+        assert!(
+            ctx.finding_store
+                .list_findings()
+                .expect("to read the Library")
+                .is_empty(),
+            "no Finding may be created when there is nothing to paste"
+        );
+    }
+
+    #[test]
+    fn persist_clipboard_bitmap_refuses_a_corrupt_bitmap_and_creates_no_finding() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = paste_test_ctx(vault_dir.path());
+
+        let err = persist_clipboard_bitmap(&ctx, Some(b"not a bitmap"))
+            .expect_err("corrupt bytes must refuse");
+        assert!(!err.is_empty());
+        assert!(
+            ctx.finding_store
+                .list_findings()
+                .expect("to read the Library")
+                .is_empty(),
+            "a decode failure must create no Finding"
+        );
+    }
+
+    /// The whole point of `FR-35`: a real image on the clipboard becomes a real Finding, reduced
+    /// under the same Quality Budget a Capture would use, appearing with an empty Note.
+    #[test]
+    fn persist_clipboard_bitmap_creates_one_finding_reduced_under_the_active_budget() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let ctx = paste_test_ctx(vault_dir.path());
+
+        let bmp = fabricate_clipboard_bmp(12, 8, [40, 120, 200]);
+        let id = persist_clipboard_bitmap(&ctx, Some(&bmp)).expect("a real bitmap must persist");
+
+        let findings = ctx
+            .finding_store
+            .list_findings()
+            .expect("to read the Library");
+        assert_eq!(findings.len(), 1, "exactly one Finding must exist");
+
+        let detail = ctx
+            .finding_store
+            .get_finding(&id)
+            .expect("to read the Finding")
+            .expect("the Finding must exist");
+        assert_eq!(detail.note.body, "", "a pasted Finding's Note starts empty");
+        assert_eq!(
+            detail.finding.source_monitor, "Pasted",
+            "a pasted Finding must be labelled as such, not confused with an Import"
+        );
+
+        // Decode the STORED file, not just the row's own reported dimensions - the mistake this
+        // repository's own rule warns against is trusting a signature-and-size pair.
+        let stored_path = ctx.vault_path.join(&detail.finding.image_path);
+        let decoded = image::open(&stored_path).expect("the stored file must decode as an image");
+        assert_eq!(
+            (decoded.width(), decoded.height()),
+            (detail.finding.image_width, detail.finding.image_height),
+            "the row's own dimensions must match what was actually written"
+        );
+        let resolved_long_edge = detail
+            .finding
+            .resolved_long_edge
+            .expect("NFR-18: the resolved budget must be stored with the Finding");
+        assert!(
+            decoded.width().max(decoded.height()) <= resolved_long_edge,
+            "the stored image's long edge must fit the Quality Budget that was resolved for it"
         );
     }
 
@@ -8041,6 +8355,42 @@ mod tests {
 
         let err = open_folder(&folder).expect_err("a missing folder must refuse, not do nothing");
         assert_eq!(err, "That folder no longer exists.");
+    }
+
+    /// `BUG-96`: `bundle_folder_path` joins the Vault root (native `\`) to `markdown_path`'s own
+    /// forward-slash Vault-relative parent, producing a MIXED-separator path. `PathBuf` equality is
+    /// component-wise and does not notice this - `bundle_folder_path_is_the_markdown_files_own_folder`
+    /// above passes regardless - so this asserts the actual STRING `open_folder` hands to Explorer's
+    /// command line instead, which is where the real failure lived: Explorer silently did nothing
+    /// with a path like `C:\Vault\bundles/b-1`.
+    #[test]
+    fn native_path_string_has_no_forward_slashes_even_when_the_input_path_mixes_them() {
+        let vault_dir = tempfile::tempdir().expect("a temp dir");
+        let (bundle, _items) = bundle_fixture("b-1");
+        let ctx = library_test_ctx(
+            vault_dir.path(),
+            SqliteBundleStore::open_in_memory().expect("a bundle store"),
+        );
+
+        let folder = bundle_folder_path(&ctx, &bundle);
+        // Reproduce the exact mixed shape a real Bundle's `markdown_path` produces, rather than
+        // trusting that `bundle_folder_path`'s current implementation still mixes separators -
+        // `bundle.markdown_path` in the fixture is already `"bundles/b-1/bundle.md"` (forward
+        // slashes, a storage key), so `folder`'s own string form is the thing under test.
+        assert!(
+            folder.to_string_lossy().contains('/'),
+            "the fixture must reproduce the mixed-separator shape this guards against: {folder:?}"
+        );
+
+        let native = native_path_string(&folder);
+        assert!(
+            !native.contains('/'),
+            "the string handed to Explorer's command line must be all-backslash: {native:?}"
+        );
+        assert!(
+            native.contains('\\'),
+            "must still be a real Windows path: {native:?}"
+        );
     }
 
     // ===== ticket 16: disassemble a Bundle, or delete a sealed one ==========================
@@ -9602,6 +9952,33 @@ mod tests {
         assert_eq!(format_mb(1_048_576 * 2), "2.0 MB");
     }
 
+    /// `BUG-98`: a real screenshot's original capture is routinely well under 0.1 MB, and
+    /// `"{:.1} MB"` rounds every one of those down to "0.0 MB" - a genuine, non-zero size reading as
+    /// indistinguishable from the true-zero "0 MB" `format_mb(0)` already prints. Below 0.1 MB this
+    /// must switch to whole kilobytes, precise at the sizes that actually occur.
+    #[test]
+    fn format_mb_switches_to_kilobytes_under_one_tenth_of_a_megabyte() {
+        assert_eq!(format_mb(51_200), "50 KB", "exactly 50 KiB");
+        assert_eq!(format_mb(1_024), "1 KB", "exactly 1 KiB");
+        assert_eq!(
+            format_mb(10),
+            "1 KB",
+            "a non-zero byte count must never round down to a bare 0 KB - the same complaint one \
+             unit smaller"
+        );
+        // Just under and just at the 0.1 MB boundary - the switch itself, not just each side.
+        assert_eq!(
+            format_mb(104_857),
+            "102 KB",
+            "just under 0.1 MB - still kilobytes"
+        );
+        assert_eq!(
+            format_mb(104_858),
+            "0.1 MB",
+            "at or above 0.1 MB - back to megabytes"
+        );
+    }
+
     /// `spec.md`'s "Reclaim space": *"Sizes are measured from the files on disk, not estimated."*
     /// Proven against a fixture with KNOWN file sizes that bear no relation to the images' own
     /// dimensions - `bundle_original_bytes` must report exactly what `fs::metadata` says, not a
@@ -9735,7 +10112,11 @@ mod tests {
             rows[0].size_bytes as u64, 30_000,
             "the row's size must equal the exact sum of its own Findings' files on disk"
         );
-        assert_eq!(rows[0].size_label, "0.0 MB");
+        // `BUG-98`: this fixture's 30,000 bytes (~29.3 KiB) is well under 0.1 MB, so `format_mb`
+        // now renders it in kilobytes - this test itself asserted the pre-fix "0.0 MB" as if it
+        // were correct until this line was corrected, exactly the "asserts a copy of the bug"
+        // shape `BUG-86`'s own writeup warns about.
+        assert_eq!(rows[0].size_label, "29 KB");
         assert_eq!(
             total_bytes, 30_000,
             "the header total must equal the sum of the rows it lists - there is only one row here"

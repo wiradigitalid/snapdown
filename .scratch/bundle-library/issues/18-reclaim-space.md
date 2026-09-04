@@ -14,7 +14,7 @@ Bundle here either had its originals discarded already, or has none left to disc
 
 **Blocked by:** 17
 
-**Status:** ready-for-agent
+**Status:** done — feat/merge commits per `.control/memlog/autopilot-2026-09-04.md` iteration 1; PR #38 merged 2026-09-03. Status line was stale until this correction.
 
 - [ ] Reachable from the Library header and from Settings' Vault area; both open the same screen
 - [ ] Lists exactly the unsealed Bundles; each row's size equals the sum of its original Findings'

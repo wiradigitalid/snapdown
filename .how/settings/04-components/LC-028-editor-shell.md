@@ -27,8 +27,9 @@ Three things, and nothing else:
   frame that can fail to draw, and `FR-28` requires navigation to survive any surface's failure.
 - **Own routing logic beyond which surface is active.** A surface's own loading and error states are
   the surface's.
-- **Hide a surface whose component is frozen.** `BR-120` is explicit: `DEC-005` freezes `sharing` and
-  `agent-access`, and their surfaces stay listed.
+- **Hide a surface whose component is frozen.** `BR-120` is explicit: `DEC-005` freezes `sharing`, and
+  its surface stays listed. (`agent-access` was frozen and listed the same way until `DEC-016`
+  withdrew the component and its surface on 2026-09-04 — there is nothing left to hide or list.)
 
 ## Boundaries
 

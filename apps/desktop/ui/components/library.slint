@@ -1,5 +1,5 @@
 import { Theme } from "../theme.slint";
-import { SdModalHeader } from "modal.slint";
+import { SdModalHeader, SdToast } from "modal.slint";
 import { SdActionButton, SdSectionLabel, SdCaption } from "action-button.slint";
 import { SdContextMenu, MenuEntry } from "context-menu.slint";
 import { ScrollView } from "std-widgets.slint";
@@ -54,6 +54,12 @@ export component SdLibrary inherits Rectangle {
     in property <string> error-message: "";
     in property <[LibraryBundleRow]> rows: [];
 
+    // `BUG-100`: docked inside THIS panel rather than shown at the window root, so a toast fired
+    // by a row action (Copy Markdown, Open file location, Disassemble, Delete...) renders where the
+    // Reviewer is actually looking, not behind the Library's own opaque panel.
+    in property <string> toast-text: "";
+    in property <bool> toast-is-error: false;
+
     callback closed();
     // Opens Reclaim space (`ticket 18`) - the header's own entry point, beside the Bundle count. The
     // SAME callback Settings' Vault card fires, forwarded at `appwindow.slint`'s mount site to one
@@ -93,10 +99,15 @@ export component SdLibrary inherits Rectangle {
     // compiler reports "Cannot convert [...] to [MenuEntry]" because an inline ternary's branches are
     // typed before the property they are assigned to). Naming each branch as its own
     // `[MenuEntry]`-typed property fixes the inference and reads better besides. The sealed model
-    // stays the one entry ticket 16 built. "delete-both" never appears in either model on purpose -
-    // `ticket 17`'s acceptance criteria asks that to be checked structurally, and this is what makes
-    // it true: the Delete both act only ever reaches Slint through `delete-both-requested`, fired
-    // from a link inside the Disassemble confirmation below, never from this model.
+    // stays the one entry ticket 16 built.
+    //
+    // `BUG-104`, on the owner's decision, reversing `ticket 17`'s own original design: "delete-both"
+    // used to never appear in either model on purpose - the act was reachable only via
+    // `delete-both-requested`, fired from a link inside the Disassemble confirmation, one deliberate
+    // extra click below it. In practice the owner found that indirection unnecessary friction rather
+    // than useful safety, and asked for a THIRD, dedicated row instead - so `unsealed-row-menu` now
+    // carries "Delete both…" directly, alongside Disassemble…/Discard originals…, and the link
+    // inside the Disassemble dialog is gone (see that dialog's own comment for what replaced it).
     private property <[MenuEntry]> sealed-row-menu: [
         { action: "copy-markdown", label: "Copy Markdown", hint: "", separator: false, enabled: true },
         { action: "reveal", label: "Open file location", hint: "", separator: false, enabled: true },
@@ -111,6 +122,13 @@ export component SdLibrary inherits Rectangle {
         {
             action: "discard-originals-bundle",
             label: "Discard originals…",
+            hint: "",
+            separator: false,
+            enabled: true,
+        },
+        {
+            action: "delete-both-bundle",
+            label: "Delete both…",
             hint: "",
             separator: false,
             enabled: true,
@@ -138,13 +156,11 @@ export component SdLibrary inherits Rectangle {
     callback discard-cancelled();
     callback discard-confirmed(string);
 
-    // DELETE BOTH - reachable ONLY as a second-step choice from inside the Disassemble confirmation
-    // (the link at the foot of that dialog below), never as its own menu row: `row-menu` above never
-    // carries a "delete-both" action. `delete-both-requested` asks Rust to swap the Disassemble
-    // dialog for this one; Rust owns that swap because the Bundle name and Finding count it fills in
-    // are its own live read, not something this component may cache across the transition.
+    // DELETE BOTH - reachable directly from the row menu now (`BUG-104`, `unsealed-row-menu`'s own
+    // "delete-both-bundle" entry), which forwards through the same `row-menu-action` path
+    // Disassemble/Discard originals already use. Rust fills in the Bundle name and Finding count
+    // from its own live read, the same discipline every other confirmation here follows.
     in property <string> pending-delete-both: "";
-    callback delete-both-requested(string);
     callback delete-both-cancelled();
     callback delete-both-confirmed(string);
 
@@ -154,7 +170,16 @@ export component SdLibrary inherits Rectangle {
 
     // Swallows any click that misses the panel, so the Editor beneath stays inert - Assemble &
     // Review's own scrim-covering TouchArea, now that this IS a scrim rather than an opaque screen.
-    TouchArea { }
+    //
+    // `scroll-event` ALSO needs an explicit accept (`BUG-94`): a bare `TouchArea` rejects wheel
+    // input by default, and a rejected event keeps walking backward through whatever the hit-test
+    // finds behind it - which, for a modal, is the Editor's own canvas underneath, so scrolling
+    // anywhere over an area of the Library that has nothing of its own to scroll (the header, the
+    // padding around the list, or the row list once it has reached either end) reached through and
+    // zoomed/panned the canvas instead. A real modal window admits no such thing happens.
+    TouchArea {
+        scroll-event(event) => { accept }
+    }
 
     // Escape closes it - Assemble & Review's own pattern. Declared before the panel and focused on
     // creation, so it holds the keyboard until the Reviewer clicks into something else.
@@ -494,7 +519,26 @@ export component SdLibrary inherits Rectangle {
                                     // 11` laid these out undecorated on purpose ("an icon with no
                                     // click handler invites nothing"); this ticket gives all three a
                                     // `TouchArea`.
-                                    if row-touch.has-hover : HorizontalLayout {
+                                    // Gated with `visible`, deliberately NOT with `if`, and on the
+                                    // OR of every TouchArea in this group rather than `row-touch`
+                                    // alone. `row-touch` covers the whole row, so once its bounds
+                                    // overlap these icons' own TouchAreas (declared later, painted
+                                    // on top), Slint's hit-test stops delivering hover to `row-touch`
+                                    // the moment the pointer sits over an icon - and an `if` gated on
+                                    // that alone tore this exact subtree down the instant that
+                                    // happened, which put the icons' own TouchAreas out of the hit
+                                    // path, handed hover back to `row-touch`, and rebuilt them again:
+                                    // a flicker loop confirmed with a headless `PointerMoved` sweep
+                                    // (`BUG-91`) - `row-touch.has-hover` alone toggled on every 5px
+                                    // step across the icon group, while OR-ing in the icons' own
+                                    // `has-hover` (which Slint DOES set correctly for whichever
+                                    // element currently wins the hit-test) held `visible` at a
+                                    // constant `true` for the same sweep, zero flips.
+                                    icon-actions := HorizontalLayout {
+                                        visible: row-touch.has-hover
+                                            || copy-touch.has-hover
+                                            || reveal-touch.has-hover
+                                            || overflow-touch.has-hover;
                                         spacing: 4px;
                                         alignment: end;
 
@@ -550,7 +594,16 @@ export component SdLibrary inherits Rectangle {
                                             border-width: 1px;
                                             border-color: Theme.border-strong;
                                             HorizontalLayout {
+                                                // `alignment` only centers along the MAIN (horizontal)
+                                                // axis - CSS flexbox calls the cross axis's own
+                                                // property `align-items`, and Slint's name for it is
+                                                // `cross-axis-alignment`. Without it, three fixed-size
+                                                // 2.3px dots sat pinned to the top of this 28px-tall
+                                                // box instead of centred in it - visible only once
+                                                // `BUG-91`'s fix let the hover state hold still long
+                                                // enough to actually look at.
                                                 alignment: center;
+                                                cross-axis-alignment: center;
                                                 spacing: 3px;
                                                 Rectangle { width: 2.3px; height: 2.3px; border-radius: 1.15px; background: Theme.text-secondary; }
                                                 Rectangle { width: 2.3px; height: 2.3px; border-radius: 1.15px; background: Theme.text-secondary; }
@@ -573,6 +626,16 @@ export component SdLibrary inherits Rectangle {
                 }
             }
         }
+        }
+
+        // `BUG-100` - docked to THIS panel, not the window. No footer to clear here, so a small
+        // fixed clearance is all `bottom-clearance` needs.
+        SdToast {
+            text: root.toast-text;
+            is-error: root.toast-is-error;
+            x: (parent.width - self.width) / 2;
+            y: parent.height - self.height - 16px;
+            width: min(560px, parent.width - 64px);
         }
     }
 
@@ -650,7 +713,7 @@ export component SdLibrary inherits Rectangle {
                     alignment: end;
 
                     SdActionButton {
-                        label: "Keep it";
+                        label: "Cancel";
                         primary: false;
                         height: 30px;
                         clicked => { root.disassemble-cancelled(); }
@@ -662,27 +725,6 @@ export component SdLibrary inherits Rectangle {
                     }
                 }
 
-                // THE SECOND STEP (`ticket 17`). A link, not a menu row and not a third equal
-                // button next to Keep it/Disassemble - the most destructive act in the product must
-                // never be one click away, and this puts one deliberate extra click between the
-                // Reviewer and it. Fires `delete-both-requested`, which Rust answers by swapping this
-                // dialog for the Delete both one below.
-                Rectangle {
-                    height: 16px;
-                    HorizontalLayout {
-                        alignment: end;
-                        Text {
-                            text: "Delete the Bundle and its originals instead";
-                            font-size: 11px;
-                            color: Theme.semantic-error;
-                            font-family: "IBM Plex Sans";
-                        }
-                    }
-                    delete-both-link := TouchArea {
-                        mouse-cursor: MouseCursor.pointer;
-                        clicked => { root.delete-both-requested(root.pending-disassemble); }
-                    }
-                }
             }
         }
     }
@@ -732,7 +774,7 @@ export component SdLibrary inherits Rectangle {
                     alignment: end;
 
                     SdActionButton {
-                        label: "Keep it";
+                        label: "Cancel";
                         primary: false;
                         height: 30px;
                         clicked => { root.delete-cancelled(); }
@@ -740,6 +782,7 @@ export component SdLibrary inherits Rectangle {
                     SdActionButton {
                         label: "Delete";
                         height: 30px;
+                        danger: true;
                         clicked => { root.delete-confirmed(root.pending-delete); }
                     }
                 }
@@ -800,7 +843,7 @@ export component SdLibrary inherits Rectangle {
                     alignment: end;
 
                     SdActionButton {
-                        label: "Keep it";
+                        label: "Cancel";
                         primary: false;
                         height: 30px;
                         clicked => { root.discard-cancelled(); }
@@ -808,6 +851,7 @@ export component SdLibrary inherits Rectangle {
                     SdActionButton {
                         label: "Discard";
                         height: 30px;
+                        danger: true;
                         clicked => { root.discard-confirmed(root.pending-discard); }
                     }
                 }
@@ -815,10 +859,11 @@ export component SdLibrary inherits Rectangle {
         }
     }
 
-    // DELETE BOTH (`ticket 17`) - the Bundle AND its originals. Reached only from the link inside
-    // the Disassemble confirmation above; never a menu row (`row-menu`'s own model never carries a
-    // "delete-both" action - see the comment beside it). Removes the Bundle (row, then folder) and
-    // then each source Finding (record, then files) - `AD-2`'s ordering, combined over both acts.
+    // DELETE BOTH (`ticket 17`) - the Bundle AND its originals. `BUG-104` moved this to its own
+    // dedicated row in `unsealed-row-menu` ("delete-both-bundle"), reached the same way
+    // Disassemble/Discard originals are - never nested inside another dialog. Removes the Bundle
+    // (row, then folder) and then each source Finding (record, then files) - `AD-2`'s ordering,
+    // combined over both acts.
     if root.pending-delete-both != "" : Rectangle {
         width: 100%;
         height: 100%;
@@ -865,7 +910,7 @@ export component SdLibrary inherits Rectangle {
                     alignment: end;
 
                     SdActionButton {
-                        label: "Keep it";
+                        label: "Cancel";
                         primary: false;
                         height: 30px;
                         clicked => { root.delete-both-cancelled(); }
@@ -873,6 +918,7 @@ export component SdLibrary inherits Rectangle {
                     SdActionButton {
                         label: "Delete both";
                         height: 30px;
+                        danger: true;
                         clicked => { root.delete-both-confirmed(root.pending-delete-both); }
                     }
                 }

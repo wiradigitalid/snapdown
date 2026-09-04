@@ -8,7 +8,7 @@ This is what the owner reads at **G3 Blueprint**, instead of seven files. Its co
 
 ## Use case catalogue
 
-**31 use cases**, 6 marked `critical`.
+**28 use cases**, 5 marked `critical`.
 
 | id | Use case | Component | Satisfies | critical |
 | --- | --- | --- | --- | --- |
@@ -20,9 +20,6 @@ This is what the owner reads at **G3 Blueprint**, instead of seven files. Its co
 | `UC-14` | I decide where my screenshots are kept | `settings` | `FR-16` | no |
 | `UC-15` | I change the keys that set Snapdown off, because one of them clashes | `settings` | `FR-17` | no |
 | `UC-16` | I have Snapdown ready the moment I sign in | `settings` | `FR-18` | no |
-| `UC-17` | I let the agent in front of me read my reviews | `agent-access` | `FR-19` | yes |
-| `UC-18` | I read a review from inside my agent instead of pasting it in | `agent-access` | `FR-20`, `FR-21` | no |
-| `UC-19` | I take the agent's access away again | `agent-access` | `FR-22` | no |
 | `UC-2` | I take five of these in a row without stopping | `finding` | `FR-3` | no |
 | `UC-20` | I put a review somewhere the agent on my server can reach it | `sharing` | `FR-23` | yes |
 | `UC-21` | I read a review that was put up for me, from a machine that has nothing else on it | `sharing` | `FR-24` | no |
@@ -47,24 +44,15 @@ This is what the owner reads at **G3 Blueprint**, instead of seven files. Its co
 ## Actor list
 
 
-### agent-access
-
-| Actor | Who they are | What they may do |
-| --- | --- | --- |
-| Reviewer | The person operating Snapdown. The only writer | Issue an Access Key, copy it, see whether one is valid and when it was issued, and revoke it |
-| Local coding agent | An AI coding agent running on the Reviewer's machine, configured with the MCP Bridge | With a valid key: list Bundles, read one Bundle's Markdown, fetch that Bundle's images. Nothing else, and nothing that writes |
-
-The agent is a real actor here — it is the only component in the product where a non-human initiates a
-use case. It is not a variant of the Reviewer: what it may do is a strictly smaller, read-only set.
-
 ### bundle
 
 | Actor | Who they are | What they may do |
 | --- | --- | --- |
 | Reviewer | The person operating Snapdown. The only human actor and the only writer | Compose a Bundle from a selection, name it, list Bundles, open one, copy its Markdown, correct its title and its notes, export it as a PDF, and delete it with its files |
 
-An agent reads Bundles, but never through this component: `agent-access` and `sharing` are the surfaces
-that expose them, and both are read-only per AD-5.
+An agent reads Bundles, but never through this component: the Reviewer copies a Bundle's Markdown and
+pastes it, or `sharing` serves it over a Publication, and both are read-only per AD-5. (`agent-access`
+was a third such surface until `DEC-016` withdrew it on 2026-09-04.)
 
 **Amended 2026-08-31.** The Reviewer's rights used to end *"delete it with its files, and choose in the
 same act whether its source Findings go too"*. That last clause is gone: `FR-14` no longer offers a
@@ -78,8 +66,9 @@ Correcting a title and exporting a PDF are the two rights added.
 | --- | --- | --- |
 | Reviewer | The person operating Snapdown. The only human actor and the only writer in the product | Press the Capture hotkey, drag a region, cancel a Capture, type and reword a Note, place, move and remove Markers, select Findings, delete Findings, discard the Findings behind a finished Bundle, act on an orphan report |
 
-No second actor. An agent never reaches this component: `agent-access` and `sharing` read Bundles, and
-BR-14 keeps an unbundled Finding invisible to both.
+No second actor. An agent never reaches this component: Copy Markdown and `sharing` read Bundles, and
+BR-14 keeps an unbundled Finding invisible to both. (`agent-access` was a third such reader until
+`DEC-016` withdrew it on 2026-09-04.)
 
 ### settings
 
@@ -99,66 +88,6 @@ published. That is not a third actor; it is the same person using the same read.
 
 ## Domain model
 
-
-### agent-access
-
-### Model — agent-access
-
-Conceptual. No column types, no storage shape.
-
-#### Entities
-
-| Entity | What it is | Identified by |
-| --- | --- | --- |
-| AccessKey | The Reviewer's grant of read access to an agent on this machine: a secret they copy out and paste in, and can take back | Its own opaque identifier |
-
-One entity, and that is the whole domain of this component. Everything else it does is a read of
-`bundle`'s entities across a process boundary, which is a surface rather than a thing.
-
-#### Relationships
-
-- One Library has **at most one** AccessKey that is currently valid. Issuing a new one ends the
-  previous one in the same act (BR-16).
-- An AccessKey grants reads over **every** Bundle in the Library, and over nothing else. It is not
-  scoped to a Bundle, and there is no per-Bundle or per-agent key.
-- An AccessKey has **no** relationship to a Finding. BR-14 keeps unbundled Findings invisible on this
-  surface, so the key cannot reach one.
-- The MCP Bridge holds a copy of the key for the life of one process and stores nothing. There is no
-  entity for that copy, deliberately: anything with a lifetime longer than the process would make
-  revocation eventual instead of immediate (AD-5).
-
-#### State Lifecycle
-
-An AccessKey has two states and one transition, and the transition is one-way.
-
-| From | To | Trigger | Who may |
-| --- | --- | --- | --- |
-| — | valid | The Reviewer issues a key. Any key already valid becomes revoked in the same act | Reviewer |
-| valid | revoked | The Reviewer revokes it, or issues a new one | Reviewer |
-
-A revoked key never becomes valid again. There is no renewal and no re-activation: the only way
-forward is a new key, which is what makes "exactly one valid at a time" a statement about the present
-rather than a rule someone has to maintain.
-
-No state can be entered and not left, and there is no expiry — revocation is the r2 control, and an
-expiry transition would need a clock inside the authorisation path.
-
-#### Invariants
-
-1. At most one AccessKey is valid at any moment. → BR-16
-2. Issuing a key and revoking the previous one are one operation. There is no instant with two valid
-   keys, and none with zero when the Reviewer asked for one. → BR-16
-3. A revoked key never becomes valid again. → FR-22
-4. A revoke takes effect on the next request. No cache, no session, no grace period. → NFR-13
-5. The key itself is never stored in the Library. Only a hash of it is kept, and the key lives in the
-   operating system's credential store. → cross-cutting.md § Secrets
-6. The key never appears in a log line, a Bundle, a published document, or this repository.
-   → cross-cutting.md § Secrets, § Logging
-7. Every read this key authorises is over a Bundle. No Finding, Note, Marker, or Setting is reachable
-   with it. → BR-14
-8. Nothing this key authorises writes. → BR-15, AD-5
-9. A request with no key and a request with a revoked key are refused with different codes, and both
-   are distinguishable from an empty result. → BR-17, AD-7
 
 ### bundle
 
@@ -314,8 +243,9 @@ The named choices that exist, and who reads each:
 | Run at Windows startup | Whether Snapdown is running after sign-in | `settings` itself |
 | Web service address | Where a publish goes | `sharing` |
 
-The Access Key and the publish credential are **not** Settings. They are secrets, they live in the
-Windows credential store, and they belong to `agent-access` and `sharing` respectively.
+The publish credential is **not** a Setting. It is a secret, it lives in the Windows credential store,
+and it belongs to `sharing`. The Access Key was a second such secret, belonging to `agent-access`,
+until `DEC-016` withdrew both on 2026-09-04.
 
 #### Relationships
 
@@ -457,7 +387,7 @@ neither is a container, and a row's owning component is what decides which store
 | 4 | `bundle` | `bundle` | One composed Bundle, including the composed Markdown itself so that every handoff path serves the same authored document rather than each surface composing its own (AD-9, DEC-012) | `id` pk · `name` · `markdown` · `markdown_path` relative to the Vault · `composed_at` | draft |
 | 5 | `bundle_item` | `bundle` | The membership of one Finding in one Bundle, and the path of the Marker-burned image copy written for it | `id` pk · `bundle_id` fk · `finding_id` fk · `position` · `image_path` · unique on (`bundle_id`, `finding_id`) | draft |
 | 6 | `publication` | `sharing` | Where a Bundle is published and whether it is still live. `slug` is generated independently of every id here (AD-8) | `id` pk · `bundle_id` fk unique · `slug` unique · `base_url` · `published_at` · `unpublished_at` nullable · `last_error` nullable | draft |
-| 7 | `access_key` | `agent-access` | The one Access Key that may be valid, stored as a hash. The key itself lives in the Windows credential store, never here | `id` pk · `key_hash` · `issued_at` · `revoked_at` nullable | draft |
+| 7 | `access_key` | `agent-access` | The one Access Key that may be valid, stored as a hash. The key itself lives in the Windows credential store, never here | `id` pk · `key_hash` · `issued_at` · `revoked_at` nullable | removed |
 | 8 | `setting` | `settings` | One persisted preference per key: Vault location, each hotkey binding, the Quality Budget pair, startup, open-editor-after-capture, the web service address | `key` pk · `value` · `updated_at` | draft |
 | 9 | `schema_version` | `settings` | The migration level of `library.db`, so a newer binary knows what it is opening | `version` pk · `applied_at` | draft |
 | 10 | `published_bundle` | `sharing` | `web-api`'s own record of one served Publication: its slug, its Markdown, and where its blobs are. Holds no Library id (AD-8) | `slug` pk · `markdown` · `blob_dir` · `created_at` · `deleted_at` nullable | draft |
@@ -482,14 +412,15 @@ rather than patched into agreement.
 
 ### Inventory — endpoints
 
-Three surfaces, one list. Not one of them accepts a write from outside the desktop process (AD-5).
+One surface, one list. Not one of its rows accepts a write from outside the desktop process (AD-5).
 
-- **Local API** — `desktop-app`, bound to `127.0.0.1` only, every request carrying the Access Key
-  (NFR-9). Prefix `/v1`.
-- **MCP** — `mcp-bridge`, Model Context Protocol tools over stdio. Not HTTP; listed here because it
-  is the surface an agent actually calls, and leaving it out would make the API record incomplete.
 - **Web** — `web-api` on the Reviewer's host. Public routes serving one Publication, plus two
   credential-gated routes the desktop publish client uses.
+
+A **Local API** (`desktop-app`, loopback, Access-Key-gated, prefix `/v1`) and an **MCP** surface
+(`mcp-bridge`, stdio) stood here until 2026-09-04. `DEC-016` removed the running channel both of them
+fronted; rows 1–8 below are what is left of them, and they stay at `status: removed` rather than
+being deleted, per this file's own numbering rule.
 
 `No` is stable. A new row takes the next number; a removed one keeps its number with
 `status: removed`.
@@ -498,15 +429,15 @@ Three surfaces, one list. Not one of them accepts a write from outside the deskt
 
 | No | Method | Path | Owning component | Description | Status |
 | --- | --- | --- | --- | --- | --- |
-| 1 | GET | `/v1/health` | `agent-access` | Local API liveness. The only route that does not require the Access Key, and it returns nothing about the Library | draft |
-| 2 | GET | `/v1/bundles` | `agent-access` | List Bundles: id, name, Finding count, composed-at. Refuses with `key_required` when no valid key is presented, which is distinguishable from an empty list (AD-7) | draft |
-| 3 | GET | `/v1/bundles/{id}` | `agent-access` | One Bundle's stored Markdown — the same authored document *Copy Markdown* serves, with the stored folder-relative image links rather than a rebased set (AD-9, DEC-012) — plus the list of image filenames it references | draft |
-| 4 | GET | `/v1/bundles/{id}/images/{filename}` | `agent-access` | One image belonging to that Bundle. Refuses any filename that escapes the Bundle's own folder | draft |
-| 5 | TOOL | `mcp:list_bundles` | `agent-access` | MCP tool over row 2 | draft |
-| 6 | TOOL | `mcp:read_bundle` | `agent-access` | MCP tool over row 3. Returns the Markdown as text | draft |
-| 7 | TOOL | `mcp:read_bundle_image` | `agent-access` | MCP tool over row 4. Returns the image as an MCP image content block | draft |
-| 8 | TOOL | `mcp:set_access_key` | `agent-access` | Accepts the Access Key the Reviewer pasted, for the lifetime of this bridge process only. The bridge persists nothing (AD-5) | draft |
-| 9 | GET | `/b/{slug}` | `sharing` | A Publication. Raw Markdown when the client asks for `text/markdown` or `text/plain`; the `web-ui` document when a browser asks for HTML. Same bytes of Markdown either way | draft |
+| 1 | GET | `/v1/health` | `agent-access` | Local API liveness. The only route that does not require the Access Key, and it returns nothing about the Library | removed |
+| 2 | GET | `/v1/bundles` | `agent-access` | List Bundles: id, name, Finding count, composed-at. Refuses with `key_required` when no valid key is presented, which is distinguishable from an empty list (AD-7) | removed |
+| 3 | GET | `/v1/bundles/{id}` | `agent-access` | One Bundle's stored Markdown — the same authored document *Copy Markdown* serves, with the stored folder-relative image links rather than a rebased set (AD-9, DEC-012) — plus the list of image filenames it references | removed |
+| 4 | GET | `/v1/bundles/{id}/images/{filename}` | `agent-access` | One image belonging to that Bundle. Refuses any filename that escapes the Bundle's own folder | removed |
+| 5 | TOOL | `mcp:list_bundles` | `agent-access` | MCP tool over row 2 | removed |
+| 6 | TOOL | `mcp:read_bundle` | `agent-access` | MCP tool over row 3. Returns the Markdown as text | removed |
+| 7 | TOOL | `mcp:read_bundle_image` | `agent-access` | MCP tool over row 4. Returns the image as an MCP image content block | removed |
+| 8 | TOOL | `mcp:set_access_key` | `agent-access` | Accepts the Access Key the Reviewer pasted, for the lifetime of this bridge process only. The bridge persists nothing (AD-5) | removed |
+| 9 | GET | `/b/{slug}` | `sharing` | A Publication. Raw Markdown when the client asks for `text/markdown` or `text/plain`; an HTML document `web-api` renders itself when a browser asks for HTML (`DEC-015`). Same bytes of Markdown either way | draft |
 | 10 | GET | `/b/{slug}/raw.md` | `sharing` | The same Markdown, unambiguously, for a client that will not negotiate content types | draft |
 | 11 | GET | `/b/{slug}/images/{filename}` | `sharing` | One image of that Publication. Resolves relative to row 9's document, which is what makes the Markdown's relative paths work | draft |
 | 12 | PUT | `/publish/{slug}` | `sharing` | Create or replace one Publication: its Markdown and its images, in one request that either completes or leaves nothing (FR-23). Requires the publish credential | draft |
@@ -530,11 +461,25 @@ None — `derived_from: plan`, and there is no code to derive from yet.
 ### Inventory — screens
 
 Two front ends. Rows 1–13 are the desktop UI inside `desktop-app` — a React webview until `DEC-007`,
-native Slint since; rows 14–15 are `web-ui` in the reader's browser, unaffected by that decision. A
-desktop surface that is a window rather than a route has `—` for its route.
+native Slint since. Rows 14–15 were `web-ui` in the reader's browser; `DEC-015` withdrew that
+container on 2026-09-01, and those two rows now describe screens that would live in `web-api` if they
+were ever built. **They are still `BUG-2` and are deliberately left standing** — withdrawing them is
+`OQ-22`'s answer, not `DEC-015`'s, and that question is still the owner's. A desktop surface that is a
+window rather than a route has `—` for its route.
 
 `No` is stable. A new row takes the next number; a removed one keeps its number with
 `status: removed`.
+
+#### Correction, 2026-09-04 — rows 8, 10 and 16 caught up to Slint, by `wdi-autopilot`
+
+The Bundle Library spec (`.scratch/bundle-library/`) closed with PR #38 (2026-09-03), which is exactly
+the "wayfinder map" work the note below said this table's re-plan was waiting on. Rows 8 and 10's
+`Route` cells are corrected here to say what actually opens them — `SdLibrary` and `SdReviewUpdate` in
+`apps/desktop/ui/components/library.slint` and `review-update.slint` — and row 16 drops its "PLAN ONLY"
+line for the same reason: `SdReclaimSpace` in `apps/desktop/ui/components/reclaim-space.slint` is built
+and shipped. **Only these three rows moved.** Every other row below is still the 2026-08-23 React-era
+snapshot the note below describes, and re-planning the rest of this table against Slint is still owed —
+this correction narrowed that debt, it did not pay it off.
 
 #### Derivation finding, 2026-08-31 — the Route column is a fossil, and this is not hand work
 
@@ -553,8 +498,10 @@ each of them as *"planned but not read in code"*, which is accurate: there is no
 `screens/settings-view.slint`, `screens/orphan-report-view.slint`, `screens/agent-access-view.slint`,
 `components/confirm-dialog.slint` and `components/publish-dialog.slint`. None exists. The shipped
 desktop UI is one file — `apps/desktop/ui/appwindow.slint` — so the row-per-file structure this
-inventory assumes was never built. Two `web-ui` rows are absent for the same reason
-(`PublishedBundleReader.tsx`, `PublicationNotFound.tsx`).
+inventory assumes was never built. Rows 14 and 15 are absent for a different reason and it is worth
+keeping the two apart: the desktop screens exist and are simply not in the files the plan expects,
+while `PublishedBundleReader.tsx` and `PublicationNotFound.tsx` were never written at all — and after
+`DEC-015` there is no browser container for a `.tsx` to be deployed into.
 
 **What this does NOT mean.** It is not evidence that the screens are unreachable. The Capture Overlay,
 the Findings list, the Bundle list, the compose modal and Settings all exist and run; they live inside
@@ -581,14 +528,14 @@ produce. The honest state is a table that says what it planned, beside a finding
 | 5 | Finding detail with Marker canvas | `/findings/:id` | `finding` | Reviewer | UC-4, UC-5 | [`.how/finding/01-ux/assets/01-studio-workspace.html`](../finding/01-ux/assets/01-studio-workspace.html) |
 | 6 | Delete Findings confirmation | `/findings/delete` (modal) | `finding` | Reviewer | UC-7 | [`.how/bundle/01-ux/assets/05-saved-bundles-drawer.html`](../bundle/01-ux/assets/05-saved-bundles-drawer.html) |
 | 7 | Orphan report | `/findings/orphans` | `finding` | Reviewer | UC-8 | [`.how/finding/01-ux/assets/01-studio-workspace.html`](../finding/01-ux/assets/01-studio-workspace.html) |
-| 8 | Editor — Bundles | `/bundles` | `bundle` | Reviewer | UC-10, UC-11, UC-23, UC-28, UC-30 | [`.how/bundle/01-ux/assets/05-saved-bundles-drawer.html`](../bundle/01-ux/assets/05-saved-bundles-drawer.html) |
+| 8 | Editor — Bundles (Library) | — (a full-window overlay in the Editor; `DEC-007` retired React Router) | `bundle` | Reviewer | UC-10, UC-11, UC-23, UC-28, UC-30 | [`.how/bundle/01-ux/assets/05-saved-bundles-drawer.html`](../bundle/01-ux/assets/05-saved-bundles-drawer.html) |
 | 9 | Compose Bundle | `/bundles/compose` (modal) | `bundle` | Reviewer | UC-9 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
-| 10 | Bundle detail | `/bundles/:id` | `bundle` | Reviewer | UC-11, UC-12, UC-23, UC-28, UC-29 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
+| 10 | Bundle detail (Review & Update) | — (a full-window overlay opened from row 8; `DEC-007` retired React Router) | `bundle` | Reviewer | UC-11, UC-12, UC-23, UC-28, UC-29 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 | 11 | Publish and unpublish a Bundle | `/bundles/:id/publish` (modal) | `sharing` | Reviewer | UC-20, UC-22 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 | 12 | Settings — General & Quality | `/settings` | `settings` | Reviewer | UC-13, UC-14, UC-15, UC-16 | [`.how/settings/01-ux/assets/06a-settings-general.html`](../settings/01-ux/assets/06a-settings-general.html)<br>[`.how/settings/01-ux/assets/06b-settings-hotkeys.html`](../settings/01-ux/assets/06b-settings-hotkeys.html)<br>[`.how/settings/01-ux/assets/06d-settings-about.html`](../settings/01-ux/assets/06d-settings-about.html) |
-| 13 | Settings — Agent access | `/settings/agent-access` | `agent-access` | Reviewer | UC-17, UC-19 | [`.how/settings/01-ux/assets/06c-settings-agent-bridge.html`](../settings/01-ux/assets/06c-settings-agent-bridge.html) |
+| 13 | Settings — Agent access | `/settings/agent-access` | `agent-access` | Reviewer | UC-17, UC-19 | withdrawn by `DEC-016` — status: removed |
 | 14 | Published Bundle reader | `/b/:slug` | `sharing` | Remote coding agent, Reviewer | UC-21 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
-| 16 | Reclaim space | — (a desktop surface; PLAN ONLY, no code and no route) | `finding` | Reviewer | UC-31 | _none yet_ |
+| 16 | Reclaim space | — (a full-window overlay, reached from row 8's header and from Settings' Vault area) | `finding` | Reviewer | UC-31 | _none yet_ |
 | 15 | Publication not available | `/b/:slug` (the refused state) | `sharing` | Remote coding agent, Reviewer | UC-22 | [`.how/bundle/01-ux/assets/04-bundle-assembly-modal.html`](../bundle/01-ux/assets/04-bundle-assembly-modal.html) |
 
 Row 0 is numbered 0 rather than 16 deliberately. Numbers here are stable and a new row normally takes

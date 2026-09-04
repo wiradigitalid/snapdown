@@ -1,6 +1,6 @@
 # Spec: Bundle Library
 
-**Status:** ready-for-agent
+**Status:** done — every ticket (10-19) built, tested, reviewed and merged via PR #38 into `main` (2026-09-03). Status line was stale until this correction, 2026-09-04.
 **Source:** `map.md` and its nine resolved tickets (`issues/01`–`09`). Every decision below was taken
 there; this document assembles them into one buildable statement and adds only the implementation
 decisions a builder needs. Written 2026-09-02, the day the map's exit condition was met.
@@ -230,18 +230,40 @@ file location · [Export PDF] — [Publish] — then the destructive group, whic
 **Whether a Bundle still holds its
 Findings is read live from whether those Findings exist, never from a stored flag** (`BR-122`): a
 Bundle is *unsealed* when every one of its BundleItems' Findings still exists and *sealed* otherwise.
-Unsealed: **Disassemble…**, **Discard originals…**. Sealed: **Delete…** only. The **Delete both**
-outcome (Bundle and originals, "nothing comes back to the filmstrip") is offered as a second-step
-choice from within the Disassemble confirmation, never as a menu row.
+Unsealed: **Disassemble…**, **Discard originals…**, **Delete both…**. Sealed: **Delete…** only. The
+**Delete both** outcome (Bundle and originals, "nothing comes back to the filmstrip") is its own
+dedicated menu row as of `BUG-104` — see the correction below; it was originally a second-step choice
+reached only from within the Disassemble confirmation.
 
 **The four confirmations** carry the copy the artboards settled: each names the Bundle in quotes,
 counts what goes, states what comes back or that nothing does, and ends "This cannot be undone." The
-cancel verb keeps what the act would destroy ("Keep it", "Keep them"); the confirm verb is the act
-("Disassemble", "Discard", "Delete both", "Delete"). The Discard originals confirmation additionally
-names any other Bundle that shares one of those Findings and will therefore be sealed by the act —
-that consequence is real today (`BR-12` + `BR-122`) and the confirmation is the only place to say it.
-The `FR-41` wording in the corpus will be brought into line afterwards; the safer behaviour is built
-first.
+confirm verb is the act ("Disassemble", "Discard", "Delete both", "Delete"). The Discard originals
+confirmation additionally names any other Bundle that shares one of those Findings and will therefore
+be sealed by the act — that consequence is real today (`BR-12` + `BR-122`) and the confirmation is
+the only place to say it. The `FR-41` wording in the corpus will be brought into line afterwards; the
+safer behaviour is built first.
+
+**Corrected 2026-09-03, on the owner's decision (`BUG-101`).** This paragraph used to say the cancel
+verb keeps what the act would destroy ("Keep it", "Keep them") rather than a plain "Cancel", and that
+"Delete both" is reached through a text LINK below the Disassemble confirmation's two buttons, never
+a third button — both deliberate, on the reasoning that a link forces one more deliberate motion
+before the product's single most destructive act. In practice a Reviewer testing the feature could
+not tell the link was pressable at all ("orang gak tahu itu button" — nobody can tell it's a button),
+which defeats a safety device that has to be found to work: every cancel button now reads "Cancel",
+and "Delete both instead" is a real, visibly clickable `SdActionButton` — still on its own row below
+Cancel/Disassemble, so it is not a third button LEVEL with the other two and the extra deliberate step
+survives, just discoverable now rather than invisible.
+
+**Corrected again, 2026-09-03, on the owner's decision (`BUG-104`), reversing the paragraph directly
+above it.** Having just asked for that button to be made discoverable, the owner reconsidered the
+indirection itself: *"saya berubah pikiran, buatkan aja Delete di context menu... sehingga dedicated"*
+(changed my mind — just put Delete in the context menu, so it's dedicated). The button inside the
+Disassemble confirmation is gone; **Delete both…** is now a third row in the unsealed context menu,
+reached the same direct way Disassemble…/Discard originals… already are, with no extra deliberate
+step below another dialog. The four confirmations, their copy and their `AD-2` write ordering are
+unchanged — only how Delete both is REACHED changed. Buttons across all four confirmations also
+carry a matched height and, on the three genuinely irreversible ones (Delete, Discard, Delete both —
+never Disassemble, which returns the Findings), a red `danger` variant (`BUG-103`).
 
 **Write ordering on delete follows `AD-2`: the record first, then its files.** Disassemble and Delete
 remove the Bundle's row (its BundleItems cascade) and only then the Bundle's folder. A crash between

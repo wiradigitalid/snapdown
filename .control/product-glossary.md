@@ -20,10 +20,9 @@ here. The split test: does this term still hold if used in another product? Yes 
 
 <!-- Alphabetical. Format: **Term** — definition. Relationship. Cardinality where relevant. -->
 
-- **Access Key** — the secret string a Reviewer copies out of Snapdown and pastes into an agent
-  conversation to grant that agent read access to the Library over the Local API. Exactly one Access
-  Key is valid at a time; issuing a new one revokes the previous one. It is not a password and there
-  is no account behind it.
+- **Access Key** — stood here, naming the secret string a Reviewer copied out of Snapdown and pasted
+  into an agent conversation to grant that agent read access to the Library over the **Local API**,
+  until `DEC-016` withdrew it on 2026-09-04. Not reused.
 - **Advanced** — the disclosure in Settings holding the Quality Budget's resolved numbers, the maximum
   long edge and the encoder quality, for direct entry. Editing either moves the Quality Budget to
   `Custom`. Source: `DEC-004`.
@@ -59,18 +58,19 @@ here. The split test: does this term still hold if used in another product? Yes 
 - **Finding** — one observation: a captured image, the Note that describes it, and the Markers drawn
   on it. The atomic unit of the product; nothing smaller is handed to an agent. A Finding has exactly
   one image file in the Vault.
-- **Handoff** — the act of giving a Bundle to an agent. Three shapes carry the same content: copying
-  the Markdown, reading it over MCP with the Access Key, or fetching a Publication over HTTPS.
+- **Handoff** — the act of giving a Bundle to an agent. Two shapes carry the same content: the
+  Reviewer copying the Markdown and pasting it themselves, or fetching a Publication over HTTPS. A
+  third shape — reading it over MCP with an **Access Key** — stood here until `DEC-016` withdrew it
+  on 2026-09-04.
 - **Library** — the whole set of Findings and Bundles held on this machine, together with their
   metadata. One Library per installation.
-- **Local API** — the loopback-only HTTP interface over the Library, reachable at `127.0.0.1` and
-  refusing every request that does not carry the current Access Key. The MCP Bridge is its only
-  intended client.
+- **Local API** — stood here, naming the loopback-only HTTP interface over the Library that the
+  **MCP Bridge** called, until `DEC-016` withdrew it on 2026-09-04. Not reused.
 - **Marker** — a numbered badge placed by the Reviewer on a Finding's image. Marker `n` is bound to
   line `n` of that Finding's Note; the two share one sequence and are never kept in sync as two
   things. A Finding has zero or more Markers, numbered from 1 with no gaps.
-- **MCP Bridge** — the separate executable that speaks the Model Context Protocol to an agent and the
-  Local API to Snapdown. It holds no data of its own.
+- **MCP Bridge** — stood here, naming the separate executable that spoke the Model Context Protocol
+  to an agent and the Local API to Snapdown, until `DEC-016` withdrew it on 2026-09-04. Not reused.
 - **Note** — the Reviewer's prose about one Finding: a free-text body, plus one numbered line per
   Marker. Exactly one Note per Finding; it may be empty.
 - **Orphan report** — the Editor surface listing image files present in the Vault that no Finding or

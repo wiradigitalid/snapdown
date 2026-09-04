@@ -4,16 +4,6 @@
 
 ```yaml
 product_components:
-- id: agent-access
-  name: null
-  containers:
-  - desktop-app
-  - mcp-bridge
-  logical_components:
-  - LC-016
-  - LC-017
-  - LC-018
-  - LC-019
 - id: bundle
   name: null
   containers:
@@ -25,6 +15,7 @@ product_components:
   - LC-013
   - LC-014
   - LC-031
+  - LC-033
 - id: finding
   name: null
   containers:
@@ -40,6 +31,7 @@ product_components:
   - LC-008
   - LC-029
   - LC-030
+  - LC-034
 - id: settings
   name: null
   containers:
@@ -56,7 +48,6 @@ product_components:
   containers:
   - desktop-app
   - web-api
-  - web-ui
   logical_components:
   - LC-020
   - LC-021
@@ -140,26 +131,6 @@ logical_components:
   component: settings
   area: settings-store
   owner: null
-- id: LC-016
-  type: null
-  component: agent-access
-  area: local-api
-  owner: null
-- id: LC-017
-  type: null
-  component: agent-access
-  area: local-api
-  owner: null
-- id: LC-018
-  type: null
-  component: agent-access
-  area: mcp-bridge
-  owner: null
-- id: LC-019
-  type: null
-  component: agent-access
-  area: editor-ui
-  owner: null
 - id: LC-020
   type: null
   component: sharing
@@ -224,5 +195,15 @@ logical_components:
   type: null
   component: settings
   area: build-tooling
+  owner: null
+- id: LC-033
+  type: null
+  component: bundle
+  area: editor-ui
+  owner: null
+- id: LC-034
+  type: null
+  component: finding
+  area: vault-fs
   owner: null
 ```

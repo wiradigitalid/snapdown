@@ -18,7 +18,7 @@ to a running-app component.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done — feat/merge commits per `.control/memlog/autopilot-2026-09-04.md` iteration 1; PR #38 merged 2026-09-03. Status line was stale until this correction.
 
 - [ ] The Library icon opens the overlay and the stub that printed a line is gone; the known-stubs
       ratchet test no longer lists it and passes

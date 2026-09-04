@@ -3,7 +3,7 @@ type: cross-cutting
 scope: _platform
 status: draft
 created: "2026-08-22"
-updated: "2026-08-22"
+updated: "2026-09-04"
 ---
 
 # Cross-Cutting — Snapdown
@@ -11,16 +11,16 @@ updated: "2026-08-22"
 What is defined once for the whole product. This file describes; it does not forbid. Anything that
 forbids is an `AD-N` in `ARCHITECTURE-SPINE.md`.
 
-Three process boundaries exist — the Local API, the MCP Bridge, and `web-api` — and AD-7 requires all
-three to speak the shape below.
+One process boundary exists — `web-api` — and AD-7 requires it to speak the shape below. A Local API
+and an MCP Bridge boundary stood here too until 2026-09-04; `DEC-016` withdrew both.
 
 ## Error envelope
 
 ```json
 {
   "error": {
-    "code": "key_required",
-    "message": "An Access Key is required. Paste the key from Snapdown.",
+    "code": "not_found",
+    "message": "This Publication is no longer available.",
     "detail": null,
     "request_id": "0192f3c1-8a7e-7c31-9b44-3d2f1a6c5e08"
   }
@@ -34,20 +34,20 @@ three to speak the shape below.
 | `error.detail` | object or null | Structured extra facts for exactly one code — the field that failed validation, the filename that was refused. Never free-form prose | no |
 | `error.request_id` | string, UUIDv7 | Correlates the response with the one log line the producing side wrote | yes |
 
-Two rules follow from AD-7 and are worth stating where the shape is:
+One rule follows from AD-7 and is worth stating where the shape is:
 
-- A **refusal** always carries a code. It is never an empty success. `key_required` and an empty
-  Bundle list are different answers, and an agent that cannot tell them apart reports to the Reviewer
-  that their Library is empty.
-- The MCP Bridge does not invent its own errors. It maps a Local API envelope onto an MCP tool error,
-  preserving `code` and `message` verbatim.
+- A **refusal** always carries a code. It is never an empty success. A refusal and an empty result
+  are different answers, and a caller that cannot tell them apart reports to the Reviewer that a
+  Publication is empty when it was actually refused.
+
+`key_required` and `key_invalid` were two more such codes, and a note on the MCP Bridge mapping a
+Local API envelope onto an MCP tool error stood here, until 2026-09-04: both were specific to the
+Local API and MCP surfaces `DEC-016` withdrew, and neither code is reused.
 
 ## Error catalogue
 
 | Code | HTTP | Means | Caller should |
 | --- | --- | --- | --- |
-| `key_required` | 401 | No Access Key was presented | Tell the Reviewer to paste the key from Snapdown. Do not retry |
-| `key_invalid` | 401 | A key was presented but is not the currently valid one — wrong, or revoked | Tell the Reviewer the key is no longer valid and a new one is needed. Do not retry |
 | `not_found` | 404 | The Bundle, image, or slug does not exist — or once did and no longer does. The two are deliberately indistinguishable (NFR-15) | Stop. Do not probe for a nearby id |
 | `not_allowed` | 403 | The operation exists but is not permitted on this surface. Every write on a read-only surface lands here (AD-5) | Stop. This is a defect in the caller, not a permission to acquire |
 | `bad_request` | 400 | The request is malformed — a filename that escapes its folder, a missing field. `detail` names it | Fix the request. Do not retry unchanged |
@@ -74,9 +74,10 @@ shared concern.
 
 ### Timestamps
 
-**Applies to:** all — `desktop-app`, `mcp-bridge`, `web-api`.
+**Applies to:** all — `desktop-app`, `web-api`. (`mcp-bridge` was listed here until `DEC-016`
+withdrew that container.)
 **Enforced by:** a serialisation test asserting every timestamp field matches RFC 3339 with a `Z`
-offset, run over the Local API responses, the published Markdown, and the publish request body.
+offset, run over the published Markdown and the publish request body.
 
 Every timestamp is stored and transmitted in UTC as RFC 3339 with an explicit `Z`. Local time exists
 only in what a UI renders for a person. A Bundle's composed-at in its Markdown is UTC, which is why
@@ -140,7 +141,8 @@ generated separately, per AD-8.
 
 ### Bundle Markdown shape
 
-**Applies to:** `bundle`, `agent-access`, `sharing`.
+**Applies to:** `bundle`, `sharing`. (`agent-access` was listed here until `DEC-016` withdrew that
+component.)
 **Enforced by:** the single composer in `snapdown-core`, plus a golden-file test asserting its output
 against a stored reference — `crates/snapdown-store/tests/test_golden_markdown.rs`.
 
@@ -173,8 +175,7 @@ _Snapdown · {N} findings · composed {RFC 3339 UTC}_
 ```
 
 CommonMark only. No HTML, no extensions, no front matter. Image references are relative to the
-document's own folder, which is what makes the same bytes work on disk, over the Local API, and under
-a Publication URL.
+document's own folder, which is what makes the same bytes work on disk and under a Publication URL.
 
 ### Logging
 
@@ -189,21 +190,23 @@ a client address longer than it needs to operate.
 
 ### Secrets
 
-**Applies to:** `agent-access`, `sharing`, `settings`.
+**Applies to:** `sharing`, `settings`.
 **Enforced by:** the Windows credential store on the desktop and process environment on the server,
 plus a repository scan in CI.
 
-The Access Key and the publish credential are the only two secrets in the product. On the desktop
-both live in the Windows credential store; `library.db` holds only a hash of the Access Key. On the
-host the publish credential arrives in the environment. Neither is written to a configuration file, a
-log line, a Bundle, a published document, or this repository.
+The publish credential is the only secret left in the product. It lives in the Windows credential
+store on the desktop, and arrives in the environment on the host. It is not written to a
+configuration file, a log line, a Bundle, a published document, or this repository. The Access Key
+was the other secret here, held the same way with `library.db` holding only a hash of it, until
+2026-09-04 — `DEC-016` withdrew `agent-access` and the key with it.
 
 ### Configuration
 
-**Applies to:** `desktop-app`, `mcp-bridge`, `web-api`.
+**Applies to:** `desktop-app`, `web-api`.
 **Enforced by:** one loader per program that reads the file then applies environment overrides, and
 fails to start on an unknown key rather than ignoring it.
 
-One TOML file per program, with environment variables overriding it. `mcp-bridge` is the exception
-worth naming: it takes the Local API address from configuration and the Access Key from the
-`set_access_key` tool call only, holding it for the life of the process and never writing it down.
+One TOML file per program, with environment variables overriding it. `mcp-bridge` was the exception
+worth naming here — it took the Local API address from configuration and the Access Key from the
+`set_access_key` tool call only — until 2026-09-04, when `DEC-016` withdrew the container along with
+the exception.

@@ -17,7 +17,7 @@ import { SdContextMenu, MenuEntry } from "components/context-menu.slint";
 import { SdIconLabel } from "components/icon-label.slint";
 import { SdSettings, HotkeyRow } from "components/settings.slint";
 import { SdSegmented, SegmentOption } from "components/form-controls.slint";
-import { SdModalHeader } from "components/modal.slint";
+import { SdModalHeader, SdToast } from "components/modal.slint";
 import { SdActionButton, SdSectionLabel, SdCaption, SdDocHeading } from "components/action-button.slint";
 import { AnnotationItem, AnnotationData } from "components/annotation.slint";
 import { SdLibrary, LibraryBundleRow } from "components/library.slint";
@@ -1180,6 +1180,12 @@ export component AppWindow inherits Window {
     in-out property <string> resolution-text: "1020 × 885  px";
     in-out property <string> size-text: "119.5  KB";
     in-out property <image> active-image;
+    // `FR-34`. A pure view transform: it changes how big the canvas draws, never the stored image
+    // and never a Marker's or an annotation's stored coordinate — both are already fractions of the
+    // canvas (`AD-3`), so scaling `canvas-viewport` alone rescales everything on it for free.
+    // `1.0` is "natural size" — one canvas pixel is one image pixel. Reset by Rust to `1.0` whenever
+    // a different Finding becomes active; never read by `finding_store`, never a `Setting`.
+    in-out property <float> canvas-zoom: 1.0;
     // No demo Markers. Two fake ones used to ship as the default, for the same reason the
     // Observation Summary once shipped placeholder prose - and with the same consequence: a reader
     // cannot tell invented content from stored content, so a binding that never delivered looked
@@ -1242,8 +1248,9 @@ export component AppWindow inherits Window {
     // Jangan ada default ukuran."* An annotation is a statement about a REGION, and a tap does not
     // name one - a default size would be the product guessing which region was meant.
     //
-    // 8 image pixels in the longer direction. The canvas draws a Finding at natural size, so this is
-    // measured in the image's own pixels and does not change with the window.
+    // 8 image pixels in the longer direction. Measured in the image's own pixels, so this threshold
+    // does not change with the window OR with `canvas-zoom` (`FR-34`) — a drag that is real at one
+    // zoom level is real at every zoom level.
     private property <bool> drag-is-real:
         Math.max(Math.abs(root.draw-x2 - root.draw-x1) * root.active-image.width,
                  Math.abs(root.draw-y2 - root.draw-y1) * root.active-image.height) >= 8;
@@ -1405,8 +1412,9 @@ export component AppWindow inherits Window {
     in property <string> library-pending-discard-warning: "";
     callback library-discard-cancelled();
     callback library-discard-confirmed(string);
+    // `BUG-104`: reached directly from the row menu now (`"delete-both-bundle"`), not from a
+    // request forwarded out of the Disassemble dialog - so there is no `-requested` callback here.
     in property <string> library-pending-delete-both: "";
-    callback library-delete-both-requested(string);
     callback library-delete-both-cancelled();
     callback library-delete-both-confirmed(string);
 
@@ -1467,6 +1475,11 @@ export component AppWindow inherits Window {
     callback paste-clicked();
     callback assemble-bundle-clicked();
     callback copy-image-clicked();
+    // `FR-34`. Rust owns the step size and the clamp; the canvas only ever asks for a direction, or
+    // for exactly natural size.
+    callback zoom-in-clicked();
+    callback zoom-out-clicked();
+    callback zoom-reset-clicked();
     callback marker-placed(float, float);
     callback delete-marker-clicked(string);
     callback marker-comment-edited(string, string);
@@ -1610,7 +1623,6 @@ export component AppWindow inherits Window {
     in-out property <string> budget-explainer: "";
     in-out property <[HotkeyRow]> hotkeys: [];
     in-out property <string> app-version: "";
-    in-out property <string> bridge-status: "";
     // Which hotkey row is listening for a keypress, by action id. Owned by the window rather
     // than by the Settings component because RUST closes it - on a successful bind, and on the
     // shortcut actually arriving.
@@ -1995,6 +2007,35 @@ export component AppWindow inherits Window {
                     // not a choice.
                     HorizontalLayout {
                         alignment: end;
+                        spacing: 2px;
+
+                        // `FR-34`. Three buttons, not a slider: the proof line asks only that the
+                        // canvas can be zoomed in, out, and returned to natural size, and Undo/Redo
+                        // already set the precedent of a plain button pair for a stepped control in
+                        // this same group.
+                        IconButton {
+                            width: 40px;
+                            height: 44px;
+                            icon: @image-url("../assets/icons/zoom-out.svg");
+                            text: "Zoom out";
+                            clicked => { root.zoom-out-clicked(); }
+                        }
+                        IconButton {
+                            width: 40px;
+                            height: 44px;
+                            icon: @image-url("../assets/icons/zoom-reset.svg");
+                            text: "Natural size";
+                            clicked => { root.zoom-reset-clicked(); }
+                        }
+                        IconButton {
+                            width: 40px;
+                            height: 44px;
+                            icon: @image-url("../assets/icons/zoom-in.svg");
+                            text: "Zoom in";
+                            clicked => { root.zoom-in-clicked(); }
+                        }
+
+                        Rectangle { width: 1px; height: 24px; background: Theme.border-strong; y: 10px; }
 
                         Rectangle {
                             width: 84px;
@@ -2075,8 +2116,12 @@ export component AppWindow inherits Window {
                             canvas-viewport := Rectangle {
                                 x: max(24px, (parent.width - self.width) / 2);
                                 y: max(24px, (parent.height - self.height) / 2);
-                                width: root.active-image.width * 1px;
-                                height: root.active-image.height * 1px;
+                                // `FR-34`. `canvas-zoom` is the ONLY thing zoom changes. Every
+                                // annotation and Marker below reads a fraction of THIS rectangle's own
+                                // width/height, so scaling it here rescales all of them together —
+                                // nothing downstream needs to know zoom exists.
+                                width: root.active-image.width * 1px * root.canvas-zoom;
+                                height: root.active-image.height * 1px * root.canvas-zoom;
                                 background: Theme.canvas-ground;
                                 border-radius: Theme.radius-sharp;
                                 drop-shadow-blur: 20px;
@@ -3011,9 +3056,10 @@ export component AppWindow inherits Window {
                                         // screenshot; the field is for "18, the same as the last
                                         // one". The five-step ladder that was here could do neither.
                                         //
-                                        // Both are in IMAGE pixels. The canvas draws a Finding at
-                                        // natural size, so the number means the same thing here and
-                                        // in the burned PNG.
+                                        // Both are in IMAGE pixels, so the number always means the
+                                        // same thing in the burned PNG. On screen it matches only at
+                                        // `canvas-zoom == 1.0` ("natural size") — `FR-34` scales the
+                                        // whole canvas, this font size among everything else on it.
                                         HorizontalLayout {
                                             spacing: 8px;
 
@@ -3110,50 +3156,25 @@ export component AppWindow inherits Window {
                 }
             }
         }
-        // RESULT LINE - last declared, so it draws over everything.
+        // RESULT LINE (`BUG-93`). The Rectangle itself now sits at the very end of this component
+        // (search "RESULT LINE - moved" below) - only its clearing Timer stays here, since a Timer
+        // is not a rendered element and its position has no effect on paint order.
+        //
+        // This USED to say "last declared, so it draws over everything," and that was true the day
+        // it was written. It stopped being true the moment the first overlay was added after it -
+        // the Library, Review & Update, Settings, Reclaim space, the Vault-move and delete-Finding
+        // confirmations, the context menu, and Assemble & Review all landed below this point over
+        // several waves, each one now painting on top of a toast that believed it was on top of
+        // everything. A Reviewer who fired a toast (Copy Markdown's, for instance) while any one of
+        // those was open watched it appear behind the Editor's own dimmed backdrop instead of over
+        // whatever they were actually looking at - found and reported the same day this comment is
+        // being corrected.
         //
         // Assembling a Bundle writes image files, a Markdown file and a database row, and changes
         // nothing at all on screen. Without a line that says so, a success and a silent failure look
         // identical from the Editor - and a silent failure on exactly this path is what BUG-19 and
         // BUG-23 both are. The semantic colour is carried by the border and the dot rather than by
         // the text, because a red or green body on a tinted plate does not clear AA in both themes.
-        if root.toast-text != "" : Rectangle {
-            x: (parent.width - self.width) / 2;
-            y: parent.height - self.height - 28px;
-            width: min(560px, parent.width - 64px);
-            height: 42px;
-            border-radius: Theme.radius-sharp;
-            background: root.bg-card;
-            border-width: 1px;
-            border-color: root.toast-is-error ? Theme.semantic-error : Theme.semantic-success;
-            drop-shadow-blur: 18px;
-            drop-shadow-color: Theme.overlay-shadow;
-
-            HorizontalLayout {
-                padding-left: 14px;
-                padding-right: 14px;
-                spacing: 10px;
-                alignment: start;
-
-                Rectangle {
-                    width: 8px;
-                    height: 8px;
-                    y: (parent.height - self.height) / 2;
-                    border-radius: Theme.radius-pill;
-                    background: root.toast-is-error ? Theme.semantic-error : Theme.semantic-success;
-                }
-
-                Text {
-                    text: root.toast-text;
-                    font-size: 12px;
-                    font-weight: 600;
-                    color: root.text-primary;
-                    vertical-alignment: center;
-                    wrap: word-wrap;
-                    font-family: "IBM Plex Sans";
-                }
-            }
-        }
 
         // The hotkey arrival clears itself for the same reason the result line does: a confirmation
         // that stays forever stops being a confirmation of anything in particular.
@@ -3179,6 +3200,8 @@ export component AppWindow inherits Window {
             state: root.library-state;
             error-message: root.library-error-message;
             rows: root.library-rows;
+            toast-text: root.toast-text;
+            toast-is-error: root.toast-is-error;
 
             menu-target: root.library-menu-target;
             menu-sealed: root.library-menu-sealed;
@@ -3207,7 +3230,6 @@ export component AppWindow inherits Window {
             bundle-opened(id) => { root.library-bundle-clicked(id); }
             discard-cancelled => { root.library-discard-cancelled(); }
             discard-confirmed(id) => { root.library-discard-confirmed(id); }
-            delete-both-requested(id) => { root.library-delete-both-requested(id); }
             delete-both-cancelled => { root.library-delete-both-cancelled(); }
             delete-both-confirmed(id) => { root.library-delete-both-confirmed(id); }
             reclaim-space-clicked => { root.reclaim-space-clicked(); }
@@ -3221,6 +3243,8 @@ export component AppWindow inherits Window {
             provenance: root.review-update-provenance;
             editing: root.review-update-editing;
             cancel-pending <=> root.review-update-cancel-pending;
+            toast-text: root.toast-text;
+            toast-is-error: root.toast-is-error;
 
             closed => { root.review-update-closed(); }
             edit-clicked => { root.review-update-edit-clicked(); }
@@ -3248,7 +3272,6 @@ export component AppWindow inherits Window {
             budget-explainer: root.budget-explainer;
             hotkeys: root.hotkeys;
             app-version: root.app-version;
-            bridge-status: root.bridge-status;
             listening <=> root.hotkey-listening;
             last-fired: root.hotkey-last-fired;
             last-fired-text: root.hotkey-last-fired-text;
@@ -3283,6 +3306,8 @@ export component AppWindow inherits Window {
             total-label: root.reclaim-space-total-label;
             footer-label: root.reclaim-space-footer-label;
             selected-count: root.reclaim-space-selected-count;
+            toast-text: root.toast-text;
+            toast-is-error: root.toast-is-error;
             confirm-open: root.reclaim-space-confirm-open;
             confirm-heading: root.reclaim-space-confirm-heading;
             confirm-body: root.reclaim-space-confirm-body;
@@ -3504,16 +3529,22 @@ export component AppWindow inherits Window {
         // The contents list and the per-item removal went with that: choosing what goes in is the
         // filmstrip's job, and doing it in two places is two places to disagree.
         //
-        // The UX asset's third column - Copy Markdown, Local MCP Bridge, Publish - is still absent.
-        // None of the three exists: no clipboard dependency, `BUG-59` for the Bridge's endpoints,
-        // `DEC-005` for publishing. Drawing them would be `BUG-57` again.
+        // The UX asset's third column named Copy Markdown, Local MCP Bridge, Publish. The Bridge is
+        // retired in full by `DEC-016` - there is nothing left to build there, not merely something
+        // not built yet. Copy Markdown and Publish are still absent: no clipboard dependency for the
+        // former, `DEC-005` for the latter. Drawing either would be `BUG-57` again.
         if root.bundle-preview-open : Rectangle {
             width: 100%;
             height: 100%;
             background: Theme.overlay-scrim;
 
             // Swallows every click that misses the panel, so the Editor behind is inert.
-            TouchArea { }
+            //
+            // `scroll-event` too (`BUG-94`): a bare `TouchArea` rejects wheel input by default, and
+            // a rejected event keeps walking backward to whatever is behind it - the canvas.
+            TouchArea {
+                scroll-event(event) => { accept }
+            }
 
             // Escape closes it. Declared before the panel and focused on creation, so it holds the
             // keyboard until the Reviewer clicks into a field.
@@ -3826,6 +3857,26 @@ export component AppWindow inherits Window {
                     }
                 }
             }
+        }
+
+        // RESULT LINE - moved here, `BUG-93`. Genuinely the last thing declared in this component
+        // now, so it draws over Settings, the Vault-move and delete-Finding confirmations, the
+        // context menu, and Assemble & Review. See the corrected comment beside the clearing Timer,
+        // above, for why this moved rather than merely being re-explained in place.
+        //
+        // `BUG-100`: no longer shown here at all while the Library, Review & Update or Reclaim
+        // space is open - each of those now docks its OWN `SdToast` inside its own panel instead
+        // (see each component's own mount site below), so a toast fired by an action inside one of
+        // them renders where the Reviewer is actually looking rather than behind it. This root copy
+        // is what remains for every OTHER case (an Editor-level action, or one of the surfaces this
+        // ticket did not touch).
+        if root.toast-text != "" && !root.library-open && !root.review-update-open
+            && !root.reclaim-space-open : SdToast {
+            text: root.toast-text;
+            is-error: root.toast-is-error;
+            x: (parent.width - self.width) / 2;
+            y: parent.height - self.height - 28px;
+            width: min(560px, parent.width - 64px);
         }
     }
 }

@@ -97,6 +97,68 @@ export component SdModalHeader inherits Rectangle {
     }
 }
 
+// THE TOAST EVERY MODAL WEARS - and the Editor itself, when nothing is open over it.
+//
+// `BUG-100`: this used to be ONE copy, positioned relative to the whole window - fine while nothing
+// covered the Editor, wrong the moment a modal did, since a toast fired by an action INSIDE that
+// modal (Copy Markdown, Save, Discard originals) rendered behind the modal's own opaque panel and
+// scrim, invisible to the Reviewer who just triggered it. `design-system-guide.md`'s own rule
+// applies here exactly as it does to `SdModalHeader` above: "Two places showing the same kind of
+// thing MUST reference the same component, not the same numbers" - so this is ONE component,
+// positioned by each caller relative to whatever `parent` actually is (the window root when nothing
+// is open over it; one modal's own `panel` when something is), rather than four copies of the same
+// Rectangle drifting apart the first time one of them is touched.
+//
+// `visible`, not `if`, matching the ratchet this codebase already carries (`appwindow.slint`'s own
+// loupe/crosshair comment): an `if` tears the whole subtree down and rebuilds it on every text
+// change, which risked the same one-frame blank-paint the loupe was fixed for once already.
+//
+// `x`/`y`/`width` are each CALLER's own job, not this component's: Slint rejects a reusable
+// `export component`'s own root reading `parent` ("Cannot access id 'parent'") - `parent` only
+// resolves at a literal use site, which differs per caller anyway (the window root here, one
+// modal's own `panel` there). Every call site follows the same formula
+// (`x: (parent.width - self.width) / 2; width: min(560px, parent.width - 64px); y: parent.height -
+// self.height - <clearance>;`) with only the clearance differing, which is the one thing that
+// genuinely cannot be shared: it depends on whether - and how tall - the caller's own footer is.
+export component SdToast inherits Rectangle {
+    in property <string> text;
+    in property <bool> is-error;
+
+    visible: root.text != "";
+    height: 42px;
+    border-radius: Theme.radius-sharp;
+    background: Theme.bg-card;
+    border-width: 1px;
+    border-color: root.is-error ? Theme.semantic-error : Theme.semantic-success;
+    drop-shadow-blur: 18px;
+    drop-shadow-color: Theme.overlay-shadow;
+
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 10px;
+        alignment: start;
+
+        Rectangle {
+            width: 8px;
+            height: 8px;
+            y: (parent.height - self.height) / 2;
+            border-radius: Theme.radius-pill;
+            background: root.is-error ? Theme.semantic-error : Theme.semantic-success;
+        }
+
+        Text {
+            text: root.text;
+            font-size: 12px;
+            font-weight: 600;
+            color: Theme.text-primary;
+            vertical-alignment: center;
+            wrap: word-wrap;
+            font-family: "IBM Plex Sans";
+        }
+    }
+}
+
 // A SUNKEN CARD around one group of settings.
 //
 // The G3 design puts every settings group in one of these - sunken surface, 1px border, 14px padding,

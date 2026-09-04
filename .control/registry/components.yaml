@@ -107,28 +107,14 @@ product_components:
     # means something again, and G4 ran for this component for the FIRST time on 2026-08-23.
     g4_passed: true
 
-  - id: agent-access
-    title: Agent access
-    why: Granting and withdrawing an agent's ability to read Bundles from this machine, which is
-      the only reason a key exists at all.
-    caps: [CAP-7]
-    owns: [AccessKey]
-    containers: [desktop-app, mcp-bridge]
-    # `mode` history: an explicit `guarded` until 2026-08-31, then removed when the global became
-    # `guarded`, then left absent when the global moved to `outline` the same day - so depth genuinely
-    # DROPPED here, guarded -> outline. Design now stops at section Structure, which means the Inherited
-    # Constraints table corrected for DEC-012 hours earlier stops being required. The file stays.
-    risk_accepted: high
-    risk_accepted_by: DEC-013
-    risk_note: The key gates access to images that may contain personal data, across a process
-      boundary the product does not control. Revocation is the safety, so getting it wrong is an
-      irreversible disclosure. No money, no third party.
-    # `risk_accepted` low -> medium -> high on 2026-08-31, owner's instruction. `high` is NOT free here -
-    # the note above names personal data and an irreversible disclosure - so DEC-013 is the ratification,
-    # still `draft`. `high` also drops `edge-case-hunter`, not just the code panel. Note for whoever fixes
-    # BUG-59: LC-017 has no implementation at all today, so there is no code for a panel to review yet -
-    # which is what makes this cheap now and worth re-reading when it is fixed.
-    g4_passed: true
+  # A Product Component `agent-access` stood here until 2026-09-04 - registered as `caps: [CAP-7]`,
+  # `owns: [AccessKey]`, `containers: [desktop-app, mcp-bridge]`, `risk_accepted: high`. `DEC-016`
+  # withdrew it: the running channel it granted and revoked access to is removed in full, and the
+  # only way a Bundle reaches an agent now is the Markdown a Reviewer copies or pastes themselves.
+  # Retiring a Product Component that already carries an SRS goes through `wdi-decision`, never
+  # through this file directly - `corpus-guide.md` §"Product Component - the naming and proposal
+  # rule" - and `DEC-016` is that decision. `CAP-7`, `FR-19`..`FR-22`, and `UC-17`..`UC-19` are
+  # withdrawn with it in `requirements.yaml` and `usecases.yaml`; none of the four ids is reused.
 
   - id: sharing
     title: Sharing
@@ -167,11 +153,12 @@ containers:
       archive/desktop-tauri
     built: true
     runs: The Reviewer's Windows 11 machine, as one signed-in user process with a tray icon
-  - id: mcp-bridge
-    title: Snapdown MCP Bridge
-    technology: Rust command-line executable, stdio Model Context Protocol
-    built: true
-    runs: Launched by the agent's MCP client on the same machine as the desktop app
+  # A THIRD container, `mcp-bridge` ("Snapdown MCP Bridge" - Rust command-line executable, stdio
+  # Model Context Protocol, launched by the agent's MCP client), stood here until 2026-09-04 and is
+  # withdrawn by `DEC-016`: there is no longer a running channel into the Library for an agent to
+  # open, so there is nothing left for a bridge process to front. `LC-018 mcp-bridge-cli` is
+  # withdrawn with it, and `crates/snapdown-bridge` is removed in the same pass by a separate
+  # dispatch this decision unblocked.
   - id: web-api
     title: Snapdown Web Service
     technology: Go — net/http with chi, embedded SQLite, a blob directory
@@ -305,12 +292,31 @@ logical_components:
     area: editor-ui
     depends_on: [LC-010, LC-013]
   - id: LC-014
-    name: bundles-editor
+    # Renamed 2026-09-04 from `bundles-editor`, by wdi-autopilot's registry catch-up after the Bundle
+    # Library spec closed (PR #38). `bundles-editor` named the plan; `library` names the Slint
+    # component that actually ships it - SdLibrary in apps/desktop/ui/components/library.slint.
+    name: library
     lc_type: ui-screen
     container: desktop-app
     component: bundle
     area: editor-ui
     depends_on: [LC-010, LC-013]
+  # LC-033 and LC-034 born 2026-09-04 by the same catch-up. Both screens shipped in PR #38 with no LC
+  # registered - inventory-screen.md rows 10 and 16 named them as a plan; these rows are what V12 checks.
+  - id: LC-033
+    name: review-update
+    lc_type: ui-screen
+    container: desktop-app
+    component: bundle
+    area: editor-ui
+    depends_on: [LC-010, LC-013]
+  - id: LC-034
+    name: reclaim-space
+    lc_type: ui-screen
+    container: desktop-app
+    component: finding
+    area: vault-fs
+    depends_on: [LC-004, LC-005]
   # --- settings · desktop-app -------------------------------------------------------
   # LC-028 born 2026-08-23 by wdi-ux, landing DESIGN-settings.md. FR-27 and FR-28 are promises about
   # the WINDOW FRAME, and in the shipped build the frame is inline JSX at the top of App.tsx owned by
@@ -352,35 +358,9 @@ logical_components:
     component: settings
     area: settings-store
     depends_on: []
-  # --- agent-access · desktop-app + mcp-bridge --------------------------------------
-  - id: LC-016
-    name: access-key-manager
-    lc_type: service
-    container: desktop-app
-    component: agent-access
-    area: local-api
-    depends_on: []
-  - id: LC-017
-    name: local-api-server
-    lc_type: gateway
-    container: desktop-app
-    component: agent-access
-    area: local-api
-    depends_on: [LC-013, LC-016]
-  - id: LC-018
-    name: mcp-bridge-cli
-    lc_type: gateway
-    container: mcp-bridge
-    component: agent-access
-    area: mcp-bridge
-    depends_on: [LC-017]
-  - id: LC-019
-    name: agent-access-panel
-    lc_type: ui-screen
-    container: desktop-app
-    component: agent-access
-    area: editor-ui
-    depends_on: [LC-016]
+  # LC-016 access-key-manager, LC-017 local-api-server, LC-018 mcp-bridge-cli, and LC-019
+  # agent-access-panel stood here, all `component: agent-access`, until 2026-09-04. `DEC-016`
+  # withdrew the component they belonged to along with them; none of the four ids is reused.
   # --- sharing · desktop-app + web-api ---------------------------------------------
   - id: LC-020
     name: publish-client

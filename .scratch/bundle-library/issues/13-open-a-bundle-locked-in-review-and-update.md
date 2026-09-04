@@ -14,7 +14,7 @@ and Close. Closing returns to the Library.
 
 **Blocked by:** 10 (the blocks come from the parse), 11 (the row click)
 
-**Status:** ready-for-agent
+**Status:** done — feat/merge commits per `.control/memlog/autopilot-2026-09-04.md` iteration 1; PR #38 merged 2026-09-03. Status line was stale until this correction.
 
 - [ ] Clicking a row opens the window locked; the title, Bundle notes, every Finding's image, note and
       Marker notes shown are exactly the stored document's, verified against a Bundle whose stored

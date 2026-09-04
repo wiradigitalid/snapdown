@@ -731,6 +731,41 @@ fn the_about_tab_carries_the_slint_attribution() {
     );
 }
 
+/// The icon set's licence notice is in the product and in the repository. `NTL-3`.
+///
+/// Every icon under `assets/icons/` except `blur` and `marker` is Lucide (ISC) or the Feather icon
+/// Lucide inherited it from (MIT). Both licences grant closed and commercial use freely and ask one
+/// thing back: the copyright and permission notice must travel with every copy. The About tab is the
+/// copy a Reviewer holds; `assets/icons/NOTICE.md` is the copy a reader of the source holds; the
+/// README points at the second.
+#[test]
+fn the_about_tab_and_the_readme_carry_the_icon_attribution() {
+    let settings = read("ui/components/settings.slint");
+    assert!(
+        settings.contains("Lucide"),
+        "the ISC licence requires the notice IN every copy, and the binary is a copy. Slint and          IBM Plex were acknowledged on this tab under `NTL-1`; the icons were not, for the same          reason `NTL-1` went unpaid - nothing asserted it"
+    );
+    assert!(
+        settings.contains("Feather"),
+        "and Lucide's own notice names Feather as the holder of part of the copyright, so an          acknowledgement that drops Feather is not the notice the licence asks for"
+    );
+
+    let notice = read("assets/icons/NOTICE.md");
+    assert!(
+        notice.contains("ISC License")
+            && notice.contains("Cole Bemis")
+            && notice.contains("Lucide Contributors"),
+        "the full notice has to sit beside the icons it covers, verbatim - a paraphrase of a          licence is not the licence"
+    );
+
+    let readme = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../README.md"))
+        .expect("the README must be readable from here");
+    assert!(
+        readme.contains("Lucide") && readme.contains("assets/icons/NOTICE.md"),
+        "the README is the page the source is read from, and it has to say what the binary says          and point at the notice file"
+    );
+}
+
 /// `BUG-63` is closed: the encoder quality lever does something.
 ///
 /// It was stored and read by nothing for the life of the product, because the obvious reading of it -

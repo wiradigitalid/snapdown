@@ -18,21 +18,17 @@
 | Delete Findings, and their image files with them | `FR-13` | `finding` | `guarded` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
 | Delete a Bundle with its images | `FR-14` | `bundle` | `guarded` | `medium` — Deleting a Bundle is an irreversible action that removes fi… | — | — | `CAP-3` | r1 |
 | Report orphans | `FR-15` | `finding` | `guarded` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
-| Choose the Vault folder | `FR-16` | `settings` | `outline` | `high` — No money, no personal data, no irreversible action. The wor… | — | — | — | r1 |
-| Edit the hotkeys | `FR-17` | `settings` | `outline` | `high` — No money, no personal data, no irreversible action. The wor… | — | — | — | r1 |
-| Run at Windows startup, on by default after first run | `FR-18` | `settings` | `outline` | `high` — No money, no personal data, no irreversible action. The wor… | — | — | — | r1 |
-| Issue and copy an Access Key | `FR-19` | `agent-access` | `outline` | `high` — The key gates access to images that may contain personal da… | — | — | `CAP-4` | r2 |
+| Choose the Vault folder | `FR-16` | `settings` | `outline` | `high` — No money and no personal data. One IRREVERSIBLE action - ch… | — | — | — | r1 |
+| Edit the hotkeys | `FR-17` | `settings` | `outline` | `high` — No money and no personal data. One IRREVERSIBLE action - ch… | — | — | — | r1 |
+| Run at Windows startup, on by default after first run | `FR-18` | `settings` | `outline` | `high` — No money and no personal data. One IRREVERSIBLE action - ch… | — | — | — | r1 |
 | Write the Note at capture time | `FR-2` | `finding` | `guarded` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
-| Serve the Library over the Local API | `FR-20` | `agent-access` | `outline` | `high` — The key gates access to images that may contain personal da… | — | — | `CAP-4` | r2 |
-| Read a Bundle through MCP | `FR-21` | `agent-access` | `outline` | `high` — The key gates access to images that may contain personal da… | — | — | `CAP-4` | r2 |
-| Revoke access | `FR-22` | `agent-access` | `outline` | `high` — The key gates access to images that may contain personal da… | — | — | `CAP-4` | r2 |
 | Publish a Bundle | `FR-23` | `sharing` | `guarded` | `high` — Publishing puts images that may contain personal data on th… | — | — | `CAP-4` | r2 |
 | Serve a published Bundle | `FR-24` | `sharing` | `guarded` | `high` — Publishing puts images that may contain personal data on th… | — | — | `CAP-4` | r2 |
 | Unpublish a Bundle | `FR-25` | `sharing` | `guarded` | `high` — Publishing puts images that may contain personal data on th… | — | — | `CAP-4` | r2 |
 | See and copy a Bundle's Publication | `FR-26` | `sharing` | `guarded` | `high` — Publishing puts images that may contain personal data on th… | — | — | `CAP-4` | r2 |
-| Name the surface the Reviewer is looking at | `FR-27` | `settings` | `outline` | `high` — No money, no personal data, no irreversible action. The wor… | — | — | — | r3 |
-| Reach every surface from every surface | `FR-28` | `settings` | `outline` | `high` — No money, no personal data, no irreversible action. The wor… | — | — | — | r3 |
-| A primary surface fits the window it opens in | `FR-29` | `settings` | `outline` | `high` — No money, no personal data, no irreversible action. The wor… | — | — | — | r3 |
+| Name the surface the Reviewer is looking at | `FR-27` | `settings` | `outline` | `high` — No money and no personal data. One IRREVERSIBLE action - ch… | — | — | — | r3 |
+| Reach every surface from every surface | `FR-28` | `settings` | `outline` | `high` — No money and no personal data. One IRREVERSIBLE action - ch… | — | — | — | r3 |
+| A primary surface fits the window it opens in | `FR-29` | `settings` | `outline` | `high` — No money and no personal data. One IRREVERSIBLE action - ch… | — | — | — | r3 |
 | Capture repeatedly without leaving the loop | `FR-3` | `finding` | `guarded` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
 | Draw transparent outlined shapes and directional arrows on canvas | `FR-30` | `finding` | `guarded` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r3 |
 | Draw blur redaction boxes over sensitive image regions | `FR-31` | `finding` | `guarded` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r3 |
@@ -49,7 +45,7 @@
 | Discard the source Findings behind a Bundle, keeping the Bundle | `FR-41` | `finding` | `guarded` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
 | See which Bundles still hold original captures, and reclaim their disk in bulk | `FR-42` | `finding` | `guarded` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
 | Open a Bundle's folder in the file manager | `FR-43` | `bundle` | `guarded` | `medium` — Deleting a Bundle is an irreversible action that removes fi… | — | — | `CAP-3` | r1 |
-| Choose a Quality Budget by naming the intent | `FR-5` | `settings` | `outline` | `high` — No money, no personal data, no irreversible action. The wor… | — | — | — | r1 |
+| Choose a Quality Budget by naming the intent | `FR-5` | `settings` | `outline` | `high` — No money and no personal data. One IRREVERSIBLE action - ch… | — | — | — | r1 |
 | See every Finding with its Note | `FR-6` | `finding` | `guarded` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
 | Edit a Note | `FR-7` | `finding` | `guarded` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
 | Place numbered Markers bound to numbered Note lines | `FR-8` | `finding` | `guarded` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |

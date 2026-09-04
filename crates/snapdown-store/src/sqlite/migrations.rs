@@ -83,18 +83,13 @@ pub const MIGRATIONS: &[Migration] = &[
         );
     "#,
     },
-    Migration {
-        version: 4,
-        description: "create access_key table",
-        sql: r#"
-        CREATE TABLE IF NOT EXISTS access_key (
-            id TEXT PRIMARY KEY,
-            key_hash TEXT NOT NULL,
-            issued_at TEXT NOT NULL,
-            revoked_at TEXT
-        );
-    "#,
-    },
+    // Version 4 ("create access_key table") was removed under DEC-016 - the Access Key ceremony
+    // it backed is retired in full, and the table never backed a reachable feature (no Local API
+    // ever existed to use it). `run_migrations` applies strictly by `version > current_version`
+    // with no requirement that version numbers be contiguous, so removing this entry is safe: a
+    // fresh install never creates the table, and an already-migrated library (already past
+    // version 4) is untouched - it keeps an orphaned, unqueried table. 9 remains the highest
+    // version below, so every `get_schema_version() == 9` assertion in the test suite still holds.
     Migration {
         version: 5,
         description: "create publication table",

@@ -81,13 +81,10 @@ capabilities:
     component: settings
     target_release: r1
     prd: capture-to-markdown
-  - id: CAP-7
-    title: Let an agent on this machine read a Bundle, after the Reviewer hands it a key
-    goal: BG-2
-    component: agent-access
-    target_release: r2
-    prd: agent-handoff
-    depends_on: [CAP-4]
+  # CAP-7 "Let an agent on this machine read a Bundle, after the Reviewer hands it a key" stood
+  # here, `component: agent-access`, until 2026-09-04. `DEC-016` withdrew it along with the
+  # component: the running channel it named is removed in full, and FR-19..FR-22 are withdrawn
+  # with it below. Not reused.
   - id: CAP-8
     title: Let an agent on another host read a Bundle over HTTPS
     goal: BG-4
@@ -318,9 +315,14 @@ functional:
     writes: [Finding, Note, Marker, VisualAnnotation]
     # BR-59 ("Composing does not remove the Findings it used from the Library") stays TRUE and MUST
     # NOT be amended for this. It governs COMPOSING; this is a separate, later, explicit act.
+    # Corrected 2026-09-04 by wdi-autopilot: the proof line named only the triggering Bundle until a
+    # gap closed at ticket 17 found the built confirmation dialog also names any OTHER Bundle sharing
+    # one of the discarded Findings (BR-12) - the proof now says so too. Code wins; documents follow.
     proof: Discarding the originals behind a Bundle leaves the Bundle readable with its own images
       while its source Findings and their image files are gone from the Library and the Vault, and
-      the Bundle can no longer be disassembled.
+      the Bundle can no longer be disassembled. Where another Bundle shares one of those Findings, its
+      confirmation names that Bundle before the Reviewer confirms, and that Bundle can no longer be
+      disassembled either once the act completes.
   - id: FR-42
     title: See which Bundles still hold original captures, and reclaim their disk in bulk
     capability: CAP-5
@@ -406,7 +408,12 @@ functional:
     writes: [Finding]
     proof: Clicking any visual annotation or marker displays its interactive control points (8-point
       resizing handles for boxes, start/end points for arrows, tail handle for callouts); pressing
-      Delete or Backspace removes the active element.
+      Delete removes the active element.
+    # Corrected 2026-09-04 by wdi-autopilot: this line named "Delete or Backspace" until a
+    # verification pass found the built code deletes only on Delete, by the owner's own deliberate
+    # decision - "Tombol backspace jangan mendelete element" - and a test
+    # (test_annotation_wiring.rs::backspace_does_not_delete_an_annotation) proves Backspace is
+    # excluded on purpose rather than missing. Code wins; the proof line catches up to it.
   - id: FR-38
     title: Change the front-to-back order of canvas annotations
     capability: CAP-11
@@ -470,33 +477,13 @@ functional:
       right-clicking a filmstrip card offers that Finding's own; every entry does what the toolbar
       button of the same name does, and no entry exists that has no other route.
 
-  # --- CAP-7 Local agent access ------------------------------------------------------
-  - id: FR-19
-    title: Issue and copy an Access Key
-    capability: CAP-7
-    component: agent-access
-    writes: [AccessKey]
-    proof: Clicking Copy access key puts a key on the clipboard, and an agent given that key can read
-      the Library while an agent given no key cannot.
-  - id: FR-20
-    title: Serve the Library over the Local API
-    capability: CAP-7
-    component: agent-access
-    proof: With a valid Access Key, a request from this machine returns a Bundle's Markdown; the same
-      request without the key, or from another machine, is refused.
-  - id: FR-21
-    title: Read a Bundle through MCP
-    capability: CAP-7
-    component: agent-access
-    proof: A coding agent with the Bridge configured and the key pasted can name the Findings in a
-      Bundle and describe what is in their images, without the Reviewer pasting any content.
-  - id: FR-22
-    title: Revoke access
-    capability: CAP-7
-    component: agent-access
-    writes: [AccessKey]
-    proof: After a revoke, an agent that had been reading Bundles a moment earlier is refused on its
-      next call.
+  # --- CAP-7 Local agent access (withdrawn) -------------------------------------------
+  # FR-19 "Issue and copy an Access Key", FR-20 "Serve the Library over the Local API", FR-21 "Read
+  # a Bundle through MCP", and FR-22 "Revoke access" stood here, all `capability: CAP-7`,
+  # `component: agent-access`, until 2026-09-04. `DEC-016` withdrew all four along with CAP-7 and
+  # the component: Snapdown no longer opens a running channel into the Library for an agent, and the
+  # only way a Bundle reaches one is the Markdown a Reviewer copies or pastes themselves. None of
+  # the four ids is reused.
   # --- CAP-8 Web sharing -------------------------------------------------------------
   - id: FR-23
     title: Publish a Bundle
@@ -588,13 +575,9 @@ nonfunctional:
     goal: BG-1
     component: bundle
     enforced_by: A rendering test over a composed Bundle
-  - id: NFR-9
-    title: The Local API binds 127.0.0.1 only and refuses every request without a currently valid
-      Access Key, comparing keys in constant time
-    goal: BG-4
-    component: agent-access
-    enforced_by: Tests attempting the interface from a non-loopback address and with absent, wrong,
-      and revoked keys
+  # NFR-9 "The Local API binds 127.0.0.1 only and refuses every request without a currently valid
+  # Access Key, comparing keys in constant time" stood here, `component: agent-access`, until
+  # 2026-09-04. `DEC-016` withdrew it along with the Local API and the component; not reused.
   - id: NFR-10
     title: A Publication's URL slug carries at least 128 bits of entropy from a cryptographically
       secure source
@@ -615,11 +598,13 @@ nonfunctional:
     component: sharing
     enforced_by: An assertion on the publish payload
   - id: NFR-13
-    title: A revoke and an unpublish each take effect on the next request, with no cache or grace
-      period
+    title: An unpublish takes effect on the next request, with no cache or grace period
+    # Narrowed 2026-09-04. Read "A revoke and an unpublish each take effect..." until `DEC-016`
+    # withdrew the Access Key and the revoke it described; the invariant is unchanged for the half
+    # that survives it.
     goal: BG-5
     component: sharing
-    enforced_by: Tests calling immediately after each
+    enforced_by: A test calling immediately after an unpublish
   - id: NFR-14
     title: The web service runs as one executable with one configuration file, needs no database
       server, and its whole state is one directory
@@ -693,6 +678,13 @@ journeys:
   - id: UJ-6
     title: The Reviewer hands a Bundle to an agent on a server
     prd: agent-handoff
+  # UJ-7 born 2026-09-03 by wdi-product, closing a UJ-5 collision found separately: this journey's
+  # prose (prd.md 2.3) had been calling itself "UJ-5" since it was written, never registered as its
+  # own row, and that id was already spoken for by the two rows above. UJ-5 and UJ-6 stayed untouched
+  # — they were correct — and this journey took the next free id instead.
+  - id: UJ-7
+    title: Visual markup and redaction on canvas
+    prd: capture-to-markdown
 
 # NOT PROMISED, and deliberately.
 #

@@ -16,7 +16,7 @@ decisions:
     created: "2026-08-22"
   - id: DEC-002
     title: An agent reads the Library through a stateless MCP bridge and a key the Reviewer pastes
-    status: applied
+    status: superseded
     file: .control/decisions/DEC-002-mcp-bridge-and-key.md
     serves: [CAP-7]
     touches:
@@ -166,3 +166,119 @@ decisions:
     touches:
       - .control/registry/components.yaml
     created: "2026-08-31"
+  - id: DEC-014
+    title: "`AD-9` reaches the paths an agent reads, not an artifact made for a person"
+    status: accepted
+    file: .control/decisions/DEC-014-ad-9-reaches-agent-paths-not-human-artifacts.md
+    serves: [CAP-12]
+    touches:
+      - .how/_platform/ARCHITECTURE-SPINE.md
+      - .control/questions/answered.md
+    created: "2026-09-01"
+  - id: DEC-015
+    title: The published Bundle reader is a page `web-api` renders, not a container of its own
+    status: accepted
+    file: .control/decisions/DEC-015-the-published-reader-is-a-page-web-api-renders.md
+    serves: [CAP-8]
+    touches:
+      - .control/registry/components.yaml
+      - .control/registry/defects.yaml
+      - .control/structure-codebase.md
+      - .how/_platform/ARCHITECTURE-SPINE.md
+      - .how/_platform/c4-l2-containers.md
+      - .how/_platform/cross-cutting.md
+      - .how/_platform/inventory-api.md
+      - .how/_platform/inventory-screen.md
+      - .how/sharing/SDD-sharing.md
+    created: "2026-09-01"
+  - id: DEC-016
+    title: Snapdown hands a Bundle to an agent only as copied Markdown; the MCP bridge is removed
+    status: applied
+    file: .control/decisions/DEC-016-agent-bridge-removed-markdown-only-handoff.md
+    serves: []
+    supersedes: DEC-002
+    touches:
+      - .what/agent-access/SRS-agent-access.md
+      - .what/agent-access/02-rules/rules-agent-access.md
+      - .what/agent-access/03-domain/domain-model.md
+      - .what/agent-access/04-usecases/UC-17-let-the-agent-in-front-of-me-read-my-reviews.md
+      - .what/agent-access/04-usecases/UC-18-read-a-review-from-inside-my-agent.md
+      - .how/agent-access/SDD-agent-access.md
+      - .how/_platform/ARCHITECTURE-SPINE.md
+      - .how/_platform/c4-l1-system-context.md
+      - .how/_platform/c4-l2-containers.md
+      - .how/_platform/c4-l3-desktop-app.md
+      - .how/_platform/cross-cutting.md
+      - .how/_platform/inventory-api.md
+      - .how/_platform/inventory-db.md
+      - .how/_platform/inventory-screen.md
+      - .control/registry/components.yaml
+      - .control/registry/requirements.yaml
+      - .control/registry/usecases.yaml
+      - .control/structure-codebase.md
+      - .control/structure-document.md
+      - .control/product-glossary.md
+      - .control/questions/assumptions.md
+      - .control/questions/answered.md
+      - .what/_prd/agent-handoff/prd.md
+      - .what/_prd/agent-handoff/addendum.md
+      - .what/_prd/capture-to-markdown/prd.md
+      - .what/business-rules.md
+      - .what/bundle/SRS-bundle.md
+      - .how/bundle/SDD-bundle.md
+      - .what/sharing/SRS-sharing.md
+      - .how/sharing/SDD-sharing.md
+      - .what/finding/SRS-finding.md
+      - .what/settings/SRS-settings.md
+      - .what/settings/03-domain/domain-model.md
+      - .what/settings/04-usecases/EXPERIENCE.md
+      - .how/settings/03-integrations/windows-shell.md
+      - .how/settings/04-components/LC-028-editor-shell.md
+      - .github/validate-baseline.txt
+      - AGENTS.md
+    created: "2026-09-04"
+  - id: DEC-017
+    title: An unattended run holds the owner's authority over every human checkpoint in the method
+    status: accepted
+    file: .control/decisions/DEC-017-unattended-run-holds-the-owners-method-authority.md
+    serves: []
+    touches: []
+    created: "2026-09-04"
+  - id: DEC-018
+    title: "Mandate: carry every open FR to closed, unattended, checking in only at the smoke test"
+    status: applied
+    file: .control/decisions/DEC-018-autopilot-mandate-r3-close-every-open-fr.md
+    serves: []
+    touches:
+      - .control/memlog/autopilot-2026-09-04.md
+      - .scratch/bundle-library/spec.md
+      - .scratch/bundle-library/issues/10-the-composer-reads-its-own-document.md
+      - .scratch/bundle-library/issues/11-the-library-opens-and-lists-bundles.md
+      - .scratch/bundle-library/issues/12-hand-a-bundle-over-from-its-row.md
+      - .scratch/bundle-library/issues/13-open-a-bundle-locked-in-review-and-update.md
+      - .scratch/bundle-library/issues/14-edit-and-save-a-bundle.md
+      - .scratch/bundle-library/issues/15-an-edited-bundle-says-so.md
+      - .scratch/bundle-library/issues/16-disassemble-a-bundle-or-delete-a-sealed-one.md
+      - .scratch/bundle-library/issues/17-discard-originals-and-delete-both.md
+      - .scratch/bundle-library/issues/18-reclaim-space.md
+      - .control/registry/requirements.yaml
+      - .what/bundle/SRS-bundle.md
+      - .how/bundle/SDD-bundle.md
+      - .how/_platform/inventory-screen.md
+      - .control/registry/components.yaml
+      - .what/finding/SRS-finding.md
+      - .control/registry/waves.yaml
+      - .control/reports/RTR-W8.md
+      - .gitattributes
+      - .claude/skills/to-spec/SKILL.md
+      - .claude/skills/to-tickets/SKILL.md
+      - .claude/skills/implement-spec/SKILL.md
+    created: "2026-09-04"
+    accepted_by: kodesh87, 2026-09-04
+    mandate:
+      from_gate: G5
+      scope: all
+      parked: []
+      smoke_test: owner
+      loop: 10m
+      expires: "2026-09-11"

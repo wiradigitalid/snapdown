@@ -11,7 +11,7 @@ does not move it.
 
 **Blocked by:** 11 (the row), 14 (Save)
 
-**Status:** ready-for-agent
+**Status:** done — feat/merge commits per `.control/memlog/autopilot-2026-09-04.md` iteration 1; PR #38 merged 2026-09-03. Status line was stale until this correction.
 
 - [ ] A database written before this change opens, migrates, and every existing Bundle's last-edited
       time equals its composed time — the pre-migration database is the fixture

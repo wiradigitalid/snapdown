@@ -29,11 +29,12 @@ surface, and all four are visible at the window's minimum supported size without
 3. **Quality Budget** — how much image quality is bought (`FR-5`)
 4. **Hotkeys** — which keys do what (`FR-17`)
 
-**Agent access is not a fifth group.** It is a primary surface of its own, listed in the rail beside
-Findings, Bundles and Settings, and it has its own row in `inventory-screen.md` (row 13). An earlier
-draft of this document had it both ways — a primary surface *and* a group inside Settings — which
-would put one thing in two places in one product. `DEC-005` freezes it, so it shows its current state
-and gains no behaviour; it stays listed because `FR-28` and `BR-120` require it.
+**Agent access was not a fifth group.** It stood as a primary surface of its own, listed in the rail
+beside Findings, Bundles and Settings, with its own row in `inventory-screen.md` (row 13, `status:
+removed` since 2026-09-04). An earlier draft of this document had it both ways — a primary surface
+*and* a group inside Settings — which would have put one thing in two places in one product. `DEC-005`
+froze it before `DEC-016` withdrew it outright; there is no longer a surface for `FR-28` and `BR-120`
+to keep listed.
 
 ## Voice and tone
 

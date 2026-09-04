@@ -16,7 +16,7 @@ Prefactor, per `/to-tickets`: make the change easy, then make the easy change.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done — feat/merge commits per `.control/memlog/autopilot-2026-09-04.md` iteration 1; PR #38 merged 2026-09-03. Status line was stale until this correction.
 
 - [ ] Parsing the existing golden Bundle document and serialising the result reproduces it byte for
       byte; the golden test is the first fixture and is not weakened

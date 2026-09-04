@@ -4,7 +4,7 @@ component: finding
 status: draft
 created: "2026-08-22"
 updated: "2026-08-31"
-satisfies: [FR-1, FR-2, FR-3, FR-4, FR-6, FR-7, FR-8, FR-9, FR-13, FR-15, FR-30, FR-31, FR-32, FR-33, FR-41, FR-42, NFR-1, NFR-2, NFR-3, NFR-4, NFR-5]
+satisfies: [FR-1, FR-2, FR-3, FR-4, FR-6, FR-7, FR-8, FR-9, FR-13, FR-15, FR-30, FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37, FR-38, FR-41, FR-42, NFR-1, NFR-2, NFR-3, NFR-4, NFR-5]
 reviewed:
   date: '2026-08-31'
   sha: 'abc5a6f'
@@ -44,8 +44,9 @@ span a seam.
 | --- | --- | --- |
 | Reviewer | The person operating Snapdown. The only human actor and the only writer in the product | Press the Capture hotkey, drag a region, cancel a Capture, type and reword a Note, place, move and remove Markers, select Findings, delete Findings, discard the Findings behind a finished Bundle, act on an orphan report |
 
-No second actor. An agent never reaches this component: `agent-access` and `sharing` read Bundles, and
-BR-14 keeps an unbundled Finding invisible to both.
+No second actor. An agent never reaches this component: Copy Markdown and `sharing` read Bundles, and
+BR-14 keeps an unbundled Finding invisible to both. (`agent-access` was a third such reader until
+`DEC-016` withdrew it on 2026-09-04.)
 
 ## UC Catalogue · [G3]
 
@@ -98,9 +99,15 @@ stated count is the one thing in this section a reader cannot check without reco
   Bundles exist.
 - **Owning the settings it obeys.** The Quality Budget, the Vault location, and the hotkey bindings
   belong to `settings`. This component reads them.
-- **Exposing anything to an agent.** `agent-access` and `sharing` do that, and only for Bundles.
-- **Annotation beyond numbered Markers.** No arrows, callouts, blur, redaction, or freehand. Not in
-  this release and not later; it is a product Non-Goal.
+- **Exposing anything to an agent.** `sharing` and the Reviewer's own Copy Markdown do that, and only
+  for Bundles. (`agent-access` was a third such exposer until `DEC-016` withdrew it on 2026-09-04.)
+- **Freehand drawing.** Shapes, arrows, callout text and blur redaction are built (`CAP-11`, `FR-30`
+  through `FR-33`, `FR-36`, `FR-37`, `FR-38`, `UC-27`) — this bullet is corrected here, by
+  `wdi-autopilot`, on 2026-09-04. It read *"No arrows, callouts, blur, redaction, or freehand. Not in
+  this release and not later; it is a product Non-Goal"* until an FR-30..38 verification pass found
+  every one of those already shipped and tested, with this Non-Goal contradicting the same file's own
+  `satisfies:` frontmatter and its own UC Catalogue's `UC-27` row. Code wins; freehand strokes with no
+  fixed shape remain genuinely out of scope, which is the part of the old bullet that was never wrong.
 - **Editing captured pixels.** No crop, rotate, or resize after capture.
 - **Searching or filtering the Library.** Out of MVP scope, and it belongs to the store adapter when
   it arrives.

@@ -2,7 +2,7 @@
 title: Capture to Markdown
 initiative: capture-to-markdown
 created: "2026-08-22"
-updated: "2026-08-31"
+updated: "2026-09-03"
 ---
 
 # PRD: Capture to Markdown
@@ -12,9 +12,11 @@ updated: "2026-08-31"
 | Date | What changed | Why | Releases affected |
 |---|---|---|---|
 | 2026-08-22 | Initial version | The desktop review loop is the product's core; nothing else can be handed off until findings exist | r1 |
-| 2026-08-31 | Closed the last of ticket 03's open items. `FR-43` promises opening a Bundle's folder — an action the Library row already carried with nothing behind it. `FR-12` now states that the Reviewer is told the copied Markdown carries absolute image paths, and its encoding is settled by test rather than argument. `NFR-19` corrected: written the same morning, it forbade the very page-slicing that the tall-image research it rests on prescribes. One wording fix in § 2.3, where a journey called the Markdown an "export" — in this product **export means PDF**, and the Markdown path is **Copy**. | A row action with no requirement cannot be specced at all, and the clipboard promise was silent about the one thing a Reviewer cannot discover for themselves: the pasted text contains absolute disk paths, which carry the operator's user name. `NFR-19` was a self-contradiction introduced hours earlier and would have been carried into the first spec that cited it. | r3 |
-| 2026-08-31 | Grew four promises the Bundle Library needs and corrected two that contradicted them. **New:** § 4.10 Export PDF (`CAP-12`, `FR-39`, `NFR-19`), `FR-40` editing a composed Bundle's title and notes, `FR-41` discarding a Bundle's source Findings, `FR-42` the reclaim-space surface. **Removed from § 6.2:** the non-goals "Renaming a Bundle" and "Exporting a Bundle to anything but Markdown". **Corrected:** `FR-12` no longer fixes the clipboard to relative image links, and `FR-14` no longer offers to destroy a Bundle's source Findings in the same confirmation. | A Reviewer can assemble Bundles but has almost no way to live with them afterwards — no way to fix a typo without recomposing, no way to hand one to a person rather than an agent, and no way to reclaim the disk an archived review is holding. The two corrections are older promises that pointed the opposite way from these four, and leaving them would have made this document promise two designs at once. `FR-41` and `FR-42` sit under `CAP-5` rather than `CAP-4` because they destroy Findings, which the `bundle` component has no authority to write. | r3 |
 | 2026-08-23 | Added § 4.7 (`CAP-9`, `FR-27`–`FR-29`) and `NFR-16`–`NFR-18`; rewrote `FR-5`; amended `FR-18` | r1 and r2 shipped every promised capability, and the first sustained use produced a list of experience defects rather than missing features. `BG-7` now carries that, and this initiative gains the requirements that make it checkable | r3 |
+| 2026-08-31 | Closed the last of ticket 03's open items. `FR-43` promises opening a Bundle's folder — an action the Library row already carried with nothing behind it. `FR-12` now states that the Reviewer is told the copied Markdown carries absolute image paths, and its encoding is settled by test rather than argument. `NFR-19` corrected: written the same morning, it forbade the very page-slicing that the tall-image research it rests on prescribes. One wording fix in § 2.3, where a journey called the Markdown an "export" — in this product **export means PDF**, and the Markdown path is **Copy**. | A row action with no requirement cannot be specced at all, and the clipboard promise was silent about the one thing a Reviewer cannot discover for themselves: the pasted text contains absolute disk paths, which carry the operator's user name. `NFR-19` was a self-contradiction introduced hours earlier and would have been carried into the first spec that cited it. | r3 |
+| 2026-08-31 | Grew four promises the Bundle Library needs and corrected two that contradicted them. **New:** § 3.10 Export PDF (`CAP-12`, `FR-39`, `NFR-19`), `FR-40` editing a composed Bundle's title and notes, `FR-41` discarding a Bundle's source Findings, `FR-42` the reclaim-space surface. **Removed from § 4.2:** the non-goals "Renaming a Bundle" and "Exporting a Bundle to anything but Markdown". **Corrected:** `FR-12` no longer fixes the clipboard to relative image links, and `FR-14` no longer offers to destroy a Bundle's source Findings in the same confirmation. | A Reviewer can assemble Bundles but has almost no way to live with them afterwards — no way to fix a typo without recomposing, no way to hand one to a person rather than an agent, and no way to reclaim the disk an archived review is holding. The two corrections are older promises that pointed the opposite way from these four, and leaving them would have made this document promise two designs at once. `FR-41` and `FR-42` sit under `CAP-5` rather than `CAP-4` because they destroy Findings, which the `bundle` component has no authority to write. | r3 |
+| 2026-09-03 | § 2.3's canvas-annotation journey renumbered `UJ-5` → `UJ-7`, and registered in the requirements registry for the first time | It had carried `UJ-5` since it was written without ever being registered, and that id was already allocated to `agent-handoff`'s own `UJ-5` — a collision found and flagged rather than silently resolved. No journey content changed | — |
+| 2026-09-03 | `bmad-review` pass: `FR-40`'s gate note updated now that `BR-11` was narrowed by `DEC-012` and FR-40 is legal (§4.1 already listed it as delivered); `FR-38` moved from § 3.9 to § 3.10's sibling § 3.8, matching its own registered capability; three Capability lines' `serves` lists corrected to match the registry (`CAP-12`→`BG-8`, `CAP-11` drops `BG-7`, § 3.9 gains `BG-2`, `NFR-18` drops `BG-7`); two stale Revision History section citations fixed and the table's row order corrected; the two `wdi-upgrade` tooling comments moved to the memlog; `FR-41`'s duplicated paragraph, `FR-39`'s superseded page-break bullet, and `FR-12`'s "still unsettled" paragraph (all three questions it named are answered a few paragraphs earlier in the same addendum) corrected | Compliance pass against `prd-guide.md`; every change above is a correction to something already decided elsewhere in the corpus, not a new promise | — |
 
 ## 0. Document Purpose
 
@@ -122,19 +124,20 @@ images cheap enough that a machine can afford to read them.
   - **Edge case:** the chosen hotkey is already taken by another process. Snapdown says so at the
     moment of choosing and refuses to save it, rather than failing silently later.
 
-- **UJ-5. Visual markup and redaction on canvas.**
+- **UJ-7. Visual markup and redaction on canvas.**
   - **Persona + context:** the Reviewer in Editor, holding a screenshot with confidential API keys and a complex UI layout.
   - **Entry state:** Editor open, Finding selected on canvas.
-  - **Path:** selects Blur tool and drags a box over the API key line → selects Shape tool and drags a red outline box around a misaligned card → selects Arrow tool and drags an arrow from the callout text to the broken button → selects Callout tool and types a clarification note, adjusting its tail pointer.
-  - **Climax:** the screenshot now has crystal-clear visual cues and masked credentials, but the Finding's Note lines and the composed Markdown contain strictly the numbered findings.
+  - **Path:** selects Blur tool and drags a box over the API key line → selects Shape tool and drags a red outline box around a misaligned card → selects Callout tool and types a clarification note, adjusting its tail pointer → selects Arrow tool and drags an arrow from the callout to the broken button.
+  - **Climax:** the screenshot now has crystal-clear visual cues and masked credentials, but the Finding's Note lines and the composed Markdown contain strictly the numbered lines.
   - **Resolution:** burning and composing the Bundle includes the blurred and annotated image cleanly without note clutter.
 
 ## 3. Glossary
 
 Every domain noun this document uses is defined once in `.control/product-glossary.md` and used
-verbatim here: **Access Key**, **Bundle**, **Capture**, **Capture Overlay**, **Editor**, **Finding**,
-**Handoff**, **Library**, **Local API**, **Marker**, **MCP Bridge**, **Note**, **Publication**,
-**Quality Budget**, **Reviewer**, **Vault**.
+verbatim here: **Bundle**, **Capture**, **Capture Overlay**, **Editor**, **Finding**, **Handoff**,
+**Library**, **Marker**, **Note**, **Publication**, **Quality Budget**, **Reviewer**, **Vault**.
+**Access Key**, **Local API**, and **MCP Bridge** were glossary entries this document used too, until
+`DEC-016` withdrew what they named on 2026-09-04.
 
 No synonym for any of them appears anywhere in this PRD. A new noun introduced here is added to that
 file in the same pass.
@@ -643,11 +646,10 @@ r2 shipped every capability in § 4.1–§ 4.6 and the Reviewer still could not 
 had opened, find the Editor, or read a label. A promise the Reviewer cannot reach is not kept.
 
 `CAP-9` is administered by `settings`, and that placement needs a word of defence because the
-requirements below govern surfaces `finding` and `bundle` own. `settings` already holds the
-container-level Logical Components — the startup registrar, the hotkey registrar, the settings store
-— which are the app's own machinery rather than any one screen's. The window shell is machinery of
-the same kind. The alternative, giving each surface its own copy of these requirements, produces three
-statements that must be kept identical by hand, which is how a shell drifts.
+requirements below govern surfaces `finding` and `bundle` own: `settings` is where the app's own
+machinery lives, rather than any one screen's — see `addendum.md` for the component-level reasoning.
+The alternative, giving each surface its own copy of these requirements, produces three statements
+that must be kept identical by hand, which is how a shell drifts.
 
 **Functional Requirements:**
 
@@ -706,9 +708,9 @@ either visible or visibly indicated; nothing is discovered only by scrolling.
 
 ### 4.8 Canvas Visual Annotations and Privacy Redaction
 
-**Capability:** CAP-11 — serves BG-1, BG-7.
+**Capability:** CAP-11 — serves BG-1.
 
-**Description:** While numbered Markers serve as the single structured bridge between visual screenshots and numbered lines in Markdown notes, visual walkthroughs and bug reports frequently require drawing attention to specific components, guiding spatial flow, or masking sensitive data (passwords, tokens, customer emails). Snapdown supports five visual overlay elements: transparent outlined Shapes, directional Arrows, Callout bubbles with font/tail control, floating Text, and Blur redaction boxes. These elements are interactive, resizable, orderable front-to-back, and rendered directly onto the burnt image files without producing lines in the Markdown notes. Realizes UJ-5.
+**Description:** While numbered Markers serve as the single structured bridge between visual screenshots and numbered lines in Markdown notes, visual walkthroughs and bug reports frequently require drawing attention to specific components, guiding spatial flow, or masking sensitive data (passwords, tokens, customer emails). Snapdown supports five visual overlay elements: transparent outlined Shapes, directional Arrows, Callout bubbles with font/tail control, floating Text, and Blur redaction boxes. These elements are interactive, resizable, orderable front-to-back, and rendered directly onto the burnt image files without producing lines in the Markdown notes. Realizes UJ-7.
 
 **Functional Requirements:**
 
@@ -749,7 +751,7 @@ The Reviewer can manipulate any placed canvas annotation element using visual co
 
 ### 4.9 Getting a capture in and out by hand
 
-**Capability:** CAP-1, CAP-3, CAP-9 — serves BG-1, BG-7.
+**Capability:** CAP-1, CAP-3, CAP-9 — serves BG-1, BG-2, BG-7.
 
 **Description:** Four behaviours the Reviewer asked for on 2026-08-28 that the product had no promise
 for. They are recorded here in the order the corpus should have had them, and the record says plainly
@@ -818,7 +820,7 @@ The Reviewer can move any placed annotation forward or backward through the othe
 
 ### 4.10 Handing a review to a person
 
-**Capability:** CAP-12 — serves BG-2.
+**Capability:** CAP-12 — serves BG-8.
 
 **Description:** Every handoff path this product had was built for a machine to read. A Bundle can be
 copied as Markdown or, in the `agent-handoff` initiative, served to an agent — but a Reviewer who
@@ -878,7 +880,7 @@ and in memory, how a very tall screenshot is fitted to a page, and how text is e
 - Region capture from an editable global hotkey, with the Note written at capture time.
 - Automatic image reduction under a Quality Budget the Reviewer controls.
 - The Editor: the Finding list, Note editing, numbered Markers, multi-select.
-- Bundles: compose, list, open, copy Markdown, correct a composed Bundle's title and notes, and
+- Bundles: compose, list, open, copy Markdown, edit a composed Bundle's title and notes, and
   export one as a PDF for a person to read.
 - Hard deletion of Findings and of Bundles, with their files, plus orphan reporting, plus discarding
   the captures behind a finished Bundle and a surface that does it in bulk.
@@ -1004,7 +1006,7 @@ quietly dropped:
   under either Windows theme setting and under a change of that setting while running. Enforced by
   a test that renders every screen in both themes and by a lint rule that refuses a literal colour
   outside the token file.
-- **NFR-18** — serves BG-3 and BG-7. The parameters Auto resolved for a Capture are stored with that
+- **NFR-18** — serves BG-3. The parameters Auto resolved for a Capture are stored with that
   Finding, so a Finding can always say what produced it and a change to the derivation cannot
   silently rewrite the past. Enforced by an assertion that every stored Finding carries its resolved
   budget. This exists because `FR-5` forbids re-encoding an existing Finding: without the record,

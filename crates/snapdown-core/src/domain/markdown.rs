@@ -246,6 +246,26 @@ impl MarkdownSerializer {
             let image_link = rest[..close].to_string();
             rest = &rest[close + 3..];
 
+            // LEGACY (`BUG-95`): a Bundle composed before the per-Finding capture metadata was
+            // removed (`BG-3`, "a timestamp, a pixel size and a display device name are facts
+            // about the CAPTURE, not about the Finding") still carries
+            // "- **Captured:** ...\n- **Resolution:** ...\n- **Monitor:** ...\n\n" immediately
+            // after the image line, in every document composed that long ago - and its note (if
+            // any) follows directly with no "### Notes" heading of its own, since that heading did
+            // not exist at the time either. `serialize_bundle`/`render` never emit this shape for
+            // a NEW document, so tolerating it here does not weaken the round-trip guarantee over
+            // current documents at all: it only lets an OLD one be read back rather than refusing
+            // outright, which is what Copy Markdown and Review & Update both did until this was
+            // found - a validation error instead of the Bundle's own content.
+            let legacy_metadata_end = rest
+                .strip_prefix("- **Captured:**")
+                .and_then(|after| after.find("\n\n"))
+                .map(|end| "- **Captured:**".len() + end + 2);
+            let had_legacy_metadata = legacy_metadata_end.is_some();
+            if let Some(end) = legacy_metadata_end {
+                rest = &rest[end..];
+            }
+
             let mut note = String::new();
             if let Some(after_heading) = rest.strip_prefix(FINDING_NOTES_HEADING) {
                 let next_finding_heading = format!("## Finding {}", position + 1);
@@ -276,6 +296,27 @@ impl MarkdownSerializer {
                     }
                 };
                 note = body;
+                rest = remainder;
+            } else if had_legacy_metadata {
+                // No "### Notes" heading existed yet in this era - whatever text runs up to the
+                // next boundary (a Marker Notes list, the next Finding, or the end of the
+                // document) IS the note, headerless. Only taken when the legacy metadata block
+                // was actually seen above, so a genuinely note-less CURRENT-format Finding (no
+                // metadata, no heading) still correctly parses as having no note rather than
+                // swallowing whatever stray text a malformed document might carry there.
+                let next_finding_heading = format!("## Finding {}", position + 1);
+                let boundary = [MARKER_NOTES_HEADING, next_finding_heading.as_str()]
+                    .into_iter()
+                    .filter_map(|anchor| rest.find(anchor))
+                    .min();
+                let (body, remainder) = match boundary {
+                    Some(idx) => (&rest[..idx], &rest[idx..]),
+                    None => (rest, ""),
+                };
+                let body = body.strip_suffix("\n\n").unwrap_or(body).trim();
+                if !body.is_empty() {
+                    note = body.to_string();
+                }
                 rest = remainder;
             }
 
@@ -778,6 +819,53 @@ The submit button has incorrect margin on narrow viewports.\n\
         assert_eq!(MarkdownSerializer::serialize_parsed(&parsed), doc);
     }
 
+    /// `BUG-95`: a real Bundle document, composed before the per-Finding capture metadata was
+    /// removed and before the "### Notes" heading existed - copied byte for byte (line endings
+    /// aside) from a Vault fixture that reproduced the exact real-world failure: Copy Markdown
+    /// refused every Bundle composed that long ago with "expected '## Finding 2' next, found:
+    /// \"- **Captured:**...\"". This is a READ test only: parsing an old document must succeed and
+    /// recover its actual note text, never a round-trip test, since re-serializing normalizes the
+    /// legacy shape away on purpose (dropping the metadata, adding the "### Notes" heading) rather
+    /// than reproducing it byte for byte.
+    #[test]
+    fn parses_a_legacy_document_with_capture_metadata_and_a_headerless_note() {
+        let doc = "# Bundle 2026-08-27 20:28\n\n\
+                    ## Finding 1\n\n\
+                    ![Finding 1](./bundles/b-legacy/finding_1_burned.png)\n\n\
+                    - **Captured:** 2026-08-27T11:04:22Z\n\
+                    - **Resolution:** 1234 \u{d7} 883 px\n\
+                    - **Monitor:** \\\\.\\DISPLAY2\n\n\
+                    makan yuk\n\n\
+                    ## Finding 2\n\n\
+                    ![Finding 2](./bundles/b-legacy/finding_2_burned.png)\n\n\
+                    - **Captured:** 2026-08-27T11:03:56Z\n\
+                    - **Resolution:** 916 \u{d7} 681 px\n\
+                    - **Monitor:** \\\\.\\DISPLAY2\n\n";
+
+        let parsed = MarkdownSerializer::parse_bundle_document(doc)
+            .expect("a legacy document must parse, not refuse outright");
+        assert_eq!(parsed.findings.len(), 2);
+        assert_eq!(
+            parsed.findings[0].image_link,
+            "./bundles/b-legacy/finding_1_burned.png"
+        );
+        assert_eq!(
+            parsed.findings[0].note, "makan yuk",
+            "the headerless note text must be recovered, not dropped or mistaken for a heading"
+        );
+        assert_eq!(
+            parsed.findings[1].note, "",
+            "the last Finding has no note text after its metadata - must parse as empty, not error"
+        );
+
+        // Re-serializing normalizes the document to the current shape - no metadata, and a real
+        // "### Notes" heading now wraps the recovered note - which is the intended migration, not
+        // a round-trip violation (round-trip guarantees are over CURRENT-format documents only).
+        let migrated = MarkdownSerializer::serialize_parsed(&parsed);
+        assert!(!migrated.contains("**Captured:**"));
+        assert!(migrated.contains("### Notes\n\nmakan yuk\n\n"));
+    }
+
     #[test]
     fn round_trips_text_with_markdown_metacharacters() {
         let fid = "f-1";
@@ -880,52 +968,50 @@ The submit button has incorrect margin on narrow viewports.\n\
     #[test]
     fn rebase_changes_only_image_link_destinations_for_a_vault_path_with_a_space() {
         let (stored, ..) = two_finding_document("unused");
-        let vault_root = r"C:\Users\tester\Snapdown Vault";
+        let vault_root = r"C:\Users\test\Snapdown Vault";
         let rebased =
             MarkdownSerializer::rebase_image_links(&stored, vault_root, "bundles/b-1/bundle.md")
                 .expect("must rebase");
 
-        let expected = expected_rebase(&stored, "C:/Users/tester/Snapdown Vault");
+        let expected = expected_rebase(&stored, "C:/Users/test/Snapdown Vault");
         assert_eq!(
             rebased, expected,
             "rebasing must change only the image link destinations"
         );
-        assert!(
-            rebased.contains("<C:/Users/tester/Snapdown Vault/bundles/b-1/finding_1_burned.png>")
-        );
+        assert!(rebased.contains("<C:/Users/test/Snapdown Vault/bundles/b-1/finding_1_burned.png>"));
     }
 
     #[test]
     fn rebase_changes_only_image_link_destinations_for_a_vault_path_with_parentheses() {
         let (stored, ..) = two_finding_document("unused");
-        let vault_root = r"C:\Users\tester\Snapdown Vault (2024)";
+        let vault_root = r"C:\Users\test\Snapdown Vault (2024)";
         let rebased =
             MarkdownSerializer::rebase_image_links(&stored, vault_root, "bundles/b-1/bundle.md")
                 .expect("must rebase");
 
-        let expected = expected_rebase(&stored, "C:/Users/tester/Snapdown Vault (2024)");
+        let expected = expected_rebase(&stored, "C:/Users/test/Snapdown Vault (2024)");
         assert_eq!(
             rebased, expected,
             "rebasing must change only the image link destinations"
         );
         assert!(rebased
-            .contains("<C:/Users/tester/Snapdown Vault (2024)/bundles/b-1/finding_1_burned.png>"));
+            .contains("<C:/Users/test/Snapdown Vault (2024)/bundles/b-1/finding_1_burned.png>"));
     }
 
     #[test]
     fn rebase_changes_only_image_link_destinations_for_a_vault_path_with_an_apostrophe() {
         let (stored, ..) = two_finding_document("unused");
-        let vault_root = r"C:\Users\tester\Wira's Vault";
+        let vault_root = r"C:\Users\test\Wira's Vault";
         let rebased =
             MarkdownSerializer::rebase_image_links(&stored, vault_root, "bundles/b-1/bundle.md")
                 .expect("must rebase");
 
-        let expected = expected_rebase(&stored, "C:/Users/tester/Wira's Vault");
+        let expected = expected_rebase(&stored, "C:/Users/test/Wira's Vault");
         assert_eq!(
             rebased, expected,
             "rebasing must change only the image link destinations"
         );
-        assert!(rebased.contains("<C:/Users/tester/Wira's Vault/bundles/b-1/finding_1_burned.png>"));
+        assert!(rebased.contains("<C:/Users/test/Wira's Vault/bundles/b-1/finding_1_burned.png>"));
     }
 
     #[test]

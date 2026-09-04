@@ -114,7 +114,10 @@ fn every_review_update_callback_is_bound_from_slint_to_rust() {
     let at = window
         .find("if root.review-update-open : SdReviewUpdate {")
         .expect("the mount site must exist");
-    let mount = flat(&window[at..(at + 400).min(window.len())]);
+    // 600, not 400: `BUG-100` added `toast-text`/`toast-is-error` bindings before `closed =>`,
+    // pushing it past a window sized for ticket 13/14 alone - widened rather than re-anchored, the
+    // same fix `test_library_wiring.rs`'s own mount-site window needed once before.
+    let mount = flat(&window[at..(at + 600).min(window.len())]);
     assert!(
         mount.contains("root.review-update-closed();"),
         "the mount site must forward `closed()` to `root.review-update-closed()`"
@@ -423,6 +426,68 @@ fn header_and_footer_match_the_spec() {
     );
 }
 
+/// `BUG-99`: neither the header badge nor the footer's action buttons had an explicit width, so
+/// each sized itself from whichever of its two candidate strings happened to be showing -
+/// "As composed"/"Editing", and "Close"/"Cancel" - which are different lengths. Toggling
+/// locked/editing therefore visibly resized the badge (shifting the provenance `Text` beside it,
+/// right next to the header's own Close button) and the whole footer (right-aligned, so the
+/// secondary button's width change moved everything). Confirmed with a headless probe against a
+/// minimal reproduction of the exact structure: without a fixed width, the badge/provenance pair's
+/// on-screen position measurably changed between the two states; with a width measured off a
+/// hidden reference `Text` holding the longer candidate, it did not move a pixel.
+#[test]
+fn the_badge_and_footer_buttons_have_a_fixed_width_that_does_not_change_between_modes() {
+    let component = flat(&read("ui/components/review-update.slint"));
+
+    assert!(
+        component.contains("badge-reference := Text { text: \"As composed\""),
+        "the badge must be sized off a hidden reference holding the LONGER candidate string \
+         (\"As composed\"), not off whichever of the two is currently showing"
+    );
+    assert!(
+        component.contains("width: badge-reference.preferred-width"),
+        "the badge's own width must read from that fixed reference, not from `badge-text` (the \
+         element whose text actually changes)"
+    );
+
+    assert!(
+        component.contains("secondary-reference := Text { text: \"Cancel\""),
+        "the footer's secondary button (Close/Cancel) must be sized off a hidden reference holding \
+         the longer candidate (\"Cancel\")"
+    );
+    for label in ["\"Close\"", "\"Cancel\""] {
+        let at = component
+            .find(&format!("label: {label};"))
+            .unwrap_or_else(|| panic!("the {label} button must exist"));
+        let button = &component[at.saturating_sub(200)..at];
+        assert!(
+            button.contains("width: secondary-reference.preferred-width"),
+            "the {label} button must use the shared secondary width: {button}"
+        );
+    }
+
+    assert!(
+        component.contains("primary-reference-edit := Text { text: \"Edit\"")
+            && component.contains("primary-reference-save := Text { text: \"Save\""),
+        "the footer's primary button (Edit/Save) must be sized off hidden references for BOTH of \
+         its own candidate labels, taking the wider of the two"
+    );
+    for label in ["\"Edit\"", "\"Save\""] {
+        let at = component
+            .find(&format!("label: {label};"))
+            .unwrap_or_else(|| panic!("the {label} button must exist"));
+        let button = &component[at.saturating_sub(250)..at];
+        assert!(
+            button.contains(
+                "max(primary-reference-edit.preferred-width, \
+                              primary-reference-save.preferred-width)"
+            ),
+            "the {label} button must use the shared primary width (the max of both candidates), \
+             not its own label's width: {button}"
+        );
+    }
+}
+
 /// Every callback ticket 14 added is bound at the mount site to a root-level callback with a real
 /// handler in `main.rs` - the same reachability proof `every_review_update_callback_is_bound_from_
 /// slint_to_rust` already gives locked mode's own `closed()`.
@@ -574,7 +639,12 @@ fn cancel_decides_in_rust_and_a_failed_save_keeps_the_buffer_alive() {
     let save_at = main.find("on_review_update_save_clicked(").unwrap();
     // Scanned as flat text rather than `rust_fn_body`, which matches braces from a top-level `fn` -
     // this is a closure passed to `on_review_update_save_clicked(`, not a `fn` of that name.
-    let save_handler = flat(&main[save_at..(save_at + 1800).min(main.len())]);
+    //
+    // 3000, not 1800: `BUG-97` added a library-refresh check inside the Saved arm, which comes
+    // BEFORE the Err arm this test needs - the same window this file's own
+    // `a_successful_save_refreshes_the_library_still_open_underneath` test needed widened to for
+    // the identical reason, missed here when that fix landed.
+    let save_handler = flat(&main[save_at..(save_at + 3000).min(main.len())]);
     let err_arm_at = save_handler
         .find("Err(message) =>")
         .expect("the Save handler must have an Err arm");
@@ -587,5 +657,34 @@ fn cancel_decides_in_rust_and_a_failed_save_keeps_the_buffer_alive() {
     assert!(
         err_arm.contains("toast(&win, message, true)"),
         "a failed Save must tell the Reviewer what refused: {err_arm}"
+    );
+}
+
+/// `BUG-97`: the Library stays open the whole time Review & Update is on top of it (ticket 13's own
+/// design), so a Save that actually wrote left the Library's OWN row list stale - ticket 15's
+/// "edited <when>" suffix did not appear until the Reviewer closed and reopened the Library by hand,
+/// since nothing re-ran `build_library_rows` after the write.
+#[test]
+fn a_successful_save_refreshes_the_library_still_open_underneath() {
+    let main = read("src/main.rs");
+    let save_at = main
+        .find("on_review_update_save_clicked(")
+        .expect("`on_review_update_save_clicked` must exist");
+    // Wide enough to comfortably hold the Saved arm's own doc comment as well as its code - unlike
+    // the sibling test above, which only needs the Err arm and stops well before this one.
+    let save_handler = flat(&main[save_at..(save_at + 3000).min(main.len())]);
+    let saved_arm_at = save_handler
+        .find("Ok(ReviewUpdateSaveOutcome::Saved) =>")
+        .expect("the Save handler must have a Saved arm");
+    let err_arm_at = save_handler[saved_arm_at..]
+        .find("Err(message) =>")
+        .map(|i| saved_arm_at + i)
+        .expect("the Save handler must have an Err arm after the Saved arm");
+    let saved_arm = &save_handler[saved_arm_at..err_arm_at];
+    assert!(
+        saved_arm.contains("get_library_open()") && saved_arm.contains("open_library("),
+        "BUG-97: a successful Save must re-read the Library's rows when it is open underneath, or \
+         the edited suffix and any other change stay invisible until closed and reopened by hand: \
+         {saved_arm}"
     );
 }

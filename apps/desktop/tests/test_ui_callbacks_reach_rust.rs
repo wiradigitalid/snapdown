@@ -61,10 +61,10 @@ fn declared_callbacks() -> Vec<String> {
 ///
 /// A name may sit here only while the feature behind it is genuinely absent. It is not a place to
 /// park something that was forgotten — that is the state this whole file exists to make visible.
-const DELIBERATELY_UNHANDLED: &[(&str, &str)] = &[(
-    "paste-clicked",
-    "clipboard-in is not built: nothing reads an image out of the Windows clipboard yet",
-)];
+///
+/// `paste-clicked` left this list on `FR-35`: `on_paste_clicked` now reads the Windows clipboard
+/// through `paste_clipboard_image` and turns what it finds into a new Finding.
+const DELIBERATELY_UNHANDLED: &[(&str, &str)] = &[];
 
 /// Handlers that exist and do nothing but print, each with what is actually missing behind it.
 ///

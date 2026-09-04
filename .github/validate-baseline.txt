@@ -1,8 +1,4 @@
-  V13  waves.yaml:W8: carries no `reviewed` trace with a date and sha
   V3   UC-12: component `bundle` has already been touched by a wave, but this UC is not scheduled to any story
-  V3   UC-17: component `agent-access` has already been touched by a wave, but this UC is not scheduled to any story
-  V3   UC-18: component `agent-access` has already been touched by a wave, but this UC is not scheduled to any story
-  V3   UC-19: component `agent-access` has already been touched by a wave, but this UC is not scheduled to any story
   V3   UC-20: component `sharing` has already been touched by a wave, but this UC is not scheduled to any story
   V3   UC-21: component `sharing` has already been touched by a wave, but this UC is not scheduled to any story
   V3   UC-22: component `sharing` has already been touched by a wave, but this UC is not scheduled to any story
@@ -15,3 +11,11 @@
   V3   UC-7: component `finding` has already been touched by a wave, but this UC is not scheduled to any story
   V3   UC-8: component `finding` has already been touched by a wave, but this UC is not scheduled to any story
   V3   UC-9: component `bundle` has already been touched by a wave, but this UC is not scheduled to any story
+  V6   DEC-001: points to `CAP-7` which does not exist in any registry
+  V6   DEC-002: points to `CAP-7` which does not exist in any registry
+  V6   DEC-005: points to `CAP-7` which does not exist in any registry
+  V6   DEC-007: points to `CAP-7` which does not exist in any registry
+  V6   DEC-013: points to `CAP-7` which does not exist in any registry
+  V12  W7-S3: its wave is already closed, but `mcp-bridge` is not registered as an `area` in components.yaml
+  V13  waves.yaml:W8: carries no `reviewed` trace with a date and sha
+  V16  .control/memlog/agent-access.md: `artifact:` points to `.how/agent-access/SDD-agent-access.md` which does not exist

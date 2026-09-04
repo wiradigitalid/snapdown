@@ -199,19 +199,6 @@ rtm:
   green: true
   broken_at: ''
 - BG: BG-2
-  CAP: CAP-7
-  FR: FR-19
-  DEC: []
-  UC: UC-17
-  story: ''
-  wave: ''
-  release: ''
-  test: []
-  status: ''
-  green: false
-  exempt: false
-  broken_at: story
-- BG: BG-2
   CAP: CAP-1
   FR: FR-2
   DEC: []
@@ -228,45 +215,6 @@ rtm:
   exempt: false
   green: true
   broken_at: ''
-- BG: BG-2
-  CAP: CAP-7
-  FR: FR-20
-  DEC: []
-  UC: UC-18
-  story: ''
-  wave: ''
-  release: ''
-  test: []
-  status: ''
-  green: false
-  exempt: false
-  broken_at: story
-- BG: BG-2
-  CAP: CAP-7
-  FR: FR-21
-  DEC: []
-  UC: UC-18
-  story: ''
-  wave: ''
-  release: ''
-  test: []
-  status: ''
-  green: false
-  exempt: false
-  broken_at: story
-- BG: BG-2
-  CAP: CAP-7
-  FR: FR-22
-  DEC: []
-  UC: UC-19
-  story: ''
-  wave: ''
-  release: ''
-  test: []
-  status: ''
-  green: false
-  exempt: false
-  broken_at: story
 - BG: BG-4
   CAP: CAP-8
   FR: FR-23
@@ -519,7 +467,7 @@ rtm:
   green: false
   exempt: true
   broken_at: no_uc
-- BG: BG-2
+- BG: BG-8
   CAP: CAP-12
   FR: FR-39
   DEC: []
