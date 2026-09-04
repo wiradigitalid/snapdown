@@ -60,7 +60,6 @@ export component SdSettings inherits Rectangle {
 
     in property <[HotkeyRow]> hotkeys;
     in property <string> app-version;
-    in property <string> bridge-status;
 
     callback closed();
     callback startup-toggled(bool);
@@ -163,7 +162,6 @@ export component SdSettings inherits Rectangle {
                     for entry[index] in [
                         { label: "General & Quality" },
                         { label: "Hotkeys" },
-                        { label: "Agent Bridge" },
                         { label: "About" },
                     ] : Rectangle {
                         width: tab-label.preferred-width + 24px;
@@ -885,20 +883,8 @@ export component SdSettings inherits Rectangle {
                             }
                         }
 
-                        // ===== AGENT BRIDGE ===============================================
-                        if root.tab == 2 : SdCard {
-                            SdSectionLabel { text: "AGENT BRIDGE"; }
-                            Text {
-                                text: root.bridge-status;
-                                font-size: 13px;
-                                color: Theme.text-secondary;
-                                wrap: word-wrap;
-                                font-family: "IBM Plex Sans";
-                            }
-                        }
-
                         // ===== ABOUT ======================================================
-                        if root.tab == 3 : SdCard {
+                        if root.tab == 2 : SdCard {
                             SdSectionLabel { text: "SNAPDOWN"; }
                             Text {
                                 text: root.app-version;
@@ -915,7 +901,7 @@ export component SdSettings inherits Rectangle {
                             }
                         }
 
-                        if root.tab == 3 : SdCard {
+                        if root.tab == 2 : SdCard {
                             SdSectionLabel { text: "BUILT WITH"; }
                             // `NTL-1`. Slint's Royalty-free licence requires this acknowledgement in
                             // the product, and it had been recorded as owed and never paid.

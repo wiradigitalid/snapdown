@@ -1622,7 +1622,6 @@ export component AppWindow inherits Window {
     in-out property <string> budget-explainer: "";
     in-out property <[HotkeyRow]> hotkeys: [];
     in-out property <string> app-version: "";
-    in-out property <string> bridge-status: "";
     // Which hotkey row is listening for a keypress, by action id. Owned by the window rather
     // than by the Settings component because RUST closes it - on a successful bind, and on the
     // shortcut actually arriving.
@@ -3294,7 +3293,6 @@ export component AppWindow inherits Window {
             budget-explainer: root.budget-explainer;
             hotkeys: root.hotkeys;
             app-version: root.app-version;
-            bridge-status: root.bridge-status;
             listening <=> root.hotkey-listening;
             last-fired: root.hotkey-last-fired;
             last-fired-text: root.hotkey-last-fired-text;
@@ -3550,9 +3548,10 @@ export component AppWindow inherits Window {
         // The contents list and the per-item removal went with that: choosing what goes in is the
         // filmstrip's job, and doing it in two places is two places to disagree.
         //
-        // The UX asset's third column - Copy Markdown, Local MCP Bridge, Publish - is still absent.
-        // None of the three exists: no clipboard dependency, `BUG-59` for the Bridge's endpoints,
-        // `DEC-005` for publishing. Drawing them would be `BUG-57` again.
+        // The UX asset's third column named Copy Markdown, Local MCP Bridge, Publish. The Bridge is
+        // retired in full by `DEC-016` - there is nothing left to build there, not merely something
+        // not built yet. Copy Markdown and Publish are still absent: no clipboard dependency for the
+        // former, `DEC-005` for the latter. Drawing either would be `BUG-57` again.
         if root.bundle-preview-open : Rectangle {
             width: 100%;
             height: 100%;

@@ -8,8 +8,7 @@ pub use error::StoreError;
 pub use image::{ImageReducer, MarkerBurner, ReducedImageResult};
 pub use snapdown_core;
 pub use sqlite::{
-    SqliteAccessKeyStore, SqliteBundleStore, SqliteFindingStore, SqlitePublicationStore,
-    SqliteSettingsStore,
+    SqliteBundleStore, SqliteFindingStore, SqlitePublicationStore, SqliteSettingsStore,
 };
 pub use system::{SystemClock, SystemEntropySource};
 pub use vault::VaultBlobStore;
