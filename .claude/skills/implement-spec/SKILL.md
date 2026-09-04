@@ -1,7 +1,8 @@
 ---
 name: implement-spec
 description: "Implement a specification in code."
-disable-model-invocation: true
+# Unlocked 2026-09-04 on the owner's instruction, for unattended runs - see DEC-017 and DEC-018.
+disable-model-invocation: false
 ---
 
 You have been provided a spec. This spec should have tickets associated with it, describing how to implement the spec.

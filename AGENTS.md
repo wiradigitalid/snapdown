@@ -325,6 +325,18 @@ MUST anything in `.constitution/method/why/`; `status: Reference` forbids it. A 
   excluded when searching for code.
 <!-- END:wdi-method -->
 
+## Unattended runs
+
+The owner authorised an unattended run on 2026-09-04 (`DEC-017`) that carried a mandate (`DEC-018`,
+`type: mandate`) to close every remaining `FR` without asking. It ran on a branch called
+`autopilot/r3`, dispatching separate builders for each piece of work; those builders' branches, plus
+`autopilot/r3`'s own corpus fixes, were consolidated onto one branch and one PR at the owner's
+explicit request, so a merge to `main` would not have to reconcile several divergent branches at once.
+`to-spec`, `to-tickets` and `implement-spec` were unlocked (`disable-model-invocation: false`) for the
+duration, which is why their `SKILL.md` files read that way rather than the plugin default. Read
+`DEC-017` and `DEC-018` for the full authority and scope; this paragraph exists so a reader of
+`AGENTS.md` alone knows why those three skills are unlocked and what produced this diff.
+
 ## Code
 
 Tauri v2 desktop app. Rust workspace (`crates/snapdown-core` pure domain, `crates/snapdown-store`
