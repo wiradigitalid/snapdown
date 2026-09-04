@@ -49,7 +49,8 @@ fn migrations_v9_apply_cleanly_and_idempotently() {
         assert!(tables.contains(&"marker".to_string()));
         assert!(tables.contains(&"bundle".to_string()));
         assert!(tables.contains(&"bundle_item".to_string()));
-        assert!(tables.contains(&"access_key".to_string()));
+        // access_key was removed under DEC-016: the ceremony it backed is retired in full, and
+        // migration version 4 (which created it) was dropped from MIGRATIONS - see migrations.rs.
         assert!(tables.contains(&"publication".to_string()));
         assert!(tables.contains(&"visual_annotation".to_string()));
         assert!(tables.contains(&"setting".to_string()));
