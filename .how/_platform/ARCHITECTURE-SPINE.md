@@ -22,8 +22,8 @@ companions:
   - .how/_platform/c4-l2-containers.md
   - .how/_platform/cross-cutting.md
 reviewed:
-  date: '2026-09-01'
-  sha: 'a36de2c'
+  date: '2026-09-04'
+  sha: '9358a4a'
   lenses: [structure, prose]
 ---
 
