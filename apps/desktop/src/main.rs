@@ -163,30 +163,79 @@ struct AppContext {
     bundle_store: Option<Arc<SqliteBundleStore>>,
 }
 
-impl AppContext {
-    fn init() -> Self {
-        let db_path = app_database_path();
-        let finding_store = match SqliteFindingStore::open(&db_path) {
-            Ok(store) => Arc::new(store),
-            Err(e) => {
-                eprintln!(
-                    "Warning: Failed to open DB at {:?}: {e}, falling back to in-memory",
-                    db_path
-                );
-                Arc::new(SqliteFindingStore::open_in_memory().unwrap())
-            }
-        };
+/// What stopped `AppContext::try_init` from producing a usable store set, and enough detail to
+/// build the dialog `AppContext::init` shows before the process exits.
+///
+/// `BUG-60`: all three of `finding_store`, `settings_store` and `vault_store` used to paper over
+/// exactly this with a fallback the Reviewer never saw - `open_in_memory()`, twice, silently
+/// discarding the whole session's work on exit - and an `unwrap()` underneath each one, which on a
+/// Windows release build (no console) took the tray, the hotkeys and the overlay down with no
+/// visible sign anything had gone wrong. This type exists so the failure can be named and reported
+/// instead: never a store that half-opened, never a value that hides what it substituted.
+#[derive(Debug)]
+struct StartupFailure {
+    /// What a Reviewer calls this store - "Library", "Settings", "Vault" - not its Rust type.
+    store: &'static str,
+    path: PathBuf,
+    reason: String,
+}
 
-        let settings_store = match SqliteSettingsStore::open(&db_path) {
-            Ok(store) => Arc::new(store),
-            Err(e) => {
-                eprintln!(
-                    "Warning: Failed to open settings DB at {:?}: {e}, falling back to in-memory",
-                    db_path
-                );
-                Arc::new(SqliteSettingsStore::open_in_memory().unwrap())
-            }
-        };
+impl StartupFailure {
+    fn dialog_text(&self) -> String {
+        format!(
+            "Snapdown cannot start.\n\n\
+             The {} at\n{}\n\
+             could not be opened:\n\n{}\n\n\
+             Nothing on disk has been changed. Snapdown will now close - if a backup of this file \
+             exists, restoring it and relaunching is the way back in.",
+            self.store,
+            self.path.display(),
+            self.reason,
+        )
+    }
+}
+
+/// Shows a native, modal, foregrounded dialog and blocks until the Reviewer dismisses it.
+///
+/// `rfd::MessageDialog` is already a dependency here for the two file-choosers elsewhere in this
+/// file, and on Windows it shows through a plain `MessageBoxW` - the "native dialog, owned and
+/// foregrounded" call `BUG-17` originally asked for, which `BUG-60` found completely absent from
+/// the Slint startup path. A free function rather than something inlined into `AppContext::init` so
+/// any other future fatal-before-a-window-exists path can call the same one.
+fn show_fatal_dialog(title: &str, message: &str) {
+    rfd::MessageDialog::new()
+        .set_level(rfd::MessageLevel::Error)
+        .set_title(title)
+        .set_description(message)
+        .set_buttons(rfd::MessageButtons::Ok)
+        .show();
+}
+
+impl AppContext {
+    /// Opens every store `init()` needs at `db_path`, or names exactly which one failed and why.
+    ///
+    /// Deliberately free of dialogs, `eprintln!` and `process::exit`, so a corrupt-store fixture can
+    /// drive it directly in a test without taking the whole test process down with it. `init()` is
+    /// the only real caller; it is what turns an `Err` here into something a Reviewer without a
+    /// console can actually see, per `BUG-60`.
+    ///
+    /// `finding_store` and `settings_store` refuse outright on a disk failure rather than
+    /// substituting an in-memory store - see `init()`'s doc comment for why. `vault_store` keeps its
+    /// pre-existing fallback to `default_vault_path()`: that fallback is a second real location, not
+    /// memory, so a Finding captured after it survives the exit; only both attempts failing is
+    /// fatal.
+    fn try_init(db_path: &Path) -> Result<Self, StartupFailure> {
+        let finding_store = SqliteFindingStore::open(db_path).map_err(|e| StartupFailure {
+            store: "Library",
+            path: db_path.to_path_buf(),
+            reason: e.to_string(),
+        })?;
+
+        let settings_store = SqliteSettingsStore::open(db_path).map_err(|e| StartupFailure {
+            store: "Settings",
+            path: db_path.to_path_buf(),
+            reason: e.to_string(),
+        })?;
 
         let vault_path = match settings_store.get(&SettingKey::VaultPath) {
             Ok(Some(Setting {
@@ -202,11 +251,19 @@ impl AppContext {
                 eprintln!("Failed to init vault store at {:?}: {e}", vault_path);
                 let fallback = default_vault_path();
                 let _ = std::fs::create_dir_all(&fallback);
-                VaultBlobStore::new(&fallback).unwrap()
+                VaultBlobStore::new(&fallback).map_err(|fallback_err| StartupFailure {
+                    store: "Vault",
+                    path: fallback.clone(),
+                    reason: format!(
+                        "{} failed ({e}), and the fallback location {} also failed: {fallback_err}",
+                        vault_path.display(),
+                        fallback.display(),
+                    ),
+                })?
             }
         };
 
-        let bundle_store = match SqliteBundleStore::open(&db_path) {
+        let bundle_store = match SqliteBundleStore::open(db_path) {
             Ok(store) => Some(Arc::new(store)),
             Err(e) => {
                 eprintln!(
@@ -217,12 +274,35 @@ impl AppContext {
             }
         };
 
-        Self {
+        Ok(Self {
             vault_store,
             vault_path,
-            finding_store,
-            settings_store,
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(settings_store),
             bundle_store,
+        })
+    }
+
+    /// The real entry point, called once from `main`.
+    ///
+    /// `BUG-60`'s design call: a corrupt `library.db` refuses the whole launch rather than opening
+    /// with a window that LOOKS normal over a Library that is silently empty and a Vault that is
+    /// silently in memory. Labelling the window instead - "this session's work will not be saved" -
+    /// was the other option `BUG-60`'s `fix:` offered, and it was rejected: a label sits in a corner
+    /// of a window the Reviewer is actively capturing into, competing with the capture flow itself
+    /// for attention, and it has to stay noticed for an entire session rather than for the one
+    /// moment a dialog owns. Refusing also matches the shape `bundle_store` already uses above -
+    /// `None`, and a call site that reports rather than pretends - so this fix adds no second
+    /// design for the same problem. It forces the fix (replace or restore `library.db`) before any
+    /// further work is put at risk, which is the only one of the two options that actually prevents
+    /// the data loss `BUG-60` is about, rather than just disclosing it.
+    fn init() -> Self {
+        match Self::try_init(&app_database_path()) {
+            Ok(ctx) => ctx,
+            Err(failure) => {
+                show_fatal_dialog("Snapdown cannot start", &failure.dialog_text());
+                std::process::exit(1);
+            }
         }
     }
 }
@@ -7320,6 +7400,151 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `BUG-60`. Writes a REAL SQLite database - schema, several hundred rows so it spans more than
+    /// one page - then stamps every byte from offset 4096 onward, leaving the 100-byte file header
+    /// (and therefore the magic string `SqliteFindingStore::open` checks before anything else)
+    /// completely valid. `AGENTS.md`'s own pitfall section names why this matters: garbage bytes are
+    /// rejected at `Connection::open` before a single pragma runs, so a "corrupt database" fixture
+    /// built from garbage never reaches `PRAGMA quick_check` - the exact check `open`'s read-only
+    /// pass runs, and the one a fake header would let a test claim to cover without ever exercising.
+    fn write_valid_header_corrupt_pages_db(db_path: &Path) {
+        {
+            let conn = rusqlite::Connection::open(db_path).expect("a scratch connection");
+            conn.execute(
+                "CREATE TABLE sample (id INTEGER PRIMARY KEY, note TEXT);",
+                [],
+            )
+            .expect("to create a scratch table");
+            for i in 0..200 {
+                conn.execute(
+                    "INSERT INTO sample (note) VALUES (?1);",
+                    [format!("padding data row {i}")],
+                )
+                .expect("to insert a scratch row");
+            }
+        }
+
+        let mut bytes = std::fs::read(db_path).expect("to read the scratch database back");
+        assert!(bytes.len() >= 8192, "the fixture must span multiple pages");
+        assert_eq!(
+            &bytes[0..16],
+            b"SQLite format 3\0",
+            "the header must stay valid"
+        );
+        for b in &mut bytes[4096..] {
+            *b = 0xBB;
+        }
+        std::fs::write(db_path, &bytes).expect("to write the corrupted bytes back");
+    }
+
+    /// The headline shape of `BUG-60`: a corrupt `library.db` must REFUSE the whole launch, naming
+    /// the Library and the exact path, rather than silently handing back an in-memory
+    /// `AppContext` whose Findings are discarded the moment the process exits.
+    ///
+    /// This is the test that catches the regression `BUG-60` describes: temporarily restoring the
+    /// old `.unwrap_or_else(|_| open_in_memory)` shape here turns this from red to green on an
+    /// `Ok(_)` match, which is exactly the silent substitution this row exists to forbid - verified
+    /// by hand as part of landing this fix, not asserted mechanically (a mechanical form would just
+    /// scan `try_init`'s own source, per `AGENTS.md`'s note on why that kind of guard is worthless).
+    #[test]
+    fn try_init_refuses_a_corrupt_library_rather_than_falling_back_to_memory() {
+        let tmp = tempfile::NamedTempFile::new().expect("a temp file");
+        let db_path = tmp.path().to_path_buf();
+        write_valid_header_corrupt_pages_db(&db_path);
+        let bytes_before = std::fs::read(&db_path).expect("to read the fixture before try_init");
+
+        let result = AppContext::try_init(&db_path);
+
+        let Err(failure) = result else {
+            panic!("a corrupt library.db must refuse to open, never substitute an in-memory store");
+        };
+        assert_eq!(
+            failure.store, "Library",
+            "the Library store must be the one named, since it is opened first"
+        );
+        assert_eq!(
+            failure.path, db_path,
+            "the failure must name the exact path a Reviewer can go look at"
+        );
+        assert!(
+            !failure.reason.is_empty(),
+            "the reason must say something a Reviewer can read, not just fail silently"
+        );
+
+        // BR-118: nothing is created over a corrupt store. `try_init` must not have touched the
+        // file, nor created a `-wal`/`-shm` beside it, on its way to reporting the failure.
+        let bytes_after = std::fs::read(&db_path).expect("to read the fixture after try_init");
+        assert_eq!(
+            bytes_after, bytes_before,
+            "a refused open must leave the corrupt file byte-identical"
+        );
+        let wal_path = db_path.with_file_name(format!(
+            "{}-wal",
+            db_path.file_name().unwrap().to_str().unwrap()
+        ));
+        let shm_path = db_path.with_file_name(format!(
+            "{}-shm",
+            db_path.file_name().unwrap().to_str().unwrap()
+        ));
+        assert!(
+            !wal_path.exists(),
+            "no -wal file may appear beside a refused store"
+        );
+        assert!(
+            !shm_path.exists(),
+            "no -shm file may appear beside a refused store"
+        );
+    }
+
+    /// A first launch - `db_path` does not exist yet - must still succeed and hand back stores that
+    /// actually work, so the refusal above is provably about corruption and not about `try_init`
+    /// having become unconditionally fatal.
+    #[test]
+    fn try_init_succeeds_on_a_fresh_path_and_the_stores_actually_work() {
+        let tmp_dir = tempfile::tempdir().expect("a temp dir");
+        let db_path = tmp_dir.path().join("library.db");
+
+        let ctx = AppContext::try_init(&db_path).expect("a fresh path must open cleanly");
+
+        assert!(
+            ctx.finding_store
+                .list_findings()
+                .expect("to read the fresh Library")
+                .is_empty(),
+            "a fresh Library must be empty, not merely present"
+        );
+        assert!(
+            ctx.bundle_store.is_some(),
+            "a fresh Bundle library must open too, on the same path"
+        );
+    }
+
+    /// `StartupFailure::dialog_text` is the one piece of `BUG-60`'s fix that never runs under `cargo
+    /// test` at all - `show_fatal_dialog` blocks on real OS UI - so this is the only guard on what the
+    /// Reviewer is actually shown: the store name and the exact path have to survive into the text,
+    /// or a Reviewer reading the dialog cannot tell what broke or where to look.
+    #[test]
+    fn startup_failure_dialog_names_the_store_and_the_path() {
+        let failure = StartupFailure {
+            store: "Library",
+            path: PathBuf::from(r"C:\Users\reviewer\AppData\Roaming\Snapdown\library.db"),
+            reason: "Database corruption detected: wrong # of entries in index sample".to_string(),
+        };
+        let text = failure.dialog_text();
+        assert!(
+            text.contains("Library"),
+            "the store name must be in the dialog"
+        );
+        assert!(
+            text.contains(r"C:\Users\reviewer\AppData\Roaming\Snapdown\library.db"),
+            "the exact path must be in the dialog"
+        );
+        assert!(
+            text.contains("wrong # of entries in index sample"),
+            "the underlying reason must be in the dialog"
+        );
+    }
 
     /// The exact string shape found in the live `finding.region` column, read out of
     /// `%APPDATA%/id.wiradigital.snapdown/library.db`.

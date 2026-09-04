@@ -3741,8 +3741,55 @@ defects:
       `Connection::open` before a pragma runs, so the fixture must be a valid header with corrupt
       pages, and the guard must be mutation-verified - `a_failed_open_leaves_no_wal_or_shm_file` is
       already recorded as insensitive to its own defect.
+    resolution: |
+      FIXED, 2026-09-04, under `DEC-019`. `apps/desktop/src/main.rs`'s `AppContext::init` is now a
+      thin wrapper around a new `AppContext::try_init(db_path: &Path) -> Result<Self, StartupFailure>`
+      - pure, dialog-free, exit-free, and therefore directly testable. `try_init` opens
+      `SqliteFindingStore` and `SqliteSettingsStore` and, on either failing, returns `Err` instead of
+      substituting `open_in_memory()`; `init()` turns that `Err` into a native `rfd::MessageDialog`
+      (already a dependency here for the two file-choosers elsewhere in this file - on Windows it
+      shows through a plain `MessageBoxW`, the "native dialog, owned and foregrounded" `BUG-17`
+      originally asked for) naming the store, the exact path, and the underlying reason, then
+      `std::process::exit(1)`. All three `unwrap`s named in `fix:` point 3 are gone: the two on the
+      in-memory fallbacks no longer exist because the fallback itself no longer exists, and the one
+      on the Vault's second-attempt fallback is now `.map_err(...)?` into the same `StartupFailure`
+      dialog rather than a panic.
+
+      Design call for `fix:` point 2 - refuse, not label: a corrupt `library.db` now refuses the
+      whole launch rather than opening a window that looks normal over a silently empty Library and
+      a silently in-memory Vault. The alternative `fix:` offered - labelling the window
+      unmistakably that the session is lost-on-exit - was rejected: a label competes with the
+      capture flow itself for the Reviewer's attention and has to stay noticed for an entire
+      session, where a dialog only has to be read once, before anything is at risk. Refusing also
+      matches the shape `bundle_store` already used before this fix (`Option<Arc<SqliteBundleStore>>`,
+      `None` on a failed open, and a call site that reports rather than pretends) rather than
+      inventing a second design for the same problem, and it is the only one of the two options that
+      actually *prevents* the data loss `BUG-60` is about rather than merely disclosing it.
+      `vault_store` is the one exception, left as a real fallback rather than folded into the
+      refusal: `VaultBlobStore::new` failing on the Vault's configured path and succeeding on
+      `default_vault_path()` is a relocation to a second real, on-disk location, not a substitution
+      that discards work - so it is not the shape `fix:` point 2 is about. Only both attempts failing
+      is fatal now, reported the same way as the other two.
+
+      Three new tests in `apps/desktop/src/main.rs`'s `mod tests`:
+      `try_init_refuses_a_corrupt_library_rather_than_falling_back_to_memory` (the regression guard -
+      a real SQLite file with a valid 100-byte header and every byte from offset 4096 onward
+      overwritten, per `AGENTS.md`'s fixture rule, since garbage bytes never reach
+      `PRAGMA quick_check` at all), `try_init_succeeds_on_a_fresh_path_and_the_stores_actually_work`
+      (the refusal is about corruption, not about `try_init` having become unconditionally fatal),
+      and `startup_failure_dialog_names_the_store_and_the_path` (the one piece of the fix that never
+      runs under `cargo test` - `show_fatal_dialog` blocks on real OS UI - covers what the text
+      actually says). Mutation-verified by hand: temporarily restoring the old
+      `Err(_) => open_in_memory().unwrap()` shape in both stores turned
+      `try_init_refuses_a_corrupt_library_rather_than_falling_back_to_memory` red (it caught the
+      exact `BUG-60` shape - `try_init` returning `Ok` over an in-memory `AppContext` - not merely a
+      changed error message), confirming the guard is sensitive to the defect rather than passing
+      regardless of it; reverted immediately after.
+
+      `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and
+      `cargo test --workspace --no-fail-fast` are all clean.
     related: BUG-12, BUG-16, BUG-17
-    status: open
+    status: fixed
 
   - id: BUG-61
     title: Nine promised Editor surfaces have no Slint implementation, and seven store operations have no caller
