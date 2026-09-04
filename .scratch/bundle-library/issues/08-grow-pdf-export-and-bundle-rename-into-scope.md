@@ -278,7 +278,7 @@ again.
 Also landed: `BR-122` for the sealed state, read from whether the Findings exist rather than from a
 flag; `bundle`'s `domain-model.md` State Lifecycle and invariants 4 and 10; both SRS Actor Registers;
 the glossary's `Bundle` entry and a new `Sealed` entry; four fossil `V3` lines added to
-`.github/validate-baseline.txt` as `AGENTS.md` permits; `.control/generated/blueprint.md` regenerated.
+`.github/validate-baseline.txt` as `AGENTS.md` permits; `.how-rendered/blueprint.md` regenerated.
 
 ### One thing was deliberately NOT fixed, and it is the same `AD-9` question from ticket 03's side
 
