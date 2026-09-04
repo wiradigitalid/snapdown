@@ -51,7 +51,6 @@ product_components:
   logical_components:
   - LC-020
   - LC-021
-  - LC-022
   - LC-023
   - LC-024
   - LC-027
@@ -140,11 +139,6 @@ logical_components:
   type: null
   component: sharing
   area: local-db
-  owner: null
-- id: LC-022
-  type: null
-  component: sharing
-  area: editor-ui
   owner: null
 - id: LC-023
   type: null

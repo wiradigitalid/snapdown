@@ -376,13 +376,11 @@ logical_components:
     component: sharing
     area: local-db
     depends_on: []
-  - id: LC-022
-    name: publish-dialog
-    lc_type: ui-composite
-    container: desktop-app
-    component: sharing
-    area: editor-ui
-    depends_on: [LC-020]
+  # LC-022 `publish-dialog` (ui-composite, desktop-app, area editor-ui) stood here until 2026-09-04.
+  # `DEC-020` withdrew it: it was never built - `BUG-23`'s rescoped note found publishing has no
+  # Slint caller at all - and `DEC-005` forbids building it now. Not the same case as `LC-027` below:
+  # that one moved container and stayed, this one is retired outright because nothing exists behind
+  # it. The id is not reused.
   - id: LC-023
     name: publication-router
     lc_type: gateway
@@ -403,6 +401,9 @@ logical_components:
     # `container` was `web-ui` until 2026-09-01. DEC-015 moved it to the container that actually
     # renders the page: web-api builds the HTML inline and serves it as text/html. Still `ui-screen`
     # - it is a screen a person looks at; what changed is that it is drawn on the server.
+    # DEC-020 (2026-09-04) confirms this row is NOT retired: it corrected inventory-screen.md row 14
+    # to describe what this LC actually renders (a bare `<pre>` dump) instead of the designed screen
+    # BUG-2 found missing. Only LC-022 was retired by that decision, not this one.
     container: web-api
     component: sharing
     area: web-service
