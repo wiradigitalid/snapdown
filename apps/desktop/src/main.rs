@@ -3079,16 +3079,6 @@ fn load_settings_into_window(
     window.set_hotkey_meta_key_label(META_KEY_DISPLAY.into());
 
     window.set_app_version(format!("Snapdown {}", env!("CARGO_PKG_VERSION")).into());
-
-    // Stated plainly rather than shown as a working panel. `BUG-59`: the Bridge executable exists
-    // and the Local API it talks to does not, so there is nothing here to configure yet.
-    window.set_bridge_status(
-        "Not available yet. The Bridge lets an agent read your Findings directly, and the part \
-         of Snapdown it connects to has not been built - so there is nothing to configure here \
-         yet.\n\nUntil it exists, Assemble a Bundle and use Copy Markdown: an agent can read \
-         that file and the images beside it."
-            .into(),
-    );
 }
 
 /// Puts one sentence on screen, in the Editor's result line.
