@@ -886,11 +886,30 @@ export component SdSettings inherits Rectangle {
                         // ===== ABOUT ======================================================
                         if root.tab == 2 : SdCard {
                             SdSectionLabel { text: "SNAPDOWN"; }
-                            Text {
-                                text: root.app-version;
-                                font-size: 13px;
-                                color: Theme.text-primary;
-                                font-family: "IBM Plex Mono";
+                            // `06` (`FR-27`'s home): the product's own icon, beside its version -
+                            // the tab that names the product now also shows it. Reuses
+                            // `assets/app-icon.png` rather than `app-icon.ico`: that PNG already
+                            // renders through `@image-url` elsewhere in this window (the titlebar
+                            // icon, `appwindow.slint:1809`), so it is a proven load path instead of
+                            // an untested one.
+                            HorizontalLayout {
+                                spacing: 8px;
+                                alignment: start;
+
+                                Image {
+                                    width: 32px;
+                                    height: 32px;
+                                    image-fit: contain;
+                                    source: @image-url("../../assets/app-icon.png");
+                                }
+
+                                Text {
+                                    text: root.app-version;
+                                    font-size: 13px;
+                                    color: Theme.text-primary;
+                                    font-family: "IBM Plex Mono";
+                                    vertical-alignment: center;
+                                }
                             }
                             Text {
                                 text: "Snapdown turns a screenshot and a sentence into Markdown an agent can read. MIT licensed.";
