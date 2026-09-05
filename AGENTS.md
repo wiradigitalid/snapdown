@@ -24,7 +24,6 @@ forbidden: each one either ships code or maintains a task layer this project no 
 
 | MUST NOT be run | Run instead |
 |---|---|
-| `wdi-build` | `/to-spec` → `/to-tickets` → `/implement-spec` |
 | `wdi-systematic-debugging` | `diagnosing-bugs` |
 | `bmad-build` · `bmad-build-auto` · `bmad-quick-dev` · `bmad-dev-story` · `bmad-dev-auto` · `bmad-agent-dev` | `/implement-spec` |
 | `bmad-spec` | `/to-spec` |
@@ -36,9 +35,11 @@ forbidden: each one either ships code or maintains a task layer this project no 
 `bmad-review` is deliberately NOT on that list and MUST stay runnable: it reviews **documents**, and
 `wdi-review` dispatches it.
 
-Inside the marker block below, the **G5 Release** row, the `wdi-systematic-debugging` mention, and
-`## Bugs, decisions, questions`' first bullet are superseded by this section. They are not edited
-there, because that block is package-owned and replaced on every update.
+Inside the marker block below, the `wdi-systematic-debugging` mention and `## Bugs, decisions,
+questions`' first bullet are superseded by this section. They are not edited there, because that
+block is package-owned and replaced on every update. The **G5 Release** row now stands as the block
+states it: `wdi-build` is runnable again, alongside `/to-spec` → `/to-tickets` → `/implement-spec` —
+this project no longer bans it, it just does not require it.
 
 ### Where a spec's inputs and outputs live
 

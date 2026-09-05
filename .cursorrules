@@ -6,8 +6,9 @@
 owns the code and task management**. This section sits outside the `wdi-method` block below, which is
 package-owned and replaced in full on every update, and where the two disagree **this section wins**.
 
-- The **G5 Release** row in the block below is retired. `wdi-build` MUST NOT be run; the code flow is
-  `/to-spec` → `/to-tickets` → `/implement-spec`, with tickets under `.scratch/<feature-slug>/issues/`.
+- The **G5 Release** row in the block below stands: `wdi-build` is runnable again. It is not
+  required — `/to-spec` → `/to-tickets` → `/implement-spec`, with tickets under
+  `.scratch/<feature-slug>/issues/`, still works and is not being retired by this.
 - The epic / story / sprint / wave layer is retired. `waves.yaml` and `stories.yaml` MUST NOT be
   extended; a reference to a "wave" in the block below is history, not an instruction.
 - 17 skills MUST NOT be run. `AGENTS.md` § `## Method` names each with what to run instead, and is the
