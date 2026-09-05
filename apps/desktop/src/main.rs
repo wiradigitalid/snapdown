@@ -163,30 +163,79 @@ struct AppContext {
     bundle_store: Option<Arc<SqliteBundleStore>>,
 }
 
-impl AppContext {
-    fn init() -> Self {
-        let db_path = app_database_path();
-        let finding_store = match SqliteFindingStore::open(&db_path) {
-            Ok(store) => Arc::new(store),
-            Err(e) => {
-                eprintln!(
-                    "Warning: Failed to open DB at {:?}: {e}, falling back to in-memory",
-                    db_path
-                );
-                Arc::new(SqliteFindingStore::open_in_memory().unwrap())
-            }
-        };
+/// What stopped `AppContext::try_init` from producing a usable store set, and enough detail to
+/// build the dialog `AppContext::init` shows before the process exits.
+///
+/// `BUG-60`: all three of `finding_store`, `settings_store` and `vault_store` used to paper over
+/// exactly this with a fallback the Reviewer never saw - `open_in_memory()`, twice, silently
+/// discarding the whole session's work on exit - and an `unwrap()` underneath each one, which on a
+/// Windows release build (no console) took the tray, the hotkeys and the overlay down with no
+/// visible sign anything had gone wrong. This type exists so the failure can be named and reported
+/// instead: never a store that half-opened, never a value that hides what it substituted.
+#[derive(Debug)]
+struct StartupFailure {
+    /// What a Reviewer calls this store - "Library", "Settings", "Vault" - not its Rust type.
+    store: &'static str,
+    path: PathBuf,
+    reason: String,
+}
 
-        let settings_store = match SqliteSettingsStore::open(&db_path) {
-            Ok(store) => Arc::new(store),
-            Err(e) => {
-                eprintln!(
-                    "Warning: Failed to open settings DB at {:?}: {e}, falling back to in-memory",
-                    db_path
-                );
-                Arc::new(SqliteSettingsStore::open_in_memory().unwrap())
-            }
-        };
+impl StartupFailure {
+    fn dialog_text(&self) -> String {
+        format!(
+            "Snapdown cannot start.\n\n\
+             The {} at\n{}\n\
+             could not be opened:\n\n{}\n\n\
+             Nothing on disk has been changed. Snapdown will now close - if a backup of this file \
+             exists, restoring it and relaunching is the way back in.",
+            self.store,
+            self.path.display(),
+            self.reason,
+        )
+    }
+}
+
+/// Shows a native, modal, foregrounded dialog and blocks until the Reviewer dismisses it.
+///
+/// `rfd::MessageDialog` is already a dependency here for the two file-choosers elsewhere in this
+/// file, and on Windows it shows through a plain `MessageBoxW` - the "native dialog, owned and
+/// foregrounded" call `BUG-17` originally asked for, which `BUG-60` found completely absent from
+/// the Slint startup path. A free function rather than something inlined into `AppContext::init` so
+/// any other future fatal-before-a-window-exists path can call the same one.
+fn show_fatal_dialog(title: &str, message: &str) {
+    rfd::MessageDialog::new()
+        .set_level(rfd::MessageLevel::Error)
+        .set_title(title)
+        .set_description(message)
+        .set_buttons(rfd::MessageButtons::Ok)
+        .show();
+}
+
+impl AppContext {
+    /// Opens every store `init()` needs at `db_path`, or names exactly which one failed and why.
+    ///
+    /// Deliberately free of dialogs, `eprintln!` and `process::exit`, so a corrupt-store fixture can
+    /// drive it directly in a test without taking the whole test process down with it. `init()` is
+    /// the only real caller; it is what turns an `Err` here into something a Reviewer without a
+    /// console can actually see, per `BUG-60`.
+    ///
+    /// `finding_store` and `settings_store` refuse outright on a disk failure rather than
+    /// substituting an in-memory store - see `init()`'s doc comment for why. `vault_store` keeps its
+    /// pre-existing fallback to `default_vault_path()`: that fallback is a second real location, not
+    /// memory, so a Finding captured after it survives the exit; only both attempts failing is
+    /// fatal.
+    fn try_init(db_path: &Path) -> Result<Self, StartupFailure> {
+        let finding_store = SqliteFindingStore::open(db_path).map_err(|e| StartupFailure {
+            store: "Library",
+            path: db_path.to_path_buf(),
+            reason: e.to_string(),
+        })?;
+
+        let settings_store = SqliteSettingsStore::open(db_path).map_err(|e| StartupFailure {
+            store: "Settings",
+            path: db_path.to_path_buf(),
+            reason: e.to_string(),
+        })?;
 
         let vault_path = match settings_store.get(&SettingKey::VaultPath) {
             Ok(Some(Setting {
@@ -202,11 +251,19 @@ impl AppContext {
                 eprintln!("Failed to init vault store at {:?}: {e}", vault_path);
                 let fallback = default_vault_path();
                 let _ = std::fs::create_dir_all(&fallback);
-                VaultBlobStore::new(&fallback).unwrap()
+                VaultBlobStore::new(&fallback).map_err(|fallback_err| StartupFailure {
+                    store: "Vault",
+                    path: fallback.clone(),
+                    reason: format!(
+                        "{} failed ({e}), and the fallback location {} also failed: {fallback_err}",
+                        vault_path.display(),
+                        fallback.display(),
+                    ),
+                })?
             }
         };
 
-        let bundle_store = match SqliteBundleStore::open(&db_path) {
+        let bundle_store = match SqliteBundleStore::open(db_path) {
             Ok(store) => Some(Arc::new(store)),
             Err(e) => {
                 eprintln!(
@@ -217,12 +274,35 @@ impl AppContext {
             }
         };
 
-        Self {
+        Ok(Self {
             vault_store,
             vault_path,
-            finding_store,
-            settings_store,
+            finding_store: Arc::new(finding_store),
+            settings_store: Arc::new(settings_store),
             bundle_store,
+        })
+    }
+
+    /// The real entry point, called once from `main`.
+    ///
+    /// `BUG-60`'s design call: a corrupt `library.db` refuses the whole launch rather than opening
+    /// with a window that LOOKS normal over a Library that is silently empty and a Vault that is
+    /// silently in memory. Labelling the window instead - "this session's work will not be saved" -
+    /// was the other option `BUG-60`'s `fix:` offered, and it was rejected: a label sits in a corner
+    /// of a window the Reviewer is actively capturing into, competing with the capture flow itself
+    /// for attention, and it has to stay noticed for an entire session rather than for the one
+    /// moment a dialog owns. Refusing also matches the shape `bundle_store` already uses above -
+    /// `None`, and a call site that reports rather than pretends - so this fix adds no second
+    /// design for the same problem. It forces the fix (replace or restore `library.db`) before any
+    /// further work is put at risk, which is the only one of the two options that actually prevents
+    /// the data loss `BUG-60` is about, rather than just disclosing it.
+    fn init() -> Self {
+        match Self::try_init(&app_database_path()) {
+            Ok(ctx) => ctx,
+            Err(failure) => {
+                show_fatal_dialog("Snapdown cannot start", &failure.dialog_text());
+                std::process::exit(1);
+            }
         }
     }
 }
@@ -4223,6 +4303,65 @@ fn persist_finding(
     Some(finding_id)
 }
 
+/// Crops a Finding's image in place. `BUG-106`: the Crop tool's own store operation, and the first
+/// caller `update_finding_image` has ever had - it existed on `FindingStore` with nothing in
+/// `main.rs` calling it, the same "a port with no caller" shape `every_annotation_port_method_has_a_
+/// caller_in_the_app` guards against for the annotation ports.
+///
+/// `rect_px` is the crop rectangle in the CURRENT image's own pixel space - not the canvas's display
+/// space, and not that space at a different `canvas-zoom`. The cropped bytes are written to a NEW
+/// Vault path rather than overwriting `image_path`: if the database update below fails, the
+/// Finding's row still names a file whose dimensions match what the row says, which is the same
+/// "orphan a blob rather than corrupt a row" trade `persist_finding` above already makes when
+/// `create_finding` fails after `write_blob` has already landed. The pre-crop file is deleted only
+/// once the row has been repointed at the new one.
+fn crop_finding_image(
+    ctx: &AppContext,
+    finding_id: &str,
+    image_path: &str,
+    quality: u8,
+    rect_px: (u32, u32, u32, u32),
+) -> Result<(u32, u32), String> {
+    let original = ctx
+        .vault_store
+        .read_blob(image_path)
+        .map_err(|e| format!("Could not read the Finding's image to crop it: {e}"))?;
+
+    let (cropped_bytes, new_w, new_h) = ImageReducer::crop_image(&original, rect_px, quality)
+        .map_err(|e| format!("Could not crop the Finding's image: {e}"))?;
+
+    let new_rel_path = format!(
+        "findings/crop_{finding_id}_{}.png",
+        chrono::Utc::now().format("%Y%m%d_%H%M%S%3f")
+    );
+
+    ctx.vault_store
+        .write_blob(&new_rel_path, &cropped_bytes)
+        .map_err(|e| format!("Could not write the cropped image into the Vault: {e}"))?;
+
+    if let Err(e) = ctx
+        .finding_store
+        .update_finding_image(finding_id, &new_rel_path, new_w, new_h)
+    {
+        // The Vault write above already landed. Reported rather than swallowed - even though the
+        // Finding's row is NOT corrupted by this failure, it still means the crop the Reviewer just
+        // drew never took effect, and the new file is now an orphan nothing points to yet.
+        return Err(format!(
+            "The cropped image was written to the Vault but the Finding could not be updated to \
+             use it: {e}. The Finding still shows its previous image."
+        ));
+    }
+
+    // Best-effort cleanup of the file the row no longer points at. A failure here is a few
+    // orphaned KB in the Vault, not a correctness problem - the row already points at the NEW file
+    // and is consistent - so it is logged rather than turned into an error the Reviewer has to see.
+    if let Err(e) = ctx.vault_store.delete_blob(image_path) {
+        eprintln!("Could not delete the pre-crop image after cropping: {e}");
+    }
+
+    Ok((new_w, new_h))
+}
+
 /// Creates, places and then hides the capture overlay, so the first Capture has nothing left to
 /// build. See the call site for why this cannot wait until the overlay is actually wanted.
 ///
@@ -4658,6 +4797,63 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 load_active_detail(&win, &ctx_ad, &finding_id);
             }
             Err(e) => toast(&win, format!("Could not draw that: {e}"), true),
+        }
+    });
+
+    // THE CROP TOOL - `BUG-106`. Not an annotation: it replaces the Finding's image rather than
+    // drawing on top of it, so it gets its own callback and its own store operation
+    // (`crop_finding_image`) instead of joining `on_annotation_drawn`'s `match` on `kind`.
+    let win_weak_crop = main_window.as_weak();
+    let ctx_crop = ctx.clone();
+    main_window.on_crop_applied(move |x1, y1, x2, y2| {
+        let Some(win) = win_weak_crop.upgrade() else {
+            return;
+        };
+        let finding_id = win.get_active_finding_id().to_string();
+        if finding_id.is_empty() {
+            toast(
+                &win,
+                "Open a Finding first - a crop belongs to an image.",
+                true,
+            );
+            return;
+        }
+        let Ok(Some(detail)) = ctx_crop.finding_store.get_finding(&finding_id) else {
+            toast(&win, "Could not read the Finding to crop it.", true);
+            return;
+        };
+        let f = detail.finding;
+        if f.image_width == 0 || f.image_height == 0 {
+            return;
+        }
+
+        // Normalized, already ordered min-then-max by the canvas, into the CURRENT image's own
+        // pixel space - the same convention `shape_from_drag` turns an annotation's drag through.
+        let img_w = f64::from(f.image_width);
+        let img_h = f64::from(f.image_height);
+        let px_x1 = (f64::from(x1) * img_w).round().clamp(0.0, img_w) as u32;
+        let px_y1 = (f64::from(y1) * img_h).round().clamp(0.0, img_h) as u32;
+        let px_x2 = (f64::from(x2) * img_w).round().clamp(0.0, img_w) as u32;
+        let px_y2 = (f64::from(y2) * img_h).round().clamp(0.0, img_h) as u32;
+        let px_w = px_x2.saturating_sub(px_x1).max(1);
+        let px_h = px_y2.saturating_sub(px_y1).max(1);
+
+        let quality = f
+            .resolved_encoder_quality
+            .unwrap_or(snapdown_store::image::LOSSLESS);
+
+        match crop_finding_image(
+            &ctx_crop,
+            &finding_id,
+            &f.image_path,
+            quality,
+            (px_x1, px_y1, px_w, px_h),
+        ) {
+            // A new Vault file and new dimensions - the same reason `persist_finding` demands a
+            // full rebuild rather than `click_finding`'s in-place row update: the filmstrip's own
+            // thumbnail and dimension label are stale otherwise, not merely the canvas.
+            Ok(_) => load_findings_into_window(&win, &ctx_crop, Some(&finding_id)),
+            Err(e) => toast(&win, e, true),
         }
     });
 
@@ -7320,6 +7516,151 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `BUG-60`. Writes a REAL SQLite database - schema, several hundred rows so it spans more than
+    /// one page - then stamps every byte from offset 4096 onward, leaving the 100-byte file header
+    /// (and therefore the magic string `SqliteFindingStore::open` checks before anything else)
+    /// completely valid. `AGENTS.md`'s own pitfall section names why this matters: garbage bytes are
+    /// rejected at `Connection::open` before a single pragma runs, so a "corrupt database" fixture
+    /// built from garbage never reaches `PRAGMA quick_check` - the exact check `open`'s read-only
+    /// pass runs, and the one a fake header would let a test claim to cover without ever exercising.
+    fn write_valid_header_corrupt_pages_db(db_path: &Path) {
+        {
+            let conn = rusqlite::Connection::open(db_path).expect("a scratch connection");
+            conn.execute(
+                "CREATE TABLE sample (id INTEGER PRIMARY KEY, note TEXT);",
+                [],
+            )
+            .expect("to create a scratch table");
+            for i in 0..200 {
+                conn.execute(
+                    "INSERT INTO sample (note) VALUES (?1);",
+                    [format!("padding data row {i}")],
+                )
+                .expect("to insert a scratch row");
+            }
+        }
+
+        let mut bytes = std::fs::read(db_path).expect("to read the scratch database back");
+        assert!(bytes.len() >= 8192, "the fixture must span multiple pages");
+        assert_eq!(
+            &bytes[0..16],
+            b"SQLite format 3\0",
+            "the header must stay valid"
+        );
+        for b in &mut bytes[4096..] {
+            *b = 0xBB;
+        }
+        std::fs::write(db_path, &bytes).expect("to write the corrupted bytes back");
+    }
+
+    /// The headline shape of `BUG-60`: a corrupt `library.db` must REFUSE the whole launch, naming
+    /// the Library and the exact path, rather than silently handing back an in-memory
+    /// `AppContext` whose Findings are discarded the moment the process exits.
+    ///
+    /// This is the test that catches the regression `BUG-60` describes: temporarily restoring the
+    /// old `.unwrap_or_else(|_| open_in_memory)` shape here turns this from red to green on an
+    /// `Ok(_)` match, which is exactly the silent substitution this row exists to forbid - verified
+    /// by hand as part of landing this fix, not asserted mechanically (a mechanical form would just
+    /// scan `try_init`'s own source, per `AGENTS.md`'s note on why that kind of guard is worthless).
+    #[test]
+    fn try_init_refuses_a_corrupt_library_rather_than_falling_back_to_memory() {
+        let tmp = tempfile::NamedTempFile::new().expect("a temp file");
+        let db_path = tmp.path().to_path_buf();
+        write_valid_header_corrupt_pages_db(&db_path);
+        let bytes_before = std::fs::read(&db_path).expect("to read the fixture before try_init");
+
+        let result = AppContext::try_init(&db_path);
+
+        let Err(failure) = result else {
+            panic!("a corrupt library.db must refuse to open, never substitute an in-memory store");
+        };
+        assert_eq!(
+            failure.store, "Library",
+            "the Library store must be the one named, since it is opened first"
+        );
+        assert_eq!(
+            failure.path, db_path,
+            "the failure must name the exact path a Reviewer can go look at"
+        );
+        assert!(
+            !failure.reason.is_empty(),
+            "the reason must say something a Reviewer can read, not just fail silently"
+        );
+
+        // BR-118: nothing is created over a corrupt store. `try_init` must not have touched the
+        // file, nor created a `-wal`/`-shm` beside it, on its way to reporting the failure.
+        let bytes_after = std::fs::read(&db_path).expect("to read the fixture after try_init");
+        assert_eq!(
+            bytes_after, bytes_before,
+            "a refused open must leave the corrupt file byte-identical"
+        );
+        let wal_path = db_path.with_file_name(format!(
+            "{}-wal",
+            db_path.file_name().unwrap().to_str().unwrap()
+        ));
+        let shm_path = db_path.with_file_name(format!(
+            "{}-shm",
+            db_path.file_name().unwrap().to_str().unwrap()
+        ));
+        assert!(
+            !wal_path.exists(),
+            "no -wal file may appear beside a refused store"
+        );
+        assert!(
+            !shm_path.exists(),
+            "no -shm file may appear beside a refused store"
+        );
+    }
+
+    /// A first launch - `db_path` does not exist yet - must still succeed and hand back stores that
+    /// actually work, so the refusal above is provably about corruption and not about `try_init`
+    /// having become unconditionally fatal.
+    #[test]
+    fn try_init_succeeds_on_a_fresh_path_and_the_stores_actually_work() {
+        let tmp_dir = tempfile::tempdir().expect("a temp dir");
+        let db_path = tmp_dir.path().join("library.db");
+
+        let ctx = AppContext::try_init(&db_path).expect("a fresh path must open cleanly");
+
+        assert!(
+            ctx.finding_store
+                .list_findings()
+                .expect("to read the fresh Library")
+                .is_empty(),
+            "a fresh Library must be empty, not merely present"
+        );
+        assert!(
+            ctx.bundle_store.is_some(),
+            "a fresh Bundle library must open too, on the same path"
+        );
+    }
+
+    /// `StartupFailure::dialog_text` is the one piece of `BUG-60`'s fix that never runs under `cargo
+    /// test` at all - `show_fatal_dialog` blocks on real OS UI - so this is the only guard on what the
+    /// Reviewer is actually shown: the store name and the exact path have to survive into the text,
+    /// or a Reviewer reading the dialog cannot tell what broke or where to look.
+    #[test]
+    fn startup_failure_dialog_names_the_store_and_the_path() {
+        let failure = StartupFailure {
+            store: "Library",
+            path: PathBuf::from(r"C:\Users\reviewer\AppData\Roaming\Snapdown\library.db"),
+            reason: "Database corruption detected: wrong # of entries in index sample".to_string(),
+        };
+        let text = failure.dialog_text();
+        assert!(
+            text.contains("Library"),
+            "the store name must be in the dialog"
+        );
+        assert!(
+            text.contains(r"C:\Users\reviewer\AppData\Roaming\Snapdown\library.db"),
+            "the exact path must be in the dialog"
+        );
+        assert!(
+            text.contains("wrong # of entries in index sample"),
+            "the underlying reason must be in the dialog"
+        );
+    }
 
     /// The exact string shape found in the live `finding.region` column, read out of
     /// `%APPDATA%/id.wiradigital.snapdown/library.db`.

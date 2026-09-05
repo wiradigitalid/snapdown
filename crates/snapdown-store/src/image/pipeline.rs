@@ -313,6 +313,39 @@ impl ImageReducer {
 
         Ok(())
     }
+
+    /// Crops already-encoded image bytes to a pixel rectangle and re-encodes as PNG. `BUG-106`.
+    ///
+    /// Pure: it never touches the Vault or the database. The caller (`crop_finding_image` in
+    /// `apps/desktop/src/main.rs`) is what reads the Finding's current bytes, hands them here, and
+    /// commits what comes back - so this is decode-crop-encode and nothing else, testable the same
+    /// way `reduce_image` above is: by decoding its OWN output rather than trusting a signature and
+    /// a claimed dimension (`AGENTS.md`'s standing rule for image tests in this repository).
+    ///
+    /// `rect` is clamped into the DECODED image's own bounds rather than trusted from the caller,
+    /// the same defensive clamp `prepare_region` in `main.rs` applies to a capture's drag: a
+    /// selection computed against a stale size must not become an out-of-bounds crop.
+    pub fn crop_image(
+        input_bytes: &[u8],
+        rect: (u32, u32, u32, u32),
+        quality: u8,
+    ) -> Result<(Vec<u8>, u32, u32), CoreError> {
+        let decoded = image::load_from_memory(input_bytes)
+            .map_err(|e| CoreError::Validation(format!("Failed to decode image to crop: {e}")))?
+            .to_rgba8();
+
+        let (src_w, src_h) = (decoded.width(), decoded.height());
+        let (x, y, w, h) = rect;
+        let x = x.min(src_w.saturating_sub(1));
+        let y = y.min(src_h.saturating_sub(1));
+        let w = w.min(src_w - x).max(1);
+        let h = h.min(src_h - y).max(1);
+
+        let cropped = image::imageops::crop_imm(&decoded, x, y, w, h).to_image();
+        let bytes = encode_png(&cropped, w, h, quality)?;
+
+        Ok((bytes, w, h))
+    }
 }
 
 #[cfg(test)]
@@ -326,6 +359,36 @@ mod tests {
         let encoder = PngEncoder::new(&mut bytes);
         encoder
             .write_image(img.as_raw(), w, h, ExtendedColorType::Rgba8)
+            .unwrap();
+        bytes
+    }
+
+    /// A real PNG of a recognisable gradient, so a cropped copy can be told apart from a blank one -
+    /// the same fixture shape `png_fixture` in `apps/desktop/src/main.rs`'s own tests uses, for the
+    /// same reason: every pixel encodes its own `(x, y)`, so a crop's content can be checked against
+    /// the SOURCE pixel at the corresponding offset rather than trusted on a claimed dimension alone.
+    fn gradient_png(width: u32, height: u32) -> RgbaImage {
+        let mut img = RgbaImage::new(width, height);
+        for (x, y, px) in img.enumerate_pixels_mut() {
+            *px = image::Rgba([
+                (x * 255 / width.max(1)) as u8,
+                (y * 255 / height.max(1)) as u8,
+                128,
+                255,
+            ]);
+        }
+        img
+    }
+
+    fn encode(img: &RgbaImage) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        PngEncoder::new(&mut bytes)
+            .write_image(
+                img.as_raw(),
+                img.width(),
+                img.height(),
+                ExtendedColorType::Rgba8,
+            )
             .unwrap();
         bytes
     }
@@ -354,5 +417,76 @@ mod tests {
             image::load_from_memory(result.thumbnail_bytes.as_ref().unwrap()).unwrap();
         assert_eq!(thumb_decoded.width(), 320);
         assert_eq!(thumb_decoded.height(), 180);
+    }
+
+    /// `BUG-106`: the crop must actually decode to the requested rectangle, with the SOURCE's own
+    /// pixels inside it - not merely a signature and a claimed width and height, which is the one
+    /// shape of image test this repository has already shipped and had to correct (`AGENTS.md`).
+    #[test]
+    fn crop_image_decodes_to_the_requested_rectangle_with_the_source_pixels_inside_it() {
+        let source = gradient_png(40, 30);
+        let input_bytes = encode(&source);
+
+        let (bytes, w, h) = ImageReducer::crop_image(&input_bytes, (10, 5, 20, 15), 100).unwrap();
+
+        assert_eq!(
+            (w, h),
+            (20, 15),
+            "the reported dimensions must be the cropped ones"
+        );
+
+        let decoded = image::load_from_memory(&bytes)
+            .expect("the crop's own output must be a real, decodable image")
+            .to_rgba8();
+        assert_eq!(
+            (decoded.width(), decoded.height()),
+            (20, 15),
+            "the DECODED output must carry the requested dimensions, not merely the header"
+        );
+
+        // Every corner, checked against the SOURCE at the matching offset - proof the crop took the
+        // right pixels and not merely pixels of the right count.
+        for (dx, dy) in [(0, 0), (19, 0), (0, 14), (19, 14), (10, 7)] {
+            let expected = *source.get_pixel(10 + dx, 5 + dy);
+            let actual = *decoded.get_pixel(dx, dy);
+            assert_eq!(
+                actual,
+                expected,
+                "pixel ({dx},{dy}) of the crop must equal the source's pixel at ({},{})",
+                10 + dx,
+                5 + dy
+            );
+        }
+    }
+
+    /// A rectangle that reaches past the decoded image's own edge must be clamped into it, the same
+    /// defensive clamp `prepare_region` in `main.rs` applies to a capture's drag - a selection
+    /// computed against a stale size must not become an out-of-bounds crop or a panic.
+    #[test]
+    fn crop_image_clamps_a_rectangle_that_reaches_past_the_edge() {
+        let source = gradient_png(10, 10);
+        let input_bytes = encode(&source);
+
+        let (bytes, w, h) = ImageReducer::crop_image(&input_bytes, (5, 5, 100, 100), 100).unwrap();
+
+        assert_eq!(
+            (w, h),
+            (5, 5),
+            "the crop must be clamped into the 10x10 source"
+        );
+        let decoded = image::load_from_memory(&bytes).unwrap().to_rgba8();
+        assert_eq!((decoded.width(), decoded.height()), (5, 5));
+        assert_eq!(*decoded.get_pixel(0, 0), *source.get_pixel(5, 5));
+    }
+
+    /// A crop is asked of bytes that do not decode - a truncated read, say - and it must fail rather
+    /// than hand back an empty or fabricated image for the caller to write into the Vault.
+    #[test]
+    fn crop_image_reports_a_decode_failure_rather_than_swallowing_it() {
+        let result = ImageReducer::crop_image(b"not a real image", (0, 0, 4, 4), 100);
+        assert!(
+            result.is_err(),
+            "bytes that do not decode must be reported, not treated as a valid crop"
+        );
     }
 }

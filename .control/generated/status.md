@@ -14,18 +14,20 @@ validators_red:
 - memlog-home
 - refs-resolve
 validators_skipped:
+  review-trace: 'advisory — trace stale, re-run before the next gate or spec close: .how/bundle/SDD-bundle.md
+    (changed at c1cb8ca, reviewed at 9358a4a)'
   uc-scheduled: no spec yet, so no ticket yet — every unscheduled UC is the correct state. Full catalogue
     coverage is checked at G5
 open_questions:
   blocking: 0
-  assumptions: 23
+  assumptions: 22
   external: 3
-  answered: 10
+  answered: 11
   open_by_whose:
     owner: 0
     run: 0
     frozen: 0
-    unstated: 23
+    unstated: 22
   blocking_budget: 12
   blocking_over_budget: false
   assumptions_budget_per_gate: 15

@@ -79,7 +79,14 @@ defects:
       surface is machine-facing only. The second is cheaper and may be correct: Snapdown's reader is
       a machine. It changes a promise, so it goes through wdi-product, not a patch.
     blocked_by: DEC-005, which freezes `sharing`. Registered now, decided when that lifts.
-    status: open
+    resolved: |
+      2026-09-04, by `DEC-020`. Withdrawal, not a build: row 11 (the publish dialog, `LC-022`) and row
+      15 (the reader's not-found page) are withdrawn outright, since neither was ever built and
+      `DEC-005` still forbids building either. Row 14 is corrected rather than withdrawn — `DEC-015`
+      had already found `LC-027` genuinely serves `GET /b/{slug}` as a bare server-rendered `<pre>`
+      page, which this row's own evidence, filed 2026-08-23, predates. `LC-027` is not retired; only
+      `LC-022` is. Full reasoning in `DEC-020`.
+    status: fixed
   - id: BUG-3
     title: The web service interpolates published Markdown into HTML without escaping it
     found: "2026-08-23"
@@ -3547,6 +3554,36 @@ defects:
       Also corrected: the evidence says "a Tauri release binary on Windows has no console". `DEC-007`
       retired Tauri. The sentence is still true of the Slint release binary for the same reason, and
       the reason is what mattered.
+    note_2026_09_04: |
+      Re-checked under `DEC-019`, because the 2026-09-01 note above named two remaining stubs and the
+      bundle-library work (`.scratch/bundle-library/`, PR #38, merged 2026-09-02) landed after that
+      note was written - the same shape of staleness already found once for `BUG-61` on this run.
+
+      `library-clicked` is NOT one of the two anymore, and this repository did not need to fix it: it
+      was wired to the real Library screen by ticket 11 of that same spec, commit `36048a7`
+      ("the Library opens and lists every Bundle, closes ticket 11"), merged 2026-09-02.
+      `on_library_clicked` in `main.rs` calls `open_library()`, which loads Bundle rows from the store
+      through `build_library_rows` and drives `library-state`/`library-rows`/`library-error-message` -
+      a real screen, not a print. That same commit already dropped `library-clicked` out of
+      `KNOWN_STUBS` in `test_ui_callbacks_reach_rust.rs`; today's read of that file confirms it holds
+      only one entry now:
+
+        bundles-drawer-clicked   "the drawer is always open; nothing toggles it"
+
+      `bundles-drawer-clicked` is still genuinely a stub, confirmed by reading the code fresh rather
+      than trusting the row: `appwindow.slint:1604` declares `callback bundles-drawer-clicked();` and
+      nothing else - no drawer element, no drawer state, anywhere in the file. `main.rs`'s handler for
+      it is still `println!("Toggle Bundles Drawer clicked")`, with its own comment saying it was
+      "Deliberately untouched by this ticket - the spec's own 'Out of Scope' names it as a separate,
+      undescribed pattern nothing has asked for yet." There is nothing built for this callback to open,
+      so wiring it now would mean inventing the surface, not connecting a button to one - outcome (a)
+      from the diagnose-first brief, not (b). No code change made.
+
+      This row's own `fix:` already named the honest interim for a stub with nothing behind it -
+      disable the button or say "not built yet" on screen - and already left that choice to the owner.
+      That guidance still stands and this note does not change it. `status` stays `open`: one visible
+      control still accepts a click and does nothing, which the row's own `impact:` already says is
+      worse than an absent one.
     status: open
 
   - id: BUG-58
@@ -3704,8 +3741,55 @@ defects:
       `Connection::open` before a pragma runs, so the fixture must be a valid header with corrupt
       pages, and the guard must be mutation-verified - `a_failed_open_leaves_no_wal_or_shm_file` is
       already recorded as insensitive to its own defect.
+    resolution: |
+      FIXED, 2026-09-04, under `DEC-019`. `apps/desktop/src/main.rs`'s `AppContext::init` is now a
+      thin wrapper around a new `AppContext::try_init(db_path: &Path) -> Result<Self, StartupFailure>`
+      - pure, dialog-free, exit-free, and therefore directly testable. `try_init` opens
+      `SqliteFindingStore` and `SqliteSettingsStore` and, on either failing, returns `Err` instead of
+      substituting `open_in_memory()`; `init()` turns that `Err` into a native `rfd::MessageDialog`
+      (already a dependency here for the two file-choosers elsewhere in this file - on Windows it
+      shows through a plain `MessageBoxW`, the "native dialog, owned and foregrounded" `BUG-17`
+      originally asked for) naming the store, the exact path, and the underlying reason, then
+      `std::process::exit(1)`. All three `unwrap`s named in `fix:` point 3 are gone: the two on the
+      in-memory fallbacks no longer exist because the fallback itself no longer exists, and the one
+      on the Vault's second-attempt fallback is now `.map_err(...)?` into the same `StartupFailure`
+      dialog rather than a panic.
+
+      Design call for `fix:` point 2 - refuse, not label: a corrupt `library.db` now refuses the
+      whole launch rather than opening a window that looks normal over a silently empty Library and
+      a silently in-memory Vault. The alternative `fix:` offered - labelling the window
+      unmistakably that the session is lost-on-exit - was rejected: a label competes with the
+      capture flow itself for the Reviewer's attention and has to stay noticed for an entire
+      session, where a dialog only has to be read once, before anything is at risk. Refusing also
+      matches the shape `bundle_store` already used before this fix (`Option<Arc<SqliteBundleStore>>`,
+      `None` on a failed open, and a call site that reports rather than pretends) rather than
+      inventing a second design for the same problem, and it is the only one of the two options that
+      actually *prevents* the data loss `BUG-60` is about rather than merely disclosing it.
+      `vault_store` is the one exception, left as a real fallback rather than folded into the
+      refusal: `VaultBlobStore::new` failing on the Vault's configured path and succeeding on
+      `default_vault_path()` is a relocation to a second real, on-disk location, not a substitution
+      that discards work - so it is not the shape `fix:` point 2 is about. Only both attempts failing
+      is fatal now, reported the same way as the other two.
+
+      Three new tests in `apps/desktop/src/main.rs`'s `mod tests`:
+      `try_init_refuses_a_corrupt_library_rather_than_falling_back_to_memory` (the regression guard -
+      a real SQLite file with a valid 100-byte header and every byte from offset 4096 onward
+      overwritten, per `AGENTS.md`'s fixture rule, since garbage bytes never reach
+      `PRAGMA quick_check` at all), `try_init_succeeds_on_a_fresh_path_and_the_stores_actually_work`
+      (the refusal is about corruption, not about `try_init` having become unconditionally fatal),
+      and `startup_failure_dialog_names_the_store_and_the_path` (the one piece of the fix that never
+      runs under `cargo test` - `show_fatal_dialog` blocks on real OS UI - covers what the text
+      actually says). Mutation-verified by hand: temporarily restoring the old
+      `Err(_) => open_in_memory().unwrap()` shape in both stores turned
+      `try_init_refuses_a_corrupt_library_rather_than_falling_back_to_memory` red (it caught the
+      exact `BUG-60` shape - `try_init` returning `Ok` over an in-memory `AppContext` - not merely a
+      changed error message), confirming the guard is sensitive to the defect rather than passing
+      regardless of it; reverted immediately after.
+
+      `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and
+      `cargo test --workspace --no-fail-fast` are all clean.
     related: BUG-12, BUG-16, BUG-17
-    status: open
+    status: fixed
 
   - id: BUG-61
     title: Nine promised Editor surfaces have no Slint implementation, and seven store operations have no caller
@@ -3810,6 +3894,44 @@ defects:
 
       `/bundles` and `/bundles/:id` are the two that `.scratch/bundle-library/` is designing, so they
       have an owner and are not loose. `/findings/orphans` does not.
+    note_2026_09_04: |
+      RE-VERIFIED under `DEC-019`, against the code as it now stands: `.scratch/bundle-library/`
+      (tickets 10-19, PR #38) MERGED on 2026-09-02, and this note had not been updated since. Checked
+      by counting call sites directly, not by trusting either the old note or the ticket statuses.
+
+      Landed since the 2026-09-01 note:
+        /bundles         BUILT. `list_bundles` now has call sites building the Library's real bundle
+                          rows (`main.rs:390`, `794`, `1121`, `1198`, `1261`), not only a filter set.
+        /bundles/:id     BUILT. `get_bundle` has call sites opening a bundle into Review & Update
+                          (`main.rs:741`, `2441`, `5427`, `5461`, `5500`, and more).
+        (bundle delete)  BUILT. `delete_bundle` is called (`main.rs:463`).
+        (bundle edit)    BUILT, under a different name than this row expected. `update_bundle_markdown`
+                          was subsumed by `update_bundle_name_and_markdown` (the port comment says so
+                          directly: "Subsumes the document-only `update_bundle_markdown` that ticket
+                          05's audit found nothing calling"), which IS called (`main.rs:585`, `982`).
+
+      So of "Store operations still with no caller" from the 2026-09-01 list, only two remain true:
+      `reorder_markers` and `update_finding_image` — both defined in `crates/snapdown-core/src/ports/`
+      and implemented in `snapdown-store`, neither called anywhere in `apps/desktop/src/`.
+
+      Also corrected: `SqliteAccessKeyStore` no longer names anything. `DEC-016`'s removal (PR #40,
+      merged) deleted the whole `AccessKey`/`AccessKeyStore` domain layer, not just its caller — this
+      row's evidence section still lists it as "no caller" when the honest state is "does not exist."
+      The 2026-09-01 note's claim that `/settings/agent-access` "landed" as a read-only `Agent Bridge`
+      tab is now itself stale for the same reason: that tab was one of the two things `DEC-016`'s
+      removal found and deleted beyond its own brief (the ledger at
+      `.control/memlog/autopilot-2026-09-04.md`, iteration 18, names it). `agent-access` is retired,
+      not a surface owed by this row.
+
+      Still genuinely absent, unchanged from 2026-09-01:
+        /findings              partial - the filmstrip shows, nothing manages
+        /findings/orphans      no Slint file, and `OrphanSweeper` (renamed from `VaultSweeper` at some
+                                point since this row was opened) has no caller in `apps/desktop/src/`
+        /bundles/:id/publish   behind `DEC-005`
+
+      `reorder_markers`, `update_finding_image`, `/findings/orphans`, and the publish surface are what
+      remains of this row's original nine. Ordering which to build next is still the owner's call, per
+      this row's own `fix:` — `DEC-019` did not decide it, only re-verified the inventory.
     status: open
 
   - id: BUG-62
@@ -4743,18 +4865,34 @@ defects:
       yet: a delete affordance on the filmstrip card, an item in a Finding panel, or an amendment to
       `FR-37` if the owner considers right-click discoverable enough for a destructive action.
     fix: |
-      NOT DONE, and deliberately open. Three ways to close it, in the order they cost:
+      DONE, option 1 - the one that keeps both requirements true, and it is small.
 
-        1. a Delete control on the filmstrip card or in the Finding's own panel, and a Vault link
-           beside the file name in the readout strip
-        2. accept right-click as a route and amend `FR-37`'s consequence - which then needs an answer
-           for `NFR-16`, because a right-click menu IS a control that has to be discovered
-        3. leave deletion to the Library screen when `BUG-61` builds it, and drop the menu entry
-           until then
+      Both new controls reuse the exact state and callbacks the context menu's `reveal` and
+      `delete-finding` entries already reach, rather than a second copy of either:
 
-      Option 1 is the one that keeps both requirements true. It is small, and it is the owner's call
-      rather than mine.
-    status: open
+        - `apps/desktop/ui/appwindow.slint`, each filmstrip card: a small always-visible trash
+          icon (`del-finding-touch`), declared last so it draws above the card's own
+          click/right-click `TouchArea`. It calls a new `request-delete-finding(target,
+          target-selected)` function that sets `root.pending-delete-count` and
+          `root.pending-delete-finding` - the same two properties the menu's `delete-finding`
+          entry now also reaches through that one function, rather than each writing them out
+          separately - so the click still lands on the existing confirm-once dialog
+          (`pending-delete-finding != ""`) and the existing `delete-finding-confirmed` callback,
+          never a bare single-click delete.
+        - `apps/desktop/ui/appwindow.slint`, the titlebar: a small folder icon
+          (`vault-link-touch`) beside `current-filename`, firing
+          `root.open-file-location-clicked(root.active-finding-id)` - the same callback and the
+          same argument the bare-canvas menu's own `reveal` entry already uses for "whichever
+          Finding is open".
+
+      The right-click entries stay: this adds a second route, it does not replace the first.
+      Both callbacks were already handled in `apps/desktop/src/main.rs`
+      (`on_open_file_location_clicked`, `on_delete_finding_confirmed`), so no Rust wiring changed.
+
+      Reachability tests added in `apps/desktop/tests/test_annotation_wiring.rs`.
+    status: fixed
+    decision: none - no `AD-` was contradicted; option 1 keeps `FR-37` and `NFR-16` true exactly as
+      written, no requirement text changed.
 
   - id: BUG-78
     title: A slider filled from its middle, Explorer opening the Desktop, and a deletion that took
@@ -6097,8 +6235,99 @@ defects:
       draw or apply a crop - selecting the tool changes the icon and the mouse cursor and nothing
       else happens on the canvas.
     fix: |
-      Not fixed. Recorded on the owner's request; no code changed. Fixing this means giving the Crop
-      tool its own canvas interaction (drag-to-select a region, then apply it) the way `region-capturer`
-      already does for the capture overlay, and a store-level operation to actually crop the Finding's
-      image - out of scope for this entry.
+      The Crop tool now has its own drag-to-select and its own store operation, modelled on the
+      region-selection drag `CaptureOverlayWindow` already proves in this file rather than a second
+      invention of the same shape.
+
+      `apps/desktop/ui/appwindow.slint`: a new drag state (`crop-dragging`, `crop-x1`/`y1`/`x2`/`y2`,
+      `crop-drag-is-real`) kept separate from the annotation tools' `drawing`/`draw-x1`..`draw-y2` -
+      a crop is not an annotation and never joins `root.annotations`. `canvas-surface`'s
+      `pointer-event` starts the drag on a press while `active-tool-index == 6`, updates it on
+      `moved`, and on release - past the same "a click is not a selection" threshold every other
+      drag tool here already enforces - fires a new `crop-applied(float, float, float, float)`
+      callback with the two corners, normalized and already ordered min-then-max. A drag in progress
+      is shown with the same selection-ring chrome `annotation.slint` already draws for a selected
+      shape (`Theme.annotation-select-ring`, transparent fill) - no new colour literal.
+
+      `crates/snapdown-store/src/image/pipeline.rs`: `ImageReducer::crop_image` - decode, clamp the
+      rectangle into the decoded image's own bounds (the same defensive clamp `prepare_region` in
+      `main.rs` applies to a capture's drag), crop, re-encode as PNG at the caller's quality. Pure:
+      it touches neither the Vault nor the database.
+
+      `apps/desktop/src/main.rs`: `crop_finding_image` reads the Finding's current bytes out of the
+      Vault, calls `ImageReducer::crop_image`, writes the result to a NEW Vault path
+      (`findings/crop_<id>_<timestamp>.png`) rather than overwriting `image_path`, and only then
+      calls `update_finding_image` - which had existed on `FindingStore` with no caller anywhere in
+      the app, the same "a port with no caller" shape `BUG-61` already named for the annotation
+      ports. Writing to a new path rather than overwriting the old one means a failed database
+      update leaves the Finding's row pointing at the OLD file, whose dimensions still match what
+      the row says - never a row naming a file whose actual dimensions disagree with it. The
+      pre-crop file is deleted only after the row is repointed at the new one, and its own Result is
+      still read and logged on failure rather than swallowed - a few orphaned KB, not a correctness
+      problem, since the row is already consistent by that point. `on_crop_applied` turns the
+      canvas's normalized corners into pixel geometry against the Finding's own stored dimensions
+      (the same convention `shape_from_drag` already uses for one shape), calls
+      `crop_finding_image`, and on success rebuilds the filmstrip (`load_findings_into_window`)
+      rather than only the active detail - the image's content and dimensions changed, so the
+      filmstrip's own thumbnail and dimension label have to as well, the same reason a capture or an
+      Open/Paste already demands that rebuild.
+
+      Three new tests in `crates/snapdown-store/src/image/pipeline.rs`'s `mod tests`, all decoding
+      their own output rather than trusting a signature and a claimed dimension (`AGENTS.md`'s
+      standing rule for image tests in this repository):
+      `crop_image_decodes_to_the_requested_rectangle_with_the_source_pixels_inside_it` (a gradient
+      fixture whose every pixel encodes its own `(x, y)`, checked at both corners and the centre
+      against the source at the matching offset), `crop_image_clamps_a_rectangle_that_reaches_past_
+      the_edge`, and `crop_image_reports_a_decode_failure_rather_than_swallowing_it`. A new
+      `apps/desktop/tests/test_crop_tool.rs` proves the interaction is REACHABLE rather than merely
+      declared - `AGENTS.md` names that this repository's signature failure - covering the drag from
+      press to release, the preview's theme-token colour, that a crop never becomes an annotation,
+      that `on_crop_applied` reaches a real (non-stub) handler which reaches `crop_finding_image`
+      with every one of its three fallible writes handled rather than swallowed with `let _ =`, and
+      that the pre-crop file is deleted only after the database row is repointed at the new one.
+
+      `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and
+      `cargo test --workspace --no-fail-fast` are all clean.
+
+      KNOWN LIMITATION, recorded rather than silently left out: a Finding's existing Markers and
+      visual annotations are stored as fractions of the FULL image (`shape_from_drag`,
+      `apps/desktop/src/main.rs`), and this fix does not re-map them into the cropped image's own
+      pixel space. Cropping a Finding that already carries Markers or annotations leaves them
+      pointing at their old fractional position on the new, smaller image - which reads as wrong or
+      off-canvas rather than moving or disappearing with the region they were about. Undo was the
+      one thing this entry's own task explicitly waived; this was not asked for and is not, so it is
+      named here instead of left for the next reader to discover the way `BUG-61`'s dangling port
+      was.
+    status: fixed
+
+  - id: BUG-107
+    title: Cropping a Finding does not remap its existing Markers/annotations into the cropped image
+    found: "2026-09-05"
+    found_by: the `BUG-106` builder's own self-dispatched `/code-review` Spec pass, while shipping the Crop tool
+    component: finding
+    severity: low
+    contradicts: []
+    root_cause: code
+    evidence: |
+      A Finding's Markers and visual annotations are stored as fractions of its FULL image
+      (`shape_from_drag`, `apps/desktop/src/main.rs`). `BUG-106` gave the Crop tool a real canvas
+      interaction and a store-level crop operation, but does not re-map those fractional positions
+      into the cropped image's own coordinate space. Cropping a Finding that already carries Markers
+      or annotations leaves them at their old fractional position on the new, smaller image.
+    impact: |
+      A cropped Finding's pre-existing Markers/annotations can read as mispositioned or land outside
+      the visible canvas entirely, rather than moving with (or being clipped by) the region they were
+      about.
+    why_undetected: |
+      It was never undetected - the builder's own self-review caught it in the same session `BUG-106`
+      shipped in, and disclosed it in `BUG-106`'s own `fix:` text rather than silently shipping the
+      gap. Filed here as its own row so it is tracked rather than left as prose inside a closed
+      defect's record.
+    fix: |
+      NOT DONE. Re-mapping means, for every Marker/annotation on the cropped Finding: convert its
+      fractional position against the OLD image dimensions into pixel space, subtract the crop
+      rectangle's origin, then re-normalize against the NEW (cropped) dimensions - dropping (or
+      visibly clipping) anything that lands entirely outside the new bounds. Whether an annotation
+      straddling the crop boundary should be dropped, clipped, or kept in full is a product call the
+      owner has not been asked yet - not a code decision to make silently.
     status: open

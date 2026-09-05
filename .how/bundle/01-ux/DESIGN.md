@@ -31,7 +31,7 @@ deliverable, and product styling on top of it competes with the thing being hand
 |---|---|---|
 | Bundles | `LC-014` `bundles-editor` | List, preview, item list. Serves `FR-11`, `FR-12`, `FR-14` |
 | Compose Bundle | `LC-031` `compose-bundle-dialog` | Naming and confirming. Serves `FR-10` |
-| Publish a Bundle | `LC-022` `publish-dialog` | Existing. Frozen by `DEC-005` |
+| Publish a Bundle | ~~`LC-022` `publish-dialog`~~ | Withdrawn by `DEC-020`, 2026-09-04 — never built, and `DEC-005` forbids building it now |
 
 `LC-031` is new and registered as part of landing this document. Inventory row 9 named the screen; no
 build unit carried it.
