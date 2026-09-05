@@ -86,7 +86,7 @@ defects:
       had already found `LC-027` genuinely serves `GET /b/{slug}` as a bare server-rendered `<pre>`
       page, which this row's own evidence, filed 2026-08-23, predates. `LC-027` is not retired; only
       `LC-022` is. Full reasoning in `DEC-020`.
-    status: closed
+    status: fixed
   - id: BUG-3
     title: The web service interpolates published Markdown into HTML without escaping it
     found: "2026-08-23"
