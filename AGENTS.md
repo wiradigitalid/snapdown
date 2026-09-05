@@ -24,7 +24,6 @@ forbidden: each one either ships code or maintains a task layer this project no 
 
 | MUST NOT be run | Run instead |
 |---|---|
-| `wdi-build` | `/to-spec` → `/to-tickets` → `/implement-spec` |
 | `wdi-systematic-debugging` | `diagnosing-bugs` |
 | `bmad-build` · `bmad-build-auto` · `bmad-quick-dev` · `bmad-dev-story` · `bmad-dev-auto` · `bmad-agent-dev` | `/implement-spec` |
 | `bmad-spec` | `/to-spec` |
@@ -36,9 +35,11 @@ forbidden: each one either ships code or maintains a task layer this project no 
 `bmad-review` is deliberately NOT on that list and MUST stay runnable: it reviews **documents**, and
 `wdi-review` dispatches it.
 
-Inside the marker block below, the **G5 Release** row, the `wdi-systematic-debugging` mention, and
-`## Bugs, decisions, questions`' first bullet are superseded by this section. They are not edited
-there, because that block is package-owned and replaced on every update.
+Inside the marker block below, the `wdi-systematic-debugging` mention and `## Bugs, decisions,
+questions`' first bullet are superseded by this section. They are not edited there, because that
+block is package-owned and replaced on every update. The **G5 Release** row now stands as the block
+states it: `wdi-build` is runnable again, alongside `/to-spec` → `/to-tickets` → `/implement-spec` —
+this project no longer bans it, it just does not require it.
 
 ### Where a spec's inputs and outputs live
 
@@ -264,6 +265,9 @@ verifies the result, and lands the memlog.
   not diligence.
 - `.claude/skills/bmad-*/customize.toml` MUST NOT be edited — it is overwritten on every BMad update;
   customise through `_bmad/custom/`.
+- `CONTEXT.md`, `CONTEXT-MAP.md`, and `docs/adr/` MUST NOT be created. `docs/agents/domain.md` is the
+  engines' config and says so too: the vocabulary is `.control/product-glossary.md`, domain knowledge is
+  `.what/`, design is `.how/`, and a decision is a `DEC-` — never an ADR. Article 3 owns the rule.
 
 ## Routing — load a guide when the task matches
 
@@ -294,6 +298,7 @@ verifies the result, and lands the memlog.
 | Looking for where code lives, or placing new code | `.control/structure-codebase.md` |
 | Looking for where a document lives | `.control/structure-document.md` |
 | Writing or reviewing code | `.constitution/project/codebase-stack-guide.md` · `.constitution/project/codebase-conventions-guide.md` · `.constitution/project/codebase-brownfield-guide.md` |
+| Running `to-spec`, `to-tickets`, `implement`, or `triage` | `docs/agents/issue-tracker.md` · `docs/agents/domain.md` — the engines' own config, seeded by `wdi-method` already answered for this method |
 
 All three `.constitution/project/codebase-*-guide.md` start as `status: Draft`. While they are, their contents MAY be read
 as guidance but MUST NOT be used to reject a change.
