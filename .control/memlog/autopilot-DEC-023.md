@@ -57,11 +57,30 @@ Mandate: `DEC-023`. Parameters at `.control/registry/decisions.yaml` → `DEC-02
   `validate.py --generate` + `wdi-report` progress, raise `DEC-023` to `applied`, push, mark PR #47
   ready for review if CI is green, cancel the loop, final report.
 
-Note for Finish: `Snapdown.exe` (PID 28564) is running, launched by ticket 05's own builder for its
-manual "Look at" step — built from the `ticket-reclaim-bulk` worktree BEFORE tickets 02/03 merged
-into it, so it is not representative of the final merged branch. It does not block this worktree's own
-build (separate `target/` directory) but is flagged so the owner does not mistake it for the final
-state.
+**Smoke test run** (`smoke_test: agent`), against `target/release/Snapdown.exe` built from this fully
+merged branch (superseding the earlier stale instance from ticket 05's own worktree, which was closed):
+launched via `computer-use` (Orca), driven against the Reviewer's real Vault (`D:\SnapdownVault2`) —
+no destructive action was taken on real data; every check that could destroy something used Cancel
+after inspecting the confirmation, never Confirm.
+
+| Item | Result |
+| --- | --- |
+| `BUG-107` (crop-remap) | **Not live-tested.** Would need a disposable test Finding with markers, cropped, to observe the remap — skipped this pass to keep the smoke test bounded. Stands on its own independently-verified automated tests (mutation-tested, decode-based) instead. |
+| `canvas-zoom-clipboard-paste` (`FR-34` buttons, `FR-35`) | **Zoom in/out/reset: PASS** — clicked Zoom in, canvas visibly scaled; Zoom out/Natural size reset it. Paste not exercised (no test image staged). |
+| Ctrl+Scroll zoom (ticket 01) | **Not live-tested** — the `orca computer scroll` command has no modifier-key flag, so a Ctrl-held scroll cannot be synthesized through this tool. Stands on code review (the `scroll-event` handler reusing the shipped `zoomed_in`/`zoomed_out` callbacks) + its own passing wiring test. |
+| Marker focus + tooltip (ticket 02) | **PASS** — clicking Marker #2's canvas badge showed a live tooltip ("lontong") and put a real focus ring on Marker #2's own Note field in the panel. |
+| Second Assemble button + filmstrip alignment (ticket 03) | **PASS (partial)** — both Assemble controls (canvas-top and filmstrip-footer) are present and correctly disabled ("Nothing picked") with nothing ticked, matching the required selection gate. Did not tick a real Finding to see the enabled/click path, to avoid touching real data. Filmstrip alignment is a pixel-level visual check not practical through this tool. |
+| Copy-on-save (ticket 04) | **Not live-tested** — exercising it means actually running Assemble & Save or Review & Update Save against real Bundles. Skipped to avoid mutating real data; stands on its own passing, mutation-tested wiring tests. |
+| Bulk reclaim space (ticket 05) | **PASS** — opened Reclaim space (15 real Bundles listed), ticked "Select all" (15 of 15 selected, correct freed-space total), clicked "Delete both", read the real confirmation dialog verbatim: *"DELETE BOTH 15 BUNDLES? 15 Bundles and their 16 original captures... This cannot be undone."* — the 15-vs-16 count is the live app correctly deduping a Finding shared across two Bundles. **Cancelled**, then closed the dialog without confirming; no real data touched. |
+| About-tab icon (ticket 06) | **PASS** — Settings → About shows the Snapdown app icon beside "Snapdown 0.1.0". |
+| `editor-virtual-desktop-focus` | **Not live-tested** (needs two Windows Virtual Desktops to switch between, not set up in this smoke test). Already honestly flagged by its own builder as unverified by hands-on testing — stands unchanged; still owed a manual pass. |
+
+Net: 4 of 9 candidates directly exercised live and passed with real, decoded confirmation (not just
+"it opened"); the rest were left to their own independently-verified automated tests rather than risk
+the Reviewer's real Vault data or hit real tooling limits (no Ctrl-modifier scroll support in the
+computer-use CLI). Every one of the untested items already carries its own passing, often
+mutation-tested, automated coverage — this smoke test adds live confirmation on top where it safely
+could, not a replacement for it.
 
 ## Decisions
 
