@@ -1,8 +1,8 @@
 ---
 type: mandate
 id: DEC-019
-status: accepted
-touches: []
+status: applied
+touches: [.control/memlog/autopilot-DEC-019.md]
 supersedes: null
 superseded_by: null
 created: "2026-09-04"
@@ -61,6 +61,35 @@ page proposed them. `DEC-017` is the standing authority this mandate draws on, t
   names promised surfaces with no implementation) — if a defect turns out to be an `FR` the registry marked
   closed while the feature does not exist, this run treats that as "code wrong, document was right" and
   reports it rather than silently reopening the FR without the owner's DEC-018-style visibility.
+
+## Closed 2026-09-05
+
+Every runnable row in scope is now closed or explicitly deferred — the ledger at
+`.control/memlog/autopilot-DEC-019.md` (8 iterations, across two sessions with an owner-directed pause
+between iteration 7 and 8) is the full record. `BUG-2` (docs-only, `DEC-020`), `BUG-57` (no code change,
+corrected note), `BUG-60` (corrupt-store refusal), `BUG-61` (corrected note, remainder left to the owner),
+`BUG-77` (second visible route for reveal/delete-finding), and `BUG-106` (Crop tool given real canvas
+interaction) are all `status: fixed`. `BUG-23`, `BUG-28`, `BUG-37` stay `open` exactly as this mandate's
+own preflight triage found them — not independently actionable, each deferred to the owner for the
+reason its own row names, never decided here. `BUG-7` stays `open` too: its agent-doable half was already
+done before this mandate started, and the remaining git-history-scrub half is the one thing this mandate
+was explicitly forbidden from attempting.
+
+`parked: [ad-n, sensitive]` was never triggered — nothing in scope contradicted an `AD-N` or read as
+sensitive. `smoke_test: agent` was honoured: with no `FR` open, the agent instead smoke-tested the two
+shipped defects live, in the real release build, against a disposable test Finding created and deleted
+for the purpose so no real Finding was touched — Crop tool (drag-to-select, dimension change, filmstrip
+refresh all confirmed), the filmstrip Delete control (confirm-once dialog, deletion toast), and the Vault
+link (Explorer opened to the correct file, pre-selected). `BUG-60`'s corrupt-store path was not
+live-tested, the same gap this mandate's own Cost section named in advance — verified instead by its
+merged regression test.
+
+One new defect surfaced and was filed rather than silently absorbed: `BUG-107` (a cropped Finding's
+existing Markers/annotations are not remapped into the new coordinate space), disclosed by `BUG-106`'s
+own builder and left `open`, outside this mandate's original scope.
+
+Landed directly on `autopilot/DEC-019` throughout — a single run branch, no worker branch survived past
+its own merge, one PR.
 
 ## Trace
 

@@ -285,10 +285,10 @@ decisions:
   - id: DEC-019
     title: "Mandate: carry every open FR and every open defect to closed, unattended, checking in only at the smoke test"
     type: mandate
-    status: accepted
+    status: applied
     file: .control/decisions/DEC-019-autopilot-mandate-r4-close-every-open-defect.md
     serves: []
-    touches: []
+    touches: [.control/memlog/autopilot-DEC-019.md]
     created: "2026-09-04"
     accepted_by: kodesh87, 2026-09-04
     mandate:
