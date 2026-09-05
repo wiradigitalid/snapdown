@@ -239,7 +239,7 @@ decisions:
     created: "2026-09-04"
   - id: DEC-017
     title: An unattended run holds the owner's authority over every human checkpoint in the method
-    status: accepted
+    status: superseded
     file: .control/decisions/DEC-017-unattended-run-holds-the-owners-method-authority.md
     serves: []
     touches: []
@@ -316,3 +316,19 @@ decisions:
       - .control/questions/answered.md
     created: "2026-09-04"
     accepted_by: DEC-019
+  - id: DEC-021
+    title: The six refs-resolve/memlog-home findings in validate-baseline.txt are a permanent, accepted fossil
+    status: accepted
+    file: .control/decisions/DEC-021-six-baseline-validator-reds-are-a-permanent-accepted-fossil.md
+    serves: []
+    touches: []
+    created: "2026-09-05"
+    accepted_by: kodesh87, 2026-09-05
+  - id: DEC-022
+    title: Unattended authority is held through a wdi-autopilot mandate, not a generic unattended-run session type
+    status: accepted
+    file: .control/decisions/DEC-022-unattended-authority-is-the-wdi-autopilot-mandate-not-a-generic-session-type.md
+    serves: []
+    touches: []
+    created: "2026-09-05"
+    accepted_by: kodesh87, 2026-09-05
