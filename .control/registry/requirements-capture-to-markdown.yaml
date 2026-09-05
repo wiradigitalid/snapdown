@@ -260,6 +260,31 @@ functional:
       unexplained; without it the next reader takes it for a button somebody forgot to delete.
     proof: Choosing it on a Bundle's row opens that Bundle's own folder in the operating system's file
       manager, with the Bundle's Markdown and its images visible in it.
+  - id: FR-44
+    title: Delete several Bundles and their images together, in bulk
+    statement: The Reviewer can select several Bundles at once, from the reclaim-space surface, and
+      remove every selected one — its row and its own copied images — in a single confirmed act, the
+      bulk form of FR-14. The same act also discards the selected Bundles' own source Findings and can
+      affect a Publication, so both are triggered here rather than reauthorised — `bundle` owns only
+      [Bundle, BundleItem].
+    capability: CAP-4
+    component: bundle
+    writes: [Bundle, BundleItem, Publication]
+    defers_to: [FR-25, FR-42]
+    # Born 2026-09-05, ticket 05 of `post-testing-polish` (wdi-autopilot mandate DEC-023). The bulk
+    # "Delete both" button in reclaim space is this FR triggering FR-42's own bulk Finding-discard act
+    # over the SAME selected set, in one confirmation - the same `defers_to` shape FR-14 already uses
+    # for FR-25 (Publication), extended to a second deferred FR because this bulk act triggers two
+    # side effects instead of one. FR-42 itself is UNCHANGED by this: its own `writes` stays [Finding,
+    # Note, Marker, VisualAnnotation], never widened to [Bundle, BundleItem] - `entity-one-writer`
+    # forbids one FR claiming both, and the single-Bundle case already solved this the same way
+    # (FR-14/FR-41 stay two FRs, never merged into one). The confirmation reads `BR-122` live (a
+    # Bundle outside the selection sharing a Finding with one inside it is still named) through the
+    # exact mechanism FR-42's own proof already describes - not reimplemented or restated here.
+    proof: Selecting several Bundles in reclaim space and confirming "Delete both" removes every
+      selected Bundle's row and its own image folder, discards the same Bundles' source Findings, and
+      the one confirmation names the whole selected set plus any other Bundle BR-122 says will also be
+      sealed.
   - id: FR-40
     title: Edit a composed Bundle's title and notes
     statement: The Reviewer can reopen a Bundle they have already composed and correct its title, its

@@ -2,7 +2,7 @@
 title: Capture to Markdown
 initiative: capture-to-markdown
 created: "2026-08-22"
-updated: "2026-09-04"
+updated: "2026-09-05"
 ---
 
 # PRD: Capture to Markdown
@@ -27,6 +27,7 @@ updated: "2026-09-04"
 | 2026-09-03 | § 2.3's canvas-annotation journey renumbered `UJ-5` → `UJ-7`, and registered in `requirements-capture-to-markdown.yaml` for the first time | It had carried `UJ-5` since it was written without ever being registered, and that id was already allocated to `agent-handoff`'s own `UJ-5` — a collision found and flagged rather than silently resolved | — |
 | 2026-09-03 | `bmad-review` pass: `FR-40`'s gate note updated now that `BR-11` was narrowed by `DEC-012` and FR-40 is legal (§4.1 already listed it as delivered); `FR-38` moved from § 3.9 to § 3.10's sibling § 3.8, matching its own registered capability; three Capability lines' `serves` lists corrected to match the registry (`CAP-12`→`BG-8`, `CAP-11` drops `BG-7`, § 3.9 gains `BG-2`, `NFR-18` drops `BG-7`); two stale Revision History section citations fixed and the table's row order corrected; the two `wdi-upgrade` tooling comments moved to the memlog; `FR-41`'s duplicated paragraph, `FR-39`'s superseded page-break bullet, and `FR-12`'s "still unsettled" paragraph (all three questions it named are answered a few paragraphs earlier in the same addendum) corrected | Compliance pass against `prd-guide.md`; every change above is a correction to something already decided elsewhere in the corpus, not a new promise | — |
 | 2026-09-04 | `wdi-upgrade` (0.5.15 → 0.6.1): §0 Document Purpose, §3 Glossary, §8 Open Questions, and §9 Assumptions Index removed — each fact now lives in its own home (`product-glossary.md`, `.control/questions/`). Every `#### FR-N` block's Proof of done and Consequences moved to `requirements-capture-to-markdown.yaml` (`proof:`) and `addendum.md` (already holding the same content, confirmed word for word); each feature now cites `FR`/`NFR` ids only, under **Realizes:**. Sections renumbered 1–7 to the current template's order | Mechanical structural migration; no promise, proof, or consequence text changed | — |
+| 2026-09-05 | New `FR-44` — the bulk form of `FR-14`: selecting several Bundles in the reclaim-space surface and removing every one's row and images in one confirmed act, triggering `FR-42`'s own bulk Finding-discard act over the same set (`defers_to: [FR-25, FR-42]`, the same cross-component shape `FR-14` already uses for `FR-25`). `FR-42` itself is unchanged — its own promise stays "reclaim disk, originals only"; the wider bulk "Delete both" promise is `FR-44`'s, kept as a separate FR because `bundle` and `finding` each own different entities and one FR cannot claim both (`entity-one-writer`). §3.4's own stale claim that "no single action destroys both a Bundle and its originals" (from `BUG-104`, which reversed that on the owner's own request on 2026-09-03) is corrected in place, and the Safety section's identical claim with it. | Ticket 05 of `post-testing-polish` shipped the code (select-all plus bulk Delete-both in Reclaim space) before this promise existed in writing; `AGENTS.md`'s "documents follow the code" rule is why the correction runs now rather than the code being held back for it. | r3 |
 
 ## 1. Why This Initiative
 
@@ -194,11 +195,25 @@ conventions serve two different readers, and neither replaces the other.
 
 **FR-14 — Delete a Bundle with its images.** **Corrected 2026-08-31.** A fourth consequence used to
 read *"The Reviewer can choose, in the same confirmation, to delete the Bundle's source Findings
-too."* It is withdrawn. Destroying a Bundle and destroying the captures behind it are now two
-deliberate acts — `FR-14` and `FR-41` — because one click is the wrong price for the most destructive
-operation in this product, and both outcomes are still reachable in two steps. The withdrawn line
-also claimed authority this requirement never had: deleting a Finding is a write the `bundle`
-component cannot make, and `FR-14`'s own registry row never listed it.
+too."* It is withdrawn. Destroying a Bundle and destroying the captures behind it are two deliberate
+promises — `FR-14` and `FR-41` — because deleting a Finding is a write the `bundle` component cannot
+make, and `FR-14`'s own registry row never listed it.
+
+**Corrected 2026-09-05.** The sentence above used to end *"...because one click is the wrong price
+for the most destructive operation in this product, and both outcomes are still reachable only in
+two steps"* — read, at the time, as forbidding a single UI action from ever triggering both. `BUG-104`
+(2026-09-03) already reversed the narrower question that sentence was actually about — how "Delete
+both" is *reached* — on the owner's own request: it is a dedicated context-menu row today, not a link
+nested inside another dialog. The two promises stay two separate `FR`s for the reason given above
+(ownership, not caution), and one UI act naming both is legitimate as long as it triggers each `FR`'s
+own write rather than inventing a third one — see `FR-44`.
+
+**FR-44 — Delete several Bundles and their images together, in bulk.** The bulk form of `FR-14`,
+reached from the reclaim-space surface (`FR-42`): selecting several Bundles and confirming "Delete
+both" removes every selected one's row and images, and — by triggering `FR-42`'s own bulk act over
+the same set, not a second promise invented here — discards their source Findings too. One
+confirmation, naming the whole selected set and reading `BR-122` live the same way `FR-42`'s own bulk
+Discard-originals confirmation already does.
 
 **FR-43 — Open a Bundle's folder in the file manager.** **This is the thinnest promise in this
 document, and that is deliberate.** The Library row has carried this action since the screen was
@@ -220,7 +235,7 @@ surface edits it directly and no change to a Bundle ever reads or writes a Findi
 `FR-40` does. `AD-9`, which `BR-11` cites as its source, governs only the way **out** of a Bundle, so
 it was not contradicted and was not amended; only `BR-11`'s own wording was.
 
-**Realizes:** FR-10, FR-11, FR-12, FR-14, FR-43, FR-40
+**Realizes:** FR-10, FR-11, FR-12, FR-14, FR-43, FR-40, FR-44
 
 ### 3.5 Removal
 
@@ -239,6 +254,10 @@ Finding can be destroyed.
 **not** part of composing, and `BR-59` — *"Composing does not remove the Findings it used from the
 Library"* — stays true and is not amended. Composing still leaves every capture in place; this is a
 separate, later, explicit act, and that separation is the whole point.
+
+**FR-42's own bulk act (2026-09-05)** now has a sibling: `FR-44` in §3.4 is the bulk form of `FR-14`,
+triggered by the same "Delete both" act over the same selected set, under `bundle` rather than here —
+see `FR-44`'s own paragraph for why it is a separate promise rather than a wider `FR-42`.
 
 **Realizes:** FR-13, FR-15, FR-41, FR-42
 
@@ -427,10 +446,15 @@ quietly dropped:
 ### Safety
 
 Nothing beyond the brief. There is no destructive action here other than deletion, which is
-confirmed once and named in FR-13, FR-14, FR-41 and FR-42. `FR-41` and `FR-42` are the most
+confirmed once and named in FR-13, FR-14, FR-41, FR-42 and FR-44. `FR-41` and `FR-42` are the most
 destructive acts the product offers, because what they remove is the original capture rather than a
-copy of it — which is why no single action destroys both a Bundle and its originals, and why both are
-reachable only in two deliberate steps.
+copy of it — and `FR-14`/`FR-44` never destroy a Finding on their own authority: destroying a Bundle
+and destroying its originals stay two separate promises, owned by two different components, so one
+UI act naming both (`FR-44`) still triggers each one's own write rather than inventing a third.
+**Corrected 2026-09-05** — this used to read "which is why no single action destroys both a Bundle
+and its originals, and why both are reachable only in two deliberate steps", a claim `BUG-104`
+(2026-09-03) had already made stale by the time it was written: the owner asked for "Delete both" to
+be one dedicated act, not two.
 
 ### Privacy
 

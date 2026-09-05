@@ -57,8 +57,14 @@ export component SdReclaimSpace inherits Rectangle {
     // Bundle id. A tick or an untick - Rust owns flipping the bit and recomputing the footer, the
     // same "Rust decides, Slint displays" split `library-menu-sealed` already follows.
     callback row-toggled(string);
+    // The select-all checkbox: `true` ticks every row CURRENTLY LISTED, `false` unticks every one -
+    // rows already exclude a Bundle whose originals are gone (`build_reclaim_rows`'s own
+    // `bundle_is_sealed` filter), so this operates over exactly the rows shown, nothing hidden.
+    callback select-all-toggled(bool);
     // Opens the ONE bulk confirmation below.
     callback discard-clicked();
+    // Opens the bulk Delete-both confirmation below.
+    callback delete-both-clicked();
 
     // THE ONE CONFIRMATION. Counts Bundles and captures across the WHOLE ticked set, and names any
     // OTHER Bundle that will be sealed as a side effect (`BR-12`/`BR-122`, ticket 17's own notice,
@@ -69,6 +75,17 @@ export component SdReclaimSpace inherits Rectangle {
     in property <string> confirm-body: "";
     callback discard-cancelled();
     callback discard-confirmed();
+
+    // THE BULK DELETE-BOTH CONFIRMATION - a SECOND, separate dialog, never nested inside the one
+    // above, matching `FR-41`/`BUG-104`'s own discipline of a dedicated confirmation for the
+    // destructive "Delete both" act rather than a second step folded into Discard originals'. Names
+    // the whole selected set and what is destroyed - the Bundles themselves as well as their
+    // captures - composed in Rust (`reclaim_delete_both_confirm_body`).
+    in property <bool> delete-both-confirm-open: false;
+    in property <string> delete-both-confirm-heading: "";
+    in property <string> delete-both-confirm-body: "";
+    callback delete-both-cancelled();
+    callback delete-both-confirmed();
 
     width: 100%;
     height: 100%;
@@ -144,6 +161,20 @@ export component SdReclaimSpace inherits Rectangle {
                         color: Theme.text-muted;
                         wrap: word-wrap;
                         font-family: "IBM Plex Sans";
+                    }
+                }
+
+                // SELECT-ALL - ticks every row CURRENTLY LISTED. Only rendered alongside the list
+                // itself (never over the empty state, which has no rows to select), the same
+                // `rows.length > 0` gate the footer below already uses.
+                if root.rows.length > 0 : Rectangle {
+                    height: 20px;
+                    select-all-checkbox := SdCheckbox {
+                        x: 0;
+                        y: (parent.height - self.height) / 2;
+                        text: "Select all";
+                        checked: root.selected-count == root.rows.length;
+                        toggled(on) => { root.select-all-toggled(on); }
                     }
                 }
 
@@ -310,6 +341,13 @@ export component SdReclaimSpace inherits Rectangle {
                         enabled: root.selected-count > 0;
                         clicked => { root.discard-clicked(); }
                     }
+                    SdActionButton {
+                        label: "Delete both";
+                        danger: true;
+                        height: 32px;
+                        enabled: root.selected-count > 0;
+                        clicked => { root.delete-both-clicked(); }
+                    }
                 }
             }
         }
@@ -382,6 +420,69 @@ export component SdReclaimSpace inherits Rectangle {
                         label: "Discard originals";
                         height: 30px;
                         clicked => { root.discard-confirmed(); }
+                    }
+                }
+            }
+        }
+    }
+
+    // THE BULK DELETE-BOTH CONFIRMATION - a SEPARATE dialog from the one above, never nested
+    // inside it, matching `FR-41`/`BUG-104`'s own single-Bundle discipline: one dedicated
+    // confirmation for the destructive "Delete both" act. Same 380px/20px/14px/12px/30px-buttons
+    // shape every dialog in this product uses, with the danger-styled confirm button `BUG-103`
+    // reserves for an act that truly cannot be undone.
+    if root.delete-both-confirm-open : Rectangle {
+        width: 100%;
+        height: 100%;
+        background: Theme.overlay-scrim;
+        TouchArea {
+            clicked => { root.delete-both-cancelled(); }
+        }
+
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 380px;
+            height: delete-both-confirm-layout.preferred-height;
+            background: Theme.bg-card;
+            border-width: 1px;
+            border-color: Theme.border-strong;
+            border-radius: Theme.radius-sharp;
+            drop-shadow-blur: 32px;
+            drop-shadow-color: Theme.overlay-shadow;
+            TouchArea { }
+
+            delete-both-confirm-layout := VerticalLayout {
+                padding: 20px;
+                spacing: 14px;
+
+                SdSectionLabel {
+                    text: root.delete-both-confirm-heading;
+                }
+
+                Text {
+                    text: root.delete-both-confirm-body;
+                    font-size: 12px;
+                    color: Theme.text-secondary;
+                    wrap: word-wrap;
+                    font-family: "IBM Plex Sans";
+                }
+
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: end;
+
+                    SdActionButton {
+                        label: "Cancel";
+                        primary: false;
+                        height: 30px;
+                        clicked => { root.delete-both-cancelled(); }
+                    }
+                    SdActionButton {
+                        label: "Delete both";
+                        danger: true;
+                        height: 30px;
+                        clicked => { root.delete-both-confirmed(); }
                     }
                 }
             }

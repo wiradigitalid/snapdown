@@ -170,9 +170,13 @@ fn every_reclaim_space_callback_is_bound_from_slint_to_rust() {
     for declared in [
         "callback closed();",
         "callback row-toggled(string);",
+        "callback select-all-toggled(bool);",
         "callback discard-clicked();",
+        "callback delete-both-clicked();",
         "callback discard-cancelled();",
         "callback discard-confirmed();",
+        "callback delete-both-cancelled();",
+        "callback delete-both-confirmed();",
     ] {
         assert!(
             component.contains(declared),
@@ -183,9 +187,11 @@ fn every_reclaim_space_callback_is_bound_from_slint_to_rust() {
     let at = window
         .find("if root.reclaim-space-open : SdReclaimSpace {")
         .expect("the mount site must exist");
-    // 1200, not 900: `BUG-100` added `toast-text`/`toast-is-error` bindings at this mount site,
-    // pushing the callback forwards below past a window sized before that landed.
-    let mount = flat(&window[at..(at + 1200).min(window.len())]);
+    // 1800, not 1200: ticket `05` of `post-testing-polish` added the select-all and bulk
+    // Delete-both bindings/forwards at this mount site, pushing the callback forwards below past a
+    // window sized before that landed (which itself widened from 900 for `BUG-100`'s toast
+    // bindings).
+    let mount = flat(&window[at..(at + 1800).min(window.len())]);
 
     let forwards = [
         (
@@ -195,6 +201,10 @@ fn every_reclaim_space_callback_is_bound_from_slint_to_rust() {
         (
             "row-toggled(id) => { root.reclaim-space-row-toggled(id); }",
             "on_reclaim_space_row_toggled(",
+        ),
+        (
+            "select-all-toggled(on) => { root.reclaim-space-select-all-toggled(on); }",
+            "on_reclaim_space_select_all_toggled(",
         ),
         (
             "discard-clicked => { root.reclaim-space-discard-clicked(); }",
@@ -208,6 +218,18 @@ fn every_reclaim_space_callback_is_bound_from_slint_to_rust() {
             "discard-confirmed => { root.reclaim-space-discard-confirmed(); }",
             "on_reclaim_space_discard_confirmed(",
         ),
+        (
+            "delete-both-clicked => { root.reclaim-space-delete-both-clicked(); }",
+            "on_reclaim_space_delete_both_clicked(",
+        ),
+        (
+            "delete-both-cancelled => { root.reclaim-space-delete-both-cancelled(); }",
+            "on_reclaim_space_delete_both_cancelled(",
+        ),
+        (
+            "delete-both-confirmed => { root.reclaim-space-delete-both-confirmed(); }",
+            "on_reclaim_space_delete_both_confirmed(",
+        ),
     ];
     for (forward, handler) in forwards {
         assert!(
@@ -219,6 +241,105 @@ fn every_reclaim_space_callback_is_bound_from_slint_to_rust() {
             "`{handler}` must exist in main.rs, or the forwarded callback reaches nobody"
         );
     }
+}
+
+/// Ticket `05` of `post-testing-polish`: the select-all checkbox reuses the shared `SdCheckbox`
+/// (never a hand-drawn second one), is rendered ONLY alongside a non-empty list (matching the
+/// footer's own `rows.length > 0` gate - there is nothing to select-all over the empty state), and
+/// its checked state is read straight off `selected-count`/`rows.length` rather than a second
+/// "all selected" flag that could disagree with what the rows themselves show.
+#[test]
+fn select_all_checkbox_reuses_the_shared_component_and_is_gated_on_a_non_empty_list() {
+    let component = read("ui/components/reclaim-space.slint");
+    let flat_component = flat(&component);
+
+    let at = component.find("select-all-checkbox := SdCheckbox").expect(
+        "the select-all checkbox must exist, named so it is distinguishable from a row's \
+             own checkbox",
+    );
+    // The nearest `rows.length > 0` gate BEFORE the checkbox's own declaration must be the one
+    // wrapping it - the same `rows.length > 0` gate the footer below also uses.
+    component[..at].rfind("if root.rows.length > 0").expect(
+        "the select-all checkbox must be gated on `rows.length > 0`, the same way the \
+             footer is - there is nothing to select-all over the empty state",
+    );
+
+    let body = flat(&component[at..(at + 400).min(component.len())]);
+    assert!(
+        body.contains("checked: root.selected-count == root.rows.length;"),
+        "the select-all checkbox's checked state must be computed straight off \
+         `selected-count`/`rows.length`, never a second flag Rust would have to keep in sync"
+    );
+    assert!(
+        body.contains("toggled(on) => { root.select-all-toggled(on); }"),
+        "the select-all checkbox must actually fire `select-all-toggled`, not merely display a \
+         checked state"
+    );
+
+    assert!(
+        flat_component.contains(r#"import { SdCheckbox } from "form-controls.slint";"#),
+        "the select-all checkbox must reuse the shared component, imported once already for the \
+         row checkboxes"
+    );
+}
+
+/// Ticket `05`'s bulk "Delete both": a SEPARATE, danger-styled confirmation from the bulk Discard
+/// originals dialog above it, matching `FR-41`/`BUG-104`'s own single-Bundle discipline (one
+/// dedicated confirmation for the act that truly cannot be undone, never a second step nested
+/// inside another dialog).
+#[test]
+fn bulk_delete_both_has_its_own_dedicated_danger_styled_confirmation() {
+    let component = code_only(&read("ui/components/reclaim-space.slint"));
+
+    for declared in [
+        "in property <bool> delete-both-confirm-open: false;",
+        "in property <string> delete-both-confirm-heading: \"\";",
+        "in property <string> delete-both-confirm-body: \"\";",
+    ] {
+        assert!(
+            component.contains(declared),
+            "`SdReclaimSpace` must declare `{declared}`"
+        );
+    }
+
+    let discard_confirm_at = component
+        .find("if root.confirm-open : Rectangle {")
+        .expect("the bulk Discard originals confirmation must exist");
+    let delete_both_confirm_at = component
+        .find("if root.delete-both-confirm-open : Rectangle {")
+        .expect(
+            "the bulk Delete-both confirmation must be its OWN dialog, gated on its OWN property \
+             - never folded into the Discard-originals dialog above",
+        );
+    assert!(
+        delete_both_confirm_at > discard_confirm_at,
+        "the Delete-both confirmation must be declared as a SEPARATE block after the Discard \
+         originals one, not nested inside it"
+    );
+
+    // Nothing before the Delete-both dialog's own opening brace names the Discard-originals
+    // dialog's own confirm-open property inside ITS block, i.e. the two blocks are siblings, not
+    // parent/child. A cheap proxy for that: the Discard confirmation's own closing `}` (matched by
+    // indentation in this file) appears before the Delete-both dialog opens - verified above by
+    // simple ordering; the flat search below now checks the button styling directly.
+    let delete_both_dialog = flat(&component[delete_both_confirm_at..]);
+    assert!(
+        delete_both_dialog.contains(
+            "SdActionButton { label: \"Delete both\"; danger: true; height: 30px; clicked => { \
+             root.delete-both-confirmed(); } }"
+        ),
+        "the Delete-both dialog's own confirm button must be styled `danger: true` \
+         (`BUG-103`'s own reasoning: this act truly cannot be undone) and must fire \
+         `delete-both-confirmed`, not `discard-confirmed`"
+    );
+    assert!(
+        delete_both_dialog.contains(
+            "SdActionButton { label: \"Cancel\"; primary: false; height: 30px; clicked => { \
+             root.delete-both-cancelled(); } }"
+        ),
+        "the Delete-both dialog's own Cancel button must fire `delete-both-cancelled`, not the \
+         Discard-originals dialog's `discard-cancelled`"
+    );
 }
 
 /// Escape closes it - the Library's own pattern, borrowed rather than reinvented.
