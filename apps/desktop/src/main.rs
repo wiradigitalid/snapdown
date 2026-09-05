@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod focus;
 mod hotkey;
 mod startup;
 mod tray;
@@ -3807,6 +3808,41 @@ fn set_capture_exclusion(window: &slint::Weak<AppWindow>, exclude: bool) {
     }
 }
 
+/// The in-process half of "reopen the Editor": reads the live Slint window's own HWND and routes
+/// it through `focus::bring_editor_to_foreground`, the one shared function every entry point uses.
+/// The tray's Open Editor, its matching hotkey, and reveal-after-capture all call this - the
+/// cross-process half (the already-running double-click early exit in `main`, which shares no
+/// memory with the first instance and so has no live Slint window to read) calls
+/// `focus::find_running_editor_window` plus `focus::bring_editor_to_foreground` directly instead.
+///
+/// Assumes the caller has already made the window visible (`win.show()`) and un-minimized it at
+/// the Slint level - that is unchanged from before this existed, and is what makes "already on the
+/// Reviewer's current desktop" a no-op: there is nothing left for the OS-level foreground call to
+/// visibly change beyond bringing it to front.
+#[cfg(windows)]
+fn reveal_editor_window(window: &AppWindow) {
+    use i_slint_backend_winit::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use i_slint_backend_winit::WinitWindowAccessor;
+
+    let hwnd = window
+        .window()
+        .with_winit_window(|winit_win| {
+            let handle = winit_win.window_handle().ok()?;
+            match handle.as_raw() {
+                RawWindowHandle::Win32(win32) => Some(win32.hwnd.get()),
+                _ => None,
+            }
+        })
+        .flatten();
+
+    if let Some(hwnd) = hwnd {
+        focus::bring_editor_to_foreground(hwnd, &focus::WindowsForegroundBackend);
+    }
+}
+
+#[cfg(not(windows))]
+fn reveal_editor_window(_window: &AppWindow) {}
+
 #[cfg(not(windows))]
 fn set_capture_exclusion(_window: &slint::Weak<AppWindow>, _exclude: bool) {}
 
@@ -4518,6 +4554,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
         eprintln!("Snapdown is already running.");
+        // FR: reopening the Editor while it is already running (by double-clicking `Snapdown.exe`
+        // again) must bring the running instance's window to real OS foreground focus, switching
+        // Virtual Desktops to it if needed - not silently exit with no visible effect. This
+        // process has no window and no memory in common with the one already running, so it finds
+        // the running instance's HWND by title and routes it through the SAME shared function the
+        // in-process entry points use.
+        if let Some(hwnd) = focus::find_running_editor_window() {
+            focus::bring_editor_to_foreground(hwnd, &focus::WindowsForegroundBackend);
+        }
         return Ok(());
     };
 
@@ -6677,6 +6722,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             if reveal && finding_id.is_some() {
                                 let _ = main.show();
                                 main.window().set_minimized(false);
+                                reveal_editor_window(&main);
                             }
                         }
                     }
@@ -7391,6 +7437,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             if let Some(win) = window_for_events.upgrade() {
                                 win.show().unwrap();
                                 win.window().set_minimized(false);
+                                reveal_editor_window(&win);
                             }
                         }
                         TrayAction::Settings => {
@@ -7496,6 +7543,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     if !settings_open {
                                         win.show().unwrap();
                                         win.window().set_minimized(false);
+                                        reveal_editor_window(&win);
                                     }
                                 }
                             }
