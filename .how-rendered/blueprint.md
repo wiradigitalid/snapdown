@@ -23,7 +23,7 @@ This is what the owner reads at **G3 Blueprint** — one page, every one of the 
 | `UC-9` | I turn the findings I picked into one review document | `bundle` | `FR-10` | no |
 | `UC-10` | I look back at the reviews I have already put together | `bundle` | `FR-11` | no |
 | `UC-11` | I drop a whole review straight into the conversation I am having with my agent | `bundle` | `FR-12` | no |
-| `UC-12` | I get rid of a review and everything in it | `bundle` | `FR-14` | yes |
+| `UC-12` | I get rid of a review and everything in it | `bundle` | `FR-14`, `FR-44` | yes |
 | `UC-13` | I decide how much picture quality a screenshot is worth | `settings` | `FR-5` | no |
 | `UC-14` | I decide where my screenshots are kept | `settings` | `FR-16` | no |
 | `UC-15` | I change the keys that set Snapdown off, because one of them clashes | `settings` | `FR-17` | no |

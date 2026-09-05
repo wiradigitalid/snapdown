@@ -1463,19 +1463,36 @@ export component AppWindow inherits Window {
     in property <int> reclaim-space-selected-count: 0;
     callback reclaim-space-closed();
     callback reclaim-space-row-toggled(string);
+    // Select-all: ticks/unticks every row currently listed. Rust owns flipping every row's bit and
+    // recomputing the footer, the same "Rust decides, Slint displays" split every other row action
+    // here already follows.
+    callback reclaim-space-select-all-toggled(bool);
     callback reclaim-space-discard-clicked();
+    // Opens the bulk Delete-both confirmation - widens `FR-42` to remove the Bundles themselves as
+    // well as their originals, for the whole selected set.
+    callback reclaim-space-delete-both-clicked();
 
     // THE BULK CONFIRMATION. `reclaim-space-pending-ids` carries the ticked Bundle ids from the
     // moment the confirmation opens through to the moment it is confirmed - an `in` property Rust
     // both writes (on `reclaim-space-discard-clicked`) and reads back (on
     // `reclaim-space-discard-confirmed`), the same round trip `library-pending-disassemble` makes
-    // for one id, widened to a list.
+    // for one id, widened to a list. Reused by the Delete-both confirmation below - only one of the
+    // two dialogs is ever open at a time.
     in property <bool> reclaim-space-confirm-open: false;
     in property <string> reclaim-space-confirm-heading: "";
     in property <string> reclaim-space-confirm-body: "";
     in property <[string]> reclaim-space-pending-ids: [];
     callback reclaim-space-discard-cancelled();
     callback reclaim-space-discard-confirmed();
+
+    // THE BULK DELETE-BOTH CONFIRMATION - a SEPARATE dialog from the one above, matching
+    // `FR-41`/`BUG-104`'s own single-Bundle discipline (a dedicated confirmation for the
+    // destructive "Delete both" act, never a second step nested in Discard originals').
+    in property <bool> reclaim-space-delete-both-confirm-open: false;
+    in property <string> reclaim-space-delete-both-confirm-heading: "";
+    in property <string> reclaim-space-delete-both-confirm-body: "";
+    callback reclaim-space-delete-both-cancelled();
+    callback reclaim-space-delete-both-confirmed();
 
     // id, ctrl held, shift held. One callback rather than two, because a click on a card is one
     // gesture whose MEANING depends on the modifiers - splitting it into "selected" and "toggled"
@@ -3605,12 +3622,19 @@ export component AppWindow inherits Window {
             confirm-open: root.reclaim-space-confirm-open;
             confirm-heading: root.reclaim-space-confirm-heading;
             confirm-body: root.reclaim-space-confirm-body;
+            delete-both-confirm-open: root.reclaim-space-delete-both-confirm-open;
+            delete-both-confirm-heading: root.reclaim-space-delete-both-confirm-heading;
+            delete-both-confirm-body: root.reclaim-space-delete-both-confirm-body;
 
             closed => { root.reclaim-space-closed(); }
             row-toggled(id) => { root.reclaim-space-row-toggled(id); }
+            select-all-toggled(on) => { root.reclaim-space-select-all-toggled(on); }
             discard-clicked => { root.reclaim-space-discard-clicked(); }
             discard-cancelled => { root.reclaim-space-discard-cancelled(); }
             discard-confirmed => { root.reclaim-space-discard-confirmed(); }
+            delete-both-clicked => { root.reclaim-space-delete-both-clicked(); }
+            delete-both-cancelled => { root.reclaim-space-delete-both-cancelled(); }
+            delete-both-confirmed => { root.reclaim-space-delete-both-confirmed(); }
         }
 
         // MOVING THE VAULT - confirmed, because it moves every file the product owns.

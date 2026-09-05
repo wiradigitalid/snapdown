@@ -6,7 +6,7 @@
 promise_progress: 0%
 rtm_rows:
   green: 0
-  counted: 32
+  counted: 33
   excluded_no_uc: 7
 work_progress:
 - spec: W1

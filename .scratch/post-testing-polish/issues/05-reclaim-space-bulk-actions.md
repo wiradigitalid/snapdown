@@ -19,7 +19,7 @@ rule — do this as part of closing the ticket, not as a separate follow-up nobo
 **Blocked by:** None (can start immediately). Independent of every other ticket; touches
 `finding`-component Reclaim-space UI and `crates/snapdown-store`'s bulk-delete path.
 
-**Status:** ready-for-agent
+**Status:** done
 
 Realizes `FR-41`, `FR-42`, `BR-122`. See `.scratch/post-testing-polish/spec.md` Implementation
 Decisions § "Reclaim space bulk actions" for the full design.
@@ -34,18 +34,21 @@ red, restored) per the spec's own Testing Decisions.
 
 ## Acceptance
 
-- [ ] A "select all" checkbox ticks every listed row in Reclaim space
-- [ ] A bulk "Delete both" action removes the selected Bundles' originals AND the Bundles themselves
-- [ ] One confirmation dialog names the whole selected set and what is destroyed, "cannot be undone" —
+- [x] A "select all" checkbox ticks every listed row in Reclaim space
+- [x] A bulk "Delete both" action removes the selected Bundles' originals AND the Bundles themselves
+- [x] One confirmation dialog names the whole selected set and what is destroyed, "cannot be undone" —
       matching `FR-41`/`BUG-104`'s existing single-Bundle discipline
-- [ ] A Bundle outside the selection sharing a Finding with one inside it is still named in the
+- [x] A Bundle outside the selection sharing a Finding with one inside it is still named in the
       confirmation (`BR-122` read live, not cached)
-- [ ] A shared Finding across two selected Bundles is deleted exactly once, reported exactly once
-- [ ] Write ordering per Bundle follows `AD-2`; a partial failure partway through the batch leaves
+- [x] A shared Finding across two selected Bundles is deleted exactly once, reported exactly once
+- [x] Write ordering per Bundle follows `AD-2`; a partial failure partway through the batch leaves
       prior state intact for what hasn't been touched yet
-- [ ] `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and
+- [x] `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and
       `cargo test --workspace --no-fail-fast` all exit 0
-- [ ] `wdi-product` pass run to fold the widened `FR-42` promise into the PRD, once this ticket's code
-      is green
+- [x] `wdi-product` pass run to fold the widened `FR-42` promise into the PRD, once this ticket's code
+      is green — resolved as a new sibling `FR-44` (component: `bundle`, `defers_to: [FR-25, FR-42]`)
+      rather than widening `FR-42` itself, per `entity-one-writer` (`bundle` and `finding` own
+      different entities; `FR-42` stays unchanged)
 - [ ] **Look at:** select several Bundles including two that share a Finding, confirm the dialog names
-      everything correctly before confirming
+      everything correctly before confirming — not yet done manually; left for the owner/reviewer to
+      run the app and look (see report)

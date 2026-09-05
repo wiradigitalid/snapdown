@@ -96,7 +96,11 @@ usecases:
     title: I get rid of a review and everything in it
     actor: Reviewer
     component: bundle
-    satisfies: [FR-14]
+    # FR-44 added 2026-09-05, ticket 05 of `post-testing-polish` (wdi-autopilot mandate DEC-023):
+    # the bulk form of FR-14, over several reviews at once from the reclaim-space surface - the
+    # same intent this use case already names ("a review and everything in it"), just for more than
+    # one review in a single act.
+    satisfies: [FR-14, FR-44]
     critical: true
   # UC-28 and UC-29 born 2026-08-31. Neither is `critical`, and the derivation is stated because both
   # look like candidates. UC-28 writes a file but destroys nothing and sends nothing anywhere; its

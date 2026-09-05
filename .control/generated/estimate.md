@@ -45,6 +45,7 @@
 | Discard the source Findings behind a Bundle, keeping the Bundle | `FR-41` | `finding` | `guarded` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
 | See which Bundles still hold original captures, and reclaim their disk in bulk | `FR-42` | `finding` | `guarded` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
 | Open a Bundle's folder in the file manager | `FR-43` | `bundle` | `guarded` | `medium` — Deleting a Bundle is an irreversible action that removes fi… | — | — | `CAP-3` | r1 |
+| Delete several Bundles and their images together, in bulk | `FR-44` | `bundle` | `guarded` | `medium` — Deleting a Bundle is an irreversible action that removes fi… | — | — | `CAP-3` | r1 |
 | Choose a Quality Budget by naming the intent | `FR-5` | `settings` | `outline` | `high` — No money and no personal data. One IRREVERSIBLE action - ch… | — | — | — | r1 |
 | See every Finding with its Note | `FR-6` | `finding` | `guarded` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |
 | Edit a Note | `FR-7` | `finding` | `guarded` | `low` — A Capture may contain personal data, and deleting a Finding… | — | — | — | r1 |

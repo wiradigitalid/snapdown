@@ -97,7 +97,7 @@ Rendered from `usecases.yaml`.
 | `UC-9` | I turn the findings I picked into one review document | `bundle` | `FR-10` | no |
 | `UC-10` | I look back at the reviews I have already put together | `bundle` | `FR-11` | no |
 | `UC-11` | I drop a whole review straight into the conversation I am having with my agent | `bundle` | `FR-12` | no |
-| `UC-12` | I get rid of a review and everything in it | `bundle` | `FR-14` | yes |
+| `UC-12` | I get rid of a review and everything in it | `bundle` | `FR-14`, `FR-44` | yes |
 | `UC-28` | I turn a review into something I can send to a person who does not have Snapdown | `bundle` | `FR-39` | no |
 | `UC-29` | I fix a typo in a review I have already put together | `bundle` | `FR-40` | no |
 
