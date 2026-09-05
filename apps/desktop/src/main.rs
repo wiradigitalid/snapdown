@@ -4721,7 +4721,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Reloaded from the store rather than pushed into the model: the ordinal is the store's
             // to assign (`AD-1` ties it to the Markdown line number), so the UI must be told what it
             // became instead of guessing.
-            Ok(_) => load_active_detail(&win, &ctx_mkp, &finding_id),
+            //
+            // `02-marker-note-focus-and-tooltip.md` (`FR-8`, `UC-5` step 3 - typing right after
+            // placing). Set BEFORE the reload, not after: `load_active_detail` replaces the whole
+            // `markers` model, and the appwindow.slint card for this exact id reads
+            // `marker-focus-target` from its own `init`, which only sees a value already in place by
+            // the time the row is created. The Marker Notes tab is switched on for the same reason
+            // the focus claim needs it - the card that owns the Note field only exists at all while
+            // `active-tab-index == 0`.
+            Ok(_) => {
+                win.set_active_tab_index(0);
+                win.set_marker_focus_target(marker_id.into());
+                load_active_detail(&win, &ctx_mkp, &finding_id);
+            }
             Err(e) => toast(&win, format!("Could not place the Marker: {e}"), true),
         }
     });
