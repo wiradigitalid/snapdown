@@ -4891,6 +4891,8 @@ defects:
 
       Reachability tests added in `apps/desktop/tests/test_annotation_wiring.rs`.
     status: fixed
+    decision: none - no `AD-` was contradicted; option 1 keeps `FR-37` and `NFR-16` true exactly as
+      written, no requirement text changed.
 
   - id: BUG-78
     title: A slider filled from its middle, Explorer opening the Desktop, and a deletion that took
