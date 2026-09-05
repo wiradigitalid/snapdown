@@ -1590,6 +1590,14 @@ export component AppWindow inherits Window {
         root.menu-x = x;
         root.menu-y = y;
     }
+
+    // Shared by the context menu's `delete-finding` entry and the filmstrip card's own visible
+    // Delete control (`BUG-77`) - one place decides how many go and which row starts the
+    // confirm-once dialog, rather than the same two-property assignment written out twice.
+    function request-delete-finding(target: string, target-selected: bool) {
+        root.pending-delete-count = target-selected ? root.selected-finding-count : 1;
+        root.pending-delete-finding = target;
+    }
     // `FR-33`: "Redo/Undo history is supported for canvas additions, moves, edits, and deletions."
     callback annotation-undo();
     callback annotation-redo();
@@ -1710,7 +1718,7 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                Text {
+                filename-text := Text {
                     x: (parent.width - self.width) / 2;
                     y: 0px;
                     height: parent.height;
@@ -1721,6 +1729,36 @@ export component AppWindow inherits Window {
                     font-family: "IBM Plex Mono";
                     vertical-alignment: center;
                     horizontal-alignment: center;
+                }
+
+                // A VISIBLE second route to `open-file-location-clicked` - `BUG-77`,
+                // `FR-37`/`NFR-16`. Nothing else in the Editor opened a Finding's file location
+                // before this; the context menu's `reveal` entry stays, and this fires the exact
+                // same callback for whichever Finding is open on the canvas, the way the bare-canvas
+                // menu's own `reveal` entry already does. Declared after the drag TouchArea so it
+                // draws above it and takes the pointer over its own small area.
+                Rectangle {
+                    x: filename-text.x + filename-text.width + 4px;
+                    y: (parent.height - self.height) / 2;
+                    width: 16px;
+                    height: 16px;
+                    border-radius: Theme.radius-sharp;
+                    background: vault-link-touch.has-hover ? root.bg-hover : transparent;
+                    vault-link-touch := TouchArea {
+                        mouse-cursor: MouseCursor.pointer;
+                        enabled: root.active-finding-id != "";
+                        clicked => { root.open-file-location-clicked(root.active-finding-id); }
+                    }
+                    Image {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        width: 11px;
+                        height: 11px;
+                        image-fit: contain;
+                        source: @image-url("../assets/icons/folder.svg");
+                        colorize: vault-link-touch.has-hover ? root.text-primary : root.text-muted;
+                        opacity: root.active-finding-id != "" ? 1.0 : 0.4;
+                    }
                 }
 
                 HorizontalLayout {
@@ -2491,6 +2529,40 @@ export component AppWindow inherits Window {
                                                         self.absolute-position.x + self.mouse-x,
                                                         self.absolute-position.y + self.mouse-y);
                                                 }
+                                            }
+                                        }
+
+                                        // A VISIBLE second route to `delete-finding` - `BUG-77`,
+                                        // `FR-37`/`NFR-16`. Right-click was the only way to reach
+                                        // Finding deletion, which `FR-13`/`UC-7` promise; this sets
+                                        // the exact same state the menu's `delete-finding` entry sets
+                                        // (`pending-delete-count`, `pending-delete-finding`), so it
+                                        // goes through the same confirm-once dialog rather than a
+                                        // second copy of it. Declared last so it draws above the
+                                        // card's own click/right-click TouchArea and takes the
+                                        // pointer over its own small area.
+                                        Rectangle {
+                                            x: parent.width - 22px;
+                                            y: 4px;
+                                            width: 18px;
+                                            height: 18px;
+                                            border-radius: Theme.radius-sharp;
+                                            del-finding-touch := TouchArea {
+                                                mouse-cursor: MouseCursor.pointer;
+                                                clicked => {
+                                                    root.request-delete-finding(thumb.id, thumb.is-selected);
+                                                }
+                                            }
+                                            background: Theme.overlay-chrome;
+                                            Image {
+                                                x: (parent.width - self.width) / 2;
+                                                y: (parent.height - self.height) / 2;
+                                                width: 11px;
+                                                height: 11px;
+                                                image-fit: contain;
+                                                source: @image-url("../assets/icons/trash.svg");
+                                                colorize: del-finding-touch.has-hover
+                                                    ? Theme.semantic-error : Theme.overlay-text;
                                             }
                                         }
                                     }
@@ -3511,9 +3583,7 @@ export component AppWindow inherits Window {
                 // Deleting a capture is the one action here that cannot be taken back, so it asks
                 // first rather than firing from the menu.
                 if (action == "delete-finding") {
-                    root.pending-delete-count = root.menu-target-selected
-                        ? root.selected-finding-count : 1;
-                    root.pending-delete-finding = root.menu-target;
+                    root.request-delete-finding(root.menu-target, root.menu-target-selected);
                 }
                 root.menu-subject = "";
             }

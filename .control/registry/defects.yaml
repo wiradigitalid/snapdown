@@ -4865,18 +4865,32 @@ defects:
       yet: a delete affordance on the filmstrip card, an item in a Finding panel, or an amendment to
       `FR-37` if the owner considers right-click discoverable enough for a destructive action.
     fix: |
-      NOT DONE, and deliberately open. Three ways to close it, in the order they cost:
+      DONE, option 1 - the one that keeps both requirements true, and it is small.
 
-        1. a Delete control on the filmstrip card or in the Finding's own panel, and a Vault link
-           beside the file name in the readout strip
-        2. accept right-click as a route and amend `FR-37`'s consequence - which then needs an answer
-           for `NFR-16`, because a right-click menu IS a control that has to be discovered
-        3. leave deletion to the Library screen when `BUG-61` builds it, and drop the menu entry
-           until then
+      Both new controls reuse the exact state and callbacks the context menu's `reveal` and
+      `delete-finding` entries already reach, rather than a second copy of either:
 
-      Option 1 is the one that keeps both requirements true. It is small, and it is the owner's call
-      rather than mine.
-    status: open
+        - `apps/desktop/ui/appwindow.slint`, each filmstrip card: a small always-visible trash
+          icon (`del-finding-touch`), declared last so it draws above the card's own
+          click/right-click `TouchArea`. It calls a new `request-delete-finding(target,
+          target-selected)` function that sets `root.pending-delete-count` and
+          `root.pending-delete-finding` - the same two properties the menu's `delete-finding`
+          entry now also reaches through that one function, rather than each writing them out
+          separately - so the click still lands on the existing confirm-once dialog
+          (`pending-delete-finding != ""`) and the existing `delete-finding-confirmed` callback,
+          never a bare single-click delete.
+        - `apps/desktop/ui/appwindow.slint`, the titlebar: a small folder icon
+          (`vault-link-touch`) beside `current-filename`, firing
+          `root.open-file-location-clicked(root.active-finding-id)` - the same callback and the
+          same argument the bare-canvas menu's own `reveal` entry already uses for "whichever
+          Finding is open".
+
+      The right-click entries stay: this adds a second route, it does not replace the first.
+      Both callbacks were already handled in `apps/desktop/src/main.rs`
+      (`on_open_file_location_clicked`, `on_delete_finding_confirmed`), so no Rust wiring changed.
+
+      Reachability tests added in `apps/desktop/tests/test_annotation_wiring.rs`.
+    status: fixed
 
   - id: BUG-78
     title: A slider filled from its middle, Explorer opening the Desktop, and a deletion that took
