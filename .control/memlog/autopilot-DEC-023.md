@@ -10,17 +10,25 @@ Mandate: `DEC-023`. Parameters at `.control/registry/decisions.yaml` → `DEC-02
 (`from_gate: G5`, `scope: {fr: all, defects: [BUG-107]}`, `parked: [ad-n]`, `smoke_test: agent`,
 `loop: 10m`, `expires: 2026-09-12`).
 
-- Iteration: 0 (preflight only — mandate just accepted, no iteration has run yet)
-- Run branch: `autopilot/DEC-023`, created in an isolated worktree at
-  `.claude/worktrees/autopilot+DEC-023`. No PR opened yet — the first push (at the first spec/defect
-  close) opens it as a draft.
-- Stopped at: n/a (preflight just finished)
+- Iteration: 1, commit `88234e6` (mandate open/accept) is the boundary so far
+- Run branch: `autopilot/DEC-023`, isolated worktree at `.claude/worktrees/autopilot+DEC-023`. No PR
+  opened yet — the first push (at the first spec/defect close) opens it as a draft.
+- Stopped at: **Capacity** — one builder subagent dispatched and in flight in this same worktree; a
+  second concurrent builder needs its own worktree and was deliberately not started this iteration to
+  avoid two agents committing in the same working tree at once.
+- In flight: `BUG-107` — builder subagent dispatched (diagnose root cause → fix in
+  `snapdown-core`/`snapdown-store` → regression test that decodes actual post-crop coordinates, not a
+  count/existence check → `cargo fmt`/`clippy`/`test --workspace` green → commit directly to
+  `autopilot/DEC-023`, no push, no PR). Independent review still owed before the commit is trusted —
+  the builder is not its own reviewer.
 - Blocked: —
 - Parked: —
-- Next: iteration 1 — pick the first runnable row. Candidates found at preflight, no ranking done yet:
-  `BUG-107` (crop doesn't remap Markers/annotations), `.scratch/canvas-zoom-clipboard-paste/` (spec + 3
-  tickets, all `ready-for-agent`), `.scratch/editor-virtual-desktop-focus/` (1 ticket `ready-for-agent`),
-  `.scratch/post-testing-polish/` (spec `ready-for-agent`, not yet run through `to-tickets`)
+- Next: when the `BUG-107` builder returns — independently review its diff (read it in full, don't
+  trust its self-report), re-run the full suite, then either accept the commit as-is or send it back for
+  a fix. After `BUG-107` lands: `.scratch/canvas-zoom-clipboard-paste/` (spec + 3 tickets, all
+  `ready-for-agent`), `.scratch/editor-virtual-desktop-focus/` (1 ticket `ready-for-agent`),
+  `.scratch/post-testing-polish/` (spec `ready-for-agent`, not yet run through `to-tickets`) — each in
+  its own worktree if run concurrently.
 
 ## Decisions
 
