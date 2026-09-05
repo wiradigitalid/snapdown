@@ -10,35 +10,33 @@ Mandate: `DEC-023`. Parameters at `.control/registry/decisions.yaml` → `DEC-02
 (`from_gate: G5`, `scope: {fr: all, defects: [BUG-107]}`, `parked: [ad-n]`, `smoke_test: agent`,
 `loop: 10m`, `expires: 2026-09-12`).
 
-- Iteration: 5, commit `b165239` (post-testing-polish sized into 6 tickets) is the boundary so far
+- Iteration: 6, commit `3bbde0e` (`BUG-107` fix, independently verified) is the boundary so far
 - Run branch: `autopilot/DEC-023`, isolated worktree at `.claude/worktrees/autopilot+DEC-023`. No PR
-  opened yet — the first push (at the first defect/spec close with real code on it) opens it as a draft.
-- Stopped at: **Capacity** — 5 builders now in flight across 5 worktrees; no more dispatched this
-  iteration, reviewing/merging is next.
-- Done: `canvas-zoom-clipboard-paste` (`FR-34`, `FR-35`) — already shipped to `origin/main` before this
-  mandate opened, ticket bookkeeping corrected, merged (`1bee143`). See iteration 4 decisions row.
-- `.scratch/post-testing-polish/` sized into 6 tickets this iteration (`b165239`), none blocking another.
-  Diagnosis in ticket 01 found the shipped zoom already handles placement-under-zoom correctly by
-  construction (`appwindow.slint:2313`'s `mouse-x / parent.width` is zoom-invariant) — only Ctrl+Scroll
-  wiring is a real gap. Ticket 03's open a/b question resolved to (a), the spec's own stated default.
+  opened yet — next push (queued for the next iteration boundary) opens it as a draft.
+- Stopped at: **Capacity** — `BUG-107` genuinely finished and independently verified this iteration; the
+  other four builders are still running. No new work dispatched.
+- Done this iteration:
+  - `BUG-107` — genuinely complete, not just reported. Independently re-verified by the coordinator (not
+    taken on the builder's word): read the full diff, confirmed the mutation-check stub was actually
+    removed (`grep` for it returns nothing), re-ran `cargo fmt --all -- --check` / `cargo clippy
+    --workspace --all-targets -- -D warnings` / `cargo test --workspace --no-fail-fast` myself from
+    scratch — all exit 0, 430+ tests passed, zero failures. `validate.py --generate` after: still only
+    the 6 baseline-matched reds, no regression. `defects.yaml`'s `BUG-107` row is `status: fixed` with
+    the domain decision (drop Markers, clip boxes, clamp Arrow/Callout-tail endpoints) reasoned in full.
+    Already on `autopilot/DEC-023` directly (`3bbde0e`) — no separate merge needed.
+- Also done (iteration 4): `canvas-zoom-clipboard-paste` — already shipped to `origin/main` before this
+  mandate opened, ticket bookkeeping corrected, merged (`1bee143`).
 - In flight:
-  - `BUG-107` — this worktree directly, branch `autopilot/DEC-023`. `CropRemap` domain logic verified
-    correct by hand (worked-example tests, arithmetic checked). Store-layer wiring was mid-edit with a
-    deliberate mutation-check stub (`return Ok(())` before the real body) — sent the builder a direct
-    status check + instructions to finish the mutation check, remove the stub, and report back with the
-    final green suite and commit SHA, rather than keep passively waiting through repeated pause/resume
-    notifications (3 so far, ~225k tokens). Do not touch this file until it reports back for real.
   - `editor-virtual-desktop-focus` ticket 01 — `ticket-vdesktop-focus` / `autopilot/DEC-023-vdesktop-focus`.
-    Diagnosing Windows Virtual-Desktop switching feasibility before implementing.
   - Post-testing-polish ticket 01 (Ctrl+Scroll zoom) — `ticket-zoom-scroll` / `autopilot/DEC-023-zoom-scroll`.
   - Post-testing-polish ticket 04 (copy-on-save) — `ticket-copy-on-save` / `autopilot/DEC-023-copy-on-save`.
   - Post-testing-polish ticket 06 (about-tab icon) — `ticket-about-icon` / `autopilot/DEC-023-about-icon`.
 - Blocked: —
 - Parked: —
-- Next: wait for genuine completions (not a paused mid-task notification) on all five, independently
-  review each diff in full before trusting any report, re-run the full suite, then merge serially. After
-  that: post-testing-polish tickets 02 (marker focus/tooltip), 03 (second Assemble button), 05 (bulk
-  reclaim space) — deferred this iteration to keep review load manageable, not because they're blocked.
+- Next: wait for genuine completions on all four, independently review each diff in full before trusting
+  any report, re-run the full suite, then merge serially and push (opens the draft PR — first code
+  actually lands on this iteration boundary). After that: post-testing-polish tickets 02 (marker
+  focus/tooltip), 03 (second Assemble button), 05 (bulk reclaim space) — still queued, not blocked.
 
 ## Decisions
 
@@ -48,3 +46,4 @@ Mandate: `DEC-023`. Parameters at `.control/registry/decisions.yaml` → `DEC-02
 | Iter 0 (preflight), commit (pending) | Door 1 preflight — validators | Treated the 6 baseline-matched reds as green | Blocking preflight on them | None — `DEC-021` already accepts these as permanent | preflight page (this ledger) |
 | Iter 4, commit `1bee143` | canvas-zoom-clipboard-paste tickets | Both tickets closed as `done` with no code change — features already on `origin/main` since 2026-09-04 | Re-implementing a feature that already exists (both builders independently found this; verified again by the coordinator, not taken on trust) | None — verified via `git merge-base --is-ancestor` against `origin/main`, not against a builder's claim | `.scratch/canvas-zoom-clipboard-paste/{spec,issues/01,issues/02}.md` |
 | Iter 4 | `BUG-107` review | Deferred review — builder still live, caught a file mid-edit with a deliberate mutation-check stub in place | Committing or fixing the file myself while the builder was still writing to it | Racing a live builder's own edits, corrupting its in-progress work | — (no commit made) |
+| Iter 6, commit `3bbde0e` | `BUG-107` fix — crop-remap semantics | A Marker outside the new bounds is deleted (not clamped); a box annotation is clipped to what survives; an Arrow/Callout-tail is clamped onto the new edge unless its whole bbox misses | Clamping every kind uniformly (simpler, but misrepresents where a Marker's single point actually was) | An owner who wanted uniform clamping would see markers silently vanish instead — reported here so it's checkable, not a silent choice | `crates/snapdown-core/src/domain/finding.rs`, `.control/registry/defects.yaml` (`BUG-107` `fix:`) |
