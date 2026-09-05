@@ -16,7 +16,7 @@ use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, SharedString, Ve
 use snapdown_capture::{CaptureTarget, RegionCapturer};
 use snapdown_core::domain::bundle::{Bundle, BundleDetail, BundleItem};
 use snapdown_core::domain::finding::{
-    AnnotationShape, Finding, FindingDetail, Note, Region, VisualAnnotation,
+    AnnotationShape, CropRect, Finding, FindingDetail, Note, Region, VisualAnnotation,
 };
 use snapdown_core::domain::image::ImageDimensions;
 use snapdown_core::domain::markdown::{MarkdownSerializer, ParsedBundleDocument};
@@ -4852,7 +4852,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // A new Vault file and new dimensions - the same reason `persist_finding` demands a
             // full rebuild rather than `click_finding`'s in-place row update: the filmstrip's own
             // thumbnail and dimension label are stale otherwise, not merely the canvas.
-            Ok(_) => load_findings_into_window(&win, &ctx_crop, Some(&finding_id)),
+            Ok((new_w, new_h)) => {
+                // `BUG-107`: the image is cropped, but any Marker/VisualAnnotation already on this
+                // Finding is still positioned against the OLD image - remap them into the new
+                // one's coordinate space now, while the OLD dimensions (`f.image_width/height`)
+                // and the crop rectangle actually applied (`px_x1, px_y1, px_w, px_h`) are still at
+                // hand. Reported, not swallowed: a failure here leaves the image cropped but the
+                // Markers/annotations mispositioned, which the Reviewer needs to know about.
+                if let Err(e) = ctx_crop
+                    .finding_store
+                    .remap_markers_and_annotations_for_crop(
+                        &finding_id,
+                        f.image_width,
+                        f.image_height,
+                        CropRect {
+                            x: px_x1,
+                            y: px_y1,
+                            width: px_w,
+                            height: px_h,
+                        },
+                        new_w,
+                        new_h,
+                    )
+                {
+                    toast(
+                        &win,
+                        format!(
+                            "The image was cropped, but its Markers/annotations could not be \
+                             repositioned to match: {e}"
+                        ),
+                        true,
+                    );
+                }
+                load_findings_into_window(&win, &ctx_crop, Some(&finding_id));
+            }
             Err(e) => toast(&win, e, true),
         }
     });
