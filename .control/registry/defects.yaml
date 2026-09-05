@@ -6299,3 +6299,35 @@ defects:
       named here instead of left for the next reader to discover the way `BUG-61`'s dangling port
       was.
     status: fixed
+
+  - id: BUG-107
+    title: Cropping a Finding does not remap its existing Markers/annotations into the cropped image
+    found: "2026-09-05"
+    found_by: the `BUG-106` builder's own self-dispatched `/code-review` Spec pass, while shipping the Crop tool
+    component: finding
+    severity: low
+    contradicts: []
+    root_cause: code
+    evidence: |
+      A Finding's Markers and visual annotations are stored as fractions of its FULL image
+      (`shape_from_drag`, `apps/desktop/src/main.rs`). `BUG-106` gave the Crop tool a real canvas
+      interaction and a store-level crop operation, but does not re-map those fractional positions
+      into the cropped image's own coordinate space. Cropping a Finding that already carries Markers
+      or annotations leaves them at their old fractional position on the new, smaller image.
+    impact: |
+      A cropped Finding's pre-existing Markers/annotations can read as mispositioned or land outside
+      the visible canvas entirely, rather than moving with (or being clipped by) the region they were
+      about.
+    why_undetected: |
+      It was never undetected - the builder's own self-review caught it in the same session `BUG-106`
+      shipped in, and disclosed it in `BUG-106`'s own `fix:` text rather than silently shipping the
+      gap. Filed here as its own row so it is tracked rather than left as prose inside a closed
+      defect's record.
+    fix: |
+      NOT DONE. Re-mapping means, for every Marker/annotation on the cropped Finding: convert its
+      fractional position against the OLD image dimensions into pixel space, subtract the crop
+      rectangle's origin, then re-normalize against the NEW (cropped) dimensions - dropping (or
+      visibly clipping) anything that lands entirely outside the new bounds. Whether an annotation
+      straddling the crop boundary should be dropped, clipped, or kept in full is a product call the
+      owner has not been asked yet - not a code decision to make silently.
+    status: open
