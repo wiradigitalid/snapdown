@@ -1,10 +1,10 @@
 ---
 type: decision
 id: DEC-017
-status: accepted
+status: superseded
 touches: []
 supersedes: null
-superseded_by: null
+superseded_by: DEC-022
 created: "2026-09-04"
 ---
 
