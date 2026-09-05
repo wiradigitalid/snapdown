@@ -1193,6 +1193,16 @@ export component AppWindow inherits Window {
     in-out property <[MarkerData]> markers: [];
     in-out property <[FindingThumb]> filmstrip-items: [];
 
+    // `02-marker-note-focus-and-tooltip.md` (`FR-8`, `UC-5`). The id of the Marker whose Note field
+    // should claim real keyboard focus, or "" for none pending. Set from two places: Rust, right
+    // before it reloads the Marker Notes list after placing a new one (that reload replaces the
+    // whole model, so the matching row's own `init` is what fires - see the `for marker in
+    // root.markers` card below); and this file itself, the moment a click on an EXISTING Marker on
+    // the canvas is recognised as a click rather than a drag (that row already exists, so its
+    // `changed` watch is what fires). Consumed exactly once, by whichever row matches - it clears
+    // itself so an unrelated later reload (deleting a different Marker, say) cannot steal focus back.
+    in-out property <string> marker-focus-target: "";
+
     // CANVAS ANNOTATIONS - `CAP-11`.
     //
     // A separate model from `markers` and not a superset of it, because the two are different
@@ -2399,13 +2409,22 @@ export component AppWindow inherits Window {
                                     private property <float> lx: self.dragging ? self.dx : m.x;
                                     private property <float> ly: self.dragging ? self.dy : m.y;
 
+                                    // `02-marker-note-focus-and-tooltip.md`. The same "a click is not
+                                    // a drag" rule `drag-is-real`/`crop-drag-is-real` state above,
+                                    // narrowed to one Marker's own movement rather than the canvas's -
+                                    // measured in image pixels so a real drag stays real at every
+                                    // `canvas-zoom` (`FR-34`).
+                                    private property <bool> marker-drag-is-real:
+                                        Math.max(Math.abs(self.dx - m.x) * root.active-image.width,
+                                                 Math.abs(self.dy - m.y) * root.active-image.height) >= 8;
+
                                     ReticleMarker {
                                         x: parent.lx * parent.width - 15px;
                                         y: parent.ly * parent.height - 15px;
                                         ordinal: m.ordinal;
                                     }
 
-                                    TouchArea {
+                                    marker-touch := TouchArea {
                                         x: m.x * parent.width - 15px;
                                         y: m.y * parent.height - 15px;
                                         width: 30px;
@@ -2427,6 +2446,15 @@ export component AppWindow inherits Window {
                                             if (ev.kind == PointerEventKind.up && parent.dragging) {
                                                 parent.dragging = false;
                                                 root.marker-moved(m.id, parent.dx, parent.dy);
+                                                // Opening an EXISTING Marker by click, never by drag -
+                                                // `UC-5` step 5's drag is a different gesture and must
+                                                // not steal focus mid-reposition. The Marker Notes tab
+                                                // is where the Note field lives, so it has to be the
+                                                // one on screen before anything can claim its focus.
+                                                if (!parent.marker-drag-is-real) {
+                                                    root.active-tab-index = 0;
+                                                    root.marker-focus-target = m.id;
+                                                }
                                             }
                                         }
                                         moved => {
@@ -2436,6 +2464,38 @@ export component AppWindow inherits Window {
                                                 parent.dy = Math.max(0.0, Math.min(1.0,
                                                     m.y + (self.mouse-y - self.pressed-y) / parent.height));
                                             }
+                                        }
+                                    }
+
+                                    // Hover tooltip previewing the Marker's OWN Note text - bound to
+                                    // `m.comment` straight from this iteration's own model row, never
+                                    // to shared state, so there is nothing left over to go stale when
+                                    // the pointer moves to a different Marker or off all of them: the
+                                    // instance itself stops existing (or `m` changes under it) the
+                                    // moment that happens. An empty note shows no tooltip at all,
+                                    // rather than an empty plate over the screenshot.
+                                    if marker-touch.has-hover && m.comment != "" : Rectangle {
+                                        width: 220px;
+                                        height: tooltip-text.preferred-height + 16px;
+                                        x: Math.max(0px, Math.min(parent.width - self.width,
+                                            parent.lx * parent.width - self.width / 2));
+                                        y: Math.max(0px, parent.ly * parent.height - 15px - self.height - 8px);
+                                        background: Theme.overlay-chrome;
+                                        border-width: 1px;
+                                        border-color: Theme.overlay-chrome-border;
+                                        border-radius: Theme.radius-sharp;
+                                        drop-shadow-blur: 8px;
+                                        drop-shadow-color: Theme.overlay-shadow;
+
+                                        tooltip-text := Text {
+                                            x: 8px;
+                                            y: 8px;
+                                            width: parent.width - 16px;
+                                            text: m.comment;
+                                            color: Theme.overlay-text;
+                                            font-size: 11px;
+                                            font-family: "IBM Plex Sans";
+                                            wrap: word-wrap;
                                         }
                                     }
                                 }
@@ -2953,6 +3013,41 @@ export component AppWindow inherits Window {
                                             border-width: 1px;
                                             border-color: root.border-strong;
 
+                                            // `02-marker-note-focus-and-tooltip.md` (`FR-8`, `UC-5`).
+                                            // Claims real keyboard focus for THIS card's Note field
+                                            // the moment `root.marker-focus-target` names this
+                                            // Marker, then consumes the request so it cannot fire
+                                            // again on an unrelated later reload.
+                                            //
+                                            // Two watches, because a Marker's row exists at two very
+                                            // different moments relative to the request: `init` covers
+                                            // a row created WITH the request already pending (a
+                                            // freshly-placed Marker - Rust replaces the whole
+                                            // `root.markers` model before this row ever existed, and
+                                            // `library.slint`'s own `library-keys := FocusScope {
+                                            // init => { self.focus(); } }` is the same "claim it the
+                                            // moment I exist" shape); `changed` covers a row that
+                                            // already existed when an existing Marker is clicked open
+                                            // on the canvas. `changed` only accepts an unqualified
+                                            // identifier owned by the element it is declared on -
+                                            // `settings.slint`'s six `*-mirror` properties document
+                                            // the same constraint - so the alias below is what lets
+                                            // this card watch a property that actually lives on
+                                            // `root`.
+                                            property <string> focus-target-mirror <=> root.marker-focus-target;
+                                            init => {
+                                                if (root.marker-focus-target == marker.id) {
+                                                    marker-note-field.focus-input();
+                                                    root.marker-focus-target = "";
+                                                }
+                                            }
+                                            changed focus-target-mirror => {
+                                                if (root.marker-focus-target == marker.id) {
+                                                    marker-note-field.focus-input();
+                                                    root.marker-focus-target = "";
+                                                }
+                                            }
+
                                             VerticalLayout {
                                                 padding: 10px;
                                                 spacing: 6px;
@@ -3003,7 +3098,7 @@ export component AppWindow inherits Window {
                                                 // exactly as the capture field does. A Marker's
                                                 // note is prose, and a fixed 32px hid everything
                                                 // past the first line.
-                                                SdTextField {
+                                                marker-note-field := SdTextField {
                                                     pad: 8px;
                                                     text-size: 12px;
                                                     placeholder: "What is wrong here?";

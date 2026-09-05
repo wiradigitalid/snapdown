@@ -11,7 +11,7 @@ left over from a previously-hovered Marker).
 canvas/marker code, no shared files expected beyond `appwindow.slint` itself (large file, low collision
 risk on serial merge).
 
-**Status:** ready-for-agent
+**Status:** done
 
 Realizes `FR-8`, `UC-5`. See `.scratch/post-testing-polish/spec.md` Implementation Decisions §
 "Marker note auto-focus and hover tooltip" for the full design.
