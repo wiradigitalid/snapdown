@@ -2313,6 +2313,30 @@ export component AppWindow inherits Window {
                                             root.marker-placed(self.mouse-x / parent.width, self.mouse-y / parent.height);
                                         }
                                     }
+
+                                    // `01-canvas-zoom-ctrl-scroll.md`. Ctrl+Scroll zooms, reusing
+                                    // the EXACT SAME `zoom-in-clicked`/`zoom-out-clicked` callbacks
+                                    // the toolbar buttons already fire (`FR-34`) — the clamp/step
+                                    // arithmetic lives once, in `zoomed_in`/`zoomed_out` in
+                                    // `main.rs`, and is not copied here.
+                                    //
+                                    // A plain Scroll (no Ctrl) is REJECTED, not consumed — exactly
+                                    // what an absent handler would do, which is how this same wheel
+                                    // input already reaches `scroll-view`'s own panning today. This
+                                    // handler only ever takes the Ctrl case away from that path; it
+                                    // never takes the plain-Scroll case.
+                                    scroll-event(ev) => {
+                                        if (ev.modifiers.control) {
+                                            if (ev.delta-y < 0) {
+                                                root.zoom-in-clicked();
+                                            } else if (ev.delta-y > 0) {
+                                                root.zoom-out-clicked();
+                                            }
+                                            accept
+                                        } else {
+                                            reject
+                                        }
+                                    }
                                 }
 
                                 // The annotations themselves. Above the surface so they can be
