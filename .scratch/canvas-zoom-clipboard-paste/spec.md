@@ -1,4 +1,10 @@
-Status: ready-for-agent
+Status: done
+
+Corrected 2026-09-05 under `DEC-023`: both tickets (`01-canvas-zoom`, `02-paste-from-clipboard`) were
+already shipped to `main` on 2026-09-04 (`396550c`, `d97b82e2`) before this mandate opened. This
+`ready-for-agent` line was simply never updated after that work landed — verified independently by two
+separate builders and by the coordinator (`git merge-base --is-ancestor` against `origin/main`), not
+re-implemented.
 
 # Canvas zoom and paste-from-clipboard
 
