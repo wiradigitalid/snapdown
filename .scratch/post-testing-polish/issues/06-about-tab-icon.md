@@ -8,7 +8,7 @@ same mark needs to be added to `assets/icons/` first — a builder decision eith
 **Blocked by:** None (can start immediately). Smallest, most isolated ticket in this spec — touches
 only `apps/desktop/ui/settings.slint` and possibly one new asset file.
 
-**Status:** ready-for-agent
+**Status:** done
 
 Realizes `FR-27`'s home (the tab that names the product now also shows it); `BR-121` governs the
 product's name elsewhere and is not itself touched by this ticket.
