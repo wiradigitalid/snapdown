@@ -10,39 +10,35 @@ Mandate: `DEC-023`. Parameters at `.control/registry/decisions.yaml` → `DEC-02
 (`from_gate: G5`, `scope: {fr: all, defects: [BUG-107]}`, `parked: [ad-n]`, `smoke_test: agent`,
 `loop: 10m`, `expires: 2026-09-12`).
 
-- Iteration: 4, commit `1bee143` (canvas-zoom-clipboard-paste closed) is the boundary so far
+- Iteration: 5, commit `b165239` (post-testing-polish sized into 6 tickets) is the boundary so far
 - Run branch: `autopilot/DEC-023`, isolated worktree at `.claude/worktrees/autopilot+DEC-023`. No PR
   opened yet — the first push (at the first defect/spec close with real code on it) opens it as a draft.
-- Stopped at: **Capacity** — two of four dispatched builders genuinely done and merged this iteration;
-  the other two are still actively running (one notification arrived early: `a9badb0d409bf70ac` reported
-  "completed" then resumed on its own after its own background `cargo` sub-task finished — its file was
-  caught mid-edit with a deliberate mutation-check stub in place, not a finished result. Correctly did
-  NOT touch or commit that file while the builder was still live in the same worktree).
-- Done this iteration:
-  - `canvas-zoom-clipboard-paste` (`FR-34`, `FR-35`) — **already shipped to `origin/main`** on 2026-09-04
-    (`396550c`, `d97b82e2`), before this mandate opened. Independently confirmed via
-    `git merge-base --is-ancestor <sha> origin/main` (true for both) — not taken on either builder's own
-    report alone. Only the `.scratch/canvas-zoom-clipboard-paste/` spec + both ticket `Status:` lines were
-    stale; corrected to `done` and merged (`1bee143`, plus the two `--no-ff` merge commits before it).
-    Both ticket branches/worktrees deleted (`ticket-paste-clipboard` cleanly; `ticket-canvas-zoom`'s
-    directory is still on disk, locked by a leftover process — branch already deleted, harmless, sweep
-    next pass).
+- Stopped at: **Capacity** — 5 builders now in flight across 5 worktrees; no more dispatched this
+  iteration, reviewing/merging is next.
+- Done: `canvas-zoom-clipboard-paste` (`FR-34`, `FR-35`) — already shipped to `origin/main` before this
+  mandate opened, ticket bookkeeping corrected, merged (`1bee143`). See iteration 4 decisions row.
+- `.scratch/post-testing-polish/` sized into 6 tickets this iteration (`b165239`), none blocking another.
+  Diagnosis in ticket 01 found the shipped zoom already handles placement-under-zoom correctly by
+  construction (`appwindow.slint:2313`'s `mouse-x / parent.width` is zoom-invariant) — only Ctrl+Scroll
+  wiring is a real gap. Ticket 03's open a/b question resolved to (a), the spec's own stated default.
 - In flight:
-  - `BUG-107` — this worktree (`.claude/worktrees/autopilot+DEC-023`, branch `autopilot/DEC-023`
-    directly). Substantial, well-tested `CropRemap` domain logic already present and manually verified
-    correct by the coordinator (worked-example tests, hand-checked arithmetic). Store-layer wiring
-    (`remap_markers_and_annotations_for_crop`) mid-edit, main.rs wiring looks correct and type-checks.
-    Do not touch this file until the builder's next genuine completion notification.
-  - `editor-virtual-desktop-focus` ticket 01 — `.claude/worktrees/autopilot+DEC-023/.claude/worktrees/ticket-vdesktop-focus`,
-    branch `autopilot/DEC-023-vdesktop-focus`. Still running; briefed to diagnose Windows Virtual-Desktop
-    switching feasibility honestly before implementing (documented `IVirtualDesktopManager` vs.
-    undocumented, per-build-fragile `IVirtualDesktopManagerInternal`).
+  - `BUG-107` — this worktree directly, branch `autopilot/DEC-023`. `CropRemap` domain logic verified
+    correct by hand (worked-example tests, arithmetic checked). Store-layer wiring was mid-edit with a
+    deliberate mutation-check stub (`return Ok(())` before the real body) — sent the builder a direct
+    status check + instructions to finish the mutation check, remove the stub, and report back with the
+    final green suite and commit SHA, rather than keep passively waiting through repeated pause/resume
+    notifications (3 so far, ~225k tokens). Do not touch this file until it reports back for real.
+  - `editor-virtual-desktop-focus` ticket 01 — `ticket-vdesktop-focus` / `autopilot/DEC-023-vdesktop-focus`.
+    Diagnosing Windows Virtual-Desktop switching feasibility before implementing.
+  - Post-testing-polish ticket 01 (Ctrl+Scroll zoom) — `ticket-zoom-scroll` / `autopilot/DEC-023-zoom-scroll`.
+  - Post-testing-polish ticket 04 (copy-on-save) — `ticket-copy-on-save` / `autopilot/DEC-023-copy-on-save`.
+  - Post-testing-polish ticket 06 (about-tab icon) — `ticket-about-icon` / `autopilot/DEC-023-about-icon`.
 - Blocked: —
 - Parked: —
-- Next: wait for `BUG-107` and the vdesktop ticket's genuine completion notifications (not a paused
-  mid-task one). Independently review each diff in full before trusting either report, re-run the full
-  suite, then merge. After both land: `.scratch/post-testing-polish/` (spec `ready-for-agent`, not yet
-  run through `to-tickets` — needs a `to-tickets` pass first, sized per `delivery-flow-guide.md`'s table).
+- Next: wait for genuine completions (not a paused mid-task notification) on all five, independently
+  review each diff in full before trusting any report, re-run the full suite, then merge serially. After
+  that: post-testing-polish tickets 02 (marker focus/tooltip), 03 (second Assemble button), 05 (bulk
+  reclaim space) — deferred this iteration to keep review load manageable, not because they're blocked.
 
 ## Decisions
 
