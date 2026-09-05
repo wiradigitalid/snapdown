@@ -1,7 +1,7 @@
-asof: '2026-08-23'
+asof: '2026-09-05'
 capabilities:
 - id: CAP-1
-  text: ''
+  text: Capture a screen region with a Note, from a hotkey
   size: ''
   priority: ''
   owner: ''
@@ -15,26 +15,113 @@ capabilities:
   state: not-started
   children:
   - id: FR-1
-    text: ''
-    stories: []
+    text: Capture a screen region from a global hotkey with precision guides and auto-detection
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
   - id: FR-2
-    text: ''
-    stories: []
+    text: Write the Note at capture time
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
   - id: FR-3
-    text: ''
-    stories: []
+    text: Capture repeatedly without leaving the loop
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-35
+    text: Paste an image from the clipboard as a new Finding
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  waiting_on: []
+- id: CAP-10
+  text: Precision crosshair guides, magnifying loupe, and intelligent window/panel auto-detection
+  size: ''
+  priority: ''
+  owner: ''
+  target_release: r3
+  planned_start: ''
+  planned_end: ''
+  estimate_mandays: 0
+  actual_start: ''
+  actual_end: ''
+  delta_days: null
+  state: not-started
+  children: []
+  waiting_on: []
+- id: CAP-11
+  text: Rich visual canvas annotations and privacy redactions
+  size: ''
+  priority: ''
+  owner: ''
+  target_release: r3
+  planned_start: ''
+  planned_end: ''
+  estimate_mandays: 0
+  actual_start: ''
+  actual_end: ''
+  delta_days: null
+  state: not-started
+  children:
+  - id: FR-30
+    text: Draw transparent outlined shapes and directional arrows on canvas
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-31
+    text: Draw blur redaction boxes over sensitive image regions
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-32
+    text: Place floating text and callout bubbles with font and tail controls
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-33
+    text: Transform and manipulate canvas annotation elements with interactive handles
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-38
+    text: Change the front-to-back order of canvas annotations
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  waiting_on: []
+- id: CAP-12
+  text: Render a composed Bundle as a document a person reads away from Snapdown
+  size: ''
+  priority: ''
+  owner: ''
+  target_release: r3
+  planned_start: ''
+  planned_end: ''
+  estimate_mandays: 0
+  actual_start: ''
+  actual_end: ''
+  delta_days: null
+  state: not-started
+  children:
+  - id: FR-39
+    text: Export a Bundle as a PDF
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
   waiting_on: []
 - id: CAP-2
-  text: ''
+  text: Reduce every captured image under a budget the Reviewer sets
   size: ''
   priority: ''
   owner: ''
@@ -42,29 +129,26 @@ capabilities:
   planned_start: ''
   planned_end: ''
   estimate_mandays: 0
-  actual_start: '2026-08-23'
+  actual_start: ''
   actual_end: ''
   delta_days: null
-  state: in-progress
+  state: not-started
   children:
   - id: FR-4
-    text: ''
-    stories: []
+    text: Reduce every captured image automatically
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
   - id: FR-5
-    text: ''
-    stories:
-    - W1-S3
-    - W6-S4
-    actual_start: '2026-08-23'
+    text: Choose a Quality Budget by naming the intent
+    tickets: []
+    actual_start: ''
     actual_end: ''
-    state: in-progress
-  waiting_on:
-  - W6-S4
+    state: not-started
+  waiting_on: []
 - id: CAP-3
-  text: ''
+  text: Hold Findings with their Notes and Markers, and work on them in the Editor
   size: ''
   priority: ''
   owner: ''
@@ -72,42 +156,50 @@ capabilities:
   planned_start: ''
   planned_end: ''
   estimate_mandays: 0
-  actual_start: '2026-08-23'
-  actual_end: '2026-08-23'
+  actual_start: ''
+  actual_end: ''
   delta_days: null
-  state: done
+  state: not-started
   children:
+  - id: FR-34
+    text: Zoom the canvas to inspect a capture at more or less than natural size
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-36
+    text: Copy a Finding's burned image to the clipboard
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
   - id: FR-6
-    text: ''
-    stories:
-    - W6-S7
-    actual_start: '2026-08-23'
-    actual_end: '2026-08-23'
-    state: done
+    text: See every Finding with its Note
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
   - id: FR-7
-    text: ''
-    stories:
-    - W6-S7
-    actual_start: '2026-08-23'
-    actual_end: '2026-08-23'
-    state: done
+    text: Edit a Note
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
   - id: FR-8
-    text: ''
-    stories:
-    - W6-S7
-    actual_start: '2026-08-23'
-    actual_end: '2026-08-23'
-    state: done
+    text: Place numbered Markers bound to numbered Note lines
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
   - id: FR-9
-    text: ''
-    stories:
-    - W6-S7
-    actual_start: '2026-08-23'
-    actual_end: '2026-08-23'
-    state: done
+    text: Select several Findings at once
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
   waiting_on: []
 - id: CAP-4
-  text: ''
+  text: Compose selected Findings into a named Markdown Bundle
   size: ''
   priority: ''
   owner: ''
@@ -121,35 +213,50 @@ capabilities:
   state: not-started
   children:
   - id: FR-10
-    text: ''
-    stories: []
+    text: Compose selected Findings into a named Bundle
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
   - id: FR-11
-    text: ''
-    stories:
-    - W6-S8
+    text: List and reopen Bundles
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
   - id: FR-12
-    text: ''
-    stories:
-    - W6-S8
+    text: Copy a Bundle's Markdown
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
   - id: FR-14
-    text: ''
-    stories: []
+    text: Delete a Bundle with its images
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
-  waiting_on:
-  - W6-S8
+  - id: FR-40
+    text: Edit a composed Bundle's title and notes
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-43
+    text: Open a Bundle's folder in the file manager
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-44
+    text: Delete several Bundles and their images together, in bulk
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  waiting_on: []
 - id: CAP-5
-  text: ''
+  text: Remove a Finding together with its file, and know when something is orphaned
   size: ''
   priority: ''
   owner: ''
@@ -163,64 +270,36 @@ capabilities:
   state: not-started
   children:
   - id: FR-13
-    text: ''
-    stories: []
+    text: Delete Findings, and their image files with them
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
   - id: FR-15
-    text: ''
-    stories: []
+    text: Report orphans
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-41
+    text: Discard the source Findings behind a Bundle, keeping the Bundle
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-42
+    text: See which Bundles still hold original captures, and reclaim their disk in bulk
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
   waiting_on: []
 - id: CAP-6
-  text: ''
+  text: Keep the tool out of the way — folder, hotkeys, startup
   size: ''
   priority: ''
   owner: ''
   target_release: r1
-  planned_start: ''
-  planned_end: ''
-  estimate_mandays: 0
-  actual_start: '2026-08-23'
-  actual_end: ''
-  delta_days: null
-  state: in-progress
-  children:
-  - id: FR-16
-    text: ''
-    stories:
-    - W1-S3
-    actual_start: '2026-08-23'
-    actual_end: '2026-08-23'
-    state: done
-  - id: FR-17
-    text: ''
-    stories:
-    - W1-S4
-    - W6-S6
-    actual_start: '2026-08-23'
-    actual_end: ''
-    state: in-progress
-  - id: FR-18
-    text: ''
-    stories:
-    - W1-S5
-    - W6-S5
-    actual_start: '2026-08-23'
-    actual_end: ''
-    state: in-progress
-  waiting_on:
-  - W6-S5
-  - W6-S6
-- id: CAP-7
-  text: ''
-  size: ''
-  priority: ''
-  owner: ''
-  target_release: r2
   planned_start: ''
   planned_end: ''
   estimate_mandays: 0
@@ -229,33 +308,27 @@ capabilities:
   delta_days: null
   state: not-started
   children:
-  - id: FR-19
-    text: ''
-    stories: []
+  - id: FR-16
+    text: Choose the Vault folder
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
-  - id: FR-20
-    text: ''
-    stories: []
+  - id: FR-17
+    text: Edit the hotkeys
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
-  - id: FR-21
-    text: ''
-    stories: []
-    actual_start: ''
-    actual_end: ''
-    state: not-started
-  - id: FR-22
-    text: ''
-    stories: []
+  - id: FR-18
+    text: Run at Windows startup, on by default after first run
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
   waiting_on: []
 - id: CAP-8
-  text: ''
+  text: Let an agent on another host read a Bundle over HTTPS
   size: ''
   priority: ''
   owner: ''
@@ -269,32 +342,32 @@ capabilities:
   state: not-started
   children:
   - id: FR-23
-    text: ''
-    stories: []
+    text: Publish a Bundle
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
   - id: FR-24
-    text: ''
-    stories: []
+    text: Serve a published Bundle
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
   - id: FR-25
-    text: ''
-    stories: []
+    text: Unpublish a Bundle
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
   - id: FR-26
-    text: ''
-    stories: []
+    text: See and copy a Bundle's Publication
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
   waiting_on: []
 - id: CAP-9
-  text: ''
+  text: The surface itself — name it, reach it, fit it, read it
   size: ''
   priority: ''
   owner: ''
@@ -302,32 +375,34 @@ capabilities:
   planned_start: ''
   planned_end: ''
   estimate_mandays: 0
-  actual_start: '2026-08-23'
+  actual_start: ''
   actual_end: ''
   delta_days: null
-  state: in-progress
+  state: not-started
   children:
   - id: FR-27
-    text: ''
-    stories:
-    - W6-S2
-    actual_start: '2026-08-23'
-    actual_end: '2026-08-23'
-    state: done
-  - id: FR-28
-    text: ''
-    stories:
-    - W6-S2
-    actual_start: '2026-08-23'
-    actual_end: '2026-08-23'
-    state: done
-  - id: FR-29
-    text: ''
-    stories:
-    - W6-S3
+    text: Name the surface the Reviewer is looking at
+    tickets: []
     actual_start: ''
     actual_end: ''
     state: not-started
-  waiting_on:
-  - W6-S3
-uncommitted_stories: []
+  - id: FR-28
+    text: Reach every surface from every surface
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-29
+    text: A primary surface fits the window it opens in
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  - id: FR-37
+    text: Reach a canvas or filmstrip action from a right-click context menu
+    tickets: []
+    actual_start: ''
+    actual_end: ''
+    state: not-started
+  waiting_on: []
+uncommitted_tickets: []
