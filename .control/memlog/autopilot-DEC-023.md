@@ -10,25 +10,30 @@ Mandate: `DEC-023`. Parameters at `.control/registry/decisions.yaml` → `DEC-02
 (`from_gate: G5`, `scope: {fr: all, defects: [BUG-107]}`, `parked: [ad-n]`, `smoke_test: agent`,
 `loop: 10m`, `expires: 2026-09-12`).
 
-- Iteration: 1, commit `88234e6` (mandate open/accept) is the boundary so far
+- Iteration: 2, commit `d03f14e` (regenerated `decisions.md`) is the boundary so far
 - Run branch: `autopilot/DEC-023`, isolated worktree at `.claude/worktrees/autopilot+DEC-023`. No PR
   opened yet — the first push (at the first spec/defect close) opens it as a draft.
-- Stopped at: **Capacity** — one builder subagent dispatched and in flight in this same worktree; a
-  second concurrent builder needs its own worktree and was deliberately not started this iteration to
-  avoid two agents committing in the same working tree at once.
-- In flight: `BUG-107` — builder subagent dispatched (diagnose root cause → fix in
-  `snapdown-core`/`snapdown-store` → regression test that decodes actual post-crop coordinates, not a
-  count/existence check → `cargo fmt`/`clippy`/`test --workspace` green → commit directly to
-  `autopilot/DEC-023`, no push, no PR). Independent review still owed before the commit is trusted —
-  the builder is not its own reviewer.
+- Stopped at: **Capacity** — three builder subagents now in flight, each in its own worktree; correction
+  from iteration 1: `canvas-zoom-clipboard-paste` has **2** tickets, not 3 (the preflight page's count of
+  "3 ready-for-agent" in that folder was the spec's own status line plus both tickets, not three
+  tickets).
+- In flight:
+  - `BUG-107` — this worktree (`.claude/worktrees/autopilot+DEC-023`, branch `autopilot/DEC-023`
+    directly). Diagnose → fix crop-remap in `snapdown-core`/`snapdown-store` → decode-based regression
+    test → green suite → commit. Not yet independently reviewed.
+  - Ticket 01 (canvas zoom, `FR-34`) — `.claude/worktrees/autopilot+DEC-023/.claude/worktrees/ticket-canvas-zoom`,
+    branch `autopilot/DEC-023-zoom`, cut from `d03f14e`. No shared code with ticket 02 per both tickets'
+    own text.
+  - Ticket 02 (clipboard paste, `FR-35`) — `.claude/worktrees/autopilot+DEC-023/.claude/worktrees/ticket-paste-clipboard`,
+    branch `autopilot/DEC-023-paste`, cut from `d03f14e`.
 - Blocked: —
 - Parked: —
-- Next: when the `BUG-107` builder returns — independently review its diff (read it in full, don't
-  trust its self-report), re-run the full suite, then either accept the commit as-is or send it back for
-  a fix. After `BUG-107` lands: `.scratch/canvas-zoom-clipboard-paste/` (spec + 3 tickets, all
-  `ready-for-agent`), `.scratch/editor-virtual-desktop-focus/` (1 ticket `ready-for-agent`),
-  `.scratch/post-testing-polish/` (spec `ready-for-agent`, not yet run through `to-tickets`) — each in
-  its own worktree if run concurrently.
+- Next: as each builder returns — independently review its diff in full (never trust the builder's own
+  report), re-run the full suite on that branch, then the coordinator merges it into `autopilot/DEC-023`
+  serially (one merge at a time, registry writes only by the coordinator) and deletes the ticket
+  branch/worktree. After all three land: `.scratch/editor-virtual-desktop-focus/` (1 ticket
+  `ready-for-agent`), then `.scratch/post-testing-polish/` (spec `ready-for-agent`, not yet run through
+  `to-tickets` — needs a `to-tickets` pass first, sized per `delivery-flow-guide.md`'s table).
 
 ## Decisions
 
