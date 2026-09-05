@@ -6219,8 +6219,67 @@ defects:
       draw or apply a crop - selecting the tool changes the icon and the mouse cursor and nothing
       else happens on the canvas.
     fix: |
-      Not fixed. Recorded on the owner's request; no code changed. Fixing this means giving the Crop
-      tool its own canvas interaction (drag-to-select a region, then apply it) the way `region-capturer`
-      already does for the capture overlay, and a store-level operation to actually crop the Finding's
-      image - out of scope for this entry.
-    status: open
+      The Crop tool now has its own drag-to-select and its own store operation, modelled on the
+      region-selection drag `CaptureOverlayWindow` already proves in this file rather than a second
+      invention of the same shape.
+
+      `apps/desktop/ui/appwindow.slint`: a new drag state (`crop-dragging`, `crop-x1`/`y1`/`x2`/`y2`,
+      `crop-drag-is-real`) kept separate from the annotation tools' `drawing`/`draw-x1`..`draw-y2` -
+      a crop is not an annotation and never joins `root.annotations`. `canvas-surface`'s
+      `pointer-event` starts the drag on a press while `active-tool-index == 6`, updates it on
+      `moved`, and on release - past the same "a click is not a selection" threshold every other
+      drag tool here already enforces - fires a new `crop-applied(float, float, float, float)`
+      callback with the two corners, normalized and already ordered min-then-max. A drag in progress
+      is shown with the same selection-ring chrome `annotation.slint` already draws for a selected
+      shape (`Theme.annotation-select-ring`, transparent fill) - no new colour literal.
+
+      `crates/snapdown-store/src/image/pipeline.rs`: `ImageReducer::crop_image` - decode, clamp the
+      rectangle into the decoded image's own bounds (the same defensive clamp `prepare_region` in
+      `main.rs` applies to a capture's drag), crop, re-encode as PNG at the caller's quality. Pure:
+      it touches neither the Vault nor the database.
+
+      `apps/desktop/src/main.rs`: `crop_finding_image` reads the Finding's current bytes out of the
+      Vault, calls `ImageReducer::crop_image`, writes the result to a NEW Vault path
+      (`findings/crop_<id>_<timestamp>.png`) rather than overwriting `image_path`, and only then
+      calls `update_finding_image` - which had existed on `FindingStore` with no caller anywhere in
+      the app, the same "a port with no caller" shape `BUG-61` already named for the annotation
+      ports. Writing to a new path rather than overwriting the old one means a failed database
+      update leaves the Finding's row pointing at the OLD file, whose dimensions still match what
+      the row says - never a row naming a file whose actual dimensions disagree with it. The
+      pre-crop file is deleted only after the row is repointed at the new one, and its own Result is
+      still read and logged on failure rather than swallowed - a few orphaned KB, not a correctness
+      problem, since the row is already consistent by that point. `on_crop_applied` turns the
+      canvas's normalized corners into pixel geometry against the Finding's own stored dimensions
+      (the same convention `shape_from_drag` already uses for one shape), calls
+      `crop_finding_image`, and on success rebuilds the filmstrip (`load_findings_into_window`)
+      rather than only the active detail - the image's content and dimensions changed, so the
+      filmstrip's own thumbnail and dimension label have to as well, the same reason a capture or an
+      Open/Paste already demands that rebuild.
+
+      Three new tests in `crates/snapdown-store/src/image/pipeline.rs`'s `mod tests`, all decoding
+      their own output rather than trusting a signature and a claimed dimension (`AGENTS.md`'s
+      standing rule for image tests in this repository):
+      `crop_image_decodes_to_the_requested_rectangle_with_the_source_pixels_inside_it` (a gradient
+      fixture whose every pixel encodes its own `(x, y)`, checked at both corners and the centre
+      against the source at the matching offset), `crop_image_clamps_a_rectangle_that_reaches_past_
+      the_edge`, and `crop_image_reports_a_decode_failure_rather_than_swallowing_it`. A new
+      `apps/desktop/tests/test_crop_tool.rs` proves the interaction is REACHABLE rather than merely
+      declared - `AGENTS.md` names that this repository's signature failure - covering the drag from
+      press to release, the preview's theme-token colour, that a crop never becomes an annotation,
+      that `on_crop_applied` reaches a real (non-stub) handler which reaches `crop_finding_image`
+      with every one of its three fallible writes handled rather than swallowed with `let _ =`, and
+      that the pre-crop file is deleted only after the database row is repointed at the new one.
+
+      `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and
+      `cargo test --workspace --no-fail-fast` are all clean.
+
+      KNOWN LIMITATION, recorded rather than silently left out: a Finding's existing Markers and
+      visual annotations are stored as fractions of the FULL image (`shape_from_drag`,
+      `apps/desktop/src/main.rs`), and this fix does not re-map them into the cropped image's own
+      pixel space. Cropping a Finding that already carries Markers or annotations leaves them
+      pointing at their old fractional position on the new, smaller image - which reads as wrong or
+      off-canvas rather than moving or disappearing with the region they were about. Undo was the
+      one thing this entry's own task explicitly waived; this was not asked for and is not, so it is
+      named here instead of left for the next reader to discover the way `BUG-61`'s dangling port
+      was.
+    status: fixed

@@ -4303,6 +4303,65 @@ fn persist_finding(
     Some(finding_id)
 }
 
+/// Crops a Finding's image in place. `BUG-106`: the Crop tool's own store operation, and the first
+/// caller `update_finding_image` has ever had - it existed on `FindingStore` with nothing in
+/// `main.rs` calling it, the same "a port with no caller" shape `every_annotation_port_method_has_a_
+/// caller_in_the_app` guards against for the annotation ports.
+///
+/// `rect_px` is the crop rectangle in the CURRENT image's own pixel space - not the canvas's display
+/// space, and not that space at a different `canvas-zoom`. The cropped bytes are written to a NEW
+/// Vault path rather than overwriting `image_path`: if the database update below fails, the
+/// Finding's row still names a file whose dimensions match what the row says, which is the same
+/// "orphan a blob rather than corrupt a row" trade `persist_finding` above already makes when
+/// `create_finding` fails after `write_blob` has already landed. The pre-crop file is deleted only
+/// once the row has been repointed at the new one.
+fn crop_finding_image(
+    ctx: &AppContext,
+    finding_id: &str,
+    image_path: &str,
+    quality: u8,
+    rect_px: (u32, u32, u32, u32),
+) -> Result<(u32, u32), String> {
+    let original = ctx
+        .vault_store
+        .read_blob(image_path)
+        .map_err(|e| format!("Could not read the Finding's image to crop it: {e}"))?;
+
+    let (cropped_bytes, new_w, new_h) = ImageReducer::crop_image(&original, rect_px, quality)
+        .map_err(|e| format!("Could not crop the Finding's image: {e}"))?;
+
+    let new_rel_path = format!(
+        "findings/crop_{finding_id}_{}.png",
+        chrono::Utc::now().format("%Y%m%d_%H%M%S%3f")
+    );
+
+    ctx.vault_store
+        .write_blob(&new_rel_path, &cropped_bytes)
+        .map_err(|e| format!("Could not write the cropped image into the Vault: {e}"))?;
+
+    if let Err(e) = ctx
+        .finding_store
+        .update_finding_image(finding_id, &new_rel_path, new_w, new_h)
+    {
+        // The Vault write above already landed. Reported rather than swallowed - even though the
+        // Finding's row is NOT corrupted by this failure, it still means the crop the Reviewer just
+        // drew never took effect, and the new file is now an orphan nothing points to yet.
+        return Err(format!(
+            "The cropped image was written to the Vault but the Finding could not be updated to \
+             use it: {e}. The Finding still shows its previous image."
+        ));
+    }
+
+    // Best-effort cleanup of the file the row no longer points at. A failure here is a few
+    // orphaned KB in the Vault, not a correctness problem - the row already points at the NEW file
+    // and is consistent - so it is logged rather than turned into an error the Reviewer has to see.
+    if let Err(e) = ctx.vault_store.delete_blob(image_path) {
+        eprintln!("Could not delete the pre-crop image after cropping: {e}");
+    }
+
+    Ok((new_w, new_h))
+}
+
 /// Creates, places and then hides the capture overlay, so the first Capture has nothing left to
 /// build. See the call site for why this cannot wait until the overlay is actually wanted.
 ///
@@ -4738,6 +4797,63 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 load_active_detail(&win, &ctx_ad, &finding_id);
             }
             Err(e) => toast(&win, format!("Could not draw that: {e}"), true),
+        }
+    });
+
+    // THE CROP TOOL - `BUG-106`. Not an annotation: it replaces the Finding's image rather than
+    // drawing on top of it, so it gets its own callback and its own store operation
+    // (`crop_finding_image`) instead of joining `on_annotation_drawn`'s `match` on `kind`.
+    let win_weak_crop = main_window.as_weak();
+    let ctx_crop = ctx.clone();
+    main_window.on_crop_applied(move |x1, y1, x2, y2| {
+        let Some(win) = win_weak_crop.upgrade() else {
+            return;
+        };
+        let finding_id = win.get_active_finding_id().to_string();
+        if finding_id.is_empty() {
+            toast(
+                &win,
+                "Open a Finding first - a crop belongs to an image.",
+                true,
+            );
+            return;
+        }
+        let Ok(Some(detail)) = ctx_crop.finding_store.get_finding(&finding_id) else {
+            toast(&win, "Could not read the Finding to crop it.", true);
+            return;
+        };
+        let f = detail.finding;
+        if f.image_width == 0 || f.image_height == 0 {
+            return;
+        }
+
+        // Normalized, already ordered min-then-max by the canvas, into the CURRENT image's own
+        // pixel space - the same convention `shape_from_drag` turns an annotation's drag through.
+        let img_w = f64::from(f.image_width);
+        let img_h = f64::from(f.image_height);
+        let px_x1 = (f64::from(x1) * img_w).round().clamp(0.0, img_w) as u32;
+        let px_y1 = (f64::from(y1) * img_h).round().clamp(0.0, img_h) as u32;
+        let px_x2 = (f64::from(x2) * img_w).round().clamp(0.0, img_w) as u32;
+        let px_y2 = (f64::from(y2) * img_h).round().clamp(0.0, img_h) as u32;
+        let px_w = px_x2.saturating_sub(px_x1).max(1);
+        let px_h = px_y2.saturating_sub(px_y1).max(1);
+
+        let quality = f
+            .resolved_encoder_quality
+            .unwrap_or(snapdown_store::image::LOSSLESS);
+
+        match crop_finding_image(
+            &ctx_crop,
+            &finding_id,
+            &f.image_path,
+            quality,
+            (px_x1, px_y1, px_w, px_h),
+        ) {
+            // A new Vault file and new dimensions - the same reason `persist_finding` demands a
+            // full rebuild rather than `click_finding`'s in-place row update: the filmstrip's own
+            // thumbnail and dimension label are stale otherwise, not merely the canvas.
+            Ok(_) => load_findings_into_window(&win, &ctx_crop, Some(&finding_id)),
+            Err(e) => toast(&win, e, true),
         }
     });
 
