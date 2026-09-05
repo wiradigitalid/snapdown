@@ -10,34 +10,38 @@ Mandate: `DEC-023`. Parameters at `.control/registry/decisions.yaml` → `DEC-02
 (`from_gate: G5`, `scope: {fr: all, defects: [BUG-107]}`, `parked: [ad-n]`, `smoke_test: agent`,
 `loop: 10m`, `expires: 2026-09-12`).
 
-- Iteration: 6, commit `3bbde0e` (`BUG-107` fix, independently verified) is the boundary so far
-- Run branch: `autopilot/DEC-023`, isolated worktree at `.claude/worktrees/autopilot+DEC-023`. Pushed
-  this iteration (head `a135a04`); **PR #47 opened as draft**
-  (https://github.com/wiradigitalid/snapdown/pull/47). CI (`desktop-ci.yml`, `korpus.yml`) running on
-  this head — not yet concluded as of this write.
-- Stopped at: **Capacity** — `BUG-107` genuinely finished and independently verified this iteration; the
-  other four builders are still running. No new work dispatched.
+- Iteration: 9, commit (pending, this write) is the boundary so far — HEAD after merging tickets 06 and
+  `editor-virtual-desktop-focus`, both independently re-verified (full `cargo fmt`/`clippy -D warnings`/
+  `test --workspace --no-fail-fast`, green each time, run by the coordinator, not taken on either
+  builder's report)
+- Run branch: `autopilot/DEC-023`. **PR #47 (draft)**: https://github.com/wiradigitalid/snapdown/pull/47.
+  CI on the first pushed head (`a135a04`): Korpus Validation passed, Desktop CI was still running as of
+  the last check — not yet re-pushed with this iteration's two new merges.
+- Stopped at: **Capacity** — two more builders (copy-on-save, Ctrl+Scroll zoom) still running.
 - Done this iteration:
-  - `BUG-107` — genuinely complete, not just reported. Independently re-verified by the coordinator (not
-    taken on the builder's word): read the full diff, confirmed the mutation-check stub was actually
-    removed (`grep` for it returns nothing), re-ran `cargo fmt --all -- --check` / `cargo clippy
-    --workspace --all-targets -- -D warnings` / `cargo test --workspace --no-fail-fast` myself from
-    scratch — all exit 0, 430+ tests passed, zero failures. `validate.py --generate` after: still only
-    the 6 baseline-matched reds, no regression. `defects.yaml`'s `BUG-107` row is `status: fixed` with
-    the domain decision (drop Markers, clip boxes, clamp Arrow/Callout-tail endpoints) reasoned in full.
-    Already on `autopilot/DEC-023` directly (`3bbde0e`) — no separate merge needed.
-- Also done (iteration 4): `canvas-zoom-clipboard-paste` — already shipped to `origin/main` before this
-  mandate opened, ticket bookkeeping corrected, merged (`1bee143`).
+  - Post-testing-polish ticket 06 (About-tab icon, `FR-27`) — merged. `settings.slint`'s SNAPDOWN card
+    now shows a 32×32 `Image` bound to the existing, already-proven `app-icon.png` asset (reused rather
+    than the `.ico`, which Slint's asset pipeline can't decode). Wiring test confirms a real `Image`
+    element exists in the card, not a comment.
+  - `editor-virtual-desktop-focus` ticket 01 — merged. Feasibility finding: no public API exists to
+    switch the ACTIVE Virtual Desktop (only `IVirtualDesktopManager`, query/move-only); switching
+    normally needs the undocumented, per-build-fragile `IVirtualDesktopManagerInternal`, deliberately
+    NOT taken on. Instead, `SetForegroundWindow` (backed by `AttachThreadInput` so it isn't refused by
+    the foreground-lock heuristic) already brings the desktop switch along as a side effect — the same
+    mechanism a taskbar click uses. All four "reopen the Editor" entry points now route through one
+    shared function (`focus::bring_editor_to_foreground`), reachability-tested. The actual OS-level
+    desktop switch is honestly flagged as unverified by hands-on testing (no interactive Windows session
+    available to the builder) — a manual pass is still owed, named in the final report, not silently
+    claimed as done.
+- Also done (iteration 6): `BUG-107` (independently verified, `3bbde0e`).
+  Also done (iteration 4): `canvas-zoom-clipboard-paste` bookkeeping (`1bee143`).
 - In flight:
-  - `editor-virtual-desktop-focus` ticket 01 — `ticket-vdesktop-focus` / `autopilot/DEC-023-vdesktop-focus`.
   - Post-testing-polish ticket 01 (Ctrl+Scroll zoom) — `ticket-zoom-scroll` / `autopilot/DEC-023-zoom-scroll`.
   - Post-testing-polish ticket 04 (copy-on-save) — `ticket-copy-on-save` / `autopilot/DEC-023-copy-on-save`.
-  - Post-testing-polish ticket 06 (about-tab icon) — `ticket-about-icon` / `autopilot/DEC-023-about-icon`.
 - Blocked: —
 - Parked: —
-- Next: wait for genuine completions on all four, independently review each diff in full before trusting
-  any report, re-run the full suite, then merge serially and push (opens the draft PR — first code
-  actually lands on this iteration boundary). After that: post-testing-polish tickets 02 (marker
+- Next: wait for genuine completions on both, independently review + full suite + merge, then push
+  (updates PR #47's head, re-triggers CI). After that: post-testing-polish tickets 02 (marker
   focus/tooltip), 03 (second Assemble button), 05 (bulk reclaim space) — still queued, not blocked.
 
 ## Decisions
