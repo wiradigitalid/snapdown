@@ -335,7 +335,7 @@ decisions:
   - id: DEC-023
     title: "Mandate: close BUG-107 and the three ready-for-agent scratch specs, unattended, checking in only at the smoke test"
     type: mandate
-    status: accepted
+    status: applied
     file: .control/decisions/DEC-023-autopilot-mandate-r5-bug-107-and-three-ready-specs.md
     serves: []
     touches: [.control/memlog/autopilot-DEC-023.md]

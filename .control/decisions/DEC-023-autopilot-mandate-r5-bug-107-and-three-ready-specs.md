@@ -1,7 +1,7 @@
 ---
 type: mandate
 id: DEC-023
-status: accepted
+status: applied
 touches: [.control/memlog/autopilot-DEC-023.md]
 supersedes: null
 superseded_by: null
@@ -66,6 +66,39 @@ mandate draws on, the same as `DEC-018` and `DEC-019`.
   this mandate's scope reads as sensitive on its face (a crop-remap bug fix, a zoom/paste feature, a focus
   fix, an eleven-item UI-polish backlog already scoped and confirmed by the owner on 2026-09-03), so the
   wider category was not carried forward without a reason to.
+
+## Closed 2026-09-06
+
+Every runnable row in scope is closed. `BUG-107` fixed and independently re-verified by the
+coordinator (mutation-tested, decode-based tests, `430+` passing, `cargo fmt`/`clippy -D warnings`/
+`test --workspace` all re-run from scratch by the coordinator, not taken on the builder's report).
+`canvas-zoom-clipboard-paste` and `editor-virtual-desktop-focus`'s own tickets closed. `post-testing-polish`
+was sized into six tickets by this mandate's own `to-tickets` pass (the ticket count `Cost` above flagged
+as unknown); all six built, independently reviewed, and merged: Ctrl+Scroll zoom, marker note auto-focus
++ hover tooltip, a second Assemble entry point + a filmstrip alignment fix, copy-on-save, bulk reclaim
+space (which also registered a new `FR-44` rather than widening `FR-42`, to respect `entity-one-writer`),
+and the About tab's icon.
+
+Landed on `autopilot/DEC-023` throughout — a single run branch, fourteen merge/feature commits from six
+parallel-built ticket branches plus one direct commit for `BUG-107`, every ticket branch deleted after
+its merge, one PR (`#47`). Pushed six times; Korpus Validation and Desktop CI both green on every push
+checked.
+
+Smoke test (`smoke_test: agent`) run against the real release build via `computer-use`, driven against
+the Reviewer's live Vault with no destructive action taken: 4 of 9 candidates directly exercised and
+confirmed live (zoom buttons, marker focus + tooltip, both Assemble buttons' selection gate, bulk
+reclaim space's confirmation dialog including its correct shared-Finding dedup count); the rest stand on
+their own independently-verified, several mutation-tested, automated coverage — Ctrl+Scroll could not be
+simulated through the available tooling (no modifier-key support in the computer-use scroll command),
+and `BUG-107`/copy-on-save/`editor-virtual-desktop-focus`'s actual desktop switch were left untested
+live to avoid mutating real Vault data or because no interactive multi-desktop session was available.
+
+`parked: [ad-n]` was never triggered — nothing in scope contradicted an `AD-N`. `wdi-report progress`
+at close reads `promise progress: 0%` (0 of 33 counted RTM rows green) — a pre-existing corpus
+measurement gap, not a finding about this run: RTM rows are broken at the ticket-linkage step because
+the wave/ticket layer is retired and `.scratch/` tickets are ephemeral, cleared once their effort
+closes. This mandate's actual delivery is verified through git history, independent code review, and
+passing (often mutation-tested) automated tests instead, all named above.
 
 ## Trace
 

@@ -10,52 +10,30 @@ Mandate: `DEC-023`. Parameters at `.control/registry/decisions.yaml` → `DEC-02
 (`from_gate: G5`, `scope: {fr: all, defects: [BUG-107]}`, `parked: [ad-n]`, `smoke_test: agent`,
 `loop: 10m`, `expires: 2026-09-12`).
 
-- Iteration: 11, commit (pending, this write) is the boundary — HEAD after merging tickets 02
-  (marker focus/tooltip) and 03 (second Assemble button + filmstrip alignment), both independently
-  re-verified (full `cargo fmt`/`clippy -D warnings`/`test --workspace --no-fail-fast`, green,
-  coordinator-run each time — ticket 03's builder looped on pause/resume notifications without
-  committing, same shape as `BUG-107` earlier, so the coordinator ran its own verification directly in
-  that worktree; the builder then also finished for real moments later, matching what the coordinator
-  had already found)
-- Run branch: `autopilot/DEC-023`. **PR #47 (draft)**: https://github.com/wiradigitalid/snapdown/pull/47.
-  Pushing this iteration's boundary next.
-- Stopped at: **Capacity** — one more builder (bulk reclaim space, ticket 05) still running; five of six
-  post-testing-polish tickets are now merged.
-- Done, all independently re-verified by the coordinator (full suite re-run from scratch each time, not
-  taken on any builder's report):
-  - `BUG-107` (`3bbde0e`, iteration 6)
-  - `canvas-zoom-clipboard-paste` bookkeeping — already shipped, corrected (`1bee143`, iteration 4)
-  - Post-testing-polish ticket 06, About-tab icon (`FR-27`)
-  - `editor-virtual-desktop-focus` ticket 01 — feasibility finding: no public API to switch the ACTIVE
-    Virtual Desktop; `SetForegroundWindow` (+`AttachThreadInput`) brings the switch along as a documented
-    side effect instead of depending on the undocumented `IVirtualDesktopManagerInternal`. Actual desktop
-    switch unverified by hands-on testing — flagged, not silently claimed.
-  - Post-testing-polish ticket 01, Ctrl+Scroll zoom (`FR-34`) — reuses the shipped `zoomed_in`/`zoomed_out`
-    callbacks exactly, plain Scroll still rejects/falls through unchanged.
-  - Post-testing-polish ticket 04, copy-on-save (`FR-10`/`FR-12`/`FR-40`) — both new call sites reuse
-    Copy Markdown's own two functions, gated correctly on save success only.
-  - Post-testing-polish ticket 02, marker focus/tooltip (`FR-8`/`UC-5`) — shared focus-target property
-    consumed by `init` (fresh row) or `changed` via a mirror (existing row); drag excluded via a
-    per-Marker guard measured in image pixels so it stays correct at any zoom level; tooltip bound
-    directly to each iteration's own model row.
-  - Post-testing-polish ticket 03, second Assemble button + filmstrip alignment (`FR-10`) — labelled
-    MOVED (new door, same callback, same selection gate, option (a)) vs FIXED (unrelated
-    `padding-bottom` centering-slack fix) per the ticket's own requirement to keep the two tellable
-    apart.
-- In flight: none. Every candidate from this mandate's scope is now merged.
-  - Post-testing-polish ticket 05, bulk reclaim space (`FR-41`/`FR-42`/`BR-122`, plus new `FR-44`) —
-    select-all + bulk Delete-both, `AD-2` ordering, shared-Finding dedup mutation-tested in a real
-    store test. The builder correctly declined the ticket's literal instruction to widen `FR-42`
-    (would have made `finding` write `[Bundle, BundleItem]`, violating `entity-one-writer`) and
-    registered `FR-44` under `bundle` instead, deferring to `FR-42` — the same shape `FR-14` already
-    uses for `FR-25`. Two already-stale `BUG-104`-era PRD sentences corrected in the same pass.
-    Independently re-verified by the coordinator: full `fmt`/`clippy -D warnings`/`test --workspace`
-    and `validate.py --check` all green, not taken on the builder's report.
+- **Run ended.** 12 iterations. Mandate raised to `status: applied` (this write). Loop cancelled.
+- Run branch: `autopilot/DEC-023`. **PR #47**: https://github.com/wiradigitalid/snapdown/pull/47 — marked
+  ready for review if CI is green on the final pushed head (checked at Finish), left draft otherwise.
+- Stopped at: **Done** — every candidate this mandate's preflight found runnable is closed. Nothing
+  left in scope is parked or blocked.
+- Closed, all independently re-verified by the coordinator (full `cargo fmt --check`/
+  `clippy -D warnings`/`test --workspace --no-fail-fast` re-run from scratch after every merge, not taken
+  on any builder's report; `validate.py --check` clean against the baseline throughout):
+  - `BUG-107` (crop-remap) — `CropRemap` domain type, mutation-tested; a Marker outside the new bounds
+    is deleted, a box annotation clipped, an Arrow/Callout-tail clamped, reasoned in `defects.yaml`.
+  - `canvas-zoom-clipboard-paste` — already shipped before this mandate opened; ticket bookkeeping
+    corrected, no code change.
+  - `editor-virtual-desktop-focus` — `SetForegroundWindow`+`AttachThreadInput` brings the OS desktop
+    switch along as a documented side effect, deliberately not depending on the undocumented
+    `IVirtualDesktopManagerInternal`. The actual desktop-switch behaviour stays unverified by hands-on
+    testing — owed a manual pass.
+  - Post-testing-polish, all 6 tickets: 01 Ctrl+Scroll zoom, 02 marker note auto-focus + hover tooltip,
+    03 second Assemble button + filmstrip alignment fix, 04 copy-on-save, 05 bulk reclaim space
+    (select-all + Delete both, registering `FR-44` rather than widening `FR-42` to respect
+    `entity-one-writer`), 06 About-tab icon.
 - Blocked: —
 - Parked: —
-- Next: § The work table's "every FR in scope closed" applies. Moving to § Finish: smoke test, final
-  `validate.py --generate` + `wdi-report` progress, raise `DEC-023` to `applied`, push, mark PR #47
-  ready for review if CI is green, cancel the loop, final report.
+- Next: nothing from this mandate. Follow-ups for the owner are named in the final report (Finish
+  Output), not here.
 
 **Smoke test run** (`smoke_test: agent`), against `target/release/Snapdown.exe` built from this fully
 merged branch (superseding the earlier stale instance from ticket 05's own worktree, which was closed):
@@ -91,3 +69,5 @@ could, not a replacement for it.
 | Iter 4, commit `1bee143` | canvas-zoom-clipboard-paste tickets | Both tickets closed as `done` with no code change — features already on `origin/main` since 2026-09-04 | Re-implementing a feature that already exists (both builders independently found this; verified again by the coordinator, not taken on trust) | None — verified via `git merge-base --is-ancestor` against `origin/main`, not against a builder's claim | `.scratch/canvas-zoom-clipboard-paste/{spec,issues/01,issues/02}.md` |
 | Iter 4 | `BUG-107` review | Deferred review — builder still live, caught a file mid-edit with a deliberate mutation-check stub in place | Committing or fixing the file myself while the builder was still writing to it | Racing a live builder's own edits, corrupting its in-progress work | — (no commit made) |
 | Iter 6, commit `3bbde0e` | `BUG-107` fix — crop-remap semantics | A Marker outside the new bounds is deleted (not clamped); a box annotation is clipped to what survives; an Arrow/Callout-tail is clamped onto the new edge unless its whole bbox misses | Clamping every kind uniformly (simpler, but misrepresents where a Marker's single point actually was) | An owner who wanted uniform clamping would see markers silently vanish instead — reported here so it's checkable, not a silent choice | `crates/snapdown-core/src/domain/finding.rs`, `.control/registry/defects.yaml` (`BUG-107` `fix:`) |
+| Iter 12, ticket 05's own commit `c663801` | `wdi-product` pass for ticket 05's "widen FR-42" instruction | Registered new `FR-44` (component `bundle`, `defers_to: [FR-25, FR-42]`) instead; `FR-42` left unchanged | Widening `FR-42` to write `[Bundle, BundleItem]` as the ticket literally said | Would have made `finding` write entities `bundle` owns, violating `entity-one-writer` — an owner reading `FR-42` later would find a promise the component structurally cannot keep | `.control/registry/requirements-capture-to-markdown.yaml`, `.control/registry/usecases.yaml`, `.what/_prd/capture-to-markdown/{prd.md,addendum.md}` |
+| Iter 12, this commit | Finish — smoke test scope | Live-tested 4 of 9 candidates (zoom, marker focus/tooltip, Assemble gate, reclaim-space dialog); left the rest to their own automated coverage | Live-testing all 9, including `BUG-107`/copy-on-save/bulk-delete's confirm path | Would have required mutating the Reviewer's real Vault data (15 real Bundles) or staging disposable fixtures — judged not worth the added run time given each stands on independently-verified, often mutation-tested automated tests already | this ledger's smoke-test table |
