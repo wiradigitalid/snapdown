@@ -10,39 +10,33 @@ Mandate: `DEC-023`. Parameters at `.control/registry/decisions.yaml` → `DEC-02
 (`from_gate: G5`, `scope: {fr: all, defects: [BUG-107]}`, `parked: [ad-n]`, `smoke_test: agent`,
 `loop: 10m`, `expires: 2026-09-12`).
 
-- Iteration: 9, commit (pending, this write) is the boundary so far — HEAD after merging tickets 06 and
-  `editor-virtual-desktop-focus`, both independently re-verified (full `cargo fmt`/`clippy -D warnings`/
-  `test --workspace --no-fail-fast`, green each time, run by the coordinator, not taken on either
-  builder's report)
+- Iteration: 10, commit (pending, this write) is the boundary — HEAD after merging tickets 01
+  (Ctrl+Scroll zoom) and 04 (copy-on-save), both independently re-verified (full `cargo fmt`/
+  `clippy -D warnings`/`test --workspace --no-fail-fast`, green, coordinator-run each time)
 - Run branch: `autopilot/DEC-023`. **PR #47 (draft)**: https://github.com/wiradigitalid/snapdown/pull/47.
-  CI on the first pushed head (`a135a04`): Korpus Validation passed, Desktop CI was still running as of
-  the last check — not yet re-pushed with this iteration's two new merges.
-- Stopped at: **Capacity** — two more builders (copy-on-save, Ctrl+Scroll zoom) still running.
-- Done this iteration:
-  - Post-testing-polish ticket 06 (About-tab icon, `FR-27`) — merged. `settings.slint`'s SNAPDOWN card
-    now shows a 32×32 `Image` bound to the existing, already-proven `app-icon.png` asset (reused rather
-    than the `.ico`, which Slint's asset pipeline can't decode). Wiring test confirms a real `Image`
-    element exists in the card, not a comment.
-  - `editor-virtual-desktop-focus` ticket 01 — merged. Feasibility finding: no public API exists to
-    switch the ACTIVE Virtual Desktop (only `IVirtualDesktopManager`, query/move-only); switching
-    normally needs the undocumented, per-build-fragile `IVirtualDesktopManagerInternal`, deliberately
-    NOT taken on. Instead, `SetForegroundWindow` (backed by `AttachThreadInput` so it isn't refused by
-    the foreground-lock heuristic) already brings the desktop switch along as a side effect — the same
-    mechanism a taskbar click uses. All four "reopen the Editor" entry points now route through one
-    shared function (`focus::bring_editor_to_foreground`), reachability-tested. The actual OS-level
-    desktop switch is honestly flagged as unverified by hands-on testing (no interactive Windows session
-    available to the builder) — a manual pass is still owed, named in the final report, not silently
-    claimed as done.
-- Also done (iteration 6): `BUG-107` (independently verified, `3bbde0e`).
-  Also done (iteration 4): `canvas-zoom-clipboard-paste` bookkeeping (`1bee143`).
-- In flight:
-  - Post-testing-polish ticket 01 (Ctrl+Scroll zoom) — `ticket-zoom-scroll` / `autopilot/DEC-023-zoom-scroll`.
-  - Post-testing-polish ticket 04 (copy-on-save) — `ticket-copy-on-save` / `autopilot/DEC-023-copy-on-save`.
+  Pushing this iteration's boundary next (six real merges since the first push).
+- Stopped at: **Capacity** (about to dispatch the remaining three post-testing-polish tickets — not a
+  stop yet, see below).
+- Done, all independently re-verified by the coordinator (full suite re-run from scratch each time, not
+  taken on any builder's report):
+  - `BUG-107` (`3bbde0e`, iteration 6)
+  - `canvas-zoom-clipboard-paste` bookkeeping — already shipped, corrected (`1bee143`, iteration 4)
+  - Post-testing-polish ticket 06, About-tab icon (`FR-27`)
+  - `editor-virtual-desktop-focus` ticket 01 — feasibility finding: no public API to switch the ACTIVE
+    Virtual Desktop; `SetForegroundWindow` (+`AttachThreadInput`) brings the switch along as a documented
+    side effect instead of depending on the undocumented `IVirtualDesktopManagerInternal`. Actual desktop
+    switch unverified by hands-on testing — flagged, not silently claimed.
+  - Post-testing-polish ticket 01, Ctrl+Scroll zoom (`FR-34`) — reuses the shipped `zoomed_in`/`zoomed_out`
+    callbacks exactly, plain Scroll still rejects/falls through unchanged.
+  - Post-testing-polish ticket 04, copy-on-save (`FR-10`/`FR-12`/`FR-40`) — both new call sites reuse
+    Copy Markdown's own two functions, gated correctly on save success only.
+- In flight: none — about to dispatch tickets 02, 03, 05 (see Next).
 - Blocked: —
 - Parked: —
-- Next: wait for genuine completions on both, independently review + full suite + merge, then push
-  (updates PR #47's head, re-triggers CI). After that: post-testing-polish tickets 02 (marker
-  focus/tooltip), 03 (second Assemble button), 05 (bulk reclaim space) — still queued, not blocked.
+- Next: push this boundary (updates PR #47, re-triggers CI on the new head). Dispatch the three
+  remaining post-testing-polish tickets in parallel, each in its own worktree — 02 (marker focus/
+  tooltip), 03 (second Assemble button + filmstrip alignment, a/b already resolved to (a)), 05 (bulk
+  reclaim space, `AD-2` write-ordering + a `wdi-product` follow-up once green). None block another.
 
 ## Decisions
 
