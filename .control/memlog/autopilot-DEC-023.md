@@ -11,8 +11,10 @@ Mandate: `DEC-023`. Parameters at `.control/registry/decisions.yaml` → `DEC-02
 `loop: 10m`, `expires: 2026-09-12`).
 
 - Iteration: 6, commit `3bbde0e` (`BUG-107` fix, independently verified) is the boundary so far
-- Run branch: `autopilot/DEC-023`, isolated worktree at `.claude/worktrees/autopilot+DEC-023`. No PR
-  opened yet — next push (queued for the next iteration boundary) opens it as a draft.
+- Run branch: `autopilot/DEC-023`, isolated worktree at `.claude/worktrees/autopilot+DEC-023`. Pushed
+  this iteration (head `a135a04`); **PR #47 opened as draft**
+  (https://github.com/wiradigitalid/snapdown/pull/47). CI (`desktop-ci.yml`, `korpus.yml`) running on
+  this head — not yet concluded as of this write.
 - Stopped at: **Capacity** — `BUG-107` genuinely finished and independently verified this iteration; the
   other four builders are still running. No new work dispatched.
 - Done this iteration:
