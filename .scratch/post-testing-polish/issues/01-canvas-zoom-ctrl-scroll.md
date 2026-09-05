@@ -22,7 +22,7 @@ shipped unless this ticket's own build finds a concrete reason not to.
 a scroll-wheel event with the Ctrl modifier to the same `set_canvas_zoom(zoomed_in/out(...))` calls the
 buttons already use. Reuse, don't reimplement.
 
-**Status:** ready-for-agent
+**Status:** done
 
 ## Seam
 
