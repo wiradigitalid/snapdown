@@ -42,15 +42,26 @@ Mandate: `DEC-023`. Parameters at `.control/registry/decisions.yaml` → `DEC-02
     MOVED (new door, same callback, same selection gate, option (a)) vs FIXED (unrelated
     `padding-bottom` centering-slack fix) per the ticket's own requirement to keep the two tellable
     apart.
-- In flight:
-  - Post-testing-polish ticket 05 (bulk reclaim space) — `ticket-reclaim-bulk` / `autopilot/DEC-023-reclaim-bulk`.
-    Includes a `wdi-product` follow-up to fold the widened `FR-42` promise into the PRD once its code is
-    green — asked of the builder as part of closing its own ticket.
+- In flight: none. Every candidate from this mandate's scope is now merged.
+  - Post-testing-polish ticket 05, bulk reclaim space (`FR-41`/`FR-42`/`BR-122`, plus new `FR-44`) —
+    select-all + bulk Delete-both, `AD-2` ordering, shared-Finding dedup mutation-tested in a real
+    store test. The builder correctly declined the ticket's literal instruction to widen `FR-42`
+    (would have made `finding` write `[Bundle, BundleItem]`, violating `entity-one-writer`) and
+    registered `FR-44` under `bundle` instead, deferring to `FR-42` — the same shape `FR-14` already
+    uses for `FR-25`. Two already-stale `BUG-104`-era PRD sentences corrected in the same pass.
+    Independently re-verified by the coordinator: full `fmt`/`clippy -D warnings`/`test --workspace`
+    and `validate.py --check` all green, not taken on the builder's report.
 - Blocked: —
 - Parked: —
-- Next: wait for ticket 05's genuine completion, independently review + full suite + merge, then push.
-  Once it lands, every candidate from this mandate's scope is closed — § The work table's "every FR in
-  scope closed" applies and the run moves to Finish (smoke test, then close).
+- Next: § The work table's "every FR in scope closed" applies. Moving to § Finish: smoke test, final
+  `validate.py --generate` + `wdi-report` progress, raise `DEC-023` to `applied`, push, mark PR #47
+  ready for review if CI is green, cancel the loop, final report.
+
+Note for Finish: `Snapdown.exe` (PID 28564) is running, launched by ticket 05's own builder for its
+manual "Look at" step — built from the `ticket-reclaim-bulk` worktree BEFORE tickets 02/03 merged
+into it, so it is not representative of the final merged branch. It does not block this worktree's own
+build (separate `target/` directory) but is flagged so the owner does not mistake it for the final
+state.
 
 ## Decisions
 
