@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use rusqlite::{Connection, OpenFlags, OptionalExtension, Transaction};
 use snapdown_core::domain::finding::{
-    AnnotationShape, Finding, FindingDetail, Marker, Note, VisualAnnotation,
+    AnnotationShape, CropRect, CropRemap, Finding, FindingDetail, Marker, Note, VisualAnnotation,
 };
 use snapdown_core::error::CoreError;
 use snapdown_core::ports::FindingStore;
@@ -884,6 +884,102 @@ impl FindingStore for SqliteFindingStore {
                 rusqlite::params![(index + 1) as i64, annotation_id, finding_id],
             )
             .map_err(|e| CoreError::Validation(e.to_string()))?;
+        }
+
+        tx.commit()
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        Ok(())
+    }
+
+    fn remap_markers_and_annotations_for_crop(
+        &self,
+        finding_id: &str,
+        old_width: u32,
+        old_height: u32,
+        crop_rect_px: CropRect,
+        new_width: u32,
+        new_height: u32,
+    ) -> Result<(), CoreError> {
+        let remap = CropRemap::new(old_width, old_height, crop_rect_px, new_width, new_height);
+
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        let tx = conn
+            .transaction()
+            .map_err(|e| CoreError::Validation(e.to_string()))?;
+
+        let markers: Vec<(String, f64, f64)> = {
+            let mut stmt = tx
+                .prepare("SELECT id, x, y FROM marker WHERE finding_id = ?1 ORDER BY ordinal ASC;")
+                .map_err(|e| CoreError::Validation(e.to_string()))?;
+            let rows = stmt
+                .query_map(rusqlite::params![finding_id], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, f64>(1)?,
+                        row.get::<_, f64>(2)?,
+                    ))
+                })
+                .map_err(|e| CoreError::Validation(e.to_string()))?;
+            let mut v = Vec::new();
+            for r in rows {
+                v.push(r.map_err(|e| CoreError::Validation(e.to_string()))?);
+            }
+            v
+        };
+
+        let mut any_marker_dropped = false;
+        for (marker_id, x, y) in markers {
+            match remap.remap_marker(x, y) {
+                Some((nx, ny)) => {
+                    tx.execute(
+                        "UPDATE marker SET x = ?1, y = ?2 WHERE id = ?3 AND finding_id = ?4;",
+                        rusqlite::params![nx, ny, marker_id, finding_id],
+                    )
+                    .map_err(|e| CoreError::Validation(e.to_string()))?;
+                }
+                None => {
+                    tx.execute(
+                        "DELETE FROM marker WHERE id = ?1 AND finding_id = ?2;",
+                        rusqlite::params![marker_id, finding_id],
+                    )
+                    .map_err(|e| CoreError::Validation(e.to_string()))?;
+                    any_marker_dropped = true;
+                }
+            }
+        }
+
+        // A drop must not leave a gap in the ordinal sequence the Reviewer reads as Markdown line
+        // numbers - the same invariant `delete_marker` already enforces for a single deletion.
+        if any_marker_dropped {
+            renumber_markers_transaction(&tx, finding_id)?;
+        }
+
+        let annotations = read_annotations(&tx, finding_id)?;
+        for annotation in annotations {
+            match remap.remap_annotation(&annotation.data) {
+                Some(new_shape) => {
+                    let json = serde_json::to_string(&new_shape).map_err(|e| {
+                        CoreError::Validation(format!("Annotation could not be written: {e}"))
+                    })?;
+                    tx.execute(
+                        "UPDATE visual_annotation SET properties_json = ?1 WHERE id = ?2 AND finding_id = ?3;",
+                        rusqlite::params![json, annotation.id, finding_id],
+                    )
+                    .map_err(|e| CoreError::Validation(e.to_string()))?;
+                }
+                None => {
+                    tx.execute(
+                        "DELETE FROM visual_annotation WHERE id = ?1 AND finding_id = ?2;",
+                        rusqlite::params![annotation.id, finding_id],
+                    )
+                    .map_err(|e| CoreError::Validation(e.to_string()))?;
+                }
+            }
         }
 
         tx.commit()

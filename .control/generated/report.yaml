@@ -1,306 +1,718 @@
-asof: '2026-08-23'
-since: ''
-since_report: ''
-sha: 24c3c34a7419310cd3d0a98a56b8e7f590a2f0ea
+asof: '2026-09-05'
+since: '2026-08-23'
+since_report: 2026-W34
+sha: 1b2c53c2004c8d4c9df07fb92e2dd6b44c0f71b3
 registry_dirty: false
-uncommitted_stories: []
-promise_progress: 32%
+uncommitted_tickets: []
+promise_progress: 0%
 rtm_rows:
-  green: 10
-  counted: 31
-  excluded_no_uc: 1
+  green: 0
+  counted: 33
+  excluded_no_uc: 7
 work_progress:
-- wave: W1
+- spec: W1
   status: closed
-  stories_done: 5
-  stories_total: 5
-  work_progress: 100%
-- wave: W2
-  status: closed
-  stories_done: 0
-  stories_total: 0
+  tickets_done: 0
+  tickets_total: 0
   work_progress: n/a
-- wave: W3
+- spec: W2
   status: closed
-  stories_done: 0
-  stories_total: 0
+  tickets_done: 0
+  tickets_total: 0
   work_progress: n/a
-- wave: W4
+- spec: W3
   status: closed
-  stories_done: 0
-  stories_total: 0
+  tickets_done: 0
+  tickets_total: 0
   work_progress: n/a
-- wave: W5
+- spec: W4
   status: closed
-  stories_done: 0
-  stories_total: 0
+  tickets_done: 0
+  tickets_total: 0
   work_progress: n/a
-- wave: W6
-  status: open
-  stories_done: 3
-  stories_total: 11
-  work_progress: 27%
-gate_readiness: 88%
-proven:
-- FR: FR-16
-  UC: UC-14
-  story: W1-S3
-  test:
-  - cargo::unwritable_vault_folder_is_refused_at_choosing
-  - cargo::changing_the_vault_moves_every_file_or_none
-  - cargo::quality_budget_outside_range_is_refused_on_entry
-  - vitest::settings_shows_the_stored_size_of_the_latest_finding
-  closed: '2026-08-23'
-- FR: FR-5
-  UC: UC-13
-  story: W1-S3
-  test:
-  - cargo::unwritable_vault_folder_is_refused_at_choosing
-  - cargo::changing_the_vault_moves_every_file_or_none
-  - cargo::quality_budget_outside_range_is_refused_on_entry
-  - vitest::settings_shows_the_stored_size_of_the_latest_finding
-  closed: '2026-08-23'
-- FR: FR-17
-  UC: UC-15
-  story: W1-S4
-  test:
-  - cargo::a_combination_held_elsewhere_is_refused_at_binding
-  - cargo::two_actions_cannot_share_one_combination
-  - cargo::a_cleared_hotkey_disables_its_action
-  - cargo::rebinding_takes_effect_without_a_restart
-  - cargo::a_failed_startup_registration_is_reported_not_swallowed
-  closed: '2026-08-23'
-- FR: FR-18
-  UC: UC-16
-  story: W1-S5
-  test:
-  - cargo::startup_registration_needs_no_administrator_rights
-  - cargo::the_setting_is_read_back_from_the_os_not_remembered
-  - cargo::disabling_removes_the_registration
-  closed: '2026-08-23'
-- FR: FR-27
-  UC: UC-24
-  story: W6-S2
-  test:
-  - vitest::mounts_captureoverlay_when_url_query_has_overlay_true
-  - vitest::mounts_app_editor_shell_when_url_query_is_empty
-  - vitest::mounts_app_editor_shell_when_url_query_has_other_parameters
-  - cargo::desktop_crate_declares_exactly_one_binary_named_snapdown
-  - cargo::tauri_configuration_has_snapdown_product_and_snapdown_editor_window_title
-  - vitest::lists_all_four_primary_surfaces
-  - vitest::highlights_the_active_tab_with_multiple_visual_cues
-  - vitest::provides_visible_focus_visible_treatment_without_suppressing_focus_outline
-  - vitest::renders_200px_wide_navigation_rail_with_branding
-  - vitest::triggers_ontabchange_when_navigation_tab_is_clicked
-  - vitest::renders_pinned_capture_button_and_triggers_oncaptureclick
-  - vitest::renders_children_within_the_main_content_area_without_crashing
-  closed: '2026-08-23'
-- FR: FR-28
-  UC: UC-25
-  story: W6-S2
-  test:
-  - vitest::mounts_captureoverlay_when_url_query_has_overlay_true
-  - vitest::mounts_app_editor_shell_when_url_query_is_empty
-  - vitest::mounts_app_editor_shell_when_url_query_has_other_parameters
-  - cargo::desktop_crate_declares_exactly_one_binary_named_snapdown
-  - cargo::tauri_configuration_has_snapdown_product_and_snapdown_editor_window_title
-  - vitest::lists_all_four_primary_surfaces
-  - vitest::highlights_the_active_tab_with_multiple_visual_cues
-  - vitest::provides_visible_focus_visible_treatment_without_suppressing_focus_outline
-  - vitest::renders_200px_wide_navigation_rail_with_branding
-  - vitest::triggers_ontabchange_when_navigation_tab_is_clicked
-  - vitest::renders_pinned_capture_button_and_triggers_oncaptureclick
-  - vitest::renders_children_within_the_main_content_area_without_crashing
-  closed: '2026-08-23'
-- FR: FR-6
-  UC: UC-3
-  story: W6-S7
-  test:
-  - vitest::the_findings_detail_pane_renders_the_findings_image
-  - vitest::the_marker_canvas_is_mounted_over_that_image
-  - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
-  - vitest::the_orphan_report_is_reachable_from_the_findings_surface
-  - vitest::findings_renders_correctly_in_both_windows_themes
-  - vitest::the_empty_state_teaches_the_bound_capture_combination
-  - vitest::nothing_selected_is_visually_distinct_from_empty
-  - vitest::every_marker_is_reachable_and_movable_from_the_keyboard
-  - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
-  - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
-  - vitest::panels_take_the_height_available_rather_than_a_fixed_height
-  closed: '2026-08-23'
-- FR: FR-7
-  UC: UC-4
-  story: W6-S7
-  test:
-  - vitest::the_findings_detail_pane_renders_the_findings_image
-  - vitest::the_marker_canvas_is_mounted_over_that_image
-  - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
-  - vitest::the_orphan_report_is_reachable_from_the_findings_surface
-  - vitest::findings_renders_correctly_in_both_windows_themes
-  - vitest::the_empty_state_teaches_the_bound_capture_combination
-  - vitest::nothing_selected_is_visually_distinct_from_empty
-  - vitest::every_marker_is_reachable_and_movable_from_the_keyboard
-  - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
-  - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
-  - vitest::panels_take_the_height_available_rather_than_a_fixed_height
-  closed: '2026-08-23'
-- FR: FR-8
-  UC: UC-5
-  story: W6-S7
-  test:
-  - vitest::the_findings_detail_pane_renders_the_findings_image
-  - vitest::the_marker_canvas_is_mounted_over_that_image
-  - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
-  - vitest::the_orphan_report_is_reachable_from_the_findings_surface
-  - vitest::findings_renders_correctly_in_both_windows_themes
-  - vitest::the_empty_state_teaches_the_bound_capture_combination
-  - vitest::nothing_selected_is_visually_distinct_from_empty
-  - vitest::every_marker_is_reachable_and_movable_from_the_keyboard
-  - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
-  - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
-  - vitest::panels_take_the_height_available_rather_than_a_fixed_height
-  closed: '2026-08-23'
-- FR: FR-9
-  UC: UC-6
-  story: W6-S7
-  test:
-  - vitest::the_findings_detail_pane_renders_the_findings_image
-  - vitest::the_marker_canvas_is_mounted_over_that_image
-  - vitest::a_click_on_the_canvas_places_a_marker_and_writes_its_note_line
-  - vitest::the_orphan_report_is_reachable_from_the_findings_surface
-  - vitest::findings_renders_correctly_in_both_windows_themes
-  - vitest::the_empty_state_teaches_the_bound_capture_combination
-  - vitest::nothing_selected_is_visually_distinct_from_empty
-  - vitest::every_marker_is_reachable_and_movable_from_the_keyboard
-  - vitest::a_marker_with_no_note_line_is_reported_in_the_note_pane
-  - vitest::a_marker_with_no_note_line_is_not_annotated_on_the_image
-  - vitest::panels_take_the_height_available_rather_than_a_fixed_height
-  closed: '2026-08-23'
-moved:
-- id: CAP-2
-  kind: CAP
-  event: started
-  date: '2026-08-23'
-- id: CAP-3
-  kind: CAP
-  event: closed
-  date: '2026-08-23'
-- id: CAP-3
-  kind: CAP
-  event: started
-  date: '2026-08-23'
-- id: CAP-6
-  kind: CAP
-  event: started
-  date: '2026-08-23'
-- id: CAP-9
-  kind: CAP
-  event: started
-  date: '2026-08-23'
-- id: FR-16
-  kind: FR
-  event: closed
-  date: '2026-08-23'
-- id: FR-16
-  kind: FR
-  event: started
-  date: '2026-08-23'
-- id: FR-17
-  kind: FR
-  event: started
-  date: '2026-08-23'
-- id: FR-18
-  kind: FR
-  event: started
-  date: '2026-08-23'
-- id: FR-27
-  kind: FR
-  event: closed
-  date: '2026-08-23'
-- id: FR-27
-  kind: FR
-  event: started
-  date: '2026-08-23'
-- id: FR-28
-  kind: FR
-  event: closed
-  date: '2026-08-23'
-- id: FR-28
-  kind: FR
-  event: started
-  date: '2026-08-23'
-- id: FR-5
-  kind: FR
-  event: started
-  date: '2026-08-23'
-- id: FR-6
-  kind: FR
-  event: closed
-  date: '2026-08-23'
-- id: FR-6
-  kind: FR
-  event: started
-  date: '2026-08-23'
-- id: FR-7
-  kind: FR
-  event: closed
-  date: '2026-08-23'
-- id: FR-7
-  kind: FR
-  event: started
-  date: '2026-08-23'
-- id: FR-8
-  kind: FR
-  event: closed
-  date: '2026-08-23'
-- id: FR-8
-  kind: FR
-  event: started
-  date: '2026-08-23'
-- id: FR-9
-  kind: FR
-  event: closed
-  date: '2026-08-23'
-- id: FR-9
-  kind: FR
-  event: started
-  date: '2026-08-23'
+- spec: W5
+  status: closed
+  tickets_done: 0
+  tickets_total: 0
+  work_progress: n/a
+- spec: W6
+  status: closed
+  tickets_done: 0
+  tickets_total: 0
+  work_progress: n/a
+- spec: W7
+  status: closed
+  tickets_done: 0
+  tickets_total: 0
+  work_progress: n/a
+- spec: W8
+  status: closed
+  tickets_done: 0
+  tickets_total: 0
+  work_progress: n/a
+gate_readiness: 92%
+proven: []
+moved: []
 late: []
 defects:
   opened: []
-  closed: []
-  closed_by_root_cause: {}
-  undiagnosed:
+  closed:
   - id: BUG-1
     title: Deleting a Finding silently deletes its rows from every Bundle that holds it
-    reported: ''
-    age_days: null
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
   - id: BUG-10
     title: The MCP bridge can hand an agent an error with an empty message
-    reported: ''
-    age_days: null
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-100
+    title: A toast fired from inside a modal (Copy Markdown, Save, Discard originals) rendered behind
+      that modal instead of over it
+    root_cause: code
+    violates: []
+    closed: '2026-09-03'
+  - id: BUG-101
+    title: The Disassemble confirmation's destructive second step was invisible as a control, and its
+      cancel wording was reconsidered
+    root_cause: design
+    violates: []
+    closed: '2026-09-03'
+  - id: BUG-102
+    title: Review & Update's header packed title, badge and Close into one row, and the provenance line
+      pushed the badge and Close outside the panel
+    root_cause: layout
+    violates: []
+    closed: '2026-09-03'
+  - id: BUG-103
+    title: Every confirm button read identically regardless of whether the act was reversible, and the
+      four buttons across the Library's dialogs did not share one height
+    root_cause: design
+    violates: []
+    closed: '2026-09-03'
+  - id: BUG-104
+    title: 'Delete both, reversing ticket 17''s own design: the owner asked for a dedicated context-menu
+      row instead of a second step hidden inside the Disassemble confirmation'
+    root_cause: design
+    violates: []
+    closed: '2026-09-03'
+  - id: BUG-105
+    title: Paste does nothing when clicked
+    root_cause: code
+    violates: []
+    closed: '2026-09-04'
+  - id: BUG-106
+    title: Crop tool has no effect - it only changes the cursor and which tool icon is highlighted
+    root_cause: code
+    violates: []
+    closed: '2026-09-05'
+  - id: BUG-107
+    title: Cropping a Finding does not remap its existing Markers/annotations into the cropped image
+    root_cause: code
+    violates: []
+    closed: '2026-09-05'
   - id: BUG-11
     title: There is no reproducible way to build the desktop application
-    reported: ''
-    age_days: null
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-12
+    title: A corrupt or unreadable library.db makes the application vanish on launch
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-13
+    title: The new CI guard counts every .exe, but FR-27 promises one DESKTOP executable
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-14
+    title: Snapdown does not take screenshots. The capture path writes a 17-byte placeholder.
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-15
+    title: Opening a store switches it to WAL before checking it, so a corrupt store IS written to
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-16
+    title: A store failure exits by panic through the very `.expect()` BUG-12 excused from its sweep
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-17
+    title: The startup error dialog has no owner and no foreground flag, so it can open behind other windows
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-18
+    title: The capture overlay never asks for a Note, so half of UC-1 does not exist
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-19
+    title: Bundle export records a burned image path and never writes the file; MarkerBurner is called
+      from nowhere
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
   - id: BUG-2
     title: Three `sharing` screens are recorded as delivered and do not exist in the repository
-    reported: ''
-    age_days: null
+    root_cause: ''
+    violates: []
+    closed: '2026-09-05'
+  - id: BUG-20
+    title: The marker burn's no-markers fast path returns a corrupt source as success, having never decoded
+      it
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-21
+    title: The composed Markdown references the Finding's clean image, not the Bundle's burned copy
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-22
+    title: Bundle composition silently skips a Finding id it cannot resolve
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-24
+    title: Capture overlay opens at the default window size instead of covering the monitor, so selecting
+      a region never produces a screenshot
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-25
+    title: Escape did nothing while the capture overlay was open
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-26
+    title: One overlay stretched over the whole virtual desktop cannot render a mixed-DPI multi-monitor
+      rig
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-27
+    title: The capture overlay blinks once per capture on the first pointer move
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-29
+    title: Enter did nothing unless the note field already had keyboard focus
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
   - id: BUG-3
     title: The web service interpolates published Markdown into HTML without escaping it
-    reported: ''
-    age_days: null
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-30
+    title: An intermittent failure of Enter, caused by focus being claimed once for an overlay reused
+      forever
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-31
+    title: The note was never captured at all, because nothing gave the note field focus
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-32
+    title: A plain click re-armed the previous drag's region instead of taking the container under the
+      pointer
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-33
+    title: Container suggestions included cloaked windows, off-screen panes, and windows behind other
+      windows
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-34
+    title: Snapdown appeared in its own screenshot, and hiding it could not be timed reliably
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-35
+    title: The filmstrip's fixed-width cards pushed the Notes and Properties panel off screen
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-36
+    title: The note popup's fixed height pushed its own hint text and Save button outside it
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-38
+    title: The note popup is always placed below the selection, so a selection near the bottom of a screen
+      puts it off screen
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-39
+    title: A suggested container is outlined but still dimmed, so it does not read as selectable the way
+      a dragged region does
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
   - id: BUG-4
     title: The capture overlay is never mounted; pressing the capture hotkey shows the Settings shell
-    reported: ''
-    age_days: null
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-40
+    title: A selection cannot be replaced by clicking elsewhere; it takes Escape and a fresh capture
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-41
+    title: Selecting a Finding in the filmstrip takes a visible moment to reach the canvas
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-42
+    title: FR-1's one-click full-screen affordance does not exist on the monitor under the pointer
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-43
+    title: FR-1's "pixel loupe" shows no pixel grid
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-44
+    title: detect_element_at_point is dead code
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-45
+    title: A typed Note is stored but does not appear in the Editor's Observation Summary
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-46
+    title: The capture note field is single-line, so a longer note scrolls out of sight as it is typed
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-47
+    title: An edited Observation Summary is discarded when another Finding is selected
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-48
+    title: The filmstrip retains every Finding's image at full resolution to fill 120x86 cards
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-49
+    title: The overlay reports region and screen sizes in logical pixels while everything downstream is
+      physical
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
   - id: BUG-5
     title: The Editor never renders a Finding's image, and Markers cannot be placed at all
-    reported: ''
-    age_days: null
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-50
+    title: A whole window cannot be selected, because the tightest container under the pointer always
+      wins
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-51
+    title: The capture overlay retains two full-desktop canvases for the life of the process
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-52
+    title: The mouse cursor disappears once a region is selected, because it is hidden unconditionally
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-53
+    title: Changing the display resolution takes the process to 363 MB
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-54
+    title: theme.slint fails WCAG AA on six pairings, including every primary button label in dark mode
+    root_cause: code
+    violates: []
+    closed: '2026-09-02'
+  - id: BUG-55
+    title: Six UI callbacks were declared, fired by the interface, and handled by nothing
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-56
+    title: Nine colour literals lived outside theme.slint, and one of them misses WCAG AA
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-58
+    title: The theme choice was thrown away on every restart
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-59
+    title: The Local API does not exist, so the MCP Bridge cannot reach the product at all
+    root_cause: code
+    violates: []
+    closed: '2026-09-04'
   - id: BUG-6
     title: The orphan report is built, tested, and unreachable — no screen ever mounts it
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-60
+    title: A corrupt library.db now produces a silently empty Library, and the session's work is lost
+      on exit
+    root_cause: code
+    violates: []
+    closed: '2026-09-04'
+  - id: BUG-62
+    title: Every image the product writes used Fast compression and a redundant alpha channel
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-63
+    title: The Quality Budget's encoder_quality does nothing, because the product writes PNG and the corpus
+      designed for WebP
+    root_cause: architecture
+    violates:
+    - FR-5
+    - FR-6
+    closed: '2026-08-28'
+  - id: BUG-64
+    title: A Marker with no note line was never burned onto the Bundle's image, which is the opposite
+      of what SCN-04 requires
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-65
+    title: The titlebar could not be dragged while the window was maximized, and the refusal was swallowed
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-66
+    title: Three of the five scrollbars could not be dragged, because there were five of them
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-67
+    title: A Bundle silently took a different Finding from the one being annotated
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-68
+    title: A Marker's note rendered one character per line in the Assemble preview
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-69
+    title: A capture moved the selection but left the Shift anchor on the previous Finding
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-70
+    title: Icon and text sit on different baselines in the readout strip, the filmstrip cards and the
+      Assemble tile
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-71
+    title: The frameless window has no shadow, so it merges into whatever is behind it
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-72
+    title: CAP-11 has a domain type and a burner and no way to store or place an annotation
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-73
+    title: The annotation canvas as first shipped - a drag that fought the pointer, a mosaic called a
+      blur, and four gestures that guessed
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-74
+    title: A Callout that lost its tail, an Arrow grabbed by a rectangle, and a Properties tab that had
+      never been connected
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-75
+    title: A click that wrote to the database, which is why nothing could be typed into
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-76
+    title: A slider drawn as a lens, two font-size defaults, and a deletion reachable only by right-click
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-77
+    title: Two context-menu entries are the only route to what they do, which `FR-37` forbids
+    root_cause: requirement
+    violates:
+    - FR-37
+    closed: '2026-09-05'
+  - id: BUG-78
+    title: A slider filled from its middle, Explorer opening the Desktop, and a deletion that took one
+      Finding when the corpus had always said Findings
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-79
+    title: The Settings screen did not exist, so four promised preferences and one licence obligation
+      had nowhere to live
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-8
+    title: The web-ui container is registered built:true and does not exist; a library shares its name
+    root_cause: ''
+    violates: []
+    closed: '2026-09-01'
+  - id: BUG-80
+    title: The sixth report of design-system inconsistency, and the first one with a component to fix
+      it rather than an instance
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-81
+    title: The Vault folder could not be changed, and the migration was believed to be missing
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-82
+    title: The hotkey editor could not say why a combination was refused, and the Vault moved without
+      asking
+    root_cause: code
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-83
+    title: Resize had one lever where the owner needed two
+    root_cause: requirement
+    violates:
+    - FR-4
+    closed: '2026-08-28'
+  - id: BUG-84
+    title: Every clipboard copy after the first one pasted the FIRST image, because the Bitmap setter
+      never empties the clipboard
+    root_cause: code
+    violates:
+    - FR-36
+    closed: '2026-08-30'
+  - id: BUG-85
+    title: Filmstrip click delay is back - BUG-41's fix never accounted for the blur BUG-73 added into
+      the same path
+    root_cause: code
+    violates: []
+    closed: '2026-08-30'
+  - id: BUG-86
+    title: Every image link in every Bundle's Markdown resolved to nothing - the serializer wrote paths
+      relative to the Vault root while the document lived in a per-Bundle folder
+    root_cause: code
+    violates: []
+    closed: '2026-08-31'
+  - id: BUG-87
+    title: The parallel-blur regression guard compared against a fixed millisecond figure and was flaky
+      on shared CI runners
+    root_cause: code
+    violates: []
+    closed: '2026-08-31'
+  - id: BUG-88
+    title: Deleting a Bundle is unreachable, so FR-14, BR-20 and BR-23 are unmet
+    root_cause: code
+    violates: []
+    closed: '2026-09-03'
+  - id: BUG-89
+    title: The Editor window does not name its persona, and two of FR-27's three names are unasserted
+    root_cause: code
+    violates: []
+    closed: '2026-09-02'
+  - id: BUG-9
+    title: Bundle composition and deletion swallow every filesystem and unpublish Result
+    root_cause: ''
+    violates: []
+    closed: '2026-08-28'
+  - id: BUG-90
+    title: BUG-86's fix never repaired a Bundle composed before it - every pre-fix Bundle's image link
+      still resolves to nothing
+    root_cause: code
+    violates: []
+    closed: '2026-09-04'
+  - id: BUG-91
+    title: A Library row's hover icons flickered on and off the moment the cursor moved onto one of them
+    root_cause: code
+    violates: []
+    closed: '2026-09-03'
+  - id: BUG-92
+    title: The Library row's overflow-button dots sat pinned to the top of their button, not centred
+    root_cause: code
+    violates: []
+    closed: '2026-09-03'
+  - id: BUG-93
+    title: A toast fired while any full-window overlay was open painted behind it, not over it
+    root_cause: code
+    violates: []
+    closed: '2026-09-03'
+  - id: BUG-94
+    title: Scrolling over a modal (the Library, Review & Update, Reclaim space, Assemble & Review) could
+      still pan or zoom the Editor's canvas underneath
+    root_cause: code
+    violates: []
+    closed: '2026-09-03'
+  - id: BUG-95
+    title: A Bundle composed before the per-Finding capture metadata was removed failed to parse at all
+      - Copy Markdown refused it outright
+    root_cause: code
+    violates: []
+    closed: '2026-09-03'
+  - id: BUG-96
+    title: Open file location on a Bundle row silently did nothing
+    root_cause: code
+    violates: []
+    closed: '2026-09-03'
+  - id: BUG-97
+    title: Saving an edit in Review & Update did not refresh the Library's own row list underneath
+    root_cause: code
+    violates: []
+    closed: '2026-09-03'
+  - id: BUG-98
+    title: Reclaim space showed 0.0 MB for every Bundle under roughly 50 KB - indistinguishable from truly
+      nothing to reclaim
+    root_cause: code
+    violates: []
+    closed: '2026-09-03'
+  - id: BUG-99
+    title: Review & Update's header badge and footer buttons resized between locked and editing, reading
+      as the Close button moving
+    root_cause: code
+    violates: []
+    closed: '2026-09-03'
+  closed_by_root_cause:
+    '?':
+    - BUG-1
+    - BUG-10
+    - BUG-11
+    - BUG-12
+    - BUG-13
+    - BUG-15
+    - BUG-16
+    - BUG-17
+    - BUG-2
+    - BUG-24
+    - BUG-25
+    - BUG-26
+    - BUG-27
+    - BUG-3
+    - BUG-4
+    - BUG-44
+    - BUG-5
+    - BUG-6
+    - BUG-8
+    - BUG-9
+    architecture:
+    - BUG-63
+    code:
+    - BUG-100
+    - BUG-105
+    - BUG-106
+    - BUG-107
+    - BUG-14
+    - BUG-18
+    - BUG-19
+    - BUG-20
+    - BUG-21
+    - BUG-22
+    - BUG-29
+    - BUG-30
+    - BUG-31
+    - BUG-32
+    - BUG-33
+    - BUG-34
+    - BUG-35
+    - BUG-36
+    - BUG-38
+    - BUG-39
+    - BUG-40
+    - BUG-41
+    - BUG-42
+    - BUG-43
+    - BUG-45
+    - BUG-46
+    - BUG-47
+    - BUG-48
+    - BUG-49
+    - BUG-50
+    - BUG-51
+    - BUG-52
+    - BUG-53
+    - BUG-54
+    - BUG-55
+    - BUG-56
+    - BUG-58
+    - BUG-59
+    - BUG-60
+    - BUG-62
+    - BUG-64
+    - BUG-65
+    - BUG-66
+    - BUG-67
+    - BUG-68
+    - BUG-69
+    - BUG-70
+    - BUG-71
+    - BUG-72
+    - BUG-73
+    - BUG-74
+    - BUG-75
+    - BUG-76
+    - BUG-78
+    - BUG-79
+    - BUG-80
+    - BUG-81
+    - BUG-82
+    - BUG-84
+    - BUG-85
+    - BUG-86
+    - BUG-87
+    - BUG-88
+    - BUG-89
+    - BUG-90
+    - BUG-91
+    - BUG-92
+    - BUG-93
+    - BUG-94
+    - BUG-95
+    - BUG-96
+    - BUG-97
+    - BUG-98
+    - BUG-99
+    design:
+    - BUG-101
+    - BUG-103
+    - BUG-104
+    layout:
+    - BUG-102
+    requirement:
+    - BUG-77
+    - BUG-83
+  undiagnosed:
+  - id: BUG-23
+    title: Publishing swallows a failed image read and puts the Publication live without it
     reported: ''
     age_days: null
   - id: BUG-7
@@ -308,20 +720,4 @@ defects:
       W1
     reported: ''
     age_days: null
-  - id: BUG-8
-    title: The web-ui container is registered built:true and does not exist; a library shares its name
-    reported: ''
-    age_days: null
-  - id: BUG-9
-    title: Bundle composition and deletion swallow every filesystem and unpublish Result
-    reported: ''
-    age_days: null
-gates:
-- gate: G1
-  date: '2026-08-22'
-- gate: G2
-  date: '2026-08-22'
-- gate: G3
-  date: '2026-08-22'
-- gate: G4
-  date: '2026-08-22'
+gates: []

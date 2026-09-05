@@ -9,7 +9,7 @@ zooming, at any level, ever.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 Realizes `FR-34`. Governs `UC-2`, `UC-27` (control, not a use case of its own — `no_uc`). See
 `.scratch/canvas-zoom-clipboard-paste/spec.md` for the full design (Implementation Decisions §

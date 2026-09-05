@@ -6324,10 +6324,37 @@ defects:
       gap. Filed here as its own row so it is tracked rather than left as prose inside a closed
       defect's record.
     fix: |
-      NOT DONE. Re-mapping means, for every Marker/annotation on the cropped Finding: convert its
-      fractional position against the OLD image dimensions into pixel space, subtract the crop
-      rectangle's origin, then re-normalize against the NEW (cropped) dimensions - dropping (or
-      visibly clipping) anything that lands entirely outside the new bounds. Whether an annotation
-      straddling the crop boundary should be dropped, clipped, or kept in full is a product call the
-      owner has not been asked yet - not a code decision to make silently.
-    status: open
+      Done under `DEC-023`. `CropRemap` (`crates/snapdown-core/src/domain/finding.rs`) is a pure,
+      independently-tested type carrying the geometry: fraction -> OLD pixel space -> subtract the
+      crop rectangle's own origin -> NEW pixel space -> fraction of the NEW image. It is invoked
+      through a new `FindingStore` port method, `remap_markers_and_annotations_for_crop`
+      (`crates/snapdown-core/src/ports/mod.rs`, implemented in
+      `crates/snapdown-store/src/sqlite/finding_store.rs`), which reads every Marker/annotation
+      still on the Finding, applies the remap, and persists the result in one transaction.
+      `apps/desktop/src/main.rs`'s `on_crop_applied` handler calls it right after
+      `crop_finding_image` succeeds, passing the OLD dimensions and the crop rectangle actually
+      applied - both already at hand from the callback's own state - plus the NEW dimensions
+      `crop_finding_image` returns.
+
+      The domain decision the row above flagged as not yet made is now made, and reasoned here
+      rather than silently: a MARKER is a single point anchored to one specific pixel, so one that
+      the crop removed is DELETED (its ordinal sequence is then renumbered, the same invariant
+      `delete_marker` already enforces) - clamping it to the new edge would silently misrepresent
+      where the Reviewer actually pointed, which is worse than losing the comment outright. A
+      box-shaped annotation (`Rect`, `Blur`, `Text`, and `Callout`'s own box) that only partially
+      overlaps the new image is CLIPPED to whatever of it survives, the same way the pixel content
+      underneath it was clipped by the crop, and deleted only when no area survives at all. An
+      `Arrow` is deleted only when its own bounding box has no overlap with the new image
+      whatsoever; otherwise both endpoints (and a Callout's tail) are clamped onto the new image's
+      edge, since a line or an anchor still means something pinned to an edge, unlike a Marker's
+      single point.
+
+      Proven by `crates/snapdown-store/tests/test_crop_remap.rs` (6 tests) plus 12 pure-geometry
+      unit tests in `crates/snapdown-core/src/domain/finding.rs`, all asserting the exact decoded
+      post-crop coordinate against hand-computed arithmetic, not merely that a row survives.
+      Mutation-checked by hand: with the store method temporarily stubbed to a no-op, all 6
+      `test_crop_remap.rs` tests failed with the expected mismatches; restoring the real
+      implementation turned them green again. `cargo fmt --all -- --check`,
+      `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace`
+      (430 passed, 0 failed) all pass from the repo root.
+    status: fixed

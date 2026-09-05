@@ -5,7 +5,7 @@ pub use bundle_store::BundleStore;
 pub use publication_store::PublicationStore;
 
 use crate::domain::finding::{
-    AnnotationShape, Finding, FindingDetail, Marker, Note, VisualAnnotation,
+    AnnotationShape, CropRect, Finding, FindingDetail, Marker, Note, VisualAnnotation,
 };
 use crate::domain::setting::{Setting, SettingKey};
 use crate::error::CoreError;
@@ -122,6 +122,31 @@ pub trait FindingStore {
         &self,
         finding_id: &str,
         ordered_annotation_ids: &[&str],
+    ) -> Result<(), CoreError>;
+
+    /// Remaps every existing Marker and VisualAnnotation on a Finding from its OLD image's
+    /// coordinate space into a NEW one produced by cropping it - `BUG-107`.
+    ///
+    /// The geometry itself is `snapdown_core::domain::finding::CropRemap`, pure and independently
+    /// tested; this method's own job is only to read what currently exists, apply that remap to
+    /// each row, and persist the result in one transaction. A Marker/annotation the remap reports
+    /// as gone (`None`) is deleted, not left at a stale position; a Marker's ordinal sequence is
+    /// renumbered afterwards the same way `delete_marker` already renumbers it, so a drop cannot
+    /// leave a gap.
+    ///
+    /// Callers pass `old_width`/`old_height` explicitly rather than this method reading them back
+    /// off the Finding's own row, because by the time a crop is being applied that row may already
+    /// have been updated to the NEW dimensions - the caller is the only one who still knows what
+    /// the OLD ones were.
+    #[allow(clippy::too_many_arguments)]
+    fn remap_markers_and_annotations_for_crop(
+        &self,
+        finding_id: &str,
+        old_width: u32,
+        old_height: u32,
+        crop_rect_px: CropRect,
+        new_width: u32,
+        new_height: u32,
     ) -> Result<(), CoreError>;
 }
 

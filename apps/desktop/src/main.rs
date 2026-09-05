@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod focus;
 mod hotkey;
 mod startup;
 mod tray;
@@ -16,7 +17,7 @@ use slint::{ComponentHandle, Model, ModelRc, SharedPixelBuffer, SharedString, Ve
 use snapdown_capture::{CaptureTarget, RegionCapturer};
 use snapdown_core::domain::bundle::{Bundle, BundleDetail, BundleItem};
 use snapdown_core::domain::finding::{
-    AnnotationShape, Finding, FindingDetail, Note, Region, VisualAnnotation,
+    AnnotationShape, CropRect, Finding, FindingDetail, Note, Region, VisualAnnotation,
 };
 use snapdown_core::domain::image::ImageDimensions;
 use snapdown_core::domain::markdown::{MarkdownSerializer, ParsedBundleDocument};
@@ -1325,6 +1326,51 @@ fn reclaim_confirm_heading(bundle_count: usize) -> String {
     )
 }
 
+/// "DELETE BOTH 3 BUNDLES?" - the bulk Delete-both confirmation's heading, matching
+/// `reclaim_confirm_heading`'s own pluralisation, one dialog for the whole selected set rather than
+/// `FR-41`/`BUG-104`'s single-Bundle dialog run several times.
+fn reclaim_delete_both_confirm_heading(bundle_count: usize) -> String {
+    format!(
+        "DELETE BOTH {bundle_count} BUNDLE{}?",
+        if bundle_count == 1 { "" } else { "S" }
+    )
+}
+
+/// The bulk Delete-both confirmation's body: names the whole selected set (Bundle and capture
+/// counts, `reclaim_confirm_body`'s own "selected set" discipline) and what the act destroys - this
+/// time the Bundles themselves as well as their captures, matching `FR-41`/`BUG-104`'s single-Bundle
+/// "Delete both" wording ("nothing comes back to the filmstrip") rather than bulk Discard originals'
+/// "each Bundle keeps its own copy" (Delete both keeps nothing). `capture_count` MUST be the DEDUPED
+/// count across the whole selected set - a Finding shared by two selected Bundles is one capture,
+/// not two, the same count the confirmed act itself will actually remove exactly once
+/// (`test_bundle_deletion.rs`'s own bulk-delete-both test is what proves the act honours this).
+fn reclaim_delete_both_confirm_body(
+    bundle_count: usize,
+    capture_count: usize,
+    warning: &str,
+) -> String {
+    let bundle_word = if bundle_count == 1 {
+        "Bundle"
+    } else {
+        "Bundles"
+    };
+    let capture_word = if capture_count == 1 {
+        "capture"
+    } else {
+        "captures"
+    };
+    let mut text = format!(
+        "{bundle_count} {bundle_word} and their {capture_count} original {capture_word}, with \
+         their notes, Markers and image files, are removed. Nothing comes back to the filmstrip."
+    );
+    if !warning.is_empty() {
+        text.push(' ');
+        text.push_str(warning);
+    }
+    text.push_str(" This cannot be undone.");
+    text
+}
+
 fn load_findings_into_window(
     window: &AppWindow,
     ctx: &AppContext,
@@ -2504,6 +2550,13 @@ fn bundle_folder_path(ctx: &AppContext, bundle: &Bundle) -> PathBuf {
         _ => ctx.vault_path.clone(),
     }
 }
+
+/// Ticket 12's Copy Markdown toast, and ticket 4's (`04-copy-markdown-on-save`) two more copy
+/// sites reuse the exact same sentence - one constant so the three copy-on-success toasts can never
+/// drift out of wording with each other, and so a Reviewer is told the same fact regardless of which
+/// door produced the copy (the spec's own requirement for `FR-10`/`FR-12`/`FR-40`).
+const COPY_MARKDOWN_TOAST: &str =
+    "Markdown copied. The image links carry their location on this disk.";
 
 /// Ticket 12's Copy Markdown: the Bundle's whole stored document, with every image link rewritten
 /// to an absolute path a local agent can open - same words, same order, only the link destinations
@@ -3807,6 +3860,41 @@ fn set_capture_exclusion(window: &slint::Weak<AppWindow>, exclude: bool) {
     }
 }
 
+/// The in-process half of "reopen the Editor": reads the live Slint window's own HWND and routes
+/// it through `focus::bring_editor_to_foreground`, the one shared function every entry point uses.
+/// The tray's Open Editor, its matching hotkey, and reveal-after-capture all call this - the
+/// cross-process half (the already-running double-click early exit in `main`, which shares no
+/// memory with the first instance and so has no live Slint window to read) calls
+/// `focus::find_running_editor_window` plus `focus::bring_editor_to_foreground` directly instead.
+///
+/// Assumes the caller has already made the window visible (`win.show()`) and un-minimized it at
+/// the Slint level - that is unchanged from before this existed, and is what makes "already on the
+/// Reviewer's current desktop" a no-op: there is nothing left for the OS-level foreground call to
+/// visibly change beyond bringing it to front.
+#[cfg(windows)]
+fn reveal_editor_window(window: &AppWindow) {
+    use i_slint_backend_winit::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use i_slint_backend_winit::WinitWindowAccessor;
+
+    let hwnd = window
+        .window()
+        .with_winit_window(|winit_win| {
+            let handle = winit_win.window_handle().ok()?;
+            match handle.as_raw() {
+                RawWindowHandle::Win32(win32) => Some(win32.hwnd.get()),
+                _ => None,
+            }
+        })
+        .flatten();
+
+    if let Some(hwnd) = hwnd {
+        focus::bring_editor_to_foreground(hwnd, &focus::WindowsForegroundBackend);
+    }
+}
+
+#[cfg(not(windows))]
+fn reveal_editor_window(_window: &AppWindow) {}
+
 #[cfg(not(windows))]
 fn set_capture_exclusion(_window: &slint::Weak<AppWindow>, _exclude: bool) {}
 
@@ -4518,6 +4606,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
         eprintln!("Snapdown is already running.");
+        // FR: reopening the Editor while it is already running (by double-clicking `Snapdown.exe`
+        // again) must bring the running instance's window to real OS foreground focus, switching
+        // Virtual Desktops to it if needed - not silently exit with no visible effect. This
+        // process has no window and no memory in common with the one already running, so it finds
+        // the running instance's HWND by title and routes it through the SAME shared function the
+        // in-process entry points use.
+        if let Some(hwnd) = focus::find_running_editor_window() {
+            focus::bring_editor_to_foreground(hwnd, &focus::WindowsForegroundBackend);
+        }
         return Ok(());
     };
 
@@ -4669,7 +4766,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Reloaded from the store rather than pushed into the model: the ordinal is the store's
             // to assign (`AD-1` ties it to the Markdown line number), so the UI must be told what it
             // became instead of guessing.
-            Ok(_) => load_active_detail(&win, &ctx_mkp, &finding_id),
+            //
+            // `02-marker-note-focus-and-tooltip.md` (`FR-8`, `UC-5` step 3 - typing right after
+            // placing). Set BEFORE the reload, not after: `load_active_detail` replaces the whole
+            // `markers` model, and the appwindow.slint card for this exact id reads
+            // `marker-focus-target` from its own `init`, which only sees a value already in place by
+            // the time the row is created. The Marker Notes tab is switched on for the same reason
+            // the focus claim needs it - the card that owns the Note field only exists at all while
+            // `active-tab-index == 0`.
+            Ok(_) => {
+                win.set_active_tab_index(0);
+                win.set_marker_focus_target(marker_id.into());
+                load_active_detail(&win, &ctx_mkp, &finding_id);
+            }
             Err(e) => toast(&win, format!("Could not place the Marker: {e}"), true),
         }
     });
@@ -4852,7 +4961,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             // A new Vault file and new dimensions - the same reason `persist_finding` demands a
             // full rebuild rather than `click_finding`'s in-place row update: the filmstrip's own
             // thumbnail and dimension label are stale otherwise, not merely the canvas.
-            Ok(_) => load_findings_into_window(&win, &ctx_crop, Some(&finding_id)),
+            Ok((new_w, new_h)) => {
+                // `BUG-107`: the image is cropped, but any Marker/VisualAnnotation already on this
+                // Finding is still positioned against the OLD image - remap them into the new
+                // one's coordinate space now, while the OLD dimensions (`f.image_width/height`)
+                // and the crop rectangle actually applied (`px_x1, px_y1, px_w, px_h`) are still at
+                // hand. Reported, not swallowed: a failure here leaves the image cropped but the
+                // Markers/annotations mispositioned, which the Reviewer needs to know about.
+                if let Err(e) = ctx_crop
+                    .finding_store
+                    .remap_markers_and_annotations_for_crop(
+                        &finding_id,
+                        f.image_width,
+                        f.image_height,
+                        CropRect {
+                            x: px_x1,
+                            y: px_y1,
+                            width: px_w,
+                            height: px_h,
+                        },
+                        new_w,
+                        new_h,
+                    )
+                {
+                    toast(
+                        &win,
+                        format!(
+                            "The image was cropped, but its Markers/annotations could not be \
+                             repositioned to match: {e}"
+                        ),
+                        true,
+                    );
+                }
+                load_findings_into_window(&win, &ctx_crop, Some(&finding_id));
+            }
             Err(e) => toast(&win, e, true),
         }
     });
@@ -5332,7 +5474,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // out anything a Bundle already holds. The strip is the queue of what has not been
                 // handed over yet, which is what makes "N selected" mean something.
                 load_findings_into_window(&win, &ctx_pc, None);
-                toast(&win, message, false);
+                // Ticket 4 (`04-copy-markdown-on-save`): a successful Assemble & Save also copies
+                // the Bundle's Markdown to the clipboard, through the exact same function Copy
+                // Markdown's own handler (`on_library_copy_markdown_clicked`) calls -
+                // `bundle_markdown_for_clipboard` then `put_text_on_clipboard` - never a second
+                // implementation of either. The `Err` arm below never reaches this call, so a
+                // failed save copies nothing.
+                match bundle_markdown_for_clipboard(&ctx_pc, &pending.bundle_id)
+                    .and_then(|markdown| put_text_on_clipboard(&markdown))
+                {
+                    Ok(()) => toast(&win, COPY_MARKDOWN_TOAST, false),
+                    Err(clipboard_err) => {
+                        eprintln!("Copy-on-save could not reach the clipboard: {clipboard_err}");
+                        toast(&win, message, false);
+                    }
+                }
             }
             Err(message) => {
                 eprintln!("Assemble failed: {message}");
@@ -5597,11 +5753,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
         match put_text_on_clipboard(&markdown) {
-            Ok(()) => toast(
-                &win,
-                "Markdown copied. The image links carry their location on this disk.",
-                false,
-            ),
+            Ok(()) => toast(&win, COPY_MARKDOWN_TOAST, false),
             Err(message) => toast(&win, message, true),
         }
     });
@@ -5949,11 +6101,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 toast(&win, "Saved. Nothing had changed.", false);
             }
             Ok(ReviewUpdateSaveOutcome::Saved) => {
-                if let Err(message) = set_review_update_view(&win, &ctx_review_update_save, bundle)
-                {
-                    toast(&win, message, true);
-                } else {
-                    toast(&win, "Saved.", false);
+                let view_refreshed = set_review_update_view(&win, &ctx_review_update_save, bundle);
+                // Ticket 4 (`04-copy-markdown-on-save`): a successful Save (this arm) also copies
+                // the Bundle's Markdown to the clipboard, through the exact same function Copy
+                // Markdown's own handler calls - `bundle_markdown_for_clipboard` then
+                // `put_text_on_clipboard` - never a second implementation of either.
+                // `ReviewUpdateSaveOutcome::NoChange` and the outer `Err` arm below never reach
+                // here, so neither of those copies anything.
+                let copied = bundle_markdown_for_clipboard(&ctx_review_update_save, &bundle.id)
+                    .and_then(|markdown| put_text_on_clipboard(&markdown));
+                match view_refreshed {
+                    Err(view_err) => toast(&win, view_err, true),
+                    Ok(()) => match copied {
+                        Ok(()) => toast(&win, COPY_MARKDOWN_TOAST, false),
+                        Err(clipboard_err) => {
+                            eprintln!(
+                                "Copy-on-save could not reach the clipboard: {clipboard_err}"
+                            );
+                            toast(&win, "Saved.", false);
+                        }
+                    },
                 }
                 *edit_slot = None;
                 win.set_review_update_editing(false);
@@ -6272,6 +6439,202 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             None => format!(
                 "{total_discarded} {noun} discarded. {total_orphaned} image file(s) could not be \
                  removed and are now orphans."
+            ),
+        };
+        toast(&win, message, had_failure);
+    });
+
+    // SELECT-ALL. Ticks or unticks every row CURRENTLY LISTED - a Bundle whose originals are
+    // already gone never reaches this list at all (`build_reclaim_rows`'s own `bundle_is_sealed`
+    // filter), so select-all operates over exactly the rows shown, nothing hidden, per the
+    // ticket's own acceptance criterion. The checkbox's own checked state is computed in Slint
+    // straight off `rows.length`/`selected-count`, so there is no second "all selected" flag here
+    // that could disagree with what the rows themselves show.
+    let win_reclaim_select_all = main_window.as_weak();
+    main_window.on_reclaim_space_select_all_toggled(move |checked| {
+        let Some(win) = win_reclaim_select_all.upgrade() else {
+            return;
+        };
+        let mut rows: Vec<ReclaimBundleRow> = win.get_reclaim_space_rows().iter().collect();
+        for row in rows.iter_mut() {
+            row.selected = checked;
+        }
+        win.set_reclaim_space_rows(ModelRc::from(Rc::new(VecModel::from(rows))));
+        refresh_reclaim_space_footer(&win);
+    });
+
+    // THE FOOTER'S "Delete both" BUTTON - opens ONE bulk confirmation naming the whole selected
+    // set, the same "one dialog, not several" discipline `on_reclaim_space_discard_clicked`
+    // already established for bulk Discard originals. `BR-122` is read LIVE here
+    // (`bundles_sealed_by_bulk_discard`), not cached from whenever the screen last opened, per the
+    // ticket's own acceptance criterion. Nothing is deleted yet; this only computes what the
+    // confirmation says.
+    let win_reclaim_delete_both_clicked = main_window.as_weak();
+    let ctx_reclaim_delete_both_clicked = ctx.clone();
+    main_window.on_reclaim_space_delete_both_clicked(move || {
+        let Some(win) = win_reclaim_delete_both_clicked.upgrade() else {
+            return;
+        };
+        let ticked: Vec<String> = win
+            .get_reclaim_space_rows()
+            .iter()
+            .filter(|r| r.selected)
+            .map(|r| r.id.to_string())
+            .collect();
+        if ticked.is_empty() {
+            return;
+        }
+        let Some(store) = ctx_reclaim_delete_both_clicked.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+
+        // The unique Finding ids across the WHOLE selected set - two selected Bundles sharing one
+        // Finding must be counted (and later removed) exactly once, never twice.
+        let mut unique_finding_ids: Vec<String> = Vec::new();
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for id in &ticked {
+            if let Ok(Some(detail)) = store.get_bundle(id) {
+                for item in &detail.items {
+                    if seen.insert(item.finding_id.clone()) {
+                        unique_finding_ids.push(item.finding_id.clone());
+                    }
+                }
+            }
+        }
+        let sealed_elsewhere = bundles_sealed_by_bulk_discard(
+            &ctx_reclaim_delete_both_clicked,
+            &ticked,
+            &unique_finding_ids,
+        );
+
+        win.set_reclaim_space_delete_both_confirm_heading(
+            reclaim_delete_both_confirm_heading(ticked.len()).into(),
+        );
+        win.set_reclaim_space_delete_both_confirm_body(
+            reclaim_delete_both_confirm_body(
+                ticked.len(),
+                unique_finding_ids.len(),
+                &discard_warning_text(&sealed_elsewhere),
+            )
+            .into(),
+        );
+        win.set_reclaim_space_pending_ids(ModelRc::from(Rc::new(VecModel::from(
+            ticked
+                .into_iter()
+                .map(SharedString::from)
+                .collect::<Vec<_>>(),
+        ))));
+        win.set_reclaim_space_delete_both_confirm_open(true);
+    });
+
+    let win_reclaim_delete_both_cancel = main_window.as_weak();
+    main_window.on_reclaim_space_delete_both_cancelled(move || {
+        if let Some(win) = win_reclaim_delete_both_cancel.upgrade() {
+            win.set_reclaim_space_delete_both_confirm_open(false);
+        }
+    });
+
+    // THE CONFIRMED ACT. Per Bundle, `AD-2`'s own order - the row before its own folder
+    // (`remove_bundle_row_and_folder`) - then, over what that Bundle's own Findings still need,
+    // `discard_originals`. A Finding a PRIOR Bundle in this same batch already discarded is
+    // skipped here, never attempted a second time - the shared-Finding guard
+    // `test_bundle_deletion.rs`'s own bulk test proves: deleted exactly once, reported exactly
+    // once. A refusal at either step stops the whole batch exactly where it is: every Bundle and
+    // Finding already processed stays gone, nothing beyond that point is touched, matching the
+    // ticket's own "a partial failure partway through the batch leaves prior state intact for
+    // what hasn't been touched yet".
+    let win_reclaim_delete_both_confirm = main_window.as_weak();
+    let ctx_reclaim_delete_both_confirm = ctx.clone();
+    main_window.on_reclaim_space_delete_both_confirmed(move || {
+        let Some(win) = win_reclaim_delete_both_confirm.upgrade() else {
+            return;
+        };
+        win.set_reclaim_space_delete_both_confirm_open(false);
+
+        let ticked: Vec<String> = win
+            .get_reclaim_space_pending_ids()
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+
+        let Some(store) = ctx_reclaim_delete_both_confirm.bundle_store.as_ref() else {
+            toast(&win, "The Bundle library could not be opened.", true);
+            return;
+        };
+
+        let bundle_count = ticked.len();
+        let mut bundles_removed = 0usize;
+        let mut total_discarded = 0usize;
+        let mut total_orphaned = 0usize;
+        let mut refusal: Option<String> = None;
+        // Every Finding id already discarded in this batch.
+        let mut already_discarded: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+
+        for id in &ticked {
+            let Ok(Some(detail)) = store.get_bundle(id.as_str()) else {
+                continue;
+            };
+            let finding_ids: Vec<String> =
+                detail.items.iter().map(|i| i.finding_id.clone()).collect();
+
+            match remove_bundle_row_and_folder(&ctx_reclaim_delete_both_confirm, id.as_str()) {
+                Ok(bundle_orphaned) => {
+                    bundles_removed += 1;
+                    if bundle_orphaned {
+                        total_orphaned += 1;
+                    }
+                }
+                Err(e) => {
+                    refusal = Some(format!("Bundle could not be deleted: {e}"));
+                    break;
+                }
+            }
+
+            let remaining: Vec<String> = finding_ids
+                .into_iter()
+                .filter(|fid| !already_discarded.contains(fid))
+                .collect();
+            let (discarded, orphaned, refused) =
+                discard_originals(&ctx_reclaim_delete_both_confirm, &remaining);
+            for fid in remaining.iter().take(discarded) {
+                already_discarded.insert(fid.clone());
+            }
+            total_discarded += discarded;
+            total_orphaned += orphaned;
+            if let Some((finding_id, error)) = refused {
+                refusal = Some(format!("Finding {finding_id} refused: {error}"));
+                break;
+            }
+        }
+
+        open_reclaim_space(&win, &ctx_reclaim_delete_both_confirm);
+        load_findings_into_window(&win, &ctx_reclaim_delete_both_confirm, None);
+
+        let bundle_word = if bundle_count == 1 {
+            "Bundle"
+        } else {
+            "Bundles"
+        };
+        let capture_noun = if total_discarded == 1 {
+            "capture"
+        } else {
+            "captures"
+        };
+        let had_failure = refusal.is_some();
+        let message = match refusal {
+            Some(reason) => format!(
+                "{bundles_removed} of {bundle_count} {bundle_word} deleted, {total_discarded} \
+                 original {capture_noun} discarded, before this refused: {reason}"
+            ),
+            None if total_orphaned == 0 => format!(
+                "{bundles_removed} {bundle_word} and {total_discarded} original {capture_noun} \
+                 deleted."
+            ),
+            None => format!(
+                "{bundles_removed} {bundle_word} and {total_discarded} original {capture_noun} \
+                 deleted. {total_orphaned} file(s) could not be removed and are now orphans."
             ),
         };
         toast(&win, message, had_failure);
@@ -6677,6 +7040,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             if reveal && finding_id.is_some() {
                                 let _ = main.show();
                                 main.window().set_minimized(false);
+                                reveal_editor_window(&main);
                             }
                         }
                     }
@@ -7391,6 +7755,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             if let Some(win) = window_for_events.upgrade() {
                                 win.show().unwrap();
                                 win.window().set_minimized(false);
+                                reveal_editor_window(&win);
                             }
                         }
                         TrayAction::Settings => {
@@ -7496,6 +7861,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     if !settings_open {
                                         win.show().unwrap();
                                         win.window().set_minimized(false);
+                                        reveal_editor_window(&win);
                                     }
                                 }
                             }

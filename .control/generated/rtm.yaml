@@ -441,6 +441,19 @@ rtm:
   green: false
   exempt: true
   broken_at: no_uc
+- BG: BG-1
+  CAP: CAP-4
+  FR: FR-44
+  DEC: []
+  UC: UC-12
+  ticket: ''
+  spec: ''
+  release: ''
+  test: []
+  status: ''
+  green: false
+  exempt: false
+  broken_at: ticket
 - BG: BG-3
   CAP: CAP-2
   FR: FR-5

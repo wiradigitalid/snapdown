@@ -338,6 +338,20 @@ Why this is not part of composing is stated once, in prd.md §3.5.
 - It changes nothing: no file is written, moved, or renamed.
 - A Bundle whose folder is missing reports that rather than opening the wrong folder.
 
+### FR-44 — Delete several Bundles and their images together, in bulk
+
+- Reached from the same reclaim-space surface as FR-42, over the same selected set — a select-all
+  checkbox ticks every row currently listed.
+- One confirmation names the whole selected set and what is destroyed (both the Bundles themselves
+  and their originals), stating it cannot be undone — the same discipline FR-14's own single-Bundle
+  "Delete both" confirmation already follows.
+- Triggers FR-42's own bulk Finding-discard act over the same set; it does not re-implement it.
+- A Bundle outside the selection sharing a Finding with one inside it (`BR-122`) is named in the
+  confirmation, read live at confirmation time — the same mechanism FR-42's own bulk confirmation
+  already uses.
+- A Finding shared by two selected Bundles is destroyed and reported exactly once, never once per
+  Bundle that names it.
+
 ## Rejected alternatives
 
 | Option | Why it lost |

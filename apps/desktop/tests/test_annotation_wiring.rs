@@ -782,6 +782,38 @@ fn the_settings_screen_reads_from_the_registrars_and_the_store() {
     );
 }
 
+/// `06` (`FR-27`'s home): the About tab's SNAPDOWN card shows the product's own icon, not just its
+/// version and description. Before this ticket the card held two `Text` elements and nothing else,
+/// so a check that only grepped for the asset's name in a comment, or for a `source` property on
+/// some unrelated element, would have passed without an icon ever being instantiated.
+#[test]
+fn the_about_tab_instantiates_the_app_icon_image() {
+    let settings = flat(&read("ui/components/settings.slint"));
+
+    let card_at = settings
+        .find(r#"SdSectionLabel { text: "SNAPDOWN"; }"#)
+        .expect("the About tab's SNAPDOWN card must exist");
+    let card = &settings[card_at..(card_at + 600).min(settings.len())];
+
+    assert!(
+        card.contains("Image {"),
+        "the SNAPDOWN card must instantiate a real `Image` element - not merely name the icon in a \
+         comment, or set a decorative property nothing reads"
+    );
+    assert!(
+        card.contains(r#"source: @image-url("../../assets/app-icon.png");"#),
+        "and that `Image` must be bound to the product's own icon asset"
+    );
+
+    // The asset the binding names has to actually exist, or the source resolves to nothing at
+    // build time and the card renders an empty box where the icon should be.
+    let icon = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/app-icon.png");
+    assert!(
+        icon.is_file(),
+        "the icon `settings.slint` points at must exist on disk at {icon:?}"
+    );
+}
+
 /// The Slint attribution is finally in the product. `NTL-1`.
 #[test]
 fn the_about_tab_carries_the_slint_attribution() {
