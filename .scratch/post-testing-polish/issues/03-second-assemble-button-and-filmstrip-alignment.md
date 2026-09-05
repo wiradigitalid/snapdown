@@ -19,7 +19,7 @@ while keeping the underlying behaviour (selection-gated, same refusal message) u
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 Realizes `FR-10` (a second entry point to it). See `.scratch/post-testing-polish/spec.md`
 Implementation Decisions § "A second Assemble entry point" for the full design.
@@ -32,12 +32,13 @@ when nothing is ticked (assert the same string/function, not a second copy of th
 
 ## Acceptance
 
-- [ ] New Assemble button exists near the top of the canvas, fires `assemble-bundle-clicked`
-- [ ] Behaves exactly like the filmstrip-footer door: same ticked-selection rule, same refusal message
+- [x] New Assemble button exists near the top of the canvas, fires `assemble-bundle-clicked`
+- [x] Behaves exactly like the filmstrip-footer door: same ticked-selection rule, same refusal message
       when nothing is ticked — reading option (a), not (b)
-- [ ] Filmstrip's Assemble button area now visually aligns with the filmstrip's own frame (visual fix
+- [x] Filmstrip's Assemble button area now visually aligns with the filmstrip's own frame (visual fix
       only, no behaviour change)
-- [ ] `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and
+- [x] `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and
       `cargo test --workspace --no-fail-fast` all exit 0
 - [ ] **Look at:** confirm the new button's placement actually reads as closer to the canvas in the
       real, built UI (not a mock); confirm the filmstrip alignment fix looks right beside real content
+      — left open for the human reviewer; not run from this builder session

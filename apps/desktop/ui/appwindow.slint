@@ -2079,6 +2079,17 @@ export component AppWindow inherits Window {
                     // Sized on its own now rather than at the 52px that used to sit beside a wider
                     // Assemble - a single narrow button in the spot three used to fill read as a gap,
                     // not a choice.
+                    //
+                    // REVERSED IN PART, ticket 03 (`.scratch/post-testing-polish/issues/03-...`),
+                    // FR-10: the owner asked for Assemble reachable beside the canvas, not only in the
+                    // filmstrip. Ticket 19's reasoning above ("it acts on the filmstrip's ticked
+                    // selection, not on the canvas") is not wrong about the ACT - Assemble still reads
+                    // the identical ticked selection `prepare_bundle` always has - only about where a
+                    // door to it may sit. The button below is a second door to the SAME
+                    // `assemble-bundle-clicked` callback and the SAME `selected-finding-count > 0`
+                    // gate the filmstrip tile and the context menu's `assemble` entry already use, not
+                    // a new act and not new behaviour (spec's option (a), not (b): nothing here ticks
+                    // the active Finding for the Reviewer).
                     HorizontalLayout {
                         alignment: end;
                         spacing: 2px;
@@ -2134,6 +2145,21 @@ export component AppWindow inherits Window {
                                 Text { text: "Copy Image"; font-size: 10px; font-weight: 700; color: Theme.text-on-accent; horizontal-alignment: center; font-family: "IBM Plex Sans"; }
                             }
                             cp-touch := TouchArea { clicked => { root.copy-image-clicked(); } }
+                        }
+
+                        Rectangle { width: 1px; height: 24px; background: Theme.border-strong; y: 10px; }
+
+                        // The second Assemble door, `FR-10`/ticket 03. Reuses `SdActionButton` rather
+                        // than hand-rolling a Rectangle the way "Copy Image" beside it still does -
+                        // `design-system-guide.md`'s "two places showing the same kind of thing MUST
+                        // reference the same component", already followed by the filmstrip's own
+                        // Assemble tile below.
+                        canvas-assemble-button := SdActionButton {
+                            label: "Assemble";
+                            icon: @image-url("../assets/icons/package.svg");
+                            height: 44px;
+                            enabled: root.selected-finding-count > 0;
+                            clicked => { root.assemble-bundle-clicked(); }
                         }
                     }
                 }
@@ -2595,6 +2621,15 @@ export component AppWindow inherits Window {
                                     width: filmstrip-scroll.viewport-width;
                                     height: 110px;
                                     padding-top: 12px;
+                                    // VISUAL FIX ONLY, ticket 03 - no behaviour change. `padding-top`
+                                    // alone left 110 - 12 = 98px of cross-axis space for the 86px-tall
+                                    // cards, and Slint centres a fixed-height child in whatever space
+                                    // is left rather than pinning it to the top inset - so the row sat
+                                    // 6px lower than the sticky Assemble tile beside it (`y: 12px`,
+                                    // `height: 86px`, unpadded). Matching `padding-bottom` to
+                                    // `padding-top` leaves 110 - 12 - 12 = 86px, exactly the card
+                                    // height, with no slack left to centre away.
+                                    padding-bottom: 12px;
                                     padding-right: 12px;
                                     spacing: 12px;
                                     alignment: start;
