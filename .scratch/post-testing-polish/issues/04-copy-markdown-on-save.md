@@ -11,7 +11,7 @@ image paths.
 **Blocked by:** None (can start immediately). Touches `apps/desktop/src/main.rs` only, in the two named
 handlers — independent of every other ticket in this spec.
 
-**Status:** ready-for-agent
+**Status:** done
 
 Realizes `FR-10`, `FR-12`, `FR-40`. See `.scratch/post-testing-polish/spec.md` Implementation Decisions
 § "Copy on save" for the full design.

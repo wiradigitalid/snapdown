@@ -2506,6 +2506,13 @@ fn bundle_folder_path(ctx: &AppContext, bundle: &Bundle) -> PathBuf {
     }
 }
 
+/// Ticket 12's Copy Markdown toast, and ticket 4's (`04-copy-markdown-on-save`) two more copy
+/// sites reuse the exact same sentence - one constant so the three copy-on-success toasts can never
+/// drift out of wording with each other, and so a Reviewer is told the same fact regardless of which
+/// door produced the copy (the spec's own requirement for `FR-10`/`FR-12`/`FR-40`).
+const COPY_MARKDOWN_TOAST: &str =
+    "Markdown copied. The image links carry their location on this disk.";
+
 /// Ticket 12's Copy Markdown: the Bundle's whole stored document, with every image link rewritten
 /// to an absolute path a local agent can open - same words, same order, only the link destinations
 /// differ (`AD-9` as narrowed by `DEC-012`). The rewriting itself is the composer rebasing its own
@@ -5410,7 +5417,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // out anything a Bundle already holds. The strip is the queue of what has not been
                 // handed over yet, which is what makes "N selected" mean something.
                 load_findings_into_window(&win, &ctx_pc, None);
-                toast(&win, message, false);
+                // Ticket 4 (`04-copy-markdown-on-save`): a successful Assemble & Save also copies
+                // the Bundle's Markdown to the clipboard, through the exact same function Copy
+                // Markdown's own handler (`on_library_copy_markdown_clicked`) calls -
+                // `bundle_markdown_for_clipboard` then `put_text_on_clipboard` - never a second
+                // implementation of either. The `Err` arm below never reaches this call, so a
+                // failed save copies nothing.
+                match bundle_markdown_for_clipboard(&ctx_pc, &pending.bundle_id)
+                    .and_then(|markdown| put_text_on_clipboard(&markdown))
+                {
+                    Ok(()) => toast(&win, COPY_MARKDOWN_TOAST, false),
+                    Err(clipboard_err) => {
+                        eprintln!("Copy-on-save could not reach the clipboard: {clipboard_err}");
+                        toast(&win, message, false);
+                    }
+                }
             }
             Err(message) => {
                 eprintln!("Assemble failed: {message}");
@@ -5675,11 +5696,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
         match put_text_on_clipboard(&markdown) {
-            Ok(()) => toast(
-                &win,
-                "Markdown copied. The image links carry their location on this disk.",
-                false,
-            ),
+            Ok(()) => toast(&win, COPY_MARKDOWN_TOAST, false),
             Err(message) => toast(&win, message, true),
         }
     });
@@ -6027,11 +6044,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 toast(&win, "Saved. Nothing had changed.", false);
             }
             Ok(ReviewUpdateSaveOutcome::Saved) => {
-                if let Err(message) = set_review_update_view(&win, &ctx_review_update_save, bundle)
-                {
-                    toast(&win, message, true);
-                } else {
-                    toast(&win, "Saved.", false);
+                let view_refreshed = set_review_update_view(&win, &ctx_review_update_save, bundle);
+                // Ticket 4 (`04-copy-markdown-on-save`): a successful Save (this arm) also copies
+                // the Bundle's Markdown to the clipboard, through the exact same function Copy
+                // Markdown's own handler calls - `bundle_markdown_for_clipboard` then
+                // `put_text_on_clipboard` - never a second implementation of either.
+                // `ReviewUpdateSaveOutcome::NoChange` and the outer `Err` arm below never reach
+                // here, so neither of those copies anything.
+                let copied = bundle_markdown_for_clipboard(&ctx_review_update_save, &bundle.id)
+                    .and_then(|markdown| put_text_on_clipboard(&markdown));
+                match view_refreshed {
+                    Err(view_err) => toast(&win, view_err, true),
+                    Ok(()) => match copied {
+                        Ok(()) => toast(&win, COPY_MARKDOWN_TOAST, false),
+                        Err(clipboard_err) => {
+                            eprintln!(
+                                "Copy-on-save could not reach the clipboard: {clipboard_err}"
+                            );
+                            toast(&win, "Saved.", false);
+                        }
+                    },
                 }
                 *edit_slot = None;
                 win.set_review_update_editing(false);
