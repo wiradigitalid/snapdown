@@ -8,7 +8,47 @@ rtm_rows:
   green: 0
   counted: 32
   excluded_no_uc: 7
-work_progress: []
+work_progress:
+- spec: W1
+  status: closed
+  tickets_done: 0
+  tickets_total: 0
+  work_progress: n/a
+- spec: W2
+  status: closed
+  tickets_done: 0
+  tickets_total: 0
+  work_progress: n/a
+- spec: W3
+  status: closed
+  tickets_done: 0
+  tickets_total: 0
+  work_progress: n/a
+- spec: W4
+  status: closed
+  tickets_done: 0
+  tickets_total: 0
+  work_progress: n/a
+- spec: W5
+  status: closed
+  tickets_done: 0
+  tickets_total: 0
+  work_progress: n/a
+- spec: W6
+  status: closed
+  tickets_done: 0
+  tickets_total: 0
+  work_progress: n/a
+- spec: W7
+  status: closed
+  tickets_done: 0
+  tickets_total: 0
+  work_progress: n/a
+- spec: W8
+  status: closed
+  tickets_done: 0
+  tickets_total: 0
+  work_progress: n/a
 gate_readiness: 92%
 validators_red:
 - memlog-home
@@ -16,8 +56,6 @@ validators_red:
 validators_skipped:
   review-trace: 'advisory — trace stale, re-run before the next gate or spec close: .how/bundle/SDD-bundle.md
     (changed at c1cb8ca, reviewed at 9358a4a)'
-  uc-scheduled: no spec yet, so no ticket yet — every unscheduled UC is the correct state. Full catalogue
-    coverage is checked at G5
 open_questions:
   blocking: 0
   assumptions: 22

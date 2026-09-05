@@ -41,7 +41,7 @@
 # the record now states it.
 # ---------------------------------------------------------------------------------------------
 
-waves:
+specs:
   - id: W1
     title: Workspace, the two stores, and Settings complete
     status: closed
