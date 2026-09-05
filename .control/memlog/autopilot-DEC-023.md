@@ -30,13 +30,18 @@ Mandate: `DEC-023`. Parameters at `.control/registry/decisions.yaml` → `DEC-02
     callbacks exactly, plain Scroll still rejects/falls through unchanged.
   - Post-testing-polish ticket 04, copy-on-save (`FR-10`/`FR-12`/`FR-40`) — both new call sites reuse
     Copy Markdown's own two functions, gated correctly on save success only.
-- In flight: none — about to dispatch tickets 02, 03, 05 (see Next).
+- In flight:
+  - Post-testing-polish ticket 02 (marker focus/tooltip) — `ticket-marker-focus` / `autopilot/DEC-023-marker-focus`.
+  - Post-testing-polish ticket 03 (second Assemble button + filmstrip alignment) — `ticket-assemble-button` / `autopilot/DEC-023-assemble-button`.
+  - Post-testing-polish ticket 05 (bulk reclaim space) — `ticket-reclaim-bulk` / `autopilot/DEC-023-reclaim-bulk`.
+    Includes a `wdi-product` follow-up to fold the widened `FR-42` promise into the PRD once its code is
+    green — asked of the builder as part of closing its own ticket.
 - Blocked: —
 - Parked: —
-- Next: push this boundary (updates PR #47, re-triggers CI on the new head). Dispatch the three
-  remaining post-testing-polish tickets in parallel, each in its own worktree — 02 (marker focus/
-  tooltip), 03 (second Assemble button + filmstrip alignment, a/b already resolved to (a)), 05 (bulk
-  reclaim space, `AD-2` write-ordering + a `wdi-product` follow-up once green). None block another.
+- Next: wait for genuine completions on all three, independently review + full suite + merge each, then
+  push (updates PR #47, re-triggers CI). This is the last batch from this mandate's scope — once these
+  three land, § The work table's "every FR in scope closed" applies and the run moves to Finish (smoke
+  test, then close).
 
 ## Decisions
 
