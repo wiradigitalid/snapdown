@@ -10,13 +10,11 @@ Mandate: `DEC-023`. Parameters at `.control/registry/decisions.yaml` → `DEC-02
 (`from_gate: G5`, `scope: {fr: all, defects: [BUG-107]}`, `parked: [ad-n]`, `smoke_test: agent`,
 `loop: 10m`, `expires: 2026-09-12`).
 
-- Iteration: 2, commit `d03f14e` (regenerated `decisions.md`) is the boundary so far
+- Iteration: 3, commit `702c617` (iteration 2 ledger) is the boundary so far
 - Run branch: `autopilot/DEC-023`, isolated worktree at `.claude/worktrees/autopilot+DEC-023`. No PR
   opened yet — the first push (at the first spec/defect close) opens it as a draft.
-- Stopped at: **Capacity** — three builder subagents now in flight, each in its own worktree; correction
-  from iteration 1: `canvas-zoom-clipboard-paste` has **2** tickets, not 3 (the preflight page's count of
-  "3 ready-for-agent" in that folder was the spec's own status line plus both tickets, not three
-  tickets).
+- Stopped at: **Capacity** — four builder subagents now in flight, each in its own worktree. No new
+  concurrent work started beyond this; reviewing/merging what's in flight is next, not adding a fifth.
 - In flight:
   - `BUG-107` — this worktree (`.claude/worktrees/autopilot+DEC-023`, branch `autopilot/DEC-023`
     directly). Diagnose → fix crop-remap in `snapdown-core`/`snapdown-store` → decode-based regression
@@ -26,14 +24,22 @@ Mandate: `DEC-023`. Parameters at `.control/registry/decisions.yaml` → `DEC-02
     own text.
   - Ticket 02 (clipboard paste, `FR-35`) — `.claude/worktrees/autopilot+DEC-023/.claude/worktrees/ticket-paste-clipboard`,
     branch `autopilot/DEC-023-paste`, cut from `d03f14e`.
+  - `editor-virtual-desktop-focus` ticket 01 — `.claude/worktrees/autopilot+DEC-023/.claude/worktrees/ticket-vdesktop-focus`,
+    branch `autopilot/DEC-023-vdesktop-focus`, cut from `702c617`. Briefed to diagnose feasibility FIRST
+    (real Windows Virtual-Desktop switching may need an undocumented, per-build-fragile COM interface —
+    `IVirtualDesktopManagerInternal` — vs. the documented `IVirtualDesktopManager`, which can only move a
+    window to a desktop, not switch the active one) and to leave the desktop-switch half honestly
+    unimplemented rather than silently depend on the undocumented interface, if that's what the diagnosis
+    finds. This is a higher-uncertainty ticket than the other three; its report needs closer reading
+    before merge, not a quick skim.
 - Blocked: —
 - Parked: —
 - Next: as each builder returns — independently review its diff in full (never trust the builder's own
-  report), re-run the full suite on that branch, then the coordinator merges it into `autopilot/DEC-023`
+  report — especially the vdesktop one, given the explicit feasibility question it was asked to answer
+  honestly), re-run the full suite on that branch, then the coordinator merges it into `autopilot/DEC-023`
   serially (one merge at a time, registry writes only by the coordinator) and deletes the ticket
-  branch/worktree. After all three land: `.scratch/editor-virtual-desktop-focus/` (1 ticket
-  `ready-for-agent`), then `.scratch/post-testing-polish/` (spec `ready-for-agent`, not yet run through
-  `to-tickets` — needs a `to-tickets` pass first, sized per `delivery-flow-guide.md`'s table).
+  branch/worktree. After all four land: `.scratch/post-testing-polish/` (spec `ready-for-agent`, not yet
+  run through `to-tickets` — needs a `to-tickets` pass first, sized per `delivery-flow-guide.md`'s table).
 
 ## Decisions
 
