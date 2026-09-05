@@ -477,12 +477,13 @@ fn every_context_menu_entry_has_another_route() {
         );
     }
 
-    // Every other entry, and the second route it has - or the reason it has none yet.
+    // Every other entry, and the second route it has.
     //
-    // `FR-37`'s own consequence is that no entry exists with no other route, and two of these do not
-    // satisfy it. They are listed rather than quietly excused, in the shape `DELIBERATELY_UNHANDLED`
-    // uses in `test_ui_callbacks_reach_rust.rs`: a gap that is written down is a gap somebody can
-    // close, and one that is asserted away is a gap that stops existing on paper only.
+    // `FR-37`'s own consequence is that no entry exists with no other route. `reveal` and
+    // `delete-finding` used to be listed here as MENU-ONLY, recorded rather than closed - `BUG-77`.
+    // Both now have one: a Vault link beside the filename, and a visible Delete control on the
+    // filmstrip card. See `the_vault_link_reuses_the_menus_reveal_callback` and
+    // `the_filmstrip_delete_control_reuses_the_menus_confirm_dialog` for the wiring proof.
     let routes: &[(&str, &str)] = &[
         ("assemble", "the Assemble tile beside the filmstrip"),
         ("copy", "the Copy button on the toolbar"),
@@ -490,6 +491,14 @@ fn every_context_menu_entry_has_another_route() {
         ("delete-marker", "the Marker Notes list's own delete button"),
         ("undo", "the Undo button on the toolbar"),
         ("redo", "the Redo button on the toolbar"),
+        (
+            "reveal",
+            "the Vault link beside the filename in the titlebar",
+        ),
+        (
+            "delete-finding",
+            "the visible Delete control on the filmstrip card",
+        ),
     ];
     for (action, _route) in routes {
         assert!(
@@ -497,16 +506,78 @@ fn every_context_menu_entry_has_another_route() {
             "`{action}` must be on a menu"
         );
     }
+}
 
-    // MENU-ONLY, and recorded as such. Both arrived with the menu and have no other home yet:
-    // `reveal` shows the file in Explorer, `delete-finding` is `FR-13`/`UC-7`'s deletion. `FR-13` is
-    // a promise, so a deletion reachable only by right-click is a real gap - `BUG-76`.
-    for menu_only in ["reveal", "delete-finding"] {
-        assert!(
-            flat_window.contains(&format!("action: \"{menu_only}\", label:")),
-            "`{menu_only}` must be on the filmstrip menu"
-        );
-    }
+/// `BUG-77`: `reveal` was reachable only by right-click on the filmstrip menu. This is the second,
+/// visible route - a folder icon beside `current-filename` in the titlebar - and it must be the
+/// SAME callback the menu's own `reveal` entry fires for the bare-canvas case, not a second copy of
+/// the reveal logic.
+#[test]
+fn the_vault_link_reuses_the_menus_reveal_callback() {
+    let window = read("ui/appwindow.slint");
+    let flat_window = flat(&window);
+    let main = flat(&read("src/main.rs"));
+
+    assert!(
+        window.contains("vault-link-touch := TouchArea"),
+        "the Vault link's touch area must be instantiated beside the filename"
+    );
+    assert!(
+        flat_window
+            .contains("clicked => { root.open-file-location-clicked(root.active-finding-id); }"),
+        "and it must fire the SAME callback and the same argument the bare-canvas menu's own \
+         `reveal` entry already uses for whichever Finding is open, not a new code path"
+    );
+    assert!(
+        main.contains("main_window.on_open_file_location_clicked("),
+        "and that callback must already be handled in Rust - this control reuses it, it does not \
+         need new wiring"
+    );
+}
+
+/// `BUG-77`: `delete-finding` was reachable only by right-click on the filmstrip menu, and `FR-13`/
+/// `UC-7` promise deletion. This is the second, visible route, a trash icon on each filmstrip card,
+/// and it must call the SAME `request-delete-finding` function the menu's `delete-finding` entry
+/// calls, so the click still lands on the one existing confirm-once dialog rather than a bare
+/// single-click delete or a second copy of the confirmation.
+#[test]
+fn the_filmstrip_delete_control_reuses_the_menus_confirm_dialog() {
+    let window = read("ui/appwindow.slint");
+    let flat_window = flat(&window);
+    let main = flat(&read("src/main.rs"));
+
+    assert!(
+        window.contains("del-finding-touch := TouchArea"),
+        "the filmstrip card's delete control must be instantiated"
+    );
+    assert!(
+        flat_window
+            .contains("function request-delete-finding(target: string, target-selected: bool) {")
+            && flat_window.contains(
+                "root.pending-delete-count = target-selected ? root.selected-finding-count : 1;"
+            )
+            && flat_window.contains("root.pending-delete-finding = target;"),
+        "the one function that sets the confirm-once dialog's two properties must exist and set \
+         exactly those two - never a bare single-click delete of an irreversible action"
+    );
+    assert!(
+        flat_window.contains("root.request-delete-finding(thumb.id, thumb.is-selected);"),
+        "the filmstrip card's control must call it"
+    );
+    assert!(
+        flat_window
+            .contains("root.request-delete-finding(root.menu-target, root.menu-target-selected);"),
+        "and so must the context menu's own `delete-finding` entry - the same function, not a \
+         parallel copy of its two assignments"
+    );
+    assert!(
+        window.contains(r#"if root.pending-delete-finding != "" : Rectangle"#),
+        "the confirm-once dialog this reaches must still exist and be gated the same way"
+    );
+    assert!(
+        main.contains("main_window.on_delete_finding_confirmed("),
+        "and the callback the dialog fires on confirmation must already be handled in Rust"
+    );
 }
 
 /// The screenshot is the bottom element and is not in the order.
