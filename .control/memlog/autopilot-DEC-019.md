@@ -11,40 +11,47 @@ Mandate: `DEC-019`. Parameters at `.control/registry/decisions.yaml` → `DEC-01
 BUG-61, BUG-77, BUG-106]}`, `parked: [ad-n, sensitive]`, `smoke_test: agent`, `loop: 5m`,
 `expires: 2026-09-11`).
 
-- Iteration: 8, commit (pending — this dispatch commit)
+- Iteration: 8, commit `e01342a`
 - Run branch: `autopilot/DEC-019`, pushed as of iteration 7 (no PR yet — the mandate isn't finished,
   this is a mid-run checkpoint). This session's own checkout (`D:\Developer\wiradigital.id\snapdown`)
-  is directly on `autopilot/DEC-019`; the two builders below run in separate `git worktree add`
-  checkouts, not inside it.
-- Stopped at: **Capacity** — two builders dispatched (`BUG-77`, `BUG-106`) and in flight; no other
-  runnable row exists to work while waiting, and dispatching a third would only add more merge
-  surface with nothing to gain.
+  is directly on `autopilot/DEC-019`; `BUG-106`'s builder runs in a separate `git worktree add`
+  checkout, not inside it.
+- Stopped at: **Capacity** — `BUG-106` still in flight; no other runnable row exists to work while
+  waiting.
 - Blocked: —
 - Parked: —
-- In flight: `BUG-77` in `D:\Developer\wiradigital.id\snapdown-bug77` (branch
-  `autopilot/DEC-019-bug77`), `BUG-106` in `D:\Developer\wiradigital.id\snapdown-bug106` (branch
-  `autopilot/DEC-019-bug106`) — both branched from `autopilot/DEC-019`@`a5bb576`. **First dispatch
-  attempt for both used `Agent(isolation: "worktree")` and both had to be discarded**: the tool
-  branched each worktree from `main`@`05e7b80` (18 commits behind), not from this session's checked-out
-  `autopilot/DEC-019` — the exact "worktree branches from main" pitfall `AGENTS.md` already names for
-  a different tool. Both agents correctly detected the mismatch via `git merge-base --is-ancestor` and
-  stopped without touching any file. Worked around by creating the two worktrees manually
-  (`git worktree add ... autopilot/DEC-019`) and re-dispatching plain agents (no `isolation` param)
-  pointed at those paths — reported as product feedback separately. The next iteration should keep
-  using manually-created worktrees for any further dispatch in this run, not `isolation: "worktree"`.
-- Next: a future `/wdi-autopilot` invocation (or the owner directly) picks up from here. Runnable
-  defects still open in scope: `BUG-77` (small, has a named preferred fix — a Delete control on the
-  filmstrip card/Finding panel, plus a Vault link) and `BUG-106` (Crop tool — a real feature build,
-  drag-to-select + a store-level crop operation, isolated to `appwindow.slint` + a new store method).
-  `BUG-23`, `BUG-28`, `BUG-37` are not independently actionable by this mandate (BUG-23: blocked behind
-  `DEC-005`, no Slint publish entry point to fix; BUG-28: remaining latency work is explicitly the
-  owner's call per its own `fix:`; BUG-37: needs a `wdi-ux` look-and-feel study naming Graphite, not a
-  code fix) — leave open with their existing notes, do not close them, do not attempt the
-  design/ordering calls they defer. `BUG-7` is worked only for its agent-doable half (already `DONE`
-  — screenshots removed from the tree); do not attempt the git-history-scrub half under any
-  circumstance, mandate or not. `BUG-2`, `BUG-57`, `BUG-60`, `BUG-61` are done. When `BUG-77` and
-  `BUG-106` are both closed, every runnable row in scope is exhausted and the next iteration goes to
-  § Finish (smoke test, since `smoke_test: agent`; push; PR ready-for-review if green).
+- In flight: `BUG-106` in `D:\Developer\wiradigital.id\snapdown-bug106` (branch
+  `autopilot/DEC-019-bug106`), branched from `autopilot/DEC-019`@`a5bb576`. **First dispatch attempt
+  for both `BUG-77`/`BUG-106` used `Agent(isolation: "worktree")` and both had to be discarded**: the
+  tool branched each worktree from `main`@`05e7b80` (18 commits behind), not from this session's
+  checked-out `autopilot/DEC-019` — the exact "worktree branches from main" pitfall `AGENTS.md`
+  already names for a different tool. Both agents correctly detected the mismatch via
+  `git merge-base --is-ancestor` and stopped without touching any file. Worked around by creating the
+  worktrees manually (`git worktree add ... autopilot/DEC-019`) and re-dispatching plain agents (no
+  `isolation` param) pointed at those paths — reported as product feedback separately. Any further
+  dispatch in this run should keep using manually-created worktrees, not `isolation: "worktree"`.
+- `BUG-77` landed this iteration: merged (`423f7c4`), full `cargo test --workspace --no-fail-fast`
+  green on the merged branch, worktree/branch deleted. `validate.py --generate` then surfaced one
+  **new** (not baseline) red — `defect-root-cause`: closing a `root_cause: requirement` defect as
+  `fixed` needs a non-empty `decision:` field (V20), which `BUG-77`'s row was missing. Added
+  `decision: none - no AD- was contradicted...` (commit `e01342a`) — back to only the named baseline
+  red. **Any further defect closed this run with `root_cause: requirement` or `architecture` needs
+  the same field checked before merge.**
+- Next: a future `/wdi-autopilot` invocation (or the owner directly) picks up from here. The only
+  runnable row left in scope is `BUG-106` (Crop tool — a real feature build, drag-to-select + a
+  store-level crop operation, isolated to `appwindow.slint` + a new store method), in flight above —
+  verify and merge it the same way `BUG-77` was handled (independent diff read, fmt/clippy/test on the
+  builder's worktree AND again after merge, `validate.py --generate` re-checked for any *new* red
+  before assuming baseline). `BUG-23`, `BUG-28`, `BUG-37` are not independently actionable by this
+  mandate (BUG-23: blocked behind `DEC-005`, no Slint publish entry point to fix; BUG-28: remaining
+  latency work is explicitly the owner's call per its own `fix:`; BUG-37: needs a `wdi-ux`
+  look-and-feel study naming Graphite, not a code fix) — leave open with their existing notes, do not
+  close them, do not attempt the design/ordering calls they defer. `BUG-7` is worked only for its
+  agent-doable half (already `DONE` — screenshots removed from the tree); do not attempt the
+  git-history-scrub half under any circumstance, mandate or not. `BUG-2`, `BUG-57`, `BUG-60`, `BUG-61`,
+  `BUG-77` are done. When `BUG-106` is closed, every runnable row in scope is exhausted and the next
+  iteration goes to § Finish (smoke test, since `smoke_test: agent`; push; PR ready-for-review if
+  green).
 
 ## Decisions
 
@@ -65,3 +72,5 @@ BUG-61, BUG-77, BUG-106]}`, `parked: [ad-n, sensitive]`, `smoke_test: agent`, `l
 | Iter 7 | wdi-autopilot Door 2 | **Executed the owner's mid-run pause instruction**, now that all three in-flight dispatches (`BUG-57`, `BUG-2`, `BUG-60`) are merged and independently verified clean: stopping the loop, pushing `autopilot/DEC-019` to `origin`, and leaving `## Resume` naming `BUG-77`/`BUG-106` as the next runnable rows for whichever session resumes the mandate | Dispatching `BUG-77`/`BUG-106` now that capacity is free, which the owner's instruction directly countermands | If this pause is later judged wrong, the owner resumes with `/wdi-autopilot` (iteration door, mandate still `accepted`) — nothing here is destructive | `.control/memlog/autopilot-DEC-019.md`, pushed branch `autopilot/DEC-019` |
 | Iter 8 | wdi-autopilot Door 1→2 | Resumed via owner's `/wdi-autopilot` invocation (iteration door — mandate still `accepted`, `expires: 2026-09-11` not passed). Re-read `## Resume`, ran `validate.py --generate` (clean beyond the named baseline), and dispatched the two remaining runnable rows, `BUG-77` and `BUG-106`, in parallel — disjoint intent (filmstrip/readout-strip UI vs. crop canvas interaction + store op), accepted the known risk both may touch `appwindow.slint` | Working them sequentially to avoid any file overlap | Recoverable at merge time only, same as iter 3's `BUG-57`/`BUG-60` precedent — not a correctness risk | agents `a91fa1ba8a07cd143` (BUG-77), `ae1c2718aea783282` (BUG-106) — both discarded, see next row |
 | Iter 8 | wdi-autopilot Door 2 | **Both first-attempt dispatches used `Agent(isolation: "worktree")` and both came back refusing to proceed**: each spawned worktree was branched from `main`@`05e7b80` instead of this session's `autopilot/DEC-019`@`a5bb576` — confirmed via `git merge-base --is-ancestor` by both agents independently. Treated as a tool defect, not a retryable fluke: filed product feedback, then created the two worktrees myself (`git worktree add ../snapdown-bug77 -b autopilot/DEC-019-bug77 autopilot/DEC-019`, likewise `-bug106`) and re-dispatched plain agents (no `isolation` param) pointed at those exact paths | Retrying `isolation: "worktree"` a second time on the assumption the first failure was transient | If the workaround itself is wrong (e.g. a later merge shows the manual worktrees weren't actually based where claimed), the coordinator's own re-verification at merge time catches it before anything lands on `autopilot/DEC-019` | agents `a26a3d5a611c5de18` (BUG-77, in `D:\Developer\wiradigital.id\snapdown-bug77`), `adca338618e7aa004` (BUG-106, in `D:\Developer\wiradigital.id\snapdown-bug106`) — no files changed yet, pending their reports |
+| Iter 8 | wdi-autopilot Door 2 | `BUG-77` agent reported: reused the exact existing callbacks (`open-file-location-clicked`, the `pending-delete-*`/`delete-finding-confirmed` confirm-once path) for a new Vault-link icon in the titlebar and a Delete icon on each filmstrip card; extracted a shared `request-delete-finding()` function so the menu and the new control write the same two properties once, not twice (a self-review finding it then fixed). Independently re-verified: diff read in full (only the 3 intended files, no `.what`/`.how`/`DEC-`/`FR-37`/`NFR-16` touched, all colour/icon references pre-existing), `cargo fmt`/`clippy`/`test --workspace --no-fail-fast` all green on the builder's own worktree AND again after merge. Merged (`423f7c4`); worktree/branch deleted | Trusting the agent's own review pass without independently reading the diff and re-running verification | If my re-check had disagreed, this row would say so — it agreed | `apps/desktop/ui/appwindow.slint`, `apps/desktop/tests/test_annotation_wiring.rs`, `.control/registry/defects.yaml`, merge commit `423f7c4` on `autopilot/DEC-019` |
+| Iter 8 | wdi-autopilot Door 2 | `validate.py --generate` after the `BUG-77` merge showed a genuinely new red, not a baseline fossil: `defect-root-cause` (V20) — a `root_cause: requirement` defect closed `fixed` needs a non-empty `decision:` field, and `BUG-77`'s row had none. Added `decision: none - no AD- was contradicted...`, matching the exact phrasing convention already used by several other closed defects in the same file (e.g. rows near 4618/4701/4769/4833/4943) | Treating the new red as another baseline fossil to add to `.github/validate-baseline.txt`, which would have hidden a real, fixable gate rather than closed it | If this reading of V20 is wrong, the validator still fails on the next run and the next iteration catches it before § Finish | `.control/registry/defects.yaml` (BUG-77 `decision:` field), commit `e01342a` on `autopilot/DEC-019` |
