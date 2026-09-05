@@ -1,6 +1,17 @@
 # Spec: Post-Testing Polish (Canvas, Marker, Bundle Handoff, Reclaim Space, About)
 
-**Status:** ready-for-agent
+**Status:** ready-for-agent (sized into tickets 2026-09-05 under `DEC-023`; see `issues/`)
+
+**Ticket breakdown, decided under this mandate (the `to-tickets` quiz is the mandate's to answer, not
+the owner's, per `wdi-autopilot`):** six tickets, one per independent area named in Implementation
+Decisions, none blocking another — `01-canvas-zoom-ctrl-scroll`, `02-marker-note-focus-and-tooltip`,
+`03-second-assemble-button-and-filmstrip-alignment`, `04-copy-markdown-on-save`,
+`05-reclaim-space-bulk-actions`, `06-about-tab-icon`. Ticket 01 also records a diagnosis finding: the
+already-shipped canvas zoom (`396550c`) already satisfies User Story 4 (placement accuracy under zoom)
+by construction — `appwindow.slint:2313`'s marker-placement math divides by the same `parent.width` that
+`canvas-zoom` scales, so the ratio is zoom-invariant regardless of level. Only Ctrl+Scroll wiring is a
+real gap. Ticket 03's open question (button (a) vs (b) behaviour) is resolved to (a), per the spec's own
+"Build (a) unless the owner asks for (b)" default, since no owner is present to ask under this mandate.
 **Source:** an 11-item backlog the owner gave in one message, on 2026-09-03, right after confirming
 `bundle-library` (tickets 10-19, plus `BUG-90` through `BUG-104`) was done. Two of the eleven — Paste
 not working, Crop not working — were recorded separately as `BUG-105` and `BUG-106` in
