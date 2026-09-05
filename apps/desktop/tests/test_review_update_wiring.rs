@@ -640,11 +640,12 @@ fn cancel_decides_in_rust_and_a_failed_save_keeps_the_buffer_alive() {
     // Scanned as flat text rather than `rust_fn_body`, which matches braces from a top-level `fn` -
     // this is a closure passed to `on_review_update_save_clicked(`, not a `fn` of that name.
     //
-    // 3000, not 1800: `BUG-97` added a library-refresh check inside the Saved arm, which comes
-    // BEFORE the Err arm this test needs - the same window this file's own
-    // `a_successful_save_refreshes_the_library_still_open_underneath` test needed widened to for
-    // the identical reason, missed here when that fix landed.
-    let save_handler = flat(&main[save_at..(save_at + 3000).min(main.len())]);
+    // 3600, not 3000: ticket 4 (`04-copy-markdown-on-save`) added a copy-on-save attempt plus its
+    // own nested match INSIDE the Saved arm, which comes BEFORE the Err arm this test needs -
+    // pushing the outer Err arm past the window this test previously used. Same reason the window
+    // grew from 1800 to 3000 for `BUG-97` before it: widened rather than re-anchored, the same fix
+    // `a_successful_save_refreshes_the_library_still_open_underneath` needed too.
+    let save_handler = flat(&main[save_at..(save_at + 3600).min(main.len())]);
     let err_arm_at = save_handler
         .find("Err(message) =>")
         .expect("the Save handler must have an Err arm");
@@ -671,8 +672,10 @@ fn a_successful_save_refreshes_the_library_still_open_underneath() {
         .find("on_review_update_save_clicked(")
         .expect("`on_review_update_save_clicked` must exist");
     // Wide enough to comfortably hold the Saved arm's own doc comment as well as its code - unlike
-    // the sibling test above, which only needs the Err arm and stops well before this one.
-    let save_handler = flat(&main[save_at..(save_at + 3000).min(main.len())]);
+    // the sibling test above, which only needs the Err arm and stops well before this one. 3600,
+    // not 3000, for the same reason the sibling test above widened to 3600: ticket 4's copy-on-save
+    // code inside the Saved arm pushed the outer Err arm further out.
+    let save_handler = flat(&main[save_at..(save_at + 3600).min(main.len())]);
     let saved_arm_at = save_handler
         .find("Ok(ReviewUpdateSaveOutcome::Saved) =>")
         .expect("the Save handler must have a Saved arm");
