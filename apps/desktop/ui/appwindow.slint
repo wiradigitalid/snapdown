@@ -1241,6 +1241,27 @@ export component AppWindow inherits Window {
         : root.active-tool-index == 5 ? "text"
         : "";
 
+    // CROP - `BUG-106`. A drag-to-select rectangle, active only while `active-tool-index == 6`.
+    //
+    // Kept separate from `drawing`/`draw-x1`..`draw-y2` above rather than folded into them: those
+    // feed `annotation-drawn` and the preview `AnnotationItem`, and a crop is not an annotation - it
+    // never enters `root.annotations`, and applying it replaces the image itself instead of adding
+    // to it. Modelled on the same press/move/release shape `CaptureOverlayWindow` already proves for
+    // its own region selection, narrowed to the one axis that differs: coordinates here are
+    // fractions of the CANVAS (`AD-3`), the same convention `draw-x1`..`draw-y2` already use, not
+    // snapshot pixels.
+    private property <bool> crop-dragging: false;
+    private property <float> crop-x1;
+    private property <float> crop-y1;
+    private property <float> crop-x2;
+    private property <float> crop-y2;
+
+    // The same "a click is not a selection" rule `drag-is-real` states above, and for the same
+    // reason: measured in image pixels so a real drag stays real at every `canvas-zoom`.
+    private property <bool> crop-drag-is-real:
+        Math.max(Math.abs(root.crop-x2 - root.crop-x1) * root.active-image.width,
+                 Math.abs(root.crop-y2 - root.crop-y1) * root.active-image.height) >= 8;
+
     // A CLICK IS NOT A DRAWING.
     //
     // This used to invent a default-sized shape for a click that never became a drag. The owner
@@ -1490,6 +1511,11 @@ export component AppWindow inherits Window {
     //
     // kind, and the drag's two corners - normalized. Rust decides what shape a kind makes.
     callback annotation-drawn(string, float, float, float, float);
+    // `BUG-106`. The Crop tool's own drag, released: the selected rectangle's two corners,
+    // normalized the same way `annotation-drawn`'s are and already ordered min-then-max. Rust turns
+    // them into pixel geometry against the ACTIVE Finding's own stored dimensions and replaces the
+    // image - it is not an annotation and never joins `root.annotations`.
+    callback crop-applied(float, float, float, float);
     // id, and the new two corners. One callback for a move, a resize and an arrow endpoint alike.
     callback annotation-geometry-changed(string, float, float, float, float);
     callback annotation-tail-moved(string, float, float);
@@ -2191,6 +2217,21 @@ export component AppWindow inherits Window {
                                     blurred-source: root.blurred-capture;
                                 }
 
+                                // The Crop tool's own drag - `BUG-106`. Not an `AnnotationItem`: a
+                                // crop is not an annotation, so it gets the same bare selection-ring
+                                // chrome `annotation.slint` already draws for a SELECTED shape
+                                // (`Theme.annotation-select-ring`, transparent fill) rather than a
+                                // second visual language for "a rectangle on the canvas".
+                                if root.crop-dragging && root.crop-drag-is-real : Rectangle {
+                                    x: Math.min(root.crop-x1, root.crop-x2) * parent.width;
+                                    y: Math.min(root.crop-y1, root.crop-y2) * parent.height;
+                                    width: Math.abs(root.crop-x2 - root.crop-x1) * parent.width;
+                                    height: Math.abs(root.crop-y2 - root.crop-y1) * parent.height;
+                                    background: transparent;
+                                    border-width: 1.5px;
+                                    border-color: Theme.annotation-select-ring;
+                                }
+
                                 // THE DRAWING SURFACE.
                                 //
                                 // Declared BELOW the annotation layer on purpose. Slint hit-tests in
@@ -2228,16 +2269,43 @@ export component AppWindow inherits Window {
                                                 root.draw-y2 = root.draw-y1;
                                                 root.drawing = true;
                                             }
+                                            // `BUG-106`. Same press-to-start shape as the five
+                                            // annotation tools above, on its own state so a crop
+                                            // drag can never be mistaken for one being drawn.
+                                            if (root.active-tool-index == 6) {
+                                                root.crop-x1 = self.mouse-x / parent.width;
+                                                root.crop-y1 = self.mouse-y / parent.height;
+                                                root.crop-x2 = root.crop-x1;
+                                                root.crop-y2 = root.crop-y1;
+                                                root.crop-dragging = true;
+                                            }
                                         }
                                         if (ev.kind == PointerEventKind.up && root.drawing) {
                                             root.drawing = false;
                                             root.commit-drawing();
+                                        }
+                                        if (ev.kind == PointerEventKind.up && root.crop-dragging) {
+                                            root.crop-dragging = false;
+                                            // A CLICK IS NOT A SELECTION, the same rule
+                                            // `drag-is-real` states above: a tap names no region,
+                                            // so it must apply nothing.
+                                            if (root.crop-drag-is-real) {
+                                                root.crop-applied(
+                                                    Math.min(root.crop-x1, root.crop-x2),
+                                                    Math.min(root.crop-y1, root.crop-y2),
+                                                    Math.max(root.crop-x1, root.crop-x2),
+                                                    Math.max(root.crop-y1, root.crop-y2));
+                                            }
                                         }
                                     }
                                     moved => {
                                         if (root.drawing) {
                                             root.draw-x2 = Math.max(0.0, Math.min(1.0, self.mouse-x / parent.width));
                                             root.draw-y2 = Math.max(0.0, Math.min(1.0, self.mouse-y / parent.height));
+                                        }
+                                        if (root.crop-dragging) {
+                                            root.crop-x2 = Math.max(0.0, Math.min(1.0, self.mouse-x / parent.width));
+                                            root.crop-y2 = Math.max(0.0, Math.min(1.0, self.mouse-y / parent.height));
                                         }
                                     }
                                     clicked => {
