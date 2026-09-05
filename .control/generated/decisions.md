@@ -4,7 +4,7 @@
 
 Decisions are no longer looked up through the memlog — the memlog goes back to being just a pass log.
 
-**22 decisions** — accepted: 4 · applied: 11 · draft: 5 · superseded: 2.
+**23 decisions** — accepted: 5 · applied: 11 · draft: 5 · superseded: 2.
 
 | id | Title | Status | Type | Touches | File |
 | --- | --- | --- | --- | --- | --- |
@@ -30,3 +30,4 @@ Decisions are no longer looked up through the memlog — the memlog goes back to
 | `DEC-020` | The publish dialog and the reader's not-found page are withdrawn; the bare reader DEC-015 already found stand… | `applied` | — | `.control/registry/defects.yaml`, `.control/registry/components.yaml`, `.how/_platform/inventory-screen.md`, `.how/sharing/SDD-sharing.md`, `.how/bundle/01-ux/DESIGN.md`, `.how/bundle/SDD-bundle.md`, `.control/questions/assumptions.md`, `.control/questions/answered.md` | `.control/decisions/DEC-020-withdraw-publish-dialog-and-not-found-page-correct-the-reader.md` |
 | `DEC-021` | The six refs-resolve/memlog-home findings in validate-baseline.txt are a permanent, accepted fossil | `accepted` | — | — | `.control/decisions/DEC-021-six-baseline-validator-reds-are-a-permanent-accepted-fossil.md` |
 | `DEC-022` | Unattended authority is held through a wdi-autopilot mandate, not a generic unattended-run session type | `accepted` | — | — | `.control/decisions/DEC-022-unattended-authority-is-the-wdi-autopilot-mandate-not-a-generic-session-type.md` |
+| `DEC-023` | Mandate: close BUG-107 and the three ready-for-agent scratch specs, unattended, checking in only at the smoke… | `accepted` | mandate | `.control/memlog/autopilot-DEC-023.md` | `.control/decisions/DEC-023-autopilot-mandate-r5-bug-107-and-three-ready-specs.md` |
