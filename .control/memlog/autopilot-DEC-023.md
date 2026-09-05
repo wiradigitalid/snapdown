@@ -10,13 +10,17 @@ Mandate: `DEC-023`. Parameters at `.control/registry/decisions.yaml` → `DEC-02
 (`from_gate: G5`, `scope: {fr: all, defects: [BUG-107]}`, `parked: [ad-n]`, `smoke_test: agent`,
 `loop: 10m`, `expires: 2026-09-12`).
 
-- Iteration: 10, commit (pending, this write) is the boundary — HEAD after merging tickets 01
-  (Ctrl+Scroll zoom) and 04 (copy-on-save), both independently re-verified (full `cargo fmt`/
-  `clippy -D warnings`/`test --workspace --no-fail-fast`, green, coordinator-run each time)
+- Iteration: 11, commit (pending, this write) is the boundary — HEAD after merging tickets 02
+  (marker focus/tooltip) and 03 (second Assemble button + filmstrip alignment), both independently
+  re-verified (full `cargo fmt`/`clippy -D warnings`/`test --workspace --no-fail-fast`, green,
+  coordinator-run each time — ticket 03's builder looped on pause/resume notifications without
+  committing, same shape as `BUG-107` earlier, so the coordinator ran its own verification directly in
+  that worktree; the builder then also finished for real moments later, matching what the coordinator
+  had already found)
 - Run branch: `autopilot/DEC-023`. **PR #47 (draft)**: https://github.com/wiradigitalid/snapdown/pull/47.
-  Pushing this iteration's boundary next (six real merges since the first push).
-- Stopped at: **Capacity** (about to dispatch the remaining three post-testing-polish tickets — not a
-  stop yet, see below).
+  Pushing this iteration's boundary next.
+- Stopped at: **Capacity** — one more builder (bulk reclaim space, ticket 05) still running; five of six
+  post-testing-polish tickets are now merged.
 - Done, all independently re-verified by the coordinator (full suite re-run from scratch each time, not
   taken on any builder's report):
   - `BUG-107` (`3bbde0e`, iteration 6)
@@ -30,18 +34,23 @@ Mandate: `DEC-023`. Parameters at `.control/registry/decisions.yaml` → `DEC-02
     callbacks exactly, plain Scroll still rejects/falls through unchanged.
   - Post-testing-polish ticket 04, copy-on-save (`FR-10`/`FR-12`/`FR-40`) — both new call sites reuse
     Copy Markdown's own two functions, gated correctly on save success only.
+  - Post-testing-polish ticket 02, marker focus/tooltip (`FR-8`/`UC-5`) — shared focus-target property
+    consumed by `init` (fresh row) or `changed` via a mirror (existing row); drag excluded via a
+    per-Marker guard measured in image pixels so it stays correct at any zoom level; tooltip bound
+    directly to each iteration's own model row.
+  - Post-testing-polish ticket 03, second Assemble button + filmstrip alignment (`FR-10`) — labelled
+    MOVED (new door, same callback, same selection gate, option (a)) vs FIXED (unrelated
+    `padding-bottom` centering-slack fix) per the ticket's own requirement to keep the two tellable
+    apart.
 - In flight:
-  - Post-testing-polish ticket 02 (marker focus/tooltip) — `ticket-marker-focus` / `autopilot/DEC-023-marker-focus`.
-  - Post-testing-polish ticket 03 (second Assemble button + filmstrip alignment) — `ticket-assemble-button` / `autopilot/DEC-023-assemble-button`.
   - Post-testing-polish ticket 05 (bulk reclaim space) — `ticket-reclaim-bulk` / `autopilot/DEC-023-reclaim-bulk`.
     Includes a `wdi-product` follow-up to fold the widened `FR-42` promise into the PRD once its code is
     green — asked of the builder as part of closing its own ticket.
 - Blocked: —
 - Parked: —
-- Next: wait for genuine completions on all three, independently review + full suite + merge each, then
-  push (updates PR #47, re-triggers CI). This is the last batch from this mandate's scope — once these
-  three land, § The work table's "every FR in scope closed" applies and the run moves to Finish (smoke
-  test, then close).
+- Next: wait for ticket 05's genuine completion, independently review + full suite + merge, then push.
+  Once it lands, every candidate from this mandate's scope is closed — § The work table's "every FR in
+  scope closed" applies and the run moves to Finish (smoke test, then close).
 
 ## Decisions
 
