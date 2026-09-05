@@ -10,7 +10,12 @@ tells the Reviewer clearly, rather than doing nothing.
 **Blocked by:** None (can start immediately). Shares no code path with ticket 01 — the two may proceed
 in either order or in parallel.
 
-**Status:** ready-for-agent
+**Status:** done — already implemented and merged to `main` at `d97b82e` (2026-09-04, "feat(finding): paste
+an image from the Windows clipboard as a new Finding (FR-35)"), before this `DEC-023` run began. Verified
+in this worktree on 2026-09-05: every acceptance criterion below holds against the code exactly as
+written, `paste-clicked` is not in `DELIBERATELY_UNHANDLED`, and `cargo fmt --all -- --check`,
+`cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace --no-fail-fast` are
+all green. No code changed for this ticket; only this status line.
 
 Realizes `FR-35`. A second entry point into `UC-1` (`no_uc` — the flow from pixel-arrival onward is
 UC-1's own, unchanged). See `.scratch/canvas-zoom-clipboard-paste/spec.md` for the full design
